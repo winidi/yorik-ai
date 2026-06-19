@@ -1,0 +1,77 @@
+{
+  "name": "Yorik · Gmail",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "yorik-gmail",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-yorik-gmail",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "yorik-gmail"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "outputKey": "send",        "conditions": { "options": { "caseSensitive": false, "typeValidation": "loose" }, "combinator": "and", "conditions": [ { "leftValue": "={{ $json.body.op }}", "rightValue": "send", "operator": { "type": "string", "operation": "equals" } } ] } },
+            { "outputKey": "list_recent", "conditions": { "options": { "caseSensitive": false, "typeValidation": "loose" }, "combinator": "and", "conditions": [ { "leftValue": "={{ $json.body.op }}", "rightValue": "list_recent", "operator": { "type": "string", "operation": "equals" } } ] } }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-op",
+      "name": "Route by op",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "to": "={{ $('Webhook').item.json.body.to }}",
+        "subject": "={{ $('Webhook').item.json.body.subject }}",
+        "message": "={{ $('Webhook').item.json.body.body }}",
+        "options": {}
+      },
+      "id": "gmail-send",
+      "name": "Gmail Send",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [780, 200],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": "={{ $('Webhook').item.json.body.limit || 10 }}",
+        "simple": true,
+        "filters": {}
+      },
+      "id": "gmail-list",
+      "name": "Gmail List",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [780, 400],
+      "credentials": {}
+    }
+  ],
+  "connections": {
+    "Webhook":      { "main": [[ { "node": "Route by op", "type": "main", "index": 0 } ]] },
+    "Route by op": { "main": [
+      [ { "node": "Gmail Send", "type": "main", "index": 0 } ],
+      [ { "node": "Gmail List", "type": "main", "index": 0 } ]
+    ] }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

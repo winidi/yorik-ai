@@ -1,0 +1,68 @@
+name: Release
+
+# Triggers when a new tag matching v* is pushed. Creates a GitHub
+# release with auto-generated notes (commits between this tag and the
+# previous one). Prereleases get the "prerelease" flag automatically
+# when the tag includes `-alpha`, `-beta`, or `-rc`.
+#
+# For v0.1.0-alpha (the first tag), there's no previous tag, so the
+# release body falls back to the matching CHANGELOG.md section that
+# `gh release create --generate-notes` extracts.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write  # needed to create releases
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so gh can compute notes between tags
+
+      - name: Detect prerelease
+        id: prerelease
+        run: |
+          if [[ "${{ github.ref_name }}" =~ -(alpha|beta|rc) ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract section from CHANGELOG
+        id: changelog
+        run: |
+          # Pull the matching [vX.Y.Z-tag] section out of CHANGELOG.md
+          # so the GitHub release body matches what we already document.
+          # Falls back to "see CHANGELOG.md" if no match (e.g. tag landed
+          # before the CHANGELOG was updated — author can fix the release
+          # body manually).
+          TAG_NO_V="${{ github.ref_name }}"
+          TAG_NO_V="${TAG_NO_V#v}"
+          awk -v tag="$TAG_NO_V" '
+            BEGIN { found=0 }
+            /^## \[/ {
+              if (found) exit
+              if ($0 ~ "\\[" tag "\\]") { found=1; next }
+            }
+            found { print }
+          ' CHANGELOG.md > release-body.md
+          if [ ! -s release-body.md ]; then
+            echo "(See CHANGELOG.md for changes in this release.)" > release-body.md
+          fi
+          echo "--- release body ---"
+          head -30 release-body.md
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --notes-file release-body.md \
+            $(if [ "${{ steps.prerelease.outputs.is_prerelease }}" = "true" ]; then echo "--prerelease"; fi)

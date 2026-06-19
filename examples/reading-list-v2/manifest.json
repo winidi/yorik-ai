@@ -1,0 +1,43 @@
+{
+  "manifest_version": 2,
+  "id": "yorik.reading-list",
+  "name": "Reading list",
+  "icon": "📚",
+  "version": "0.1.0",
+  "author": "yorik-core",
+  "author_id": "yorik",
+  "license": "Apache-2.0",
+  "description": "Save links to read later. The full-surface manifest v2 reference — declares reads on Yorik contacts for 'share with a person', invokes the find_person skill, and subscribes to realtime updates on its own table.",
+  "homepage": "https://github.com/winidi/yorik-ai/tree/main/examples/reading-list-v2",
+  "schema": "schema.sql",
+  "connector": "connector.py",
+  "entry_ui": "app.js",
+  "min_yorik_version": "0.3",
+  "chrome": "embedded",
+  "tags": ["productivity", "example", "reference", "manifest-v2", "full-surface"],
+
+  "owned_schema": "app_yorik_reading_list",
+  "owned_tables": ["reading_items"],
+
+  "permissions": {
+    "reads": [
+      {
+        "table": "contacts",
+        "columns": ["id", "display_name", "kind"],
+        "purpose": "Resolve 'share with Mom' to a contact id when adding a recommendation."
+      }
+    ],
+    "invokes_skills": ["find_person"],
+    "realtime_subscriptions": ["reading_items"]
+  },
+
+  "network": {
+    "outbound": []
+  },
+
+  "ui": {
+    "type": "iframe",
+    "mount_path": "/apps/reading-list",
+    "entry": "app.js"
+  }
+}

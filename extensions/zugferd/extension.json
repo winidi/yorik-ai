@@ -1,0 +1,19 @@
+{
+  "id": "zugferd",
+  "name": "ZUGFeRD / Factur-X (German e-invoice)",
+  "description": "Embeds a CrossIndustryInvoice XML payload into Compose-rendered PDFs, producing a PDF/A-3 hybrid that German accounting software (DATEV, Lexware, sevDesk) can ingest automatically. Required for B2B invoices in Germany 2025–2027. Templates opt in via `\"zugferd\": true` + an `invoice_fields` mapping; templates without those flags render plain PDFs untouched.",
+  "version": "1.0",
+  "author": "yorik-core",
+  "license": "Apache-2.0",
+  "country": "DE",
+  "tags": ["compose", "invoicing", "compliance", "germany"],
+  "python_requirements": [
+    "drafthorse>=2025.2.0",
+    "factur-x>=4.2"
+  ],
+  "modules": ["zugferd"],
+  "hooks": {
+    "compose.pdf_post_process": "zugferd:pdf_post_process_hook"
+  },
+  "docs_url": "https://en.wikipedia.org/wiki/ZUGFeRD"
+}

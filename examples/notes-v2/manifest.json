@@ -1,0 +1,43 @@
+{
+  "manifest_version": 2,
+  "id": "yorik.notes",
+  "name": "Notes",
+  "icon": "📝",
+  "version": "0.2.0",
+  "author": "yorik-core",
+  "author_id": "yorik",
+  "license": "Apache-2.0",
+  "description": "Quick notes with optional AI mood inference. Phase E reference app demonstrating manifest v2 + per-app Postgres schema + RLS.",
+  "homepage": "https://github.com/winidi/yorik-ai/tree/main/examples/notes-v2",
+  "schema": "schema.sql",
+  "connector": "connector.py",
+  "entry_ui": "app.js",
+  "min_yorik_version": "0.3",
+  "chrome": "embedded",
+  "tags": ["productivity", "example", "reference", "manifest-v2"],
+
+  "owned_schema": "app_yorik_notes",
+  "owned_tables": ["notes"],
+
+  "permissions": {
+    "reads": [
+      {
+        "table": "contacts",
+        "columns": ["id", "display_name", "kind"],
+        "purpose": "Autocomplete @mentions when composing a note."
+      }
+    ],
+    "invokes_skills": ["find_person"],
+    "realtime_subscriptions": ["notes"]
+  },
+
+  "network": {
+    "outbound": []
+  },
+
+  "ui": {
+    "type": "iframe",
+    "mount_path": "/apps/notes",
+    "entry": "app.js"
+  }
+}

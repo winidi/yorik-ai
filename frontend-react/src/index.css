@@ -1,0 +1,163 @@
+@import "tailwindcss";
+/* tw-animate-css is added later when a shadcn component needs the
+   `data-[state=open]:animate-in` utilities. The static layout work
+   doesn't need it yet. */
+
+/* shadcn/new-york design tokens — light + dark.
+   The CSS-variable scheme keeps Tailwind utility classes like
+   `bg-background text-foreground border-border` resolving to the right
+   color in whichever theme is active. The `.dark` class on <html> flips
+   the palette; the inline boot script in index.html sets it before
+   first paint to avoid the flash-of-wrong-theme. */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  color-scheme: light;
+  --background:           oklch(1 0 0);
+  --foreground:           oklch(0.145 0 0);
+  --card:                 oklch(1 0 0);
+  --card-foreground:      oklch(0.145 0 0);
+  --popover:              oklch(1 0 0);
+  --popover-foreground:   oklch(0.145 0 0);
+  --primary:              oklch(0.46 0.18 277);   /* matches Yorik accent indigo */
+  --primary-foreground:   oklch(0.985 0 0);
+  --secondary:            oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted:                oklch(0.97 0 0);
+  --muted-foreground:     oklch(0.556 0 0);
+  --accent:               oklch(0.97 0 0);
+  --accent-foreground:    oklch(0.205 0 0);
+  --destructive:          oklch(0.577 0.245 27.325);
+  --border:               oklch(0.92 0 0);
+  --input:                oklch(0.92 0 0);
+  --ring:                 oklch(0.46 0.18 277);
+  --radius:               0.625rem;
+  --sidebar:              oklch(0.985 0 0);
+  --sidebar-foreground:   oklch(0.145 0 0);
+  --sidebar-primary:      oklch(0.46 0.18 277);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent:       oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border:       oklch(0.92 0 0);
+  --sidebar-ring:         oklch(0.46 0.18 277);
+}
+
+.dark {
+  /* Tells the browser to render native form-control chrome (date-picker
+     icon, scrollbars, time inputs, autofill yellow) against a dark
+     background. Without this the calendar icon on <input type="date">
+     stays black-on-dark and is effectively invisible. */
+  color-scheme: dark;
+  --background:           oklch(0.10 0.01 270);
+  --foreground:           oklch(0.97 0 0);
+  --card:                 oklch(0.14 0.01 270);
+  --card-foreground:      oklch(0.97 0 0);
+  --popover:              oklch(0.14 0.01 270);
+  --popover-foreground:   oklch(0.97 0 0);
+  --primary:              oklch(0.66 0.18 277);
+  --primary-foreground:   oklch(0.97 0 0);
+  --secondary:            oklch(0.20 0.01 270);
+  --secondary-foreground: oklch(0.97 0 0);
+  --muted:                oklch(0.20 0.01 270);
+  --muted-foreground:     oklch(0.62 0 0);
+  --accent:               oklch(0.20 0.01 270);
+  --accent-foreground:    oklch(0.97 0 0);
+  --destructive:          oklch(0.65 0.22 27);
+  --border:               oklch(0.97 0 0 / 8%);
+  --input:                oklch(0.97 0 0 / 12%);
+  --ring:                 oklch(0.66 0.18 277);
+  --sidebar:              oklch(0.12 0.01 270);
+  --sidebar-foreground:   oklch(0.97 0 0);
+  --sidebar-primary:      oklch(0.66 0.18 277);
+  --sidebar-primary-foreground: oklch(0.97 0 0);
+  --sidebar-accent:       oklch(0.20 0.01 270);
+  --sidebar-accent-foreground: oklch(0.97 0 0);
+  --sidebar-border:       oklch(0.97 0 0 / 8%);
+  --sidebar-ring:         oklch(0.66 0.18 277);
+}
+
+@theme inline {
+  --color-background:      var(--background);
+  --color-foreground:      var(--foreground);
+  --color-card:            var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover:         var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary:         var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary:       var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:           var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent:          var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive:     var(--destructive);
+  --color-border:          var(--border);
+  --color-input:           var(--input);
+  --color-ring:            var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar:         var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent:  var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border:  var(--sidebar-border);
+  --color-sidebar-ring:    var(--sidebar-ring);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Body itself does not scroll (overflow lives on inner containers
+     like HomeApp's overflow-y-auto). Setting touch-action: none here
+     stops Android WebView from running its scroll-vs-tap arbitrator
+     on every touch that starts on dock, header, or page padding —
+     that arbitrator is what was firing pointercancel mid-swipe and
+     killing SwipeNav. Real scroll containers get pan-y restored
+     below. */
+  touch-action: none;
+}
+
+/* Restore vertical pan for explicit scroll containers (Tailwind
+   utilities). Without this, the body's touch-action: none would
+   block their scroll. Horizontal swipes inside these still go to
+   JS because pan-y means "allow vertical, JS handles the rest". */
+.overflow-y-auto,
+.overflow-y-scroll {
+  touch-action: pan-y;
+}
+.overflow-x-auto,
+.overflow-x-scroll {
+  touch-action: pan-x;
+}
+.overflow-auto,
+.overflow-scroll {
+  touch-action: pan-x pan-y;
+}
+
+/* Apps that use min-h-screen / min-h-dvh / min-h-svh expect the
+   DOCUMENT to scroll when their content overflows the viewport
+   (Tasks, Contacts, Briefing). On those routes there's no inner
+   overflow-y-auto container — the page itself is the scroll
+   surface. Without this rule the body's touch-action: none blocks
+   vertical pan on the entire page and the user can't scroll past
+   the first viewport. h-screen + overflow-y-auto apps (Home, etc.)
+   are already covered by the .overflow-y-auto rule above and the
+   selector specificity doesn't conflict. */
+.min-h-screen,
+.min-h-dvh,
+.min-h-svh {
+  touch-action: pan-y;
+}

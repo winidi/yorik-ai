@@ -1,0 +1,226 @@
+# Voice-command eval cases.
+#
+# Each case = one INTENT with 2-3 paraphrases. The harness seeds the
+# DB via `setup_sql`, sends each variant to /api/ask, then checks the
+# expectation. A case "passes" only when ALL variants pass — we want
+# the LLM to handle phrasing robustness, not just the canonical form.
+#
+# Add new cases by appending here. No code changes needed unless you
+# want a new `expected.type`. Tags help filter (`--tag reschedule`).
+#
+# IMPORTANT: setup_sql + cleanup_sql run with FULL SQL access (this
+# is a dev tool, not a user-exposed surface). Don't run this against
+# a production DB you care about — use a copy.
+
+cases:
+
+# ─── RESCHEDULE — the user's known-painful intent ────────────────────
+
+- id: reschedule_dentist_to_day_after_tomorrow
+  tags: [reschedule, calendar]
+  setup_sql: |
+    DELETE FROM events WHERE title = 'Zahnarzttermin';
+    INSERT INTO events (title, starts_at, ends_at, allowed_roles)
+      VALUES ('Zahnarzttermin', date('now','localtime','+1 day') || 'T14:00:00',
+              date('now','localtime','+1 day') || 'T15:00:00', 'admin');
+  variants:
+    - "Verschiebe den Zahnarzttermin morgen auf übermorgen 15 Uhr."
+    - "Schieb den Zahnarzt von morgen auf übermorgen, 15:00."
+    - "Move the dentist appointment from tomorrow to the day after tomorrow at 3pm."
+  expected:
+    type: db_state
+    query: |
+      SELECT date(starts_at) AS d, time(starts_at) AS t
+      FROM events WHERE title LIKE '%Zahnarzt%'
+      ORDER BY id DESC LIMIT 1
+    must_match:
+      d: "{day_after_tomorrow}"     # placeholder resolved by harness
+      t: "15:00:00"
+
+- id: reschedule_meeting_to_next_monday
+  tags: [reschedule, calendar]
+  setup_sql: |
+    DELETE FROM events WHERE title = 'Team-Meeting';
+    INSERT INTO events (title, starts_at, ends_at, allowed_roles)
+      VALUES ('Team-Meeting', date('now','localtime','+2 days') || 'T10:00:00',
+              date('now','localtime','+2 days') || 'T11:00:00', 'admin');
+  variants:
+    - "Verschiebe das Team-Meeting auf nächsten Montag 9 Uhr."
+    - "Move team meeting to next Monday 9am."
+    - "Pack das Team-Meeting auf Montag in einer Woche, 9 Uhr."
+  expected:
+    type: db_state
+    query: |
+      SELECT date(starts_at) AS d, time(starts_at) AS t,
+             strftime('%w', starts_at) AS dow
+      FROM events WHERE title LIKE '%Team-Meeting%'
+      ORDER BY id DESC LIMIT 1
+    must_match:
+      dow: "1"                       # Monday = 1 in SQLite's %w
+      t: "09:00:00"
+
+- id: reschedule_simple_time_shift
+  tags: [reschedule, calendar]
+  setup_sql: |
+    DELETE FROM events WHERE title = 'Yoga';
+    INSERT INTO events (title, starts_at, ends_at, allowed_roles)
+      VALUES ('Yoga', date('now','localtime') || 'T18:00:00',
+              date('now','localtime') || 'T19:00:00', 'admin');
+  variants:
+    - "Verschiebe Yoga heute auf 19 Uhr."
+    - "Yoga heute eine Stunde später, also 19:00."
+    - "Push yoga to 7pm today."
+  expected:
+    type: db_state
+    query: |
+      SELECT time(starts_at) AS t FROM events WHERE title = 'Yoga'
+      ORDER BY id DESC LIMIT 1
+    must_match:
+      t: "19:00:00"
+
+# ─── ADD EVENT ──────────────────────────────────────────────────────
+
+- id: add_event_tomorrow_afternoon
+  tags: [add, calendar]
+  setup_sql: "DELETE FROM events WHERE title = 'Friseur';"
+  variants:
+    - "Trag morgen 14 Uhr Friseur ein."
+    - "Friseurtermin morgen Nachmittag um 14:00."
+    - "Add hairdresser tomorrow 2pm."
+  expected:
+    type: db_state
+    query: |
+      SELECT date(starts_at) AS d, time(starts_at) AS t
+      FROM events WHERE title LIKE '%Friseur%' OR title LIKE '%hair%'
+      ORDER BY id DESC LIMIT 1
+    must_match:
+      d: "{tomorrow}"
+      t: "14:00:00"
+
+# ─── ADD TASK ───────────────────────────────────────────────────────
+
+- id: add_task_no_due_date
+  tags: [add, tasks]
+  setup_sql: |
+    DELETE FROM tasks WHERE title LIKE '%Spülmaschine%' OR title LIKE '%dishwasher%';
+  variants:
+    - "Schreib auf meine Liste: Spülmaschine reparieren lassen."
+    - "Aufgabe: Spülmaschine reparieren."
+    - "Remind me to fix the dishwasher."
+  expected:
+    type: db_state
+    query: |
+      SELECT COUNT(*) AS n FROM tasks
+      WHERE (title LIKE '%Spülmaschine%' OR title LIKE '%dishwasher%')
+        AND done = 0
+    must_match:
+      n: 1
+
+- id: add_task_due_friday
+  tags: [add, tasks]
+  setup_sql: |
+    DELETE FROM tasks WHERE title LIKE '%Steuer%' OR title LIKE '%tax%';
+  variants:
+    - "Aufgabe bis Freitag: Steuererklärung anfangen."
+    - "Bis Freitag muss ich die Steuererklärung anfangen — schreib's auf."
+    - "Add task: start tax return by Friday."
+  expected:
+    type: db_state
+    query: |
+      SELECT COUNT(*) AS n FROM tasks
+      WHERE (title LIKE '%Steuer%' OR title LIKE '%tax%') AND done = 0
+        AND due_date IS NOT NULL
+    must_match:
+      n: 1
+
+# ─── DELETE EVENT ───────────────────────────────────────────────────
+
+- id: delete_event_today
+  tags: [delete, calendar]
+  setup_sql: |
+    DELETE FROM events WHERE title = 'Lauftraining';
+    INSERT INTO events (title, starts_at, ends_at, allowed_roles)
+      VALUES ('Lauftraining', date('now','localtime') || 'T17:00:00',
+              date('now','localtime') || 'T18:00:00', 'admin');
+  variants:
+    - "Lösche das Lauftraining heute."
+    - "Cancel running training today."
+    - "Streiche Lauftraining heute aus dem Kalender."
+  expected:
+    type: db_state
+    query: |
+      SELECT COUNT(*) AS n FROM events
+      WHERE title = 'Lauftraining' AND date(starts_at) = date('now','localtime')
+    must_match:
+      n: 0
+
+# ─── SEARCH / READ-ONLY ─────────────────────────────────────────────
+
+- id: count_events_today
+  tags: [search, calendar]
+  setup_sql: ""                       # uses whatever's in the DB
+  variants:
+    - "Wie viele Termine habe ich heute?"
+    - "How many events today?"
+    - "Was hab ich heute alles?"
+  expected:
+    type: response_contains
+    any_of:
+      - "Termin"
+      - "event"
+      - "heute"
+      - "today"
+
+- id: find_photo_recent
+  tags: [search, photos]
+  setup_sql: ""
+  variants:
+    - "Zeig mir die letzten Fotos."
+    - "Show me recent photos."
+    - "Letzte Bilder bitte."
+  expected:
+    type: ui_action_emitted
+    of_type: "photos_found"
+
+- id: find_document_readme
+  tags: [search, documents]
+  setup_sql: ""
+  # Reads only the local documents DB. Previous "Telekom Rechnung"
+  # variants routed to bills because Telekom IS a bill in the seed
+  # data; the README only exists as a document, so this isolates the
+  # document-search path. We accept either skill OR tool routing
+  # (find_document skill targets Paperless; search_documents tool
+  # targets the local DB) — both are correct user-facing behaviour
+  # and the model picks whichever fits the query.
+  variants:
+    - "Such mir das Yorik README in meinen Dokumenten."
+    - "Find the Yorik README document."
+    - "Open the README from the document library."
+  expected:
+    type: response_contains
+    any_of:
+      - "README"
+      - "Dokument"
+      - "document"
+      - "Bibliothek"
+      - "library"
+
+# ─── EDIT (non-reschedule) ──────────────────────────────────────────
+
+- id: mark_task_done
+  tags: [edit, tasks]
+  setup_sql: |
+    DELETE FROM tasks WHERE title = 'Müll rausbringen';
+    INSERT INTO tasks (title, done, allowed_roles)
+      VALUES ('Müll rausbringen', 0, 'admin');
+  variants:
+    - "Müll rausbringen ist erledigt."
+    - "Hak Müll rausbringen ab."
+    - "Mark take out trash as done."
+  expected:
+    type: db_state
+    query: |
+      SELECT done FROM tasks WHERE title = 'Müll rausbringen'
+      ORDER BY id DESC LIMIT 1
+    must_match:
+      done: 1

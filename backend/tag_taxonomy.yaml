@@ -1,0 +1,150 @@
+# Curated tag taxonomy for Yorik's autotagger.
+#
+# The LLM picks 0–3 tags from this CLOSED list per document — never
+# invents new ones. Each tag carries DE + EN labels so it renders the
+# right way for the user's UI language; the `id` is the stable key
+# used in code and in Paperless's tag table.
+#
+# Why curated:
+#   Free-form LLM tagging on a real 2500-doc corpus produces 200–500
+#   unique tags with plural/singular dupes, DE/EN synonyms, and
+#   useless "PDF"/"wichtig" tags. A closed vocabulary keeps Paperless
+#   browsable and the folder-tree UI sane.
+#
+# How tags reach Paperless:
+#   On first autotag run, the autotagger upserts each chosen tag into
+#   Paperless's /api/tags/ using its DE label (matching what a German
+#   user would already use). EN users see the EN label in the UI but
+#   the underlying Paperless tag stays bilingual via the `slug` map.
+#
+# Users add their own tags in Paperless's UI any time — those don't
+# need to live here; the LLM only PICKS from this file but doesn't
+# REMOVE user-added tags.
+
+# Per-category color (Paperless hex). Borrowed from the dock's tinted
+# squircle palette so the same hue == same category across Yorik's UI
+# and Paperless's tag pills.
+
+categories:
+
+  - id: finanzen
+    label: { de: Finanzen, en: Finance }
+    color: "#3b82f6"  # blue
+    tags:
+      - { id: rechnung_eingang,  label: { de: Rechnung,            en: Invoice } }
+      - { id: quittung,          label: { de: Quittung,            en: Receipt } }
+      - { id: kontoauszug,       label: { de: Kontoauszug,         en: Bank Statement } }
+      - { id: gehaltsabrechnung, label: { de: Gehaltsabrechnung,   en: Payslip } }
+      - { id: steuerbescheid,    label: { de: Steuerbescheid,      en: Tax Notice } }
+      - { id: steuererklaerung,  label: { de: Steuererklärung,     en: Tax Return } }
+      - { id: kredit,            label: { de: Kredit/Darlehen,     en: Loan } }
+      - { id: mahnung,           label: { de: Mahnung,             en: Payment Reminder } }
+      - { id: angebot_eingang,   label: { de: Angebot,             en: Quote } }
+      - { id: lieferantenrechnung, label: { de: Lieferantenrechnung, en: Supplier Invoice } }
+
+  - id: versicherung
+    label: { de: Versicherung, en: Insurance }
+    color: "#6366f1"  # indigo
+    tags:
+      - { id: kranken_versicherung, label: { de: Krankenversicherung,         en: Health Insurance } }
+      - { id: haftpflicht,          label: { de: Haftpflichtversicherung,     en: Liability Insurance } }
+      - { id: hausrat,              label: { de: Hausratversicherung,         en: Home Contents Insurance } }
+      - { id: kfz_versicherung,     label: { de: KFZ-Versicherung,            en: Vehicle Insurance } }
+      - { id: lebens_versicherung,  label: { de: Lebensversicherung,          en: Life Insurance } }
+      - { id: rechtsschutz,         label: { de: Rechtsschutz,                en: Legal Insurance } }
+      - { id: berufsunfaehigkeit,   label: { de: Berufsunfähigkeitsversicherung, en: Disability Insurance } }
+      - { id: versicherungs_police, label: { de: Versicherungspolice,         en: Insurance Policy } }
+      - { id: schadensmeldung,      label: { de: Schadensmeldung,             en: Insurance Claim } }
+
+  - id: wohnen
+    label: { de: Wohnen, en: Home }
+    color: "#f59e0b"  # amber
+    tags:
+      - { id: mietvertrag,       label: { de: Mietvertrag,             en: Lease } }
+      - { id: nebenkosten,       label: { de: Nebenkostenabrechnung,   en: Utility Statement } }
+      - { id: strom,             label: { de: Strom,                   en: Electricity } }
+      - { id: gas,               label: { de: Gas,                     en: Gas } }
+      - { id: wasser,            label: { de: Wasser,                  en: Water } }
+      - { id: internet_telefon,  label: { de: Internet/Telefon,        en: Internet/Phone } }
+      - { id: hausverwaltung,    label: { de: Hausverwaltung,          en: Property Management } }
+      - { id: eigentum,          label: { de: Eigentum/Grundstück,     en: Property/Deed } }
+      - { id: wartung_reparatur, label: { de: Wartung/Reparatur,       en: Maintenance/Repair } }
+
+  - id: behoerde
+    label: { de: Behörde, en: Government }
+    color: "#ef4444"  # red
+    tags:
+      - { id: personalausweis,    label: { de: Personalausweis,        en: ID Card } }
+      - { id: reisepass,          label: { de: Reisepass,              en: Passport } }
+      - { id: fuehrerschein,      label: { de: Führerschein,           en: Driving License } }
+      - { id: meldebescheinigung, label: { de: Meldebescheinigung,     en: Residence Certificate } }
+      - { id: geburtsurkunde,     label: { de: Geburtsurkunde,         en: Birth Certificate } }
+      - { id: heiratsurkunde,     label: { de: Heiratsurkunde,         en: Marriage Certificate } }
+      - { id: bescheid,           label: { de: Behördlicher Bescheid,  en: Official Notice } }
+      - { id: kindergeld,         label: { de: Kindergeld/Elterngeld,  en: Child Benefit } }
+
+  - id: gesundheit
+    label: { de: Gesundheit, en: Health }
+    color: "#10b981"  # emerald
+    tags:
+      - { id: arztrechnung,    label: { de: Arztrechnung,    en: Medical Bill } }
+      - { id: rezept,          label: { de: Rezept,          en: Prescription } }
+      - { id: befund,          label: { de: Befund/Diagnose, en: Medical Report } }
+      - { id: impfpass,        label: { de: Impfpass,        en: Vaccination Record } }
+      - { id: krankschreibung, label: { de: Krankschreibung, en: Sick Note } }
+
+  - id: auto
+    label: { de: Auto/Fahrzeug, en: Vehicle }
+    color: "#64748b"  # slate
+    tags:
+      - { id: fahrzeugschein,    label: { de: Fahrzeugschein,       en: Vehicle Registration } }
+      - { id: fahrzeugbrief,     label: { de: Fahrzeugbrief,        en: Vehicle Title } }
+      - { id: werkstatt,         label: { de: Werkstattrechnung,    en: Garage Bill } }
+      - { id: tuev,              label: { de: TÜV/HU,               en: Vehicle Inspection } }
+      - { id: kfz_steuer,        label: { de: KFZ-Steuer,           en: Vehicle Tax } }
+      - { id: auto_kaufvertrag,  label: { de: Kaufvertrag (Auto),   en: Vehicle Purchase } }
+
+  - id: beruf
+    label: { de: Beruf, en: Work }
+    color: "#8b5cf6"  # violet
+    tags:
+      - { id: arbeitsvertrag,  label: { de: Arbeitsvertrag,            en: Employment Contract } }
+      - { id: arbeitszeugnis,  label: { de: Arbeitszeugnis,            en: Reference Letter } }
+      - { id: bewerbung,       label: { de: Bewerbung,                 en: Job Application } }
+      - { id: kuendigung,      label: { de: Kündigung,                 en: Termination } }
+      - { id: lohnsteuer,      label: { de: Lohnsteuerbescheinigung,   en: Wage Tax Statement } }
+
+  - id: bildung
+    label: { de: Bildung, en: Education }
+    color: "#d946ef"  # fuchsia
+    tags:
+      - { id: schulzeugnis,      label: { de: Schulzeugnis,                 en: School Report } }
+      - { id: diplom,            label: { de: Diplom/Urkunde,               en: Diploma } }
+      - { id: studien_kurs,      label: { de: Studien-/Kursbescheinigung,   en: Enrollment/Course Cert } }
+      - { id: kita_schule_brief, label: { de: Kita-/Schulbrief,             en: School/Daycare Letter } }
+
+  - id: recht
+    label: { de: Recht, en: Legal }
+    color: "#dc2626"  # red-600 (darker than behörde so they're distinguishable side-by-side)
+    tags:
+      - { id: vertrag_allgemein,   label: { de: Vertrag (allgemein),    en: Contract (general) } }
+      - { id: vollmacht,           label: { de: Vollmacht,              en: Power of Attorney } }
+      - { id: testament,           label: { de: Testament,              en: Will } }
+      - { id: anwaltsschreiben,    label: { de: Anwaltsschreiben,       en: Lawyer Letter } }
+      - { id: gerichtsbeschluss,   label: { de: Gerichtsbeschluss,      en: Court Decision } }
+      - { id: patientenverfuegung, label: { de: Patientenverfügung,     en: Advance Directive } }
+
+  - id: bestellung
+    label: { de: Bestellung/Lieferung, en: Orders & Shipping }
+    color: "#0ea5e9"  # sky
+    tags:
+      - { id: bestellbestaetigung, label: { de: Bestellbestätigung, en: Order Confirmation } }
+      - { id: lieferschein,        label: { de: Lieferschein,       en: Delivery Note } }
+      - { id: garantie,            label: { de: Garantieschein,     en: Warranty } }
+      - { id: ruecksendung,        label: { de: Rücksendung,        en: Return } }
+
+  - id: werbung_sonstiges
+    label: { de: Werbung & Sonstiges, en: Marketing & Misc }
+    color: "#71717a"  # zinc
+    tags:
+      - { id: werbung, label: { de: Werbung/Newsletter, en: Marketing/Newsletter } }

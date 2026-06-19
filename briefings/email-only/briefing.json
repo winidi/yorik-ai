@@ -1,0 +1,18 @@
+{
+  "id": "email-only",
+  "name": "Email digest",
+  "description": "Just my inbox — no calendar, no WhatsApp",
+  "author": "yorik-core",
+  "version": "1.0",
+  "tags": ["daily", "minimal"],
+  "sections": [
+    {
+      "id":     "email",
+      "title":  "Inbox",
+      "icon":   "📧",
+      "skill":  "email_briefing",
+      "args":   { "hours": 24 },
+      "render": "markdown"
+    }
+  ]
+}

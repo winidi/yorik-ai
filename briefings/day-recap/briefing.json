@@ -1,0 +1,67 @@
+{
+  "id": "day-recap",
+  "name": "What happened today",
+  "description": "Retrospective of what's happened so far — auto-snapshotted at 03:00 nightly for the time-machine",
+  "author": "yorik-core",
+  "version": "1.2",
+  "tags": ["daily", "personal", "snapshot"],
+  "sections": [
+    {
+      "id":       "today-calendar",
+      "title":    "Calendar",
+      "icon":     "🗓",
+      "skill":    "check_calendar",
+      "args":     {
+        "start_iso": "{today_start}",
+        "end_iso":   "{now}"
+      },
+      "render":   "events_list",
+      "priority": "high"
+    },
+    {
+      "id":       "today-tasks-done",
+      "title":    "Tasks completed",
+      "icon":     "✓",
+      "skill":    "check_tasks",
+      "args":     {
+        "start_iso":   "{today_start}",
+        "end_iso":     "{now}",
+        "include_done": true,
+        "include_rows": true
+      },
+      "render":   "raw_json",
+      "condition": "result.count > 0"
+    },
+    {
+      "id":       "photos-today",
+      "title":    "Photos",
+      "icon":     "📷",
+      "skill":    "find_photo",
+      "args":     {
+        "op":         "taken_on",
+        "start_iso":  "{today_start}",
+        "end_iso":    "{now}",
+        "take_count": 24
+      },
+      "render":   "raw_json"
+    },
+    {
+      "id":       "email-summary",
+      "title":    "Email",
+      "icon":     "📧",
+      "skill":    "email_briefing",
+      "args":     { "hours": 24 },
+      "render":   "markdown"
+    },
+    {
+      "id":       "whatsapp-summary",
+      "title":    "WhatsApp",
+      "icon":     "💬",
+      "skill":    "whatsapp_briefing",
+      "args":     { "hours": 24 },
+      "render":   "markdown",
+      "condition": "result.stats.chats_with_new_msgs > 0"
+    }
+  ],
+  "synthesize": { "enabled": false }
+}

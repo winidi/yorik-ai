@@ -1,0 +1,35 @@
+# Yorik Phase D — systemd user unit for the local self-hosted Supabase stack
+# (Postgres 15 + pgvector + Kong + GoTrue + PostgREST + Studio).
+#
+# Installation:
+#   1. Place at ~/.config/systemd/user/yorik-supabase.service (substitute
+#      {{INSTALL_DIR}} with the absolute path to your yorik-ai checkout).
+#   2. systemctl --user daemon-reload
+#   3. systemctl --user enable yorik-supabase   # autostart at login
+#   4. loginctl enable-linger {{INSTALL_USER}}  # autostart at boot, not just login
+#   5. systemctl --user start yorik-supabase
+#
+# Manage:
+#   systemctl --user status yorik-supabase
+#   systemctl --user restart yorik-supabase
+#   journalctl --user -u yorik-supabase -f
+#
+# The compose file is the upstream Supabase docker compose + Yorik's
+# override (port 5435 publish for direct DB access). Idempotent —
+# `docker compose up -d` is a no-op when the stack is already up.
+
+[Unit]
+Description=Yorik / Supabase local stack (Postgres + pgvector + Studio)
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory={{INSTALL_DIR}}/infra/supabase/docker
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose stop
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

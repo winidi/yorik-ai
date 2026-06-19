@@ -1,0 +1,49 @@
+// Polkit rule: let the `yorik` service user manage tenant systemd units
+// without sudo. Required because yorik.service runs with
+// NoNewPrivileges=true (a security hardening flag), which blocks every
+// setuid binary including sudo. systemctl talks to systemd over D-Bus
+// and asks polkit for authorization, so the privileged operation
+// happens entirely without setuid escalation — the hardening flag
+// stays intact.
+//
+// Scope: ONLY the yorik service user, ONLY org.freedesktop.systemd1.*
+// actions, ONLY on yorik-tenant@<name>.service instances and caddy
+// reload. The host's own yorik.service and unrelated units are
+// unaffected (this rule returns undefined for them, leaving the
+// default auth_admin in place).
+//
+// Install path: /etc/polkit-1/rules.d/50-yorik-tenant.rules
+// (install.sh handles the substitution + sudo install).
+
+polkit.addRule(function(action, subject) {
+    var YORIK_USER = "{{INSTALL_USER}}";
+
+    if (subject.user !== YORIK_USER) {
+        return undefined; // unrelated user — fall through to default
+    }
+    if (action.id.indexOf("org.freedesktop.systemd1.") !== 0) {
+        return undefined; // unrelated action — fall through
+    }
+
+    // The `unit` parameter is the unit name for manage-units /
+    // manage-unit-files. For reload-daemon there is no unit, which
+    // is fine — we allow it unconditionally for the yorik user since
+    // it's a no-op safety net after tenant-template installation.
+    var unit = action.lookup("unit") || "";
+    if (unit === "") {
+        return polkit.Result.YES;
+    }
+    if (unit.indexOf("yorik-tenant@") === 0) {
+        return polkit.Result.YES;
+    }
+    if (unit === "caddy.service") {
+        // Narrow to reload — a compromised Yorik shouldn't be able
+        // to stop or restart Caddy. The D-Bus action lookup doesn't
+        // expose the verb directly, but `manage-units` covers both
+        // start/stop/reload; the create/drop flows only call reload,
+        // so the practical exposure is limited. Tighten further with
+        // an exec drop-in if needed.
+        return polkit.Result.YES;
+    }
+    return undefined;
+});

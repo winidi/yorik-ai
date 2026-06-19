@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background tile — square so the maskable-icon spec stays happy on
+       Android (system can mask to circle / squircle without losing the
+       glyph). Gradient mirrors the app's primary violet→blue accent. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"  stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- Lowercase "y" — same wordmark Yorik uses in the header. -->
+  <path fill="#fff" d="M178 168 L256 312 L334 168 L386 168 L286 360 Q272 388 248 388 Q224 388 210 360 L126 168 Z"/>
+</svg>

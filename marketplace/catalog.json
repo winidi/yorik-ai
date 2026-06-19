@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "updated_at": "2026-06-08",
+  "apps": [
+    {
+      "id": "notes",
+      "name": "Notes",
+      "description": "Quick notes with optional AI mood inference. Reference app demonstrating the Yorik App SDK.",
+      "icon": "📝",
+      "version": "0.1.0",
+      "author": "yorik-core",
+      "license": "Apache-2.0",
+      "homepage": "https://github.com/winidi/yorik-ai/tree/main/examples/notes",
+      "tags": ["productivity", "example", "reference"],
+      "source_type": "bundled",
+      "source_path": "examples/notes"
+    }
+  ]
+}

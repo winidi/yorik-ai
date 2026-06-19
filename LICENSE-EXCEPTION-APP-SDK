@@ -1,0 +1,107 @@
+YORIK APP SDK LINKING EXCEPTION
+================================
+
+Version 1.0, 2026-05-22
+
+
+This is an additional permission granted on top of the GNU Affero
+General Public License (AGPL-3.0-or-later) under which Yorik is
+distributed (see ./LICENSE).
+
+It applies specifically and only to:
+
+  backend/app_sdk.py
+
+and to any future module the Yorik maintainers explicitly mark as
+part of the App SDK by including a SPDX header reading:
+
+  SPDX-License-Identifier: AGPL-3.0-or-later WITH Yorik-App-SDK-Exception-1.0
+
+The intent is to allow third-party application developers to build
+Yorik apps WITHOUT the AGPL's copyleft requirement reaching their
+own code, so that commercial, proprietary, and differently-licensed
+apps can coexist with open-source ones in the Yorik ecosystem.
+
+
+GRANT
+-----
+
+You have permission to convey, distribute, and use a work that
+incorporates a Combined Work consisting of:
+
+  (a) the Yorik App SDK as listed above, and
+  (b) your own application code that imports from, calls, or
+      otherwise links against the App SDK,
+
+under terms of YOUR choice (including proprietary, non-AGPL, or
+non-open-source terms), provided that:
+
+  1. Any modifications you make to the App SDK files THEMSELVES
+     remain licensed under the AGPL-3.0-or-later. The exception
+     applies only to combining the App SDK with your separate
+     application code — it does NOT let you re-license the SDK
+     itself.
+
+  2. You distribute the App SDK as-received (or with the same
+     license + exception text intact) alongside any redistribution
+     of your application that includes the SDK.
+
+  3. Your application code is in separate files from the SDK files
+     — i.e. your code calls INTO the SDK, rather than being woven
+     into it.
+
+This exception applies to BOTH source and binary forms of the
+Combined Work, including container images that bundle the SDK with
+proprietary application code.
+
+
+WHAT THIS DOES NOT COVER
+------------------------
+
+This exception does NOT extend to:
+
+  - The rest of the Yorik core (backend/main.py, frontend/, etc.).
+    Code that imports from, modifies, or links against those files
+    is governed by the unmodified AGPL-3.0-or-later.
+
+  - Your distribution of a modified Yorik core itself. The AGPL's
+    network-use clause still applies to the core platform.
+
+  - Third-party libraries the SDK happens to import (httpx, pydantic,
+    etc.). Those are governed by their own licenses.
+
+If your application talks to Yorik only via HTTP (an iframe or a
+separate process making API calls), then the AGPL's combined-work
+clause arguably never engages in the first place — but this exception
+gives explicit permission for the linking case too, removing all
+ambiguity for app authors.
+
+
+WHY
+---
+
+Yorik wants a healthy ecosystem of third-party apps — including
+commercial ones from developers who want to charge money to support
+their work. Without this exception, the AGPL's copyleft would force
+every app built on the SDK to also be AGPL, which would block
+proprietary commercial apps entirely. By carving out the SDK as a
+permissive linking boundary, we preserve the AGPL's protection of
+the core platform (anyone distributing a modified Yorik must share
+their changes) while letting the app ecosystem be a mix of free,
+open-source, freemium, and commercial offerings.
+
+This is analogous to the GCC Runtime Library Exception, the
+Classpath Exception used by OpenJDK, and the linking exceptions
+used by GNU Bison and others — all longstanding patterns for
+keeping copyleft platforms commercially extensible.
+
+
+CONTRIBUTING TO THE SDK
+-----------------------
+
+Patches to the App SDK files themselves are accepted under the
+AGPL-3.0-or-later (matching the rest of the Yorik project under
+DCO). By submitting a patch to the App SDK, you grant the Yorik
+maintainers permission to distribute it under the AGPL-3.0-or-later
+together with this exception. If you do not wish your patch to be
+distributed under this combined license, do not submit it.

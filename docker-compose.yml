@@ -1,0 +1,281 @@
+# Every bundled service is profile-gated so start.sh can skip the ones
+# the user already has running. Profiles are selected dynamically via
+# COMPOSE_PROFILES=bundled-immich,... — start.sh probes each port and
+# includes only the profiles whose port is FREE.
+#
+# To force-run everything anyway:
+#   COMPOSE_PROFILES=bundled-immich,bundled-paperless,bundled-whatsapp docker compose up -d
+#
+# n8n note: NOT bundled. n8n is source-available under the Sustainable
+# Use License (not OSI-approved open source), so Yorik can't ship it
+# without dragging SUL distribution terms into the AGPL-3 codebase.
+# The /n8n/* reverse proxy + connector hooks stay in the backend for
+# users who run their own n8n instance — set HOMEOS_N8N_BASE_URL in
+# config.env to point at it.
+services:
+  # ── Immich — self-hosted Google Photos. Yorik's Photos app iframes this.
+  # Four containers stand up the full stack: server (API + web UI), ML worker
+  # (CLIP for text search + facial recognition), redis for jobs, postgres
+  # (vchord/pgvecto.rs build for vector search). Photos land in
+  # data/immich/library; postgres data in data/immich/postgres; ML model cache
+  # in a named volume so re-creating the container doesn't re-download.
+  #
+  # First-run: `docker compose up -d`, visit http://localhost:2283, set admin
+  # password, then Settings → API Keys → New, paste into Yorik's Settings →
+  # Connectors → Immich form so the voice operations can talk to it.
+  immich-server:
+    container_name: yorik-immich-server
+    image: ghcr.io/immich-app/immich-server:release
+    restart: unless-stopped
+    profiles: ["bundled-immich"]
+    # Run as the host user so files written under /data have the right
+    # ownership. WITHOUT this, the container runs as root and the
+    # host user (running uvicorn) later can't move/back up the
+    # photo library. The "Move library to external SSD" feature in
+    # Yorik's settings page fails with HTTP 500 in exactly that
+    # scenario — see backend/storage.py for the pre-flight check.
+    #
+    # Defaults to the typical first-user UID/GID on a single-user
+    # Linux box (1000:1000). Override via .env:
+    #   YORIK_IMMICH_UID=1001
+    #   YORIK_IMMICH_GID=1001
+    #
+    # MIGRATION FROM A PRE-FIX INSTALL: existing root-owned files
+    # under data/immich/library must be chowned ONCE before Immich
+    # can restart with this directive in place. SCOPE MATTERS — do
+    # NOT chown data/immich/postgres; it's owned by container UID 999
+    # (the postgres user inside immich-postgres) and chowning it stops
+    # the postgres container from booting:
+    #   sudo chown -R $(id -u):$(id -g) data/immich/library
+    user: "${YORIK_IMMICH_UID:-1000}:${YORIK_IMMICH_GID:-1000}"
+    ports:
+      - "2283:2283"
+    environment:
+      - DB_HOSTNAME=immich-postgres
+      - DB_USERNAME=immich
+      - DB_PASSWORD=${IMMICH_DB_PASSWORD:-immich_change_me}
+      - DB_DATABASE_NAME=immich
+      - REDIS_HOSTNAME=immich-redis
+      - TZ=${YORIK_TZ:-UTC}
+    volumes:
+      - ./data/immich/library:/data
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - immich-redis
+      - immich-postgres
+
+  # CPU-safe default. start.sh swaps this image tag + adds GPU
+  # passthrough via docker-compose.nvidia.yml / .rocm.yml overrides
+  # when it detects the right hardware. The IMMICH_ML_IMAGE env var
+  # is what those overrides set; default `release` means CPU-only
+  # and works on every platform.
+  immich-machine-learning:
+    container_name: yorik-immich-ml
+    image: ${IMMICH_ML_IMAGE:-ghcr.io/immich-app/immich-machine-learning:release}
+    restart: unless-stopped
+    profiles: ["bundled-immich"]
+    volumes:
+      - immich_model_cache:/cache
+
+  immich-redis:
+    container_name: yorik-immich-redis
+    image: docker.io/valkey/valkey:8-bookworm
+    restart: unless-stopped
+    profiles: ["bundled-immich"]
+    healthcheck:
+      test: redis-cli ping || exit 1
+
+  immich-postgres:
+    container_name: yorik-immich-postgres
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0
+    restart: unless-stopped
+    profiles: ["bundled-immich"]
+    environment:
+      - POSTGRES_PASSWORD=${IMMICH_DB_PASSWORD:-immich_change_me}
+      - POSTGRES_USER=immich
+      - POSTGRES_DB=immich
+    volumes:
+      - ./data/immich/postgres:/var/lib/postgresql/data
+
+  # ── Paperless-ngx — self-hosted document filing cabinet. Yorik's Documents
+  # app iframes this; OCR'd full-text + (later) Yorik's semantic vector layer
+  # power voice queries like "what did I charge Müller last time?".
+  #
+  # First-run is fully automated by start.sh:
+  #   1. .env gets PAPERLESS_DB_PASSWORD, PAPERLESS_SECRET_KEY,
+  #      PAPERLESS_YORIK_TOKEN generated via openssl rand
+  #   2. docker compose up brings the stack
+  #   3. start.sh creates the admin user + API token via manage.py shell and
+  #      stores the token in app_settings.paperless_api_token
+  # User opens Yorik → Documents → already logged into Paperless.
+  paperless-broker:
+    container_name: yorik-paperless-broker
+    image: docker.io/library/redis:7
+    restart: unless-stopped
+    profiles: ["bundled-paperless"]
+    volumes:
+      - paperless_redis:/data
+
+  paperless-db:
+    container_name: yorik-paperless-db
+    image: docker.io/library/postgres:16
+    restart: unless-stopped
+    profiles: ["bundled-paperless"]
+    environment:
+      - POSTGRES_DB=paperless
+      - POSTGRES_USER=paperless
+      - POSTGRES_PASSWORD=${PAPERLESS_DB_PASSWORD:-paperless_change_me}
+    volumes:
+      - ./data/paperless/db:/var/lib/postgresql/data
+
+  paperless-tika:
+    container_name: yorik-paperless-tika
+    image: docker.io/apache/tika:latest
+    restart: unless-stopped
+    profiles: ["bundled-paperless"]
+
+  paperless-gotenberg:
+    container_name: yorik-paperless-gotenberg
+    image: docker.io/gotenberg/gotenberg:8
+    restart: unless-stopped
+    profiles: ["bundled-paperless"]
+    # Exposed on :9080 (most low-3000s are squatted on this box) so Yorik's
+    # Compose app can POST HTML for PDF rendering. Paperless also uses this
+    # container internally via the docker network.
+    ports:
+      - "9080:3000"
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+
+  paperless-web:
+    container_name: yorik-paperless-web
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: unless-stopped
+    profiles: ["bundled-paperless"]
+    depends_on:
+      - paperless-db
+      - paperless-broker
+      - paperless-tika
+      - paperless-gotenberg
+    ports:
+      # Bound to loopback only. Yorik's /paperless/* reverse proxy is the
+      # ONLY path into Paperless — going direct to :8010 would bypass the
+      # Remote-User SSO that the proxy injects. To open Paperless to the
+      # LAN/Tailscale for some reason, change to "8010:8000" knowing you
+      # are also opening the un-authenticated direct path.
+      - "127.0.0.1:8010:8000"
+    environment:
+      - PAPERLESS_REDIS=redis://paperless-broker:6379
+      - PAPERLESS_DBHOST=paperless-db
+      - PAPERLESS_DBUSER=paperless
+      - PAPERLESS_DBPASS=${PAPERLESS_DB_PASSWORD:-paperless_change_me}
+      - PAPERLESS_DBNAME=paperless
+      - PAPERLESS_TIKA_ENABLED=1
+      - PAPERLESS_TIKA_ENDPOINT=http://paperless-tika:9998
+      - PAPERLESS_TIKA_GOTENBERG_ENDPOINT=http://paperless-gotenberg:3000
+      - PAPERLESS_URL=http://localhost:8010
+      # ── Single-sign-on through the Yorik reverse proxy at /paperless/*
+      # Yorik's FastAPI proxy (backend/paperless_proxy.py) authenticates
+      # the request, then sets `Remote-User` to the Paperless username
+      # of the logged-in Yorik user. RemoteUserMiddleware here trusts
+      # that header (any *direct* :8010 access bypasses Yorik and so
+      # MUST be firewalled off in production — that's done by NOT
+      # publishing 8010 in the production compose; in dev it's exposed
+      # for debugging).
+      - PAPERLESS_ENABLE_HTTP_REMOTE_USER=true
+      # Paperless splits Remote-User auth between the web UI flag (above)
+      # and a separate API flag. WITHOUT this second flag, the editor's
+      # XHR calls (/api/ui_settings/, /api/documents/, …) come back 401
+      # even though the SPA itself loaded fine. The whole UI then says
+      # "Error loading settings".
+      - PAPERLESS_ENABLE_HTTP_REMOTE_USER_API=true
+      # FORCE_SCRIPT_NAME tells Paperless's URL builder / static-asset
+      # paths / OAuth callbacks that it lives at /paperless, not /. With
+      # this set, the SPA's internal links all carry the prefix and the
+      # browser routes them back through Yorik's proxy automatically.
+      - PAPERLESS_FORCE_SCRIPT_NAME=/paperless
+      - PAPERLESS_STATIC_URL=/paperless/static/
+      # The proxy sets X-Forwarded-Host so Paperless can generate
+      # correct absolute URLs (e.g. password-reset emails). Without
+      # USE_X_FORWARD_HOST=true Django would use the upstream :8010
+      # host and the links would point at the wrong place.
+      - PAPERLESS_USE_X_FORWARD_HOST=true
+      # CSRF: Django checks the Origin/Referer of POSTs against this
+      # list. The browser sees Paperless on the Yorik origin, so the
+      # Yorik origin(s) must be trusted. Override via env to add a
+      # Tailscale hostname etc.
+      - PAPERLESS_CSRF_TRUSTED_ORIGINS=${PAPERLESS_CSRF_TRUSTED_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}
+      - PAPERLESS_ALLOWED_HOSTS=*
+      - PAPERLESS_SECRET_KEY=${PAPERLESS_SECRET_KEY:-please_replace_me}
+      - PAPERLESS_TIME_ZONE=${YORIK_TZ:-UTC}
+      - PAPERLESS_OCR_LANGUAGE=${PAPERLESS_OCR_LANGUAGE:-eng}
+      # Consumer: poll every 30s instead of inotify. inotify events from
+      # the host don't reliably reach the container across the bind mount
+      # at ./data/paperless/consume, so files dropped while Paperless is
+      # running would otherwise sit until the next container restart.
+      - PAPERLESS_CONSUMER_POLLING=30
+      - PAPERLESS_CONSUMER_POLLING_RETRY_COUNT=5
+      - PAPERLESS_CONSUMER_INOTIFY=false
+      - PAPERLESS_ADMIN_USER=${PAPERLESS_ADMIN_USER:-admin}
+      - PAPERLESS_ADMIN_PASSWORD=${PAPERLESS_ADMIN_PASSWORD:-paperless_change_me}
+      - PAPERLESS_ADMIN_MAIL=${PAPERLESS_ADMIN_MAIL:-admin@yorik.local}
+      # Run as the host user so files written under data/paperless/{data,
+      # media,export,consume} have the right ownership. Same rationale as
+      # the Immich `user:` directive above — Yorik's "Move library to
+      # external SSD" feature can't relocate root-owned files. Paperless's
+      # image uses USERMAP_* env vars (its entrypoint chowns its mounts
+      # on boot) rather than docker's `user:` directive.
+      #
+      # MIGRATION FROM A PRE-FIX INSTALL: chown existing app dirs once.
+      # SCOPE MATTERS — do NOT chown data/paperless/db; it belongs to
+      # paperless-db's internal postgres UID 999 and chowning it stops
+      # the postgres container from booting:
+      #   sudo chown -R $(id -u):$(id -g) \
+      #     data/paperless/data data/paperless/media \
+      #     data/paperless/export data/paperless/consume
+      - USERMAP_UID=${YORIK_PAPERLESS_UID:-1000}
+      - USERMAP_GID=${YORIK_PAPERLESS_GID:-1000}
+      # Webhook: when a doc finishes processing Paperless calls this script;
+      # the script POSTs to Yorik's ingest endpoint so we can build the
+      # semantic vector index (phase 2).
+      - PAPERLESS_POST_CONSUME_SCRIPT=/usr/src/paperless/scripts/notify-yorik.sh
+      - YORIK_INGEST_URL=http://host.docker.internal:8000/api/paperless/ingest
+      - YORIK_PAPERLESS_TOKEN=${PAPERLESS_YORIK_TOKEN:-yorik_change_me}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data/paperless/data:/usr/src/paperless/data
+      - ./data/paperless/media:/usr/src/paperless/media
+      - ./data/paperless/export:/usr/src/paperless/export
+      - ./data/paperless/consume:/usr/src/paperless/consume
+      - ./scripts/notify-yorik.sh:/usr/src/paperless/scripts/notify-yorik.sh:ro
+
+  # ── WhatsApp bridge — Node.js + Baileys.
+  # Holds a single WhatsApp account as a "linked device" (same as
+  # WhatsApp Web on a laptop). Exposes REST + WS on :3015 for the Python
+  # backend at backend/whatsapp.py. Session state persists in the named
+  # volume so a `docker compose down/up` doesn't trigger a fresh QR pair.
+  #
+  # First-run: `docker compose up -d whatsapp-bridge`, open Yorik →
+  # WhatsApp app, scan the QR with your phone (WhatsApp → Settings →
+  # Linked Devices → Link a Device). Yorik can read + draft from then on.
+  whatsapp-bridge:
+    container_name: yorik-whatsapp-bridge
+    build: ./whatsapp-bridge
+    restart: unless-stopped
+    profiles: ["bundled-whatsapp"]
+    ports:
+      - "3015:3015"
+    environment:
+      - BRIDGE_PORT=3015
+      - BRIDGE_AUTH_DIR=/data/baileys-auth
+      - LOG_LEVEL=warn
+    volumes:
+      - whatsapp_bridge_data:/data
+
+volumes:
+  immich_model_cache:
+  paperless_redis:
+  whatsapp_bridge_data:

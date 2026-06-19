@@ -1,0 +1,140 @@
+# HomeOS / Yorik — pinned Python dependencies.
+# Installed by start.sh / install.sh PHASE 3.
+
+# Web stack
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.5
+python-multipart==0.0.20
+requests==2.32.3
+python-dotenv==1.2.2
+
+# LLM agent — Yorik runs its own in-tree loop (backend/agent/) talking
+# to any OpenAI-compatible endpoint via the openai SDK. (Phase 4 of the
+# agent-rebuild plan removed Vanna; the compat layer in
+# backend/agent/vanna_shim.py satisfies legacy import surfaces in
+# ui_tools.py and the unused conversation_store.)
+openai==2.37.0
+
+# Web search — bundled DuckDuckGo backend, no API key. Plugin architecture
+# in backend/agent/providers/web_search/ lets ops add Brave/Tavily/Exa/
+# Firecrawl as drop-in siblings.
+ddgs==9.14.4
+
+# MCP (Model Context Protocol) — slim stdio client in
+# backend/agent/providers/mcp/. PyYAML reads the server config at
+# data/mcp_servers.yaml. Also a transitive of huggingface_hub but we
+# pin explicitly so the agent doesn't quietly break if that lineage
+# changes.
+pyyaml==6.0.3
+
+# Voice — Whisper STT (PHASE 4 of start.sh downloads the model weights)
+openai-whisper==20250625
+sounddevice==0.5.1
+scipy==1.15.1
+numpy==2.2.1
+
+# Used by the SQL runner (backend/agent/vanna_shim.py) and a handful
+# of gate-blocked-response builders in backend/ask.py to shape rows
+# as DataFrames + serialise to CSV for the LLM. Stragglers from the
+# Vanna era — long-term we should replace with a stdlib csv shim,
+# but pandas pulls cleanly on top of the existing numpy/scipy pins
+# and unblocks every run_sql call (which currently breaks with
+# "No module named 'pandas'").
+pandas==2.2.3
+
+# Voice profiles: TTS (Supertonic) + speaker identification (SpeechBrain ECAPA).
+# Each has a one-time model download triggered by start.sh PHASE 4.
+# Supertonic 3 is an ONNX-Runtime on-device TTS with 31 languages incl. de.
+# (Replaced piper-tts==1.4.2 in 2026-05.)
+supertonic==1.2.3
+# SpeechBrain 1.0.2/1.0.3 reference torchaudio.list_audio_backends which is
+# removed in torchaudio ≥2.10. 1.1.0 fixes it. Keep this pin in sync with
+# whatever torchaudio Vanna pulls in.
+speechbrain==1.1.0
+
+# Encrypted credential storage for connectors that need API keys / passwords
+# (email-imap, twilio, etc). Fernet under the hood. Key auto-managed at
+# data/.credential_key on first install.
+cryptography==48.0.0
+
+# German bank protocol (FinTS / HBCI) for read-only balance + transactions.
+# Optional: connector falls back gracefully if not installed.
+fints==5.0.0
+
+# RAG / document search. Vector index lives in data/documents.db (separate
+# from family.db on purpose — heavy reindex jobs never lock the calendar).
+sqlite-vec==0.1.9
+pypdf==6.11.0
+python-docx==1.2.0
+
+# Bundled local embedder — sentence-transformers runs in-process so
+# semantic search works out of the box without any external embeddings
+# endpoint. Default model paraphrase-multilingual-MiniLM-L12-v2 is
+# ~120 MB, 384-dim, multilingual (German + English + 48 more).
+# Power users can still point HOMEOS_EMBED_BASE_URL at a faster GPU
+# embedder — see backend/documents.py and config.env.example.
+# speechbrain (above) already pulls torch transitively; we add
+# sentence-transformers on top. No torch pin here — we let the
+# speechbrain-compatible version win to avoid a resolver fight.
+sentence-transformers==3.3.1
+
+# Wave 6b — community app platform. sqlparse for strict schema validation
+# of community-supplied SQL (whitelist of CREATE TABLE/INDEX/VIEW; blocks
+# triggers, pragmas, attaches, drops, DML).
+sqlparse==0.5.5
+
+# Compose app — template engine for AI-drafted documents (invoices,
+# quotes, letters). Jinja's `{{ var }}` + `{% for %}` is the standard for
+# this style of document templating.
+Jinja2==3.1.4
+
+# WhatsApp integration — async HTTP + WS to the Baileys bridge container.
+# httpx is the async HTTP client (used by backend/whatsapp.py for REST
+# calls into the bridge). websockets is the async WS client for the
+# /events subscription. Both pure Python, small footprint.
+httpx==0.28.1
+websockets==14.1
+
+# Web-search / web-fetch connectors. trafilatura extracts main-text
+# from HTML (boilerplate stripped, German-friendly), powers web_fetch.
+# Search uses SearXNG / Brave APIs over plain httpx — no extra dep.
+trafilatura==2.0.0
+
+# Multi-user wave: bcrypt for password hashing. Pinned because passlib
+# (which we DON'T use) is incompatible with bcrypt 4.x; the bare
+# `bcrypt` package is what we want — small, stable, no surprises.
+bcrypt==4.2.1
+
+# Email integration. imapclient gives us a sane API over imaplib
+# (handles capabilities/quirks per provider) and supports IDLE for
+# push notifications instead of polling. mail-parser handles RFC 822
+# robustly (multipart, encodings, MIME quirks). Both pure Python.
+imapclient==3.0.1
+mail-parser==4.2.1
+
+# vCard (.vcf) parser — for the Contacts UI's "Import .vcf" button
+# and the chat composer's vCard drop. The de-facto Python vCard
+# library; handles 2.1/3.0/4.0 syntax, line folding, and quirky
+# real-world exports from iCloud/Google/Outlook.
+vobject==0.9.9
+
+# Backup encryption: age (the modern Tarsnap-y format).
+# pyrage is a pure-Python binding, no system `age` binary needed.
+# Backups land as .tar.gz.age — single-passphrase symmetric encryption.
+pyrage==1.3.0
+
+# NOTE: drafthorse + factur-x (German ZUGFeRD/Factur-X e-invoice support)
+# moved to extensions/zugferd/requirements.txt — installed via the
+# Settings → Extensions tab when a German user enables that extension.
+# Keeps the base install lean for non-DE users.
+
+# Phase D — Supabase / Postgres data layer (added 2026-06-15)
+# psycopg v3 (sync) chosen to minimize code churn — keeps the existing
+# `with conn_ctx() as c:` shape used across 90+ call sites. psycopg_pool
+# replaces SQLite's per-thread file handle with a real connection pool.
+# `[binary]` extra ships libpq inside the wheel so no system libpq dep.
+psycopg[binary]>=3.2.0
+psycopg-pool>=3.2.0
+pgvector>=0.3.0
+PyJWT>=2.8

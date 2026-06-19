@@ -1,0 +1,56 @@
+# systemd unit for Yorik — installed by install.sh on opt-in.
+# Placeholders {{INSTALL_DIR}} and {{INSTALL_USER}} are filled in
+# at install time via sed.
+#
+# Manage:
+#   sudo systemctl status  yorik
+#   sudo systemctl start   yorik
+#   sudo systemctl stop    yorik
+#   sudo systemctl enable  yorik       (autostart at boot)
+#   sudo systemctl disable yorik
+#   sudo journalctl -u     yorik -f    (live log tail)
+[Unit]
+Description=Yorik — local-first family / business OS
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+# `forking` because start.sh spawns uvicorn via nohup and exits.
+# PIDFile lets systemd track the actual long-lived process.
+Type=forking
+WorkingDirectory={{INSTALL_DIR}}
+ExecStart={{INSTALL_DIR}}/start.sh
+PIDFile=/tmp/homeos-api.pid
+Restart=on-failure
+RestartSec=10
+User={{INSTALL_USER}}
+StandardOutput=journal
+StandardError=journal
+
+# start.sh's first boot does a lot of one-time work: cloning supabase
+# (~30s), generating .env (~3s), `docker compose up` for 11+ supabase
+# services (~30s), warming voice ACK cache, applying migrations, etc.
+# systemd's default TimeoutStartSec=90s hits this hard — yorik.service
+# gets killed mid-boot, Restart=on-failure brings it back, the cycle
+# spins indefinitely. 10 minutes is generous for the worst-case first
+# boot; subsequent restarts are sub-30s and well within the limit.
+TimeoutStartSec=600
+# Also widen the start-burst limit — TimeoutStartSec kills can rack up
+# fast on a slow box. Default StartLimitBurst=5 in StartLimitIntervalSec=10s
+# means 5 timeouts can permanently disable the unit; bump both so an
+# unattended fresh-install doesn't end up disabled.
+StartLimitIntervalSec=1800
+StartLimitBurst=10
+
+# ─── hardening ────────────────────────────────────────────────────
+# No setuid escalation.
+NoNewPrivileges=true
+# System dirs read-only; only Yorik's install dir is writable. /tmp
+# is added back because start.sh writes /tmp/homeos-api.{pid,log}.
+ProtectSystem=full
+ReadWritePaths={{INSTALL_DIR}} /tmp
+# Leave /home accessible — start.sh shells out to pip / npm / docker
+# which all touch user caches under ~/.
+
+[Install]
+WantedBy=multi-user.target

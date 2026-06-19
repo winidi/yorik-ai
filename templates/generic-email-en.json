@@ -1,0 +1,106 @@
+{
+  "id": "generic-email-en",
+  "locale": "en",
+  "llm_hints": "- Short, informal email — NO postal address block, NO date header, NO formal salutation default.\n- body = greeting + middle + closing; do NOT add the closing manually under the body — put it in args.closing.\n- find_person is OPTIONAL for email — if 0 matches, just proceed with recipient=<name>, do NOT fabricate a contact.\n- NEVER set 'template_id=generic-letter-en' for an email — that renders a postal letter with all the wrong chrome.",
+  "kind": "email",
+  "name": "Email (general)",
+  "description": "Universal email — short, informal messages. Body has greeting + text + closing only; no postal address.",
+  "when_to_use": [
+    "User says 'email', 'mail', 'write an email', 'shoot her a message'.",
+    "Short or informal message where formal letter chrome would feel wrong.",
+    "Recipient has an email address and the user did not say 'letter'.",
+    "No specific use case applies (cancellation, invoice, rent abatement, …)."
+  ],
+  "when_to_not_use": [
+    "User says 'letter', 'cover letter', 'printed letter' — use generic-letter-en.",
+    "Output is meant for a printed envelope or PDF — use generic-letter-en.",
+    "Specific use case applies (cancellation → cancellation-contract-en; invoice → invoice-en).",
+    "User wants WhatsApp / chat — there is no email-WhatsApp bridge template."
+  ],
+  "version": "1.0",
+  "author": "yorik-core",
+  "tags": [
+    "email"
+  ],
+  "delivery_default": "email",
+  "subject_template": "{% if args.subject %}{{ args.subject }}{% else %}Email{% endif %}",
+  "skills_supported": {
+    "auto_fill_from": [],
+    "export_formats": [
+      "html"
+    ],
+    "send_channels": [
+      "email"
+    ],
+    "voice_triggers": [
+      "write an email",
+      "send a mail"
+    ],
+    "language": "any",
+    "calendar_aware": false
+  },
+  "data_query": {},
+  "default_args": {
+    "recipient_name": "",
+    "recipient_email": "",
+    "subject": "",
+    "greeting": "Hi",
+    "body_text": "",
+    "closing": "Best regards"
+  },
+  "preview_args": {
+    "recipient_name": "Anna Example",
+    "recipient_email": "anna@example.com",
+    "subject": "Quick question about your quote",
+    "body_text": "thanks for the quick reply — I have one short follow-up about the delivery date.\n\nWould Thursday morning work for a 10-minute call?"
+  },
+  "ask_user_for_args": [
+    {
+      "key": "recipient_name",
+      "label": "Recipient (name)",
+      "required": false,
+      "hint": "Optional — only used for the greeting. The email address goes in the recipient-email field.",
+      "role": "recipient_name",
+      "contact_group": "recipient"
+    },
+    {
+      "key": "recipient_email",
+      "label": "Recipient email",
+      "required": false,
+      "hint": "Auto-fills when you pick a contact with an email. Prefills the To: field of the Send dialog.",
+      "role": "recipient_email",
+      "contact_group": "recipient"
+    },
+    {
+      "key": "subject",
+      "label": "Subject",
+      "required": true,
+      "hint": "Short and clear — e.g. \"Follow-up on your June 3 quote\".",
+      "role": "subject"
+    },
+    {
+      "key": "greeting",
+      "label": "Greeting",
+      "required": false,
+      "hint": "e.g. \"Hi Anna,\" or \"Dear Mr Smith,\". Leave blank if you don't want one.",
+      "role": "greeting"
+    },
+    {
+      "key": "body_text",
+      "label": "Body",
+      "required": true,
+      "input": "textarea",
+      "hint": "What's it about? 1–3 short paragraphs.",
+      "role": "body",
+      "llm_hint": "Write ONLY the middle of the email. NEVER include a greeting (no 'Hi there', 'Hello Anna', 'Dear X' — the template's greeting field prints that). NEVER include a closing ('Best regards', 'Sincerely', 'Kind regards' — the template's closing field prints that) or a signature/name. Use \\n\\n between paragraphs — never one giant prose blob. Stay close to the user's wording and tone; only fix obvious typos and minor grammar. Do NOT pad with 'Hope you're doing well', 'I wanted to share', 'Let me know if you want any details', 'It's been an amazing experience' or other AI-filler phrases the user didn't say. If the user wrote one sentence, you write one sentence. Match their language (English stays English, German stays German)."
+    },
+    {
+      "key": "closing",
+      "label": "Closing",
+      "required": false,
+      "hint": "e.g. \"Best regards\" or \"Sincerely\". Leave blank if you don't want one.",
+      "role": "closing"
+    }
+  ],
+  "body_html": "<div style=\"font-family: sans-serif; line-height: 1.55; font-size: 14px; color: #1a1a1a;\">\n  {% if args.greeting or args.recipient_name %}<p><span data-arg-key=\"greeting\">{{ args.greeting }}</span>{% if args.recipient_name %}{% if args.greeting %} {% endif %}<span data-arg-key=\"recipient_name\">{{ args.recipient_name }}</span>{% endif %},</p>{% endif %}\n\n  {% if args.body_text %}{% for para in args.body_text.split('\\n\\n') %}<p data-arg-key=\"body_text\">{{ para | replace('\\n', '<br>') | safe }}</p>{% endfor %}{% else %}<p><em>(Your email text goes here.)</em></p>{% endif %}\n\n  {% if args.closing %}<p data-arg-key=\"closing\" style=\"margin-top: 16px;\">{{ args.closing }}</p>{% endif %}\n  {% if args.sender_name %}<p style=\"margin: 4px 0 0 0;\">{{ args.sender_name }}</p>{% endif %}\n</div>"
+}

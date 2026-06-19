@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Yorik</title>
+  <!-- Apply the saved theme BEFORE first paint so there's no flash of
+       wrong-colored content on reload. localStorage 'yorik_theme' wins;
+       otherwise honor the OS-level prefers-color-scheme. -->
+  <script>
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem("yorik_theme"); } catch (e) {}
+      var theme = saved || (window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <!-- Tailwind utilities (pre-built once via scripts/build-tailwind.sh,
+       same vendored-output pattern as the TipTap bundle). Loaded BEFORE
+       our hand-authored styles so .yorik custom rules win on collision. -->
+  <link rel="stylesheet" href="/vendor/tailwind.css">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- Lucide icon sprite — vendored as a single SVG with <symbol> per icon.
+       Inlined at body open so every <use href="#i-..."> resolves with no
+       network round-trip. Replaced via fetch on load to keep index.html tidy. -->
+  <div id="icon-sprite-mount" aria-hidden="true"></div>
+  <header class="app">
+    <div class="brand-block">
+      <span class="brand">yorik</span>
+    </div>
+    <div class="controls">
+      <div class="header-group">
+        <!-- Logged-in user pill: name + role. Click to open Settings → Account.
+             Replaces the dev-mode role dropdown (which never had a password
+             behind it). -->
+        <button id="user-pill" class="pill" title="Account · click to manage">
+          <span id="user-pill-name">…</span>
+          <span id="user-pill-role" class="user-pill-role"></span>
+        </button>
+        <button id="theme-toggle" class="icon-btn" title="Toggle light / dark theme" aria-label="Toggle theme">
+          <svg class="icon"><use href="#i-moon"/></svg>
+        </button>
+        <button id="settings" class="icon-btn" title="Settings — connectors, voices, apps, permissions" aria-label="Settings">
+          <svg class="icon"><use href="#i-settings"/></svg>
+        </button>
+        <button id="logout-btn" class="icon-btn" title="Sign out" aria-label="Sign out">
+          <svg class="icon"><use href="#i-x"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Auth overlay: covers the whole app until the user is logged in.
+       Shows either a login form OR a first-run setup form depending on
+       whether any password has been set on the box yet. Driven by app.js. -->
+  <div id="auth-overlay" class="auth-overlay" hidden>
+    <div class="auth-card">
+      <div class="auth-brand">yorik</div>
+      <div class="auth-tagline" id="auth-tagline">Sign in to continue</div>
+      <form id="auth-form" autocomplete="on">
+        <label class="auth-field">
+          <span>Email</span>
+          <input type="email" id="auth-email" autocomplete="email" required>
+        </label>
+        <label class="auth-field" id="auth-name-field" hidden>
+          <span>Your name</span>
+          <input type="text" id="auth-name" autocomplete="name">
+        </label>
+        <label class="auth-field">
+          <span>Password</span>
+          <input type="password" id="auth-password" autocomplete="current-password" required minlength="8">
+        </label>
+        <div class="auth-error" id="auth-error" hidden></div>
+        <button type="submit" class="primary auth-submit" id="auth-submit">Sign in</button>
+      </form>
+    </div>
+  </div>
+
+  <form id="ask-form" class="ask" autocomplete="off">
+    <input id="ask-input" placeholder='Ask Yorik anything — "show next week", "open documents", "what bills are due"'>
+    <button type="submit" class="primary">Ask</button>
+  </form>
+
+  <div id="response" class="response-panel"></div>
+
+  <!-- The main area swaps between app views. Each app picks its own layout
+       inside its container; the wrapper provides the grid + chrome. -->
+  <main id="app-stage" class="stage">
+    <!-- HOME: icon grid -->
+    <section id="home-view" class="home-view" hidden>
+      <div class="home-greeting" id="home-greeting"></div>
+      <div class="home-grid" id="home-grid"></div>
+    </section>
+
+    <!-- CALENDAR: existing 2-col layout (calendar iframe + tasks sidebar) -->
+    <section id="calendar-view" class="grid calendar-view" hidden>
+      <section class="panel">
+        <div id="calendar"></div>
+      </section>
+      <aside class="panel">
+        <div id="tasks"></div>
+      </aside>
+    </section>
+
+    <!-- CHAT: full-width chat panel -->
+    <section id="chat-view" class="chat-view" hidden>
+      <aside class="chat-sidebar">
+        <button id="chat-new" class="primary" style="width:100%">+ New conversation</button>
+        <div id="chat-history" class="chat-history"></div>
+      </aside>
+      <section class="chat-main">
+        <div id="chat-messages" class="chat-messages"></div>
+      </section>
+    </section>
+
+    <!-- COMMUNITY APP: sandboxed iframe served from apps/<id>/app.js -->
+    <section id="community-app-view" class="community-app-view" hidden>
+      <div id="community-app-host" class="community-app-host"></div>
+    </section>
+
+    <!-- COMPOSE: AI-first document composer (TipTap editor) -->
+    <section id="compose-view" class="compose-view" hidden>
+      <aside class="compose-templates">
+        <div class="compose-templates-h">Templates</div>
+        <div class="compose-templates-list" id="compose-templates-list"></div>
+      </aside>
+      <section class="compose-editor">
+        <div class="compose-toolbar" id="compose-toolbar"></div>
+        <div class="compose-editor-host" id="compose-editor-host"></div>
+      </section>
+      <aside class="compose-ai">
+        <div class="compose-ai-h">Source data</div>
+        <div class="compose-ai-data" id="compose-ai-data">
+          <div class="compose-empty">Pick a template on the left, then ask Yorik to draft.</div>
+        </div>
+        <div class="compose-actions">
+          <button id="compose-save"  class="primary" disabled>
+            <svg class="icon"><use href="#i-folder"/></svg> Save to Paperless
+          </button>
+          <button id="compose-send" disabled>
+            <svg class="icon"><use href="#i-send"/></svg> Send via email
+          </button>
+          <button id="compose-export" disabled>
+            <svg class="icon"><use href="#i-download"/></svg> Export PDF
+          </button>
+        </div>
+      </aside>
+    </section>
+
+    <!-- WHATSAPP: 3-pane (chats / thread / draft) -->
+    <section id="whatsapp-view" class="whatsapp-view" hidden>
+      <aside class="wa-chats">
+        <div class="wa-chats-h">
+          <span>Conversations</span>
+          <div class="wa-chats-h-actions">
+            <button id="wa-briefing" class="icon-btn" title="Daily inbox briefing" aria-label="Briefing">
+              <svg class="icon"><use href="#i-list"/></svg>
+            </button>
+            <button id="wa-import" class="icon-btn" title="Import a WhatsApp Export Chat (.txt or .zip)" aria-label="Import">
+              <svg class="icon"><use href="#i-plus"/></svg>
+            </button>
+            <input type="file" id="wa-import-file" accept=".txt,.zip" style="display:none">
+            <button id="wa-sync" class="icon-btn" title="Sync history from phone" aria-label="Sync history">
+              <svg class="icon"><use href="#i-download"/></svg>
+            </button>
+            <button id="wa-refresh" class="icon-btn" title="Reload chats" aria-label="Reload chats">
+              <svg class="icon"><use href="#i-refresh"/></svg>
+            </button>
+            <button id="wa-backfill" class="icon-btn" title="Build / refresh semantic search index" aria-label="Re-index">
+              <svg class="icon"><use href="#i-sparkles"/></svg>
+            </button>
+            <button id="wa-clear" class="icon-btn" title="Clear all WhatsApp data (start fresh)" aria-label="Clear">
+              <svg class="icon"><use href="#i-minus"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="wa-chats-list" id="wa-chats-list"></div>
+      </aside>
+      <section class="wa-thread">
+        <div class="wa-thread-h" id="wa-thread-h">
+          <span class="wa-thread-name">Select a conversation</span>
+        </div>
+        <div class="wa-thread-msgs" id="wa-thread-msgs">
+          <div class="wa-empty">Pick a chat on the left to see messages.</div>
+        </div>
+        <form class="wa-send" id="wa-send-form">
+          <input id="wa-send-input" placeholder="Type a message…" autocomplete="off" disabled>
+          <button type="submit" class="primary" id="wa-send-btn" disabled>Send</button>
+        </form>
+      </section>
+      <aside class="wa-draft">
+        <div class="wa-draft-h">
+          <span>AI Drafts</span>
+          <div class="wa-draft-h-actions">
+            <button id="wa-draft-regen" class="icon-btn" title="Regenerate variants" aria-label="Regenerate" disabled>
+              <svg class="icon"><use href="#i-refresh"/></svg>
+            </button>
+            <button id="wa-draft-discard" class="icon-btn" title="Discard pending drafts" aria-label="Discard" disabled>
+              <svg class="icon"><use href="#i-minus"/></svg>
+            </button>
+          </div>
+        </div>
+        <!-- Variants list: auto-populated when an auto-drafted set lands. -->
+        <div class="wa-variants" id="wa-variants">
+          <div class="wa-empty-sm">When someone messages you, Yorik will auto-draft 3 reply variants here.</div>
+        </div>
+        <!-- Manual draft area below — kept for one-off "rewrite this" use. -->
+        <div class="wa-draft-manual-h">Edit & send</div>
+        <textarea id="wa-draft-text" placeholder="Click a variant above to edit it, or type from scratch." disabled></textarea>
+        <button id="wa-draft-use" disabled>
+          <svg class="icon"><use href="#i-chevron-right"/></svg> Use as message
+        </button>
+        <div class="wa-draft-sources-h">Sources used</div>
+        <div class="wa-draft-sources" id="wa-draft-sources">
+          <div class="wa-empty-sm">Variants show what context Yorik pulled.</div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- DOCS: full-width docs browser -->
+    <section id="docs-view" class="docs-view" hidden>
+      <div class="docs-search-bar">
+        <input id="docs-search-input" placeholder='Search your documents — "insurance terms", "school holidays", "the gas contract"'>
+        <button id="docs-search-btn" class="primary">Search</button>
+        <button id="docs-upload-btn">+ Upload</button>
+        <input type="file" id="docs-file-input" accept=".pdf,.docx,.md,.markdown,.txt" style="display:none" multiple>
+      </div>
+      <div id="docs-body" class="docs-body"></div>
+    </section>
+  </main>
+
+  <!-- Bottom dock — Mac-style. Populated from /api/apps on load + after install/uninstall. -->
+  <nav id="dock" class="dock" aria-label="App dock"></nav>
+
+  <!-- Floating mic — fixed bottom-right, always visible across every app.
+       Idle: subtle dark pill with mic + "Talk". Recording: red pulse + "REC".
+       TTS-playing: accent pill + "STOP". -->
+  <button type="button" id="voice" class="voice-fab" title="Tap to talk to Yorik" aria-label="Talk to Yorik">
+    <span class="voice-ic"><svg class="icon"><use href="#i-mic"/></svg></span>
+    <span class="voice-lbl">Talk</span>
+  </button>
+
+  <!-- TipTap rich-text editor (pre-bundled, vendored, no runtime CDN dep).
+       Exposes window.Tiptap with {Editor, StarterKit, Mention, Table, …}.
+       Rebuild with scripts/build-tiptap-vendor.sh when bumping versions. -->
+  <script src="/vendor/tiptap.bundle.js"></script>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

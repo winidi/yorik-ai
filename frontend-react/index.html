@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/r/butler-icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/r/butler-icon-512.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Yorik</title>
+
+    <!-- PWA — when "Add to Home Screen" lands an entry, the OS reads
+         this manifest to give the launcher icon a name, color, and
+         standalone window mode (no browser chrome). Without it the
+         home-screen icon is just a bookmark that opens in Chrome. -->
+    <link rel="manifest" href="/r/manifest.webmanifest" />
+    <meta name="theme-color" content="#7c3aed" />
+
+    <!-- Apple-specific PWA tags. Safari ignores the W3C manifest and
+         needs its own bag of meta tags + apple-touch-icon to install
+         as a proper fullscreen webapp. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Yorik" />
+    <link rel="apple-touch-icon" href="/r/butler-icon-512.png" />
+    <script>
+      // Apply saved theme before first paint to avoid the flash.
+      // Saved value is "light" | "dark" | "system" (or null = unset → system).
+      (function () {
+        let theme = null;
+        try { theme = localStorage.getItem("yorik_theme"); } catch (e) {}
+        if (theme !== "light" && theme !== "dark") {
+          theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+            ? "light" : "dark";
+        }
+        document.documentElement.classList.toggle("dark", theme === "dark");
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

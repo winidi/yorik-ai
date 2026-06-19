@@ -1,0 +1,35 @@
+# Immich GPU passthrough for NVIDIA hosts.
+#
+# Auto-applied by start.sh when `nvidia-smi` succeeds AND
+# nvidia-container-toolkit is installed. Manual use:
+#   docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up -d
+#
+# Requires: nvidia-container-toolkit on the host
+#   Ubuntu/Debian: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+#   sudo apt install -y nvidia-container-toolkit
+#   sudo systemctl restart docker
+#
+# Without the toolkit, container creation fails with
+# "could not select device driver "nvidia" with capabilities: [[gpu]]".
+
+services:
+  immich-server:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  immich-machine-learning:
+    # CUDA-accelerated ML — face recognition, smart search, etc.
+    # Massively faster than the CPU image on a real-life library.
+    image: ghcr.io/immich-app/immich-machine-learning:release-cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

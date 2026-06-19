@@ -1,0 +1,7 @@
+# Yorik override: expose supabase-db directly on host port 5434 so the
+# FastAPI backend can connect with psycopg pool. Supavisor's pooler on
+# 5433/6543 stays available for other tooling.
+services:
+  db:
+    ports:
+      - "127.0.0.1:5435:5432"

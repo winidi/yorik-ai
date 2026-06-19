@@ -1,0 +1,32 @@
+# Example MCP server config — copy to data/mcp_servers.yaml to enable.
+#
+# Yorik's slim MCP client (backend/agent/providers/mcp/) reads this file
+# at agent-loop init. Each entry under `servers:` becomes a subprocess
+# whose tools are auto-registered as `mcp_<server-name>_<tool-name>`.
+#
+# Comment out any server you don't want. Boot is best-effort — a failing
+# server logs + skips, the rest of Yorik keeps working.
+
+servers:
+
+  # Read/write the local filesystem under /tmp. Useful for "save this
+  # draft as a file" or "what's in this folder". Requires Node + npx.
+  # filesystem:
+  #   command: npx
+  #   args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+  #   env: {}
+
+  # GitHub: search repos, list issues/PRs, create issues, etc.
+  # github:
+  #   command: npx
+  #   args: ["-y", "@modelcontextprotocol/server-github"]
+  #   env:
+  #     GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_..."
+
+  # SQLite: ad-hoc queries against arbitrary SQLite files. NOT recommended
+  # to point at family.db — Yorik's own SQL tool already covers that with
+  # proper role gating.
+  # sqlite:
+  #   command: npx
+  #   args: ["-y", "@modelcontextprotocol/server-sqlite", "/some/other.db"]
+  #   env: {}

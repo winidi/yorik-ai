@@ -1,0 +1,61 @@
+[Unit]
+Description=Yorik / HomeOS — self-hosted family + business OS
+Documentation=https://github.com/winidi/yorik
+# Wait for network so IMAP / WhatsApp bridge / LLM endpoint are reachable
+# at startup. The +online variant ensures DNS is up too.
+After=network-online.target
+Wants=network-online.target
+# Soft dependency on Docker — Yorik works even if Docker is down (Immich
+# / Paperless / n8n are optional), so don't hard-require the unit.
+After=docker.service
+
+[Service]
+Type=exec
+User=__USER__
+Group=__GROUP__
+WorkingDirectory=__REPO__
+
+# Source the same config.env start.sh reads, so HOMEOS_* tunables stay
+# in one place across both manual + service startup.
+EnvironmentFile=-__REPO__/config.env
+
+# Production server: no --reload (that's dev convenience and burns
+# inotify watches at scale). Restart the service with `sudo systemctl
+# restart yorik` after upgrading via `yorik upgrade`.
+ExecStart=__REPO__/venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port __PORT__
+
+# Auto-recover from crashes (OOM, transient bugs, killed by accident).
+# 5s breather between restarts; if we crash 5 times in 5 minutes,
+# stop and let the operator investigate — restart-storming under a
+# persistent bug just floods the log.
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# All logs go to the journal — read them with `journalctl -u yorik -f`.
+# The legacy /tmp/homeos-api.log path stays usable for manual `start.sh`
+# runs; under systemd, the journal is the canonical sink (rotated +
+# rate-limited by journald, no /tmp filling up).
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=yorik
+
+# Hardening — drop privileges we don't need. Each line is one mitigation;
+# if any breaks a feature you care about, comment that single line out
+# rather than disabling all hardening at once.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+# data/ writes inside the repo are required (DB, docs/, backups). Adjust
+# if you set HOMEOS_DB_PATH / HOMEOS_DOCS_DIR to live elsewhere.
+ReadWritePaths=__REPO__/data __REPO__/templates __REPO__/briefings
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

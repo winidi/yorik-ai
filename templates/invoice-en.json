@@ -1,0 +1,446 @@
+{
+  "id": "invoice-en",
+  "locale": "en",
+  "llm_hints": "- English B2B invoice template; all prose is generated from structured args.\n- body=\"\" — never write invoice prose by hand; the template's Jinja renders it from args.\n- Hard-required: sender_name, sender_business, sender_address, sender_iban, customer_name, customer_address, invoice_number, invoice_date, service_short, amount, tax_percent.\n- Optional but recommended: sender_bic, sender_bank, sender_tax_id, due_date, service_period_from/to.",
+  "kind": "invoice",
+  "name": "Invoice (English)",
+  "description": "English invoice with up to 5 line items and a single tax rate; configurable currency, no XML.",
+  "when_to_use": [
+    "User says 'invoice', 'bill', 'issue an invoice'.",
+    "User has provided / can provide a service description and amount.",
+    "Recipient is a business or person paying for goods or services.",
+    "Sender is the user themselves (or their business) — outgoing invoice."
+  ],
+  "when_to_not_use": [
+    "User says 'quote' / 'estimate' — use an offer template (TBD).",
+    "User wants to dispute / refuse an incoming invoice — needs a dispute letter.",
+    "Sender is in Germany and needs ZUGFeRD / E-Rechnung — use rechnung-de.",
+    "No clear amount or service named — gather details before drafting."
+  ],
+  "version": "1.0",
+  "delivery_default": "attachment",
+  "subject_template": "Invoice {{ args.invoice_number or 'NEW' }}{% if args.service_short %} – {{ args.service_short }}{% endif %}",
+  "editor_notes": "<p><strong>Tax rate.</strong> Defaults to 0% — set the rate that applies in your jurisdiction (e.g. 20% UK VAT, 19% DE VAT, 8.25% Texas sales tax, 10% AU GST). For small-business / sole-trader thresholds (e.g. UK VAT registration threshold, US sales-tax nexus, German § 19 UStG) check whether you must even charge it.</p><p><strong>Currency.</strong> Set <em>Currency symbol</em> to $ (default), £, €, A$, C$, NZ$, ₹, etc. Amounts use the international 1,234.56 format. For German-style 1.234,56 € use rechnung-de.</p><p><strong>Invoice number.</strong> Assigned automatically from your Invoice series on save (Settings → Numbering).</p><p><strong>More than 5 line items?</strong> Fork the template and add position_6_…, position_7_… analogously.</p>",
+  "author": "yorik-core",
+  "vertical": "business",
+  "tags": [
+    "invoice"
+  ],
+  "default_args": {
+    "sender_name": "",
+    "sender_business": "",
+    "sender_address": "",
+    "sender_iban": "",
+    "sender_bic": "",
+    "sender_bank": "",
+    "sender_tax_id": "",
+    "sender_tax_number": "",
+    "sender_phone": "",
+    "sender_email": "",
+    "sender_logo_url": "",
+    "customer_name": "",
+    "customer_address": "",
+    "customer_number": "",
+    "invoice_number": "",
+    "invoice_date": "",
+    "service_date_from": "",
+    "service_date_to": "",
+    "due_date": "",
+    "service_short": "",
+    "tax_percent": "0",
+    "currency_symbol": "$",
+    "payment_text": "Please transfer the total amount by the due date to the account shown below.",
+    "location": ""
+  },
+  "preview_args": {
+    "sender_name": "John Example",
+    "sender_business": "Example Workshop LLC",
+    "sender_address": "7 Demo Avenue\nAustin, TX 78701",
+    "sender_iban": "US12 3456 7890 1234 5678",
+    "sender_tax_id": "12-3456789",
+    "sender_phone": "+1 512 555 0100",
+    "sender_email": "billing@example.com",
+    "customer_name": "Acme Corp",
+    "customer_address": "123 Main Street\nAustin, TX 78701",
+    "customer_number": "C-1234",
+    "invoice_number": "2026-001",
+    "invoice_date": "June 2, 2026",
+    "service_date_from": "May 15, 2026",
+    "service_date_to": "May 30, 2026",
+    "due_date": "June 16, 2026",
+    "service_short": "HVAC maintenance",
+    "position_1_description": "HVAC maintenance\nOffice wing 1F including function test",
+    "position_1_quantity": "1",
+    "position_1_unit": "flat",
+    "position_1_unit_price": "250.00",
+    "position_2_description": "HEPA filter replacement\n4-hour maintenance window",
+    "position_2_quantity": "4",
+    "position_2_unit": "pcs",
+    "position_2_unit_price": "35.00",
+    "position_3_description": "Travel and on-site setup\nTravel time + on-site assembly",
+    "position_3_quantity": "2",
+    "position_3_unit": "hr",
+    "position_3_unit_price": "65.00",
+    "tax_percent": "8.25",
+    "currency_symbol": "$",
+    "location": "Austin, TX"
+  },
+  "ask_user_for_args": [
+    {
+      "key": "customer_name",
+      "label": "Customer",
+      "required": true,
+      "role": "recipient_name",
+      "hint": "Company or person being billed.",
+      "contact_group": "customer"
+    },
+    {
+      "key": "customer_address",
+      "label": "Customer address",
+      "required": true,
+      "role": "recipient_address",
+      "hint": "Street + city + postal code. Multi-line ok.",
+      "contact_group": "customer"
+    },
+    {
+      "key": "customer_number",
+      "label": "Customer number (optional)",
+      "required": false,
+      "role": "reference_number",
+      "hint": "Your customer number on their books (their internal ID for you)."
+    },
+    {
+      "key": "service_short",
+      "label": "Service (short)",
+      "required": true,
+      "role": "freeform_value",
+      "hint": "1–3 words for the subject. e.g. \"HVAC maintenance\"."
+    },
+    {
+      "key": "positions",
+      "label": "Line items",
+      "required": false,
+      "role": "line_items",
+      "min_items": 1,
+      "hint": "At least one item. Rows can be added or removed freely.",
+      "item_schema": [
+        {
+          "key": "description",
+          "label": "Description",
+          "type": "textarea",
+          "required": true,
+          "hint": "Service or item. Multi-line ok — first line becomes the title, rest renders italic underneath."
+        },
+        {
+          "key": "quantity",
+          "label": "Quantity",
+          "type": "number",
+          "required": true,
+          "default": 1,
+          "min": 0
+        },
+        {
+          "key": "unit",
+          "label": "Unit",
+          "type": "string",
+          "default": "hr",
+          "hint": "hr / ea / lot / day / kg / m / …"
+        },
+        {
+          "key": "unit_price",
+          "label": "Unit price (net)",
+          "type": "number",
+          "required": true,
+          "min": 0
+        }
+      ]
+    },
+    {
+      "key": "position_1_description",
+      "label": "Line 1 — Description",
+      "required": true,
+      "role": "body",
+      "hint": "What was delivered / performed? Full text.",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_1_quantity",
+      "label": "Line 1 — Quantity",
+      "required": true,
+      "role": "freeform_value",
+      "pattern": "^\\d+([.,]\\d+)?$",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_1_unit",
+      "label": "Line 1 — Unit",
+      "required": false,
+      "role": "freeform_value",
+      "hint": "pcs, hr, flat, sqft, …",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_1_unit_price",
+      "label": "Line 1 — Unit price (net)",
+      "required": true,
+      "role": "currency_amount",
+      "pattern": "^\\d+([.,]\\d+)?$",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_2_description",
+      "label": "Line 2 — Description (optional)",
+      "required": false,
+      "role": "body",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_2_quantity",
+      "label": "Line 2 — Quantity",
+      "required": false,
+      "role": "freeform_value",
+      "pattern": "^\\d+([.,]\\d+)?$",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_2_unit",
+      "label": "Line 2 — Unit",
+      "required": false,
+      "role": "freeform_value",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_2_unit_price",
+      "label": "Line 2 — Unit price (net)",
+      "required": false,
+      "role": "currency_amount",
+      "pattern": "^\\d+([.,]\\d+)?$",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_3_description",
+      "label": "Line 3 — Description (optional)",
+      "required": false,
+      "role": "body",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_3_quantity",
+      "label": "Line 3 — Quantity",
+      "required": false,
+      "role": "freeform_value",
+      "pattern": "^\\d+([.,]\\d+)?$",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_3_unit",
+      "label": "Line 3 — Unit",
+      "required": false,
+      "role": "freeform_value",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_3_unit_price",
+      "label": "Line 3 — Unit price (net)",
+      "required": false,
+      "role": "currency_amount",
+      "pattern": "^\\d+([.,]\\d+)?$",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_4_description",
+      "label": "Line 4 — Description (optional)",
+      "required": false,
+      "role": "body",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_4_quantity",
+      "label": "Line 4 — Quantity",
+      "required": false,
+      "role": "freeform_value",
+      "pattern": "^\\d+([.,]\\d+)?$",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_4_unit",
+      "label": "Line 4 — Unit",
+      "required": false,
+      "role": "freeform_value",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_4_unit_price",
+      "label": "Line 4 — Unit price (net)",
+      "required": false,
+      "role": "currency_amount",
+      "pattern": "^\\d+([.,]\\d+)?$",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_5_description",
+      "label": "Line 5 — Description (optional)",
+      "required": false,
+      "role": "body",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_5_quantity",
+      "label": "Line 5 — Quantity",
+      "required": false,
+      "role": "freeform_value",
+      "pattern": "^\\d+([.,]\\d+)?$",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_5_unit",
+      "label": "Line 5 — Unit",
+      "required": false,
+      "role": "freeform_value",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "position_5_unit_price",
+      "label": "Line 5 — Unit price (net)",
+      "required": false,
+      "role": "currency_amount",
+      "pattern": "^\\d+([.,]\\d+)?$",
+      "hidden_when_positions_set": true
+    },
+    {
+      "key": "tax_percent",
+      "label": "Tax rate (%)",
+      "required": true,
+      "role": "freeform_value",
+      "pattern": "^\\d+([.,]\\d+)?$",
+      "hint": "e.g. 20 (UK VAT), 19 (DE VAT), 8.25 (TX sales tax), 0 (no tax / small-business)."
+    },
+    {
+      "key": "currency_symbol",
+      "label": "Currency symbol",
+      "required": false,
+      "role": "freeform_value",
+      "hint": "$ (default), £, €, A$, C$, NZ$, ₹, etc."
+    },
+    {
+      "key": "invoice_date",
+      "label": "Invoice date",
+      "required": true,
+      "role": "date"
+    },
+    {
+      "key": "service_date_from",
+      "label": "Service date",
+      "required": true,
+      "role": "date"
+    },
+    {
+      "key": "service_date_to",
+      "label": "Service period to (optional)",
+      "required": false,
+      "role": "date"
+    },
+    {
+      "key": "due_date",
+      "label": "Due date",
+      "required": false,
+      "role": "date",
+      "hint": "Default: 14 days after invoice date."
+    },
+    {
+      "key": "invoice_number",
+      "label": "Invoice number",
+      "required": true,
+      "role": "reference_number",
+      "hint": "Assigned automatically from the Invoice series on save."
+    },
+    {
+      "key": "payment_text",
+      "label": "Payment text",
+      "required": false,
+      "role": "freeform_text"
+    },
+    {
+      "key": "sender_logo_url",
+      "label": "Company logo (URL or data: URL, optional)",
+      "required": false,
+      "role": "freeform_value",
+      "hint": "URL to a PNG / SVG OR a data: URL. Shown at the top left of the invoice."
+    },
+    {
+      "key": "sender_name",
+      "role": "sender_name",
+      "required": true,
+      "label": "Sender — Name"
+    },
+    {
+      "key": "sender_address",
+      "role": "sender_address",
+      "required": true,
+      "label": "Sender — Address"
+    },
+    {
+      "key": "location",
+      "label": "City for the dateline",
+      "role": "location"
+    },
+    {
+      "key": "sender_iban",
+      "label": "IBAN (for SEPA payments)",
+      "role": "freeform_value"
+    },
+    {
+      "key": "sender_bic",
+      "label": "BIC / SWIFT",
+      "role": "freeform_value"
+    },
+    {
+      "key": "sender_bank",
+      "label": "Bank name",
+      "role": "freeform_value"
+    },
+    {
+      "key": "sender_tax_id",
+      "label": "Tax ID / VAT no.",
+      "required": true,
+      "role": "reference_number",
+      "hint": "e.g. UK VAT no., EU VAT-ID, US EIN."
+    },
+    {
+      "key": "sender_tax_number",
+      "label": "Tax / business number (optional)",
+      "required": false,
+      "role": "reference_number",
+      "hint": "Local tax / business registration number, if different from above."
+    },
+    {
+      "key": "sender_business",
+      "label": "Business name (optional)",
+      "required": false,
+      "role": "freeform_value",
+      "hint": "If you trade under a business name — leave blank otherwise."
+    },
+    {
+      "key": "sender_phone",
+      "label": "Phone (optional)",
+      "required": false,
+      "role": "freeform_value"
+    },
+    {
+      "key": "sender_email",
+      "label": "Email (optional)",
+      "required": false,
+      "role": "freeform_value"
+    }
+  ],
+  "page": {
+    "size": "A4",
+    "margins_mm": [
+      25,
+      20,
+      25,
+      20
+    ]
+  },
+  "body_html": "{% set tax = (args.tax_percent or '0') | replace(',', '.') | float %}{% set sym = args.currency_symbol or '$' %}{% set net_total = namespace(v=0.0) %}{% set positions = [] %}{% set _flat = namespace(has=false) %}{% for _i in range(1, 6) %}{% if args.get('position_' ~ _i ~ '_description') %}{% set _flat.has = true %}{% endif %}{% endfor %}{% if args.positions and args.positions is iterable and args.positions is not string and (args.positions | list | length) > 0 and not _flat.has %}{% for raw in args.positions %}{% set d = raw.description if raw is mapping else none %}{% if d %}{% set qty = ((raw.quantity or 1) | string).replace(',', '.') | float %}{% set price = ((raw.unit_price or 0) | string).replace(',', '.') | float %}{% set line_net = (qty * price) | round(2) %}{% set net_total.v = net_total.v + line_net %}{% set parts = d.split('\\n') %}{% set _ = positions.append({'idx': loop.index, 'title': parts[0] | trim, 'detail': (parts[1:] | join('\\n')) | trim, 'qty': qty, 'unit': raw.unit or '', 'unit_price': price, 'line_net': line_net}) %}{% endif %}{% endfor %}{% else %}{% for i in range(1, 6) %}{% set d = args.get('position_' ~ i ~ '_description') %}{% if d %}{% set qty = (args.get('position_' ~ i ~ '_quantity', '1') or '1') | replace(',', '.') | float %}{% set price = (args.get('position_' ~ i ~ '_unit_price', '0') or '0') | replace(',', '.') | float %}{% set line_net = (qty * price) | round(2) %}{% set net_total.v = net_total.v + line_net %}{% set parts = d.split('\\n') %}{% set _ = positions.append({'idx': loop.index, 'title': parts[0] | trim, 'detail': (parts[1:] | join('\\n')) | trim, 'qty': qty, 'unit': args.get('position_' ~ i ~ '_unit', '') or '', 'unit_price': price, 'line_net': line_net}) %}{% endif %}{% endfor %}{% endif %}{% set net_r = net_total.v | round(2) %}{% set tax_r = (net_total.v * tax / 100) | round(2) %}{% set gross_r = (net_r + tax_r) | round(2) %}\n\n<div style=\"font-family:'Helvetica','Arial',sans-serif;font-size:10.5pt;line-height:1.5;color:#1a1a1a;\">\n\n  <table style=\"width:100%;border-collapse:collapse;background:#2c3e50;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin-bottom:20pt;\"><tr>\n    <td style=\"padding:22pt 30pt;color:#fff;font-size:30pt;font-weight:800;letter-spacing:0.5pt;line-height:1;vertical-align:bottom;\">{% if args.sender_logo_url %}<img src=\"{{ args.sender_logo_url }}\" alt=\"Logo\" style=\"max-height:54pt;max-width:240pt;display:block;\">{% else %}INVOICE{% endif %}</td>\n    <td style=\"padding:22pt 30pt;color:#cbd5e1;font-size:9.5pt;line-height:1.6;text-align:right;vertical-align:bottom;white-space:nowrap;\">Invoice no.:<br><span style=\"color:#fff;font-weight:700;font-size:10.5pt;\">{{ args.invoice_number or '(auto)' }}</span><br>Date: {{ args.invoice_date or today_de('%B %d, %Y') }}{% if args.due_date %}<br>Due: {{ args.due_date }}{% endif %}</td>\n  </tr></table>\n\n  <table style=\"width:100%;border-collapse:collapse;margin-bottom:16pt;\"><tr>\n    <td style=\"width:50%;vertical-align:top;padding-right:18pt;\">\n      <div style=\"font-size:8.5pt;color:#888;margin-bottom:4pt;\">From:</div>\n      <div style=\"font-weight:700;font-size:11pt;margin-bottom:1pt;\">{{ args.sender_business or args.sender_name }}</div>\n      {% if args.sender_address %}{{ args.sender_address | replace('\\n', '<br>') | safe }}<br>{% endif %}{% if args.sender_tax_id %}Tax ID: {{ args.sender_tax_id }}<br>{% endif %}{% if args.sender_business and args.sender_name %}{{ args.sender_name }}<br>{% endif %}{% if args.sender_email %}{{ args.sender_email }}{% endif %}\n    </td>\n    <td style=\"width:50%;vertical-align:top;padding-left:18pt;\">\n      <div style=\"font-size:8.5pt;color:#888;margin-bottom:4pt;\">To:</div>\n      <div style=\"font-weight:700;font-size:11pt;margin-bottom:1pt;\">{{ args.customer_name }}</div>\n      {% if args.customer_address %}{{ args.customer_address | replace('\\n', '<br>') | safe }}{% endif %}{% if args.customer_number %}<br>Customer no.: {{ args.customer_number }}{% endif %}{% if args.service_date_from and args.service_date_to %}<br>Service period: {{ args.service_date_from }}–{{ args.service_date_to }}{% elif args.service_date_from %}<br>Service date: {{ args.service_date_from }}{% endif %}\n    </td>\n  </tr></table>\n\n  <h2 style=\"font-size:13pt;font-weight:700;margin:16pt 0 8pt 0;color:#1a1a1a;\">Items</h2>\n\n  <table style=\"table-layout:fixed;width:100%;border-collapse:collapse;\">\n    <colgroup>\n      <col style=\"width:38pt;\"><col><col style=\"width:42pt;\"><col style=\"width:56pt;\"><col style=\"width:84pt;\"><col style=\"width:84pt;\">\n    </colgroup>\n    <thead><tr>\n      <th style=\"border:0.4pt solid #c8c8c8;padding:6pt 9pt;text-align:left;background:#f2f2f2;font-weight:600;font-size:9.5pt;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;\">Item</th>\n      <th style=\"border:0.4pt solid #c8c8c8;padding:6pt 9pt;text-align:left;background:#f2f2f2;font-weight:600;font-size:9.5pt;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;\">Description</th>\n      <th style=\"border:0.4pt solid #c8c8c8;padding:6pt 9pt;text-align:right;background:#f2f2f2;font-weight:600;font-size:9.5pt;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;\">Qty</th>\n      <th style=\"border:0.4pt solid #c8c8c8;padding:6pt 9pt;text-align:left;background:#f2f2f2;font-weight:600;font-size:9.5pt;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;\">Unit</th>\n      <th style=\"border:0.4pt solid #c8c8c8;padding:6pt 9pt;text-align:right;background:#f2f2f2;font-weight:600;font-size:9.5pt;color:#222;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact;\">Unit price</th>\n      <th style=\"border:0.4pt solid #c8c8c8;padding:6pt 9pt;text-align:right;background:#f2f2f2;font-weight:600;font-size:9.5pt;color:#222;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact;\">Amount</th>\n    </tr></thead>\n    <tbody>\n      {% for p in positions %}\n      <tr>\n        <td style=\"border:0.4pt solid #c8c8c8;padding:6pt 9pt;vertical-align:middle;text-align:left;color:#444;\">{{ p.idx }}</td>\n        <td style=\"border:0.4pt solid #c8c8c8;padding:6pt 9pt;vertical-align:middle;\">{{ p.title }}{% if p.detail %}<br><span style=\"font-style:italic;color:#555;font-size:9.5pt;\">{{ p.detail | replace('\\n', '<br>') | safe }}</span>{% endif %}</td>\n        <td style=\"border:0.4pt solid #c8c8c8;padding:6pt 9pt;vertical-align:middle;text-align:right;white-space:nowrap;\">{{ '%g'|format(p.qty) }}</td>\n        <td style=\"border:0.4pt solid #c8c8c8;padding:6pt 9pt;vertical-align:middle;\">{{ p.unit }}</td>\n        <td style=\"border:0.4pt solid #c8c8c8;padding:6pt 9pt;vertical-align:middle;text-align:right;white-space:nowrap;\">{{ sym }}{{ '{:,.2f}'.format(p.unit_price) }}</td>\n        <td style=\"border:0.4pt solid #c8c8c8;padding:6pt 9pt;vertical-align:middle;text-align:right;white-space:nowrap;\">{{ sym }}{{ '{:,.2f}'.format(p.line_net) }}</td>\n      </tr>\n      {% endfor %}\n      {% if not positions %}\n      <tr><td colspan=\"6\" style=\"border:0.4pt solid #c8c8c8;padding:14pt;color:#888;font-style:italic;text-align:center;\">(At least one line item is required — fill in the \"Line 1 — Description\" field.)</td></tr>\n      {% endif %}\n    </tbody>\n  </table>\n\n  <table style=\"margin:12pt 0 0 auto;border-collapse:collapse;width:280pt;font-size:10.5pt;\">\n    <tr>\n      <td style=\"border:0.4pt solid #c8c8c8;padding:6pt 12pt;color:#333;\">Subtotal</td>\n      <td style=\"border:0.4pt solid #c8c8c8;padding:6pt 12pt;text-align:right;white-space:nowrap;\">{{ sym }}{{ '{:,.2f}'.format(net_r) }}</td>\n    </tr>\n    <tr>\n      <td style=\"border:0.4pt solid #c8c8c8;padding:6pt 12pt;color:#333;\">{% if tax == 0 %}Tax (0%){% else %}Tax ({{ '%g'|format(tax) }}%){% endif %}</td>\n      <td style=\"border:0.4pt solid #c8c8c8;padding:6pt 12pt;text-align:right;white-space:nowrap;\">{{ sym }}{{ '{:,.2f}'.format(tax_r) }}</td>\n    </tr>\n    <tr>\n      <td style=\"border:0.4pt solid #c8c8c8;padding:6pt 12pt;background:#2c3e50;color:#fff;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;\">Total</td>\n      <td style=\"border:0.4pt solid #c8c8c8;padding:6pt 12pt;background:#2c3e50;color:#fff;font-weight:700;text-align:right;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact;\">{{ sym }}{{ '{:,.2f}'.format(gross_r) }}</td>\n    </tr>\n  </table>\n\n  {% if tax == 0 %}<p style=\"margin:18pt 0 0 0;font-size:9.5pt;color:#555;\"><em>No tax applied. If you are required to charge sales tax / VAT / GST, set the rate in the \"Tax rate\" field and re-render.</em></p>{% endif %}\n\n  <div style=\"page-break-inside:avoid;\">\n    <h2 style=\"font-size:13pt;font-weight:700;margin:16pt 0 8pt 0;color:#1a1a1a;\">Payment terms</h2>\n\n    <p style=\"margin:0 0 10pt 0;\">{{ args.payment_text or ('Please transfer the total of ' ~ ('<strong>' ~ sym ~ '{:,.2f}'.format(gross_r) ~ '</strong>') ~ (' net 14 days' if args.due_date else ' by the due date') ~ (' by <strong>' ~ args.due_date ~ '</strong>' if args.due_date else '') ~ '.') | safe }}</p>\n\n    <div style=\"font-size:10pt;line-height:1.55;margin-top:6pt;\">\n      {% if args.sender_business or args.sender_name %}<div style=\"font-weight:700;margin-bottom:1pt;\">{{ args.sender_business or args.sender_name }}</div>{% endif %}\n      {% if args.sender_bank %}Bank: {{ args.sender_bank }}<br>{% endif %}{% if args.sender_iban %}Account / IBAN: {{ args.sender_iban }}<br>{% endif %}{% if args.sender_bic %}BIC / SWIFT: {{ args.sender_bic }}<br>{% endif %}{% if args.invoice_number %}Reference: {{ args.invoice_number }}{% endif %}\n    </div>\n\n    {% if args.signature_image_url %}<p style=\"margin:22pt 0 0 0;\"><img src=\"{{ args.signature_image_url }}\" alt=\"Signature\" style=\"max-height:50pt;max-width:200pt;display:block;\"></p>{% endif %}\n  </div>\n\n  <div style=\"border-top:0.4pt solid #c8c8c8;margin-top:32pt;padding-top:10pt;font-size:8.5pt;color:#888;line-height:1.5;text-align:center;\">\n    {% set footer_parts = [] %}\n    {% if args.sender_business %}{% set _ = footer_parts.append(args.sender_business) %}{% endif %}\n    {% if args.sender_address %}{% set _ = footer_parts.append(args.sender_address | replace('\\n', ', ')) %}{% endif %}\n    {% if args.sender_phone %}{% set _ = footer_parts.append('Tel. ' ~ args.sender_phone) %}{% endif %}\n    {% if args.sender_email %}{% set _ = footer_parts.append(args.sender_email) %}{% endif %}\n    {{ footer_parts | join(' · ') }}\n    {% if args.sender_tax_id or args.sender_tax_number or args.sender_iban %}\n    <br>\n    {% set tax_parts = [] %}\n    {% if args.sender_tax_id %}{% set _ = tax_parts.append('Tax ID: ' ~ args.sender_tax_id) %}{% endif %}\n    {% if args.sender_tax_number %}{% set _ = tax_parts.append('Reg. no.: ' ~ args.sender_tax_number) %}{% endif %}\n    {% if args.sender_iban %}{% set _ = tax_parts.append('IBAN: ' ~ args.sender_iban) %}{% endif %}\n    {{ tax_parts | join(' · ') }}\n    {% endif %}\n  </div>\n</div>"
+}

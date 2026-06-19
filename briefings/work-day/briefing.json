@@ -1,0 +1,39 @@
+{
+  "id": "work-day",
+  "name": "Work day",
+  "description": "Calendar + email + WhatsApp + an LLM-synthesised top-of-day briefing",
+  "author": "yorik-core",
+  "version": "1.0",
+  "tags": ["daily", "work"],
+  "sections": [
+    {
+      "id":       "calendar",
+      "title":    "Today's schedule",
+      "icon":     "📅",
+      "skill":    "check_calendar",
+      "args":     { "days": 1, "include_free_slots": true },
+      "render":   "events_list",
+      "priority": "high"
+    },
+    {
+      "id":     "email",
+      "title":  "Email",
+      "icon":   "📧",
+      "skill":  "email_briefing",
+      "args":   { "hours": 24 },
+      "render": "markdown"
+    },
+    {
+      "id":     "whatsapp",
+      "title":  "WhatsApp",
+      "icon":   "💬",
+      "skill":  "whatsapp_briefing",
+      "args":   { "hours": 24 },
+      "render": "markdown"
+    }
+  ],
+  "synthesize": {
+    "enabled": true,
+    "prompt": "Compose a tight 2-paragraph morning briefing in the user's language. First paragraph: the 3 most important things to act on today (across email, WhatsApp, calendar). Second paragraph: anything else worth being aware of. Don't repeat the section labels. Don't pad."
+  }
+}

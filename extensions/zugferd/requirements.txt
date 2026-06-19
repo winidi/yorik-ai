@@ -1,0 +1,6 @@
+# ZUGFeRD / Factur-X extension — installed only when admin enables this
+# extension in Settings → Extensions. Stays out of the base Yorik install
+# so non-German users don't carry the bloat.
+
+drafthorse>=2025.2.0
+factur-x>=4.2

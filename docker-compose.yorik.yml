@@ -1,0 +1,65 @@
+# Overlay compose file that adds the Yorik backend container to the
+# existing satellite stack (n8n / immich / paperless / whatsapp).
+#
+# Use BOTH files together:
+#   docker compose -f docker-compose.yml -f docker-compose.yorik.yml up -d
+#
+# Or set COMPOSE_FILE in your shell so plain `docker compose up -d` picks
+# both up automatically:
+#   export COMPOSE_FILE=docker-compose.yml:docker-compose.yorik.yml
+#
+# Why a separate overlay file:
+#   docker-compose.yml ships ONLY the bundled services that Yorik
+#   reverse-proxies into; the backend itself was historically run on
+#   the host via start.sh. This overlay opts INTO containerised Yorik
+#   without forcing it on existing native-install boxes.
+
+services:
+  yorik:
+    # Public image — published by .github/workflows/docker.yml on every
+    # push to main. To build locally instead, comment `image:` and
+    # uncomment `build:`.
+    image: ghcr.io/winidi/yorik-ai:latest
+    # build: .
+    container_name: yorik
+    restart: unless-stopped
+    profiles: ["yorik"]
+    ports:
+      - "${HOMEOS_PORT:-8000}:8000"
+    environment:
+      # Defaults work out of the box. Override in .env or your shell
+      # to point at a host-side llama-swap, a different DB path, etc.
+      - HOMEOS_LLM_BASE_URL=${HOMEOS_LLM_BASE_URL:-http://host.docker.internal:8080/v1}
+      - HOMEOS_MODEL=${HOMEOS_MODEL:-qwen3.6-27b-mtp}
+      - YORIK_TZ=${YORIK_TZ:-Europe/Berlin}
+    volumes:
+      # The user's data dir — DB, photos, paperless originals, voice
+      # models, credential key, everything. Bind a host path or use
+      # the Storage settings UI to relocate parts of it onto an
+      # external SSD (the Yorik storage helper symlinks the heavy
+      # subtrees so this single bind still picks them up).
+      - ./data:/app/data
+      # Config file lives on the host so secrets never enter the
+      # image. Mounted read-only so the container can't accidentally
+      # mutate it; the Storage UI writes to data/storage_root marker
+      # files instead.
+      - ./config.env:/app/config.env:ro
+    # Make the host reachable as `host.docker.internal` so llama-swap
+    # (running natively on the host's 127.0.0.1:8080) is reachable
+    # without messing with --network=host. Works on Linux + macOS.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Satellite services in docker-compose.yml have profiles like
+    # `bundled-paperless` — those still come up via the existing
+    # profile machinery. Yorik talks to them by container name on
+    # the default network the satellites share.
+    depends_on: []
+    healthcheck:
+      # `/api/health` returns 200 once the app is fully up; uvicorn
+      # answers on 0.0.0.0:8000 well before that. Use the health
+      # endpoint so docker compose ps reports actual readiness.
+      test: ["CMD", "curl", "-fs", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

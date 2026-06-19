@@ -1,0 +1,42 @@
+{
+  "name": "Yorik · Twilio SMS",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "yorik-twilio",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-yorik-twilio",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "yorik-twilio"
+    },
+    {
+      "parameters": {
+        "resource": "sms",
+        "operation": "send",
+        "from": "={{ $json.body.from }}",
+        "to": "={{ $json.body.to }}",
+        "toWhatsapp": false,
+        "message": "={{ $json.body.message }}",
+        "options": {}
+      },
+      "id": "twilio-send",
+      "name": "Twilio Send",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [480, 300],
+      "credentials": {}
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[ { "node": "Twilio Send", "type": "main", "index": 0 } ]] }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

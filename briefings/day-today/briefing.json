@@ -1,0 +1,66 @@
+{
+  "id": "day-today",
+  "name": "Today",
+  "description": "Everything on your plate today — calendar, tasks, photos, email, chat",
+  "author": "yorik-core",
+  "version": "1.2",
+  "tags": ["daily", "personal"],
+  "sections": [
+    {
+      "id":       "today-calendar",
+      "title":    "Calendar",
+      "icon":     "🗓",
+      "skill":    "check_calendar",
+      "args":     {
+        "start_iso":          "{today_start}",
+        "end_iso":            "{today_end}",
+        "include_free_slots": true
+      },
+      "render":   "events_list",
+      "priority": "high"
+    },
+    {
+      "id":       "today-tasks",
+      "title":    "Tasks (+ overdue)",
+      "icon":     "✓",
+      "skill":    "check_tasks",
+      "args":     {
+        "end_iso":         "{today_end}",
+        "include_undated": false,
+        "include_rows":    true
+      },
+      "render":   "raw_json"
+    },
+    {
+      "id":       "photos-today",
+      "title":    "Photos",
+      "icon":     "📷",
+      "skill":    "find_photo",
+      "args":     {
+        "op":         "taken_on",
+        "start_iso":  "{today_start}",
+        "end_iso":    "{today_end}",
+        "take_count": 12
+      },
+      "render":   "raw_json"
+    },
+    {
+      "id":       "email-summary",
+      "title":    "Email",
+      "icon":     "📧",
+      "skill":    "email_briefing",
+      "args":     { "hours": 24 },
+      "render":   "markdown"
+    },
+    {
+      "id":       "whatsapp-summary",
+      "title":    "WhatsApp",
+      "icon":     "💬",
+      "skill":    "whatsapp_briefing",
+      "args":     { "hours": 24 },
+      "render":   "markdown",
+      "condition": "result.stats.chats_with_new_msgs > 0"
+    }
+  ],
+  "synthesize": { "enabled": false }
+}

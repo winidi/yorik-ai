@@ -1,0 +1,17 @@
+{
+  "id": "notes",
+  "name": "Notes",
+  "icon": "📝",
+  "version": "0.1.0",
+  "author": "yorik-core",
+  "author_id": "yorik",
+  "license": "Apache-2.0",
+  "description": "Quick notes with optional AI mood inference. Reference app demonstrating the Yorik App SDK.",
+  "homepage": "https://github.com/winidi/yorik-ai/tree/main/examples/notes",
+  "schema": "schema.sql",
+  "connector": "connector.py",
+  "entry_ui": "app.js",
+  "min_yorik_version": "0.2",
+  "chrome": "embedded",
+  "tags": ["productivity", "example", "reference"]
+}

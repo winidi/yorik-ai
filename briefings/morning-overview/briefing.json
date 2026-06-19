@@ -1,0 +1,80 @@
+{
+  "id": "morning-overview",
+  "name": "Morning briefing",
+  "description": "Yesterday recap, today's plan, tomorrow preview, photos from today",
+  "author": "yorik-core",
+  "version": "2.0",
+  "tags": ["daily", "personal"],
+  "sections": [
+    {
+      "id":       "yesterday-recap",
+      "title":    "Yesterday",
+      "icon":     "↶",
+      "skill":    "check_calendar",
+      "args":     {
+        "start_iso": "{yesterday_start}",
+        "end_iso":   "{yesterday_end}"
+      },
+      "render":   "events_list",
+      "priority": "normal"
+    },
+    {
+      "id":       "today-events",
+      "title":    "Today",
+      "icon":     "☀️",
+      "skill":    "check_calendar",
+      "args":     {
+        "start_iso":          "{today_start}",
+        "end_iso":            "{today_end}",
+        "include_free_slots": true
+      },
+      "render":   "events_list",
+      "priority": "high"
+    },
+    {
+      "id":       "tomorrow-plan",
+      "title":    "Tomorrow",
+      "icon":     "→",
+      "skill":    "check_calendar",
+      "args":     {
+        "start_iso": "{tomorrow_start}",
+        "end_iso":   "{tomorrow_end}"
+      },
+      "render":   "events_list",
+      "priority": "normal"
+    },
+    {
+      "id":       "photos-today",
+      "title":    "Photos taken today",
+      "icon":     "📷",
+      "skill":    "find_photo",
+      "args":     {
+        "op":         "taken_on",
+        "start_iso":  "{today_start}",
+        "end_iso":    "{today_end}",
+        "take_count": 12
+      },
+      "render":   "raw_json"
+    },
+    {
+      "id":       "email-summary",
+      "title":    "Email",
+      "icon":     "📧",
+      "skill":    "email_briefing",
+      "args":     { "hours": 24 },
+      "render":   "markdown"
+    },
+    {
+      "id":       "whatsapp-summary",
+      "title":    "WhatsApp",
+      "icon":     "💬",
+      "skill":    "whatsapp_briefing",
+      "args":     { "hours": 24 },
+      "render":   "markdown",
+      "condition": "result.stats.chats_with_new_msgs > 0"
+    }
+  ],
+  "synthesize": {
+    "enabled": false
+  }
+}

@@ -1,0 +1,55 @@
+/* Tailwind entry — tells the v4 compiler what to include + maps our Yorik
+   design tokens into the Tailwind theme so utility classes pick up our
+   palette automatically.
+
+   Usage in HTML/JS:
+     class="px-6 py-4 rounded-lg bg-yorik-card border border-yorik-border"
+   resolves to:
+     padding: 0 24px 16px; border-radius: 8px; background: var(--card);
+     border: 1px solid var(--card-border);
+
+   Re-run scripts/build-tailwind.sh whenever you add a new utility class so
+   the output CSS picks it up. */
+
+@import "tailwindcss";
+
+/* Tell the v4 JIT to scan everywhere we author HTML/JS so utility-class
+   references get included in the output. */
+@source "../frontend/index.html";
+@source "../frontend/app.js";
+@source "../frontend/layouts/*.js";
+@source "../apps/**/app.js";
+
+/* Map our design tokens into Tailwind so utilities like `bg-yorik-card`,
+   `text-yorik-dim`, `text-yorik-accent`, `shadow-yorik-md` etc. work. */
+@theme {
+  --color-yorik-bg:           var(--bg);
+  --color-yorik-bg-2:         var(--bg-2);
+  --color-yorik-bg-3:         var(--bg-3);
+  --color-yorik-card:         var(--card);
+  --color-yorik-card-2:       var(--card-2);
+  --color-yorik-border:       var(--card-border);
+  --color-yorik-border-strong:var(--card-border-strong);
+  --color-yorik-accent:       var(--accent);
+  --color-yorik-accent-2:     var(--accent-2);
+  --color-yorik-accent-soft:  var(--accent-soft);
+  --color-yorik-text:         var(--text);
+  --color-yorik-text-dim:     var(--text-dim);
+  --color-yorik-text-faint:   var(--text-faint);
+  --color-yorik-danger:       var(--danger);
+  --color-yorik-ok:           var(--ok);
+  --color-yorik-warn:         var(--warn);
+  --color-yorik-info:         var(--info);
+
+  --radius-yorik-sm:   var(--r-sm);
+  --radius-yorik-md:   var(--r-md);
+  --radius-yorik-lg:   var(--r-lg);
+  --radius-yorik-xl:   var(--r-xl);
+  --radius-yorik-2xl:  var(--r-2xl);
+  --radius-yorik-pill: var(--r-pill);
+
+  --shadow-yorik-sm: var(--shadow-sm);
+  --shadow-yorik-md: var(--shadow-md);
+  --shadow-yorik-lg: var(--shadow-lg);
+  --shadow-yorik-xl: var(--shadow-xl);
+}

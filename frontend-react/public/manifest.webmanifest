@@ -1,0 +1,49 @@
+{
+  "name": "Yorik",
+  "short_name": "Yorik",
+  "description": "Your household OS — calendar, photos, documents, email, all in one place.",
+  "start_url": "/r/home",
+  "scope": "/r/",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#0a0a0a",
+  "theme_color": "#7c3aed",
+  "lang": "en",
+  "categories": ["productivity", "lifestyle"],
+  "icons": [
+    {
+      "src": "/r/butler-icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/r/butler-icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/r/butler-icon-maskable-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Ambient (kiosk wall)",
+      "short_name": "Ambient",
+      "description": "Photo slideshow + tap-to-talk for the household wall",
+      "url": "/r/ambient",
+      "icons": [{ "src": "/r/butler-icon-192.png", "type": "image/png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Chat",
+      "short_name": "Chat",
+      "url": "/r/chat",
+      "icons": [{ "src": "/r/butler-icon-192.png", "type": "image/png", "sizes": "192x192" }]
+    }
+  ]
+}

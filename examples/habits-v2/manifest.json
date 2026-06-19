@@ -1,0 +1,33 @@
+{
+  "manifest_version": 2,
+  "id": "yorik.habits",
+  "name": "Habits",
+  "icon": "🎯",
+  "version": "0.1.0",
+  "author": "yorik-core",
+  "author_id": "yorik",
+  "license": "Apache-2.0",
+  "description": "Track a small set of habits and log when you complete them. The minimum-viable manifest v2 reference app — single table, no reads of Yorik core, no skill calls.",
+  "homepage": "https://github.com/winidi/yorik-ai/tree/main/examples/habits-v2",
+  "schema": "schema.sql",
+  "connector": "connector.py",
+  "entry_ui": "app.js",
+  "min_yorik_version": "0.3",
+  "chrome": "embedded",
+  "tags": ["productivity", "example", "reference", "manifest-v2", "hello-world"],
+
+  "owned_schema": "app_yorik_habits",
+  "owned_tables": ["habits", "habit_completions"],
+
+  "permissions": {},
+
+  "network": {
+    "outbound": []
+  },
+
+  "ui": {
+    "type": "iframe",
+    "mount_path": "/apps/habits",
+    "entry": "app.js"
+  }
+}

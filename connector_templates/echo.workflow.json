@@ -1,0 +1,48 @@
+{
+  "name": "Yorik · echo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "yorik-echo",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-yorik-echo",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "yorik-echo"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "a1", "name": "ok",       "value": true,                "type": "boolean" },
+            { "id": "a2", "name": "echoed",   "value": "={{ $json.body }}", "type": "object"  },
+            { "id": "a3", "name": "source",   "value": "n8n yorik-echo",    "type": "string"  }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-yorik-echo",
+      "name": "Set",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [520, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          { "node": "Set", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

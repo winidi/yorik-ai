@@ -1,0 +1,130 @@
+{
+  "id": "generic-letter-en",
+  "locale": "en",
+  "llm_hints": "- Generic letter template with no structured slots — the body IS the letter.\n- Write the body yourself in the user's words, with [placeholder] markers for unknown facts (date, amount, month).\n- Empty body renders a 'your letter goes here' placeholder line — the user always reports that as a bug.\n- Example for 'write a rent reminder to Joel': body=\"This is a formal reminder that the rent payment for [month] in the amount of [amount] EUR is overdue. Please transfer it to the account on file by [date] at the latest. If payment is not received, I reserve the right to pursue further legal action.\"",
+  "kind": "letter",
+  "name": "Letter (general, English)",
+  "description": "Universal business letter — formal recipient, printed or PDF output, DIN 5008-like layout.",
+  "when_to_use": [
+    "User says 'letter', 'formal letter', 'cover letter', 'send a letter'.",
+    "Recipient is a business, authority, or person addressed formally.",
+    "Output is intended as a printed or PDF letter.",
+    "No specific use case applies (cancellation, invoice, rent abatement, …)."
+  ],
+  "when_to_not_use": [
+    "User says 'email', 'mail', 'quick message' — use generic-email-en.",
+    "Recipient is a friend on first-name basis and the user wants a casual chat — an email or WhatsApp message fits better than a printed letter.",
+    "Specific use case applies (cancellation → cancellation-contract-en; invoice → invoice-en).",
+    "User wants to send via WhatsApp or chat — letter format makes no sense."
+  ],
+  "version": "1.0",
+  "author": "yorik-core",
+  "tags": [
+    "letter"
+  ],
+  "delivery_default": "attachment",
+  "subject_template": "{% if args.subject %}{{ args.subject }}{% elif args.recipient_name %}Letter to {{ args.recipient_name }}{% else %}Letter{% endif %}",
+  "skills_supported": {
+    "auto_fill_from": [],
+    "export_formats": [
+      "pdf"
+    ],
+    "send_channels": [
+      "paperless_save",
+      "email",
+      "whatsapp_send"
+    ],
+    "voice_triggers": [
+      "draft a letter to X",
+      "write a letter"
+    ],
+    "language": "any",
+    "calendar_aware": false
+  },
+  "data_query": {},
+  "default_args": {
+    "recipient_name": "",
+    "recipient_address": "",
+    "sender_name": "",
+    "sender_address": "",
+    "subject": "",
+    "greeting": "Dear Sir or Madam,",
+    "body_text": "",
+    "closing": "Sincerely"
+  },
+  "preview_args": {
+    "recipient_name": "Anna Example",
+    "recipient_address": "12 Sample Street\nExample Town, EX1 2AB",
+    "sender_name": "John Example",
+    "sender_address": "7 Demo Avenue\nLondon, NW1 0AA",
+    "subject": "Follow-up on your quote",
+    "body_text": "thank you for your prompt reply last Wednesday.\n\nI have reviewed your quote and I have two short follow-up questions that I would like to clarify in a brief call."
+  },
+  "ask_user_for_args": [
+    {
+      "key": "recipient_name",
+      "label": "Recipient (name or company)",
+      "required": true,
+      "hint": "e.g. \"Acme Property Management Ltd\" or \"Dr Smith\"",
+      "role": "recipient_name",
+      "contact_group": "recipient"
+    },
+    {
+      "key": "recipient_address",
+      "label": "Recipient address",
+      "required": true,
+      "input": "textarea",
+      "hint": "Street + city + postal code — one line per address part. Auto-fills when a contact with an address is selected.",
+      "role": "recipient_address",
+      "contact_group": "recipient"
+    },
+    {
+      "key": "subject",
+      "label": "Subject",
+      "required": false,
+      "hint": "Optional — leave blank for personal letters. For formal letters, short and clear, e.g. \"Request for viewing on June 12\".",
+      "role": "subject"
+    },
+    {
+      "key": "greeting",
+      "label": "Greeting",
+      "required": false,
+      "hint": "Defaults to \"Dear Sir or Madam,\" — when you know the recipient, type the full salutation, e.g. \"Dear Mr Smith,\"",
+      "role": "greeting"
+    },
+    {
+      "key": "body_text",
+      "label": "Letter body",
+      "required": true,
+      "input": "textarea",
+      "hint": "What's it about? 1–3 paragraphs are enough. Greeting and closing are added automatically.",
+      "role": "body",
+      "llm_hint": "Write ONLY the middle of the letter. NEVER include a greeting (no 'Hi there', 'Hello', 'Dear X' — the template's greeting field prints that). NEVER include a closing ('Best regards', 'Sincerely', 'Kind regards' — the template's closing field prints that) or a signature/name. Use \\n\\n between paragraphs — never one giant prose blob. Stay close to the user's wording and tone; only fix obvious typos and minor grammar. Do NOT pad with 'Hope you're doing well', 'I wanted to share', 'Let me know if you want any details', 'It's been an amazing experience' or other AI-filler phrases the user didn't say. If the user wrote one sentence, you write one sentence. Match their language (English stays English, German stays German)."
+    },
+    {
+      "key": "closing",
+      "label": "Closing line",
+      "role": "closing"
+    },
+    {
+      "key": "sender_name",
+      "label": "Sender — Name",
+      "role": "sender_name"
+    },
+    {
+      "key": "sender_address",
+      "label": "Sender — Address",
+      "role": "sender_address"
+    }
+  ],
+  "page": {
+    "size": "A4",
+    "margins_mm": [
+      22,
+      20,
+      25,
+      20
+    ]
+  },
+  "body_html": "<div style=\"font-family: serif; line-height: 1.55; font-size: 11.5pt;\">\n  <p style=\"text-align: right; margin: 0 0 18pt 0; font-size: 10pt; color: #555;\">{{ args.sender_name }}{% if args.sender_address %} · {{ args.sender_address | replace('\\n', ' · ') }}{% endif %}</p>\n\n  <p><strong>{{ args.recipient_name }}</strong>{% if args.recipient_address %}<br>{{ args.recipient_address | replace('\\n', '<br>') | safe }}{% endif %}</p>\n\n  <p style=\"text-align: right; margin-top: 24pt;\">{{ today_de('%B %d, %Y') }}</p>\n\n  {% if args.subject %}<p style=\"font-weight: bold; margin-top: 24pt; margin-bottom: 14pt;\">{{ args.subject }}</p>{% endif %}\n\n  <p>{{ args.greeting }}</p>\n\n  {% if args.body_text %}{% for para in args.body_text.split('\\n\\n') %}<p>{{ para | replace('\\n', '<br>') | safe }}</p>{% endfor %}{% else %}<p><em>(Your letter body goes here — Yorik writes it on click or you type it yourself.)</em></p>{% endif %}\n\n  {% if args.inline_image_url %}<p style=\"text-align: center; margin: 22pt 0;\"><img src=\"{{ args.inline_image_url }}\" alt=\"\" style=\"max-width: 75%; max-height: 240pt; border-radius: 4pt;\">{% if args.inline_image_caption %}<br><em style=\"font-size: 10pt; color: #666; display: inline-block; margin-top: 6pt;\">{{ args.inline_image_caption }}</em>{% endif %}</p>{% endif %}\n\n  <p style=\"margin-top: 22pt;\">{{ args.closing }}</p>\n\n  {% if args.signature_image_url %}<p style=\"margin: 6pt 0 0 0;\"><img src=\"{{ args.signature_image_url }}\" alt=\"Signature\" style=\"max-height: 50pt; max-width: 220pt; display: block;\"></p>{% else %}<p style=\"margin: 36pt 0 0 0;\">_______________________</p>{% endif %}\n  <p style=\"margin: 0;\">{{ args.sender_name }}</p>\n</div>"
+}

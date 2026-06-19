@@ -1,0 +1,521 @@
+#!/usr/bin/env python3
+# Re-exec ourselves under the project's venv Python if we're not
+# already running there. Lets users symlink /usr/local/bin/yorik and
+# still get pyrage, fastapi, etc. without activating the venv first.
+import os as _os, sys as _sys
+from pathlib import Path as _Path
+_repo = _Path(__file__).resolve().parent.parent
+_venv_py = _repo / "venv" / "bin" / "python3"
+if _venv_py.is_file() and _sys.executable != str(_venv_py):
+    _os.execv(str(_venv_py), [str(_venv_py), __file__, *_sys.argv[1:]])
+
+"""yorik — admin CLI for the Yorik / HomeOS box.
+
+Subcommands shipped today:
+  backup-verify [SNAPSHOT]   Decrypt + sanity-check a backup snapshot.
+                             Without a path, uses the most recent
+                             snapshot from the configured target dir.
+  backup-list                List configured target's snapshots.
+
+Subcommands planned (stubs raise NotImplementedError for now):
+  upgrade                    Pull latest, run migrations, rebuild venv,
+                             rebuild frontend, restart services.
+  backup-now                 Trigger an immediate backup.
+  restore PATH               Destructive restore from snapshot — guarded
+                             by an explicit --i-mean-it flag.
+  status                     Worker health + LLM reachability + last
+                             backup at a glance.
+
+Symlinking: `sudo ln -s $(pwd)/scripts/yorik /usr/local/bin/yorik`
+lets users type `yorik backup-verify` from anywhere.
+
+Auth: subcommands operate on the local filesystem + DB directly (no
+HTTP), so they need to run AS the user who owns the Yorik venv +
+data dir. Trying to verify a snapshot encrypted with a passphrase
+the caller doesn't know fails the same way the API would.
+"""
+import argparse
+import getpass
+import os
+import sys
+from pathlib import Path
+
+# Repo root = parent of this script's dir. Used to resolve the venv
+# Python and to set PYTHONPATH so `from backend import …` works no
+# matter where the user calls yorik from.
+_HERE = Path(__file__).resolve().parent
+_REPO = _HERE.parent
+sys.path.insert(0, str(_REPO))
+
+
+def _backup_verify(args: argparse.Namespace) -> int:
+    from backend import backup
+    cfg = backup.get_config()
+    snapshot_path = Path(args.snapshot) if args.snapshot else _newest_snapshot(cfg)
+    if not snapshot_path:
+        print("error: no snapshot path given and no snapshots found in "
+              f"{cfg.get('target_path')!r}", file=sys.stderr)
+        return 2
+    print(f"verifying: {snapshot_path}")
+    passphrase = (
+        os.environ.get("YORIK_BACKUP_PASSPHRASE")
+        or getpass.getpass("backup passphrase: ")
+    )
+    if not passphrase:
+        print("error: passphrase required (set YORIK_BACKUP_PASSPHRASE or "
+              "answer the prompt)", file=sys.stderr)
+        return 2
+    result = backup.verify_snapshot(snapshot_path, passphrase)
+    width = max(len(c["name"]) for c in result["checks"]) if result["checks"] else 0
+    for c in result["checks"]:
+        mark = "✓" if c["ok"] else "✗"
+        color = "\033[32m" if c["ok"] else "\033[31m"
+        reset = "\033[0m"
+        if not sys.stdout.isatty():
+            color = reset = ""
+        print(f"  {color}{mark}{reset} {c['name']:<{width}}  {c['detail']}")
+    print()
+    print(result["summary"])
+    if result.get("extracted_to") and args.keep_extracted:
+        print(f"\nextracted snapshot left at: {result['extracted_to']}")
+    elif result.get("extracted_to"):
+        # Clean up unless asked to keep — verify runs daily in cron
+        # shouldn't fill /tmp with copies.
+        import shutil
+        shutil.rmtree(result["extracted_to"], ignore_errors=True)
+    return 0 if result["ok"] else 1
+
+
+def _upgrade(args: argparse.Namespace) -> int:
+    """Pull latest, install changed deps, rebuild frontend if needed,
+    apply schema migrations (via startup init_db), restart uvicorn.
+
+    Conservative on failure: each step prints what it did, what it
+    plans next, and bails out with a clear message if something
+    fails. Doesn't try to auto-rollback — git is forward-only here so
+    the user can decide whether to `git reset --hard` or fix the
+    underlying issue.
+    """
+    import subprocess
+    import time
+    from urllib.request import urlopen
+    from urllib.error import URLError
+
+    def _run(cmd: list[str], cwd: _Path | None = None, env: dict | None = None) -> subprocess.CompletedProcess:
+        return subprocess.run(cmd, cwd=cwd or _repo, env=env, text=True,
+                              capture_output=True, timeout=600)
+
+    def _step(label: str) -> None:
+        print(f"\n\033[36m▸ {label}\033[0m" if sys.stdout.isatty() else f"\n▸ {label}")
+
+    def _fail(reason: str) -> int:
+        print(f"\n\033[31m✗ upgrade aborted: {reason}\033[0m"
+              if sys.stdout.isatty() else f"\n✗ upgrade aborted: {reason}",
+              file=sys.stderr)
+        return 1
+
+    # ── Pre-flight: git checkout exists?
+    if not (_repo / ".git").exists():
+        return _fail(f"{_repo} is not a git checkout — can't upgrade")
+
+    # ── Pre-flight: clean working tree (uncommitted local edits are
+    # the #1 way an auto-upgrade destroys work).
+    _step("checking working tree")
+    r = _run(["git", "status", "--porcelain"])
+    if r.stdout.strip():
+        print(r.stdout, file=sys.stderr)
+        return _fail("working tree has uncommitted changes — commit or stash first, "
+                     "then re-run `yorik upgrade`")
+    print("  ✓ clean")
+
+    # ── Pre-flight: verify the latest backup (skippable for fresh
+    # installs without backups configured).
+    if not args.skip_backup_verify:
+        _step("verifying latest backup as a safety net")
+        from backend import backup
+        cfg = backup.get_config()
+        snap = _newest_snapshot(cfg)
+        if not snap:
+            print("  · no snapshot found — skipping (configure backups via Settings, "
+                  "or pass --skip-backup-verify to silence this)")
+        else:
+            passphrase = (_os.environ.get("YORIK_BACKUP_PASSPHRASE")
+                          or getpass.getpass(f"backup passphrase for {snap.name}: "))
+            res = backup.verify_snapshot(snap, passphrase)
+            if not res["ok"]:
+                return _fail(f"backup verify FAILED: {res['summary']}. "
+                             f"Fix the backup before upgrading — if the upgrade "
+                             f"breaks, you'll want a known-good restore path. "
+                             f"Override with --skip-backup-verify.")
+            # Cleanup the extracted tmp dir
+            import shutil
+            if res.get("extracted_to"):
+                shutil.rmtree(res["extracted_to"], ignore_errors=True)
+            print(f"  ✓ {res['summary']}")
+    else:
+        print("\n  · backup verify skipped (--skip-backup-verify)")
+
+    # ── Git fetch + check what's new
+    _step("fetching from origin")
+    r = _run(["git", "fetch", "origin"])
+    if r.returncode != 0:
+        return _fail(f"git fetch failed:\n{r.stderr}")
+    print("  ✓ fetched")
+
+    # Show what's about to be pulled
+    r = _run(["git", "log", "--oneline", "HEAD..@{u}"])
+    if not r.stdout.strip():
+        print("\n\033[32m✓ already up to date — nothing to upgrade.\033[0m"
+              if sys.stdout.isatty() else "\n✓ already up to date — nothing to upgrade.")
+        return 0
+
+    commits = r.stdout.strip().splitlines()
+    print(f"\n  {len(commits)} new commit(s):")
+    for c in commits[:10]:
+        print(f"    {c}")
+    if len(commits) > 10:
+        print(f"    … and {len(commits) - 10} more")
+
+    if args.dry_run:
+        print("\n\033[33m(dry-run — no changes made)\033[0m"
+              if sys.stdout.isatty() else "\n(dry-run — no changes made)")
+        return 0
+
+    # Record HEAD before pulling so we can diff to detect what changed
+    r = _run(["git", "rev-parse", "HEAD"])
+    old_head = r.stdout.strip()
+
+    # ── Git pull (fast-forward only — refuse merges)
+    _step("pulling")
+    r = _run(["git", "pull", "--ff-only"])
+    if r.returncode != 0:
+        return _fail(f"git pull failed (history diverged?):\n{r.stderr}")
+    print("  ✓ pulled")
+
+    # ── Detect what changed → trigger conditional rebuilds
+    r = _run(["git", "diff", "--name-only", f"{old_head}..HEAD"])
+    changed = set(r.stdout.strip().splitlines())
+
+    needs_pip = any(f.startswith("backend/requirements") for f in changed)
+    needs_npm_install = any(f.startswith("frontend-react/package") for f in changed)
+    needs_npm_build = any(f.startswith("frontend-react/src/") or f.startswith("frontend-react/package")
+                          or f.startswith("frontend-react/vite.config")
+                          or f.startswith("frontend-react/tailwind.config")
+                          for f in changed)
+
+    # ── pip install if requirements changed
+    if needs_pip:
+        _step("installing Python dependencies (requirements.txt changed)")
+        venv_pip = _repo / "venv" / "bin" / "pip"
+        if not venv_pip.is_file():
+            return _fail(f"venv pip not found at {venv_pip} — recreate the venv manually")
+        r = _run([str(venv_pip), "install", "-r", "backend/requirements.txt"])
+        if r.returncode != 0:
+            return _fail(f"pip install failed:\n{r.stderr[-2000:]}")
+        print("  ✓ pip install complete")
+    else:
+        print("\n  · backend/requirements.txt unchanged — skipping pip")
+
+    # ── npm ci if package.json changed, then build if anything frontend-side did
+    if needs_npm_install:
+        _step("installing Node dependencies (package.json changed)")
+        npm_dir = _repo / "frontend-react"
+        r = _run(["npm", "ci"], cwd=npm_dir)
+        if r.returncode != 0:
+            return _fail(f"npm ci failed:\n{r.stderr[-2000:]}")
+        print("  ✓ npm ci complete")
+
+    if needs_npm_build:
+        _step("rebuilding frontend bundle")
+        npm_dir = _repo / "frontend-react"
+        r = _run(["npm", "run", "build"], cwd=npm_dir)
+        if r.returncode != 0:
+            return _fail(f"npm run build failed:\n{r.stderr[-2000:]}")
+        print("  ✓ frontend rebuilt")
+    elif not needs_npm_install:
+        print("\n  · no frontend changes — skipping npm")
+
+    # ── Restart uvicorn. Killing the parent process group catches the
+    # --reload worker too (which I learned the hard way several times
+    # earlier in this session).
+    _step("restarting uvicorn")
+    subprocess.run(["pkill", "-KILL", "-f", "uvicorn backend.main"],
+                   capture_output=True, text=True)
+    time.sleep(3)
+    # Clear pycache to avoid stale bytecode surprises after a code change.
+    subprocess.run(["find", "backend", "-name", "__pycache__", "-exec",
+                    "rm", "-rf", "{}", "+"],
+                   cwd=_repo, capture_output=True, text=True)
+
+    log_path = "/tmp/homeos-api.log"
+    pid_path = "/tmp/homeos-api.pid"
+    venv_uvicorn = _repo / "venv" / "bin" / "uvicorn"
+    if not venv_uvicorn.is_file():
+        return _fail(f"venv uvicorn not found at {venv_uvicorn}")
+
+    # Start fresh. nohup + redirect so it survives this CLI exit.
+    with open(log_path, "w") as logf:
+        proc = subprocess.Popen(
+            [str(venv_uvicorn), "backend.main:app",
+             "--host", "0.0.0.0", "--port", "8000", "--reload"],
+            cwd=_repo, stdout=logf, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    with open(pid_path, "w") as pf:
+        pf.write(str(proc.pid))
+    print(f"  ✓ launched uvicorn (pid {proc.pid}, log: {log_path})")
+
+    # ── Wait for /api/health to respond. Up to 30s.
+    _step("waiting for /api/health")
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        try:
+            with urlopen("http://localhost:8000/api/health", timeout=2) as resp:
+                if resp.status == 200:
+                    body = resp.read().decode("utf-8", errors="replace")
+                    print(f"  ✓ healthy: {body[:150]}")
+                    break
+        except (URLError, OSError):
+            pass
+        time.sleep(1)
+    else:
+        print("  ⚠ /api/health didn't respond within 30s — check the log",
+              file=sys.stderr)
+        return _fail(f"upgrade landed code but the server isn't responding. "
+                     f"Check {log_path} and run `yorik status` once you've fixed it.")
+
+    # ── Done
+    r = _run(["git", "rev-parse", "--short", "HEAD"])
+    new_head = r.stdout.strip()
+    print(f"\n\033[32m✓ upgraded to {new_head}\033[0m"
+          if sys.stdout.isatty() else f"\n✓ upgraded to {new_head}")
+    return 0
+
+
+def _version(_args: argparse.Namespace) -> int:
+    """Print release + git state. Useful for bug reports — the issue
+    template asks for `yorik version` output to pin down which exact
+    snapshot the reporter is running.
+
+    Output shape:
+      Yorik v0.1.0-alpha (+3 commits, dirty)
+        commit:    91b35b4
+        tag:       v0.1.0-alpha
+        branch:    main
+        repo:      /home/yorik/yorik-ai
+    """
+    import subprocess
+
+    def _git(*cmd: str) -> str:
+        try:
+            r = subprocess.run(
+                ["git", *cmd], cwd=_repo, capture_output=True, text=True, timeout=2,
+            )
+            return r.stdout.strip() if r.returncode == 0 else ""
+        except Exception:
+            return ""
+
+    commit = _git("rev-parse", "--short", "HEAD") or "<no-git>"
+    branch = _git("rev-parse", "--abbrev-ref", "HEAD") or "<detached>"
+    # git describe gives us "tag", "tag-N-gHASH" (N commits past tag), or
+    # nothing (no tags yet on this branch).
+    described = _git("describe", "--tags", "--abbrev=0")
+    described_long = _git("describe", "--tags", "--long", "--dirty")
+    dirty = "dirty" in described_long
+    distance = 0
+    if described and described_long:
+        # described_long shape: "v0.1.0-alpha-3-g91b35b4[-dirty]"
+        parts = described_long.split("-")
+        # last two are -N -gHASH; everything before is the tag (may contain
+        # dashes itself, e.g. v0.1.0-alpha).
+        try:
+            distance = int(parts[-2]) if parts[-2].isdigit() else int(parts[-3])
+        except (ValueError, IndexError):
+            distance = 0
+
+    headline_bits = [f"Yorik {described or '<untagged>'}"]
+    extras = []
+    if distance:
+        extras.append(f"+{distance} commits")
+    if dirty:
+        extras.append("dirty")
+    if extras:
+        headline_bits.append(f"({', '.join(extras)})")
+    print(" ".join(headline_bits))
+    print(f"  commit:    {commit}")
+    print(f"  tag:       {described or '<no tag yet>'}")
+    print(f"  branch:    {branch}")
+    print(f"  repo:      {_repo}")
+    return 0
+
+
+def _db(args: argparse.Namespace) -> int:
+    """Schema-migrations operations. init_db() runs run_pending() at
+    every backend startup automatically; these subcommands are for
+    ops/inspection from outside a running server."""
+    from backend import migrations as mig
+    from backend.database import conn_ctx, DEFAULT_DB_PATH
+    import os as _os
+    db_path = _os.getenv("HOMEOS_DB_PATH", DEFAULT_DB_PATH)
+    with conn_ctx(db_path) as conn:
+        all_mig = mig.discover()
+        applied = mig.applied_versions(conn)
+        if args.action == "status":
+            if not all_mig:
+                print(f"no migrations defined (looking in {mig.MIGRATIONS_DIR})")
+                return 0
+            print(f"db: {db_path}")
+            print(f"migrations dir: {mig.MIGRATIONS_DIR}")
+            print()
+            width = max(len(f"{m.version:03d}_{m.name}") for m in all_mig)
+            for m in all_mig:
+                status = "✓ applied" if m.version in applied else "  pending"
+                color = "\033[32m" if m.version in applied else "\033[33m"
+                reset = "\033[0m"
+                if not sys.stdout.isatty():
+                    color = reset = ""
+                label = f"{m.version:03d}_{m.name}"
+                print(f"  {color}{status}{reset}  {label:<{width}}  ({m.path.suffix[1:]})")
+            n_pending = sum(1 for m in all_mig if m.version not in applied)
+            print()
+            print(f"{len(applied)} applied, {n_pending} pending")
+            return 0
+        elif args.action == "migrate":
+            applied_now = mig.run_pending(conn)
+            if not applied_now:
+                print("already up to date.")
+            else:
+                print(f"applied {len(applied_now)} migration(s): {applied_now}")
+            return 0
+
+
+def _service(args: argparse.Namespace) -> int:
+    """Thin wrapper around scripts/install-systemd-service.sh so users
+    who declined the prompt during install can opt in later via
+    `yorik service install`."""
+    import subprocess
+    script = _repo / "scripts" / "install-systemd-service.sh"
+    if not script.is_file():
+        print(f"error: {script} not found", file=sys.stderr)
+        return 1
+    return subprocess.call(["bash", str(script), args.action])
+
+
+def _backup_list(_args: argparse.Namespace) -> int:
+    from backend import backup
+    snapshots = backup.list_snapshots_on_target()
+    if not snapshots:
+        cfg = backup.get_config()
+        print(f"no snapshots found in {cfg.get('target_path')!r}")
+        return 0
+    for s in snapshots:
+        size_mb = s.get("size_bytes", 0) / (1024 * 1024)
+        print(f"  {s.get('filename', '?'):60}  {size_mb:7.1f} MB  {s.get('modified_at', '')}")
+    return 0
+
+
+def _newest_snapshot(cfg: dict) -> Path | None:
+    target = Path(cfg.get("target_path") or "")
+    if not target.is_dir():
+        return None
+    candidates = sorted(
+        list(target.glob("*.tar.gz.age")) + list(target.glob("*.age")),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
+# ── Stubs for planned subcommands. Each prints a one-liner explaining
+# what it WILL do so users can discover them via `yorik --help` even
+# before they're implemented.
+
+def _todo(name: str, plan: str):
+    def _run(_args):
+        print(f"yorik {name}: not yet implemented.\n  Planned: {plan}",
+              file=sys.stderr)
+        return 64  # EX_USAGE
+    return _run
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="yorik", description="Yorik admin CLI")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    sp_verify = sub.add_parser(
+        "backup-verify",
+        help="Decrypt + sanity-check a backup snapshot",
+    )
+    sp_verify.add_argument(
+        "snapshot", nargs="?",
+        help="Path to snapshot .tar.gz.age (default: newest in target_path)",
+    )
+    sp_verify.add_argument(
+        "--keep-extracted", action="store_true",
+        help="Leave the decrypted+extracted snapshot on disk for inspection",
+    )
+    sp_verify.set_defaults(func=_backup_verify)
+
+    sp_list = sub.add_parser("backup-list", help="List snapshots on configured target")
+    sp_list.set_defaults(func=_backup_list)
+
+    sp_version = sub.add_parser(
+        "version",
+        help="Print release + git state (for bug reports)",
+    )
+    sp_version.set_defaults(func=_version)
+
+    sp_db = sub.add_parser(
+        "db",
+        help="Schema-migrations status + apply (init_db runs them automatically on startup)",
+    )
+    sp_db.add_argument(
+        "action", choices=["status", "migrate"],
+        help="status: list applied + pending migrations. migrate: apply pending ones explicitly.",
+    )
+    sp_db.set_defaults(func=_db)
+
+    sp_service = sub.add_parser(
+        "service",
+        help="Install/uninstall the systemd unit (auto-start on boot + crash recovery)",
+    )
+    sp_service.add_argument(
+        "action", choices=["install", "uninstall", "status"],
+        help="install: write /etc/systemd/system/yorik.service + enable + start. "
+             "uninstall: stop, disable, remove. status: systemctl status + recent logs.",
+    )
+    sp_service.set_defaults(func=_service)
+
+    sp_upgrade = sub.add_parser(
+        "upgrade",
+        help="Pull latest, conditionally rebuild deps + frontend, restart uvicorn",
+    )
+    sp_upgrade.add_argument(
+        "--dry-run", action="store_true",
+        help="Show what would be pulled / rebuilt without doing anything",
+    )
+    sp_upgrade.add_argument(
+        "--skip-backup-verify", action="store_true",
+        help="Skip the pre-upgrade backup verify (fresh installs without "
+             "backups configured, or when you've verified manually already)",
+    )
+    sp_upgrade.set_defaults(func=_upgrade)
+    sub.add_parser(
+        "backup-now", help="Trigger an immediate backup (stub)",
+    ).set_defaults(func=_todo("backup-now",
+        "run backup.run_backup() synchronously, print result"))
+    sub.add_parser(
+        "restore", help="Destructive restore from snapshot (stub)",
+    ).set_defaults(func=_todo("restore",
+        "decrypt + replace data/ with snapshot contents (guarded by --i-mean-it)"))
+    sub.add_parser(
+        "status", help="Worker health + LLM + last backup (stub)",
+    ).set_defaults(func=_todo("status",
+        "hit /api/dashboard/workers + /api/health + last-backup time"))
+
+    args = p.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

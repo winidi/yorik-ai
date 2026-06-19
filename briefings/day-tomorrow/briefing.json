@@ -1,0 +1,38 @@
+{
+  "id": "day-tomorrow",
+  "name": "Tomorrow",
+  "description": "Full preview of tomorrow — calendar, tasks, anything already known",
+  "author": "yorik-core",
+  "version": "1.2",
+  "tags": ["daily", "personal"],
+  "sections": [
+    {
+      "id":       "tomorrow-calendar",
+      "title":    "Calendar",
+      "icon":     "🗓",
+      "skill":    "check_calendar",
+      "args":     {
+        "start_iso":          "{tomorrow_start}",
+        "end_iso":            "{tomorrow_end}",
+        "include_free_slots": true
+      },
+      "render":   "events_list",
+      "priority": "high"
+    },
+    {
+      "id":       "tomorrow-tasks",
+      "title":    "Tasks due",
+      "icon":     "✓",
+      "skill":    "check_tasks",
+      "args":     {
+        "start_iso":       "{tomorrow_start}",
+        "end_iso":         "{tomorrow_end}",
+        "include_undated": false,
+        "include_rows":    true
+      },
+      "render":   "raw_json",
+      "condition": "result.count > 0"
+    }
+  ],
+  "synthesize": { "enabled": false }
+}

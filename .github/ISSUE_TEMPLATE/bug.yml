@@ -1,0 +1,94 @@
+name: Bug report
+description: Something doesn't work as expected
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report! Yorik is in beta, so reports like this are genuinely valuable.
+
+        **Before submitting:** please search [existing issues](https://github.com/winidi/yorik-ai/issues?q=is%3Aissue) to avoid duplicates.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of what went wrong.
+      placeholder: "When I clicked X, I expected Y, but got Z."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Step-by-step so a maintainer can reproduce.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: input
+    id: yorik-version
+    attributes:
+      label: Yorik version / commit
+      description: "Run `git rev-parse --short HEAD` in your Yorik directory."
+      placeholder: "v0.1.0-beta or 50d7465"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Ubuntu 22.04
+        - Ubuntu 24.04
+        - Debian 12
+        - Pop!_OS
+        - Linux Mint
+        - Fedora
+        - openSUSE
+        - Arch
+        - macOS
+        - Other (please specify in "What happened")
+    validations:
+      required: true
+
+  - type: input
+    id: llm
+    attributes:
+      label: Which LLM endpoint?
+      description: What's serving your chat model?
+      placeholder: "Ollama / llama-swap / LM Studio / vLLM / bundled / cloud (please specify)"
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Which model?
+      placeholder: "qwen2.5:7b / qwen3.6-27b-mtp / etc."
+
+  - type: textarea
+    id: backend-log
+    attributes:
+      label: Backend log
+      description: "Output of: `tail -50 /tmp/homeos-api.log`. Redact any personal data."
+      render: shell
+
+  - type: textarea
+    id: browser-console
+    attributes:
+      label: Browser console (UI bugs only)
+      description: Anything red in the browser DevTools console?
+      render: shell
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Network setup, GPU, custom config, hunches about the cause, etc.

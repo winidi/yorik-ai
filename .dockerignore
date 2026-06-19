@@ -1,0 +1,40 @@
+# Keep the build context lean — the slimmer it is, the faster the
+# `docker build` upload + the smaller the final image (COPY caches
+# invalidate when any included file changes).
+
+# Python
+venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+.pytest_cache/
+
+# Frontend artifacts (rebuilt inside the image via node-build stage)
+frontend-react/node_modules/
+frontend-react/dist/
+frontend-react/tsconfig.app.tsbuildinfo
+
+# Local data — user-owned, MUST stay on the host. Never bake into image.
+data/
+
+# Vanna RunSqlTool drops query results in 16-char-hex dirs at repo root.
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*/
+
+# Logs + pid files
+*.log
+/tmp/
+homeos-*.pid
+
+# Editor / OS junk
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Git internals — Docker doesn't need history
+.git/
+.github/
+
+# Dev-only handoff doc + Claude artifacts
+HANDOFF.md
+.claude/

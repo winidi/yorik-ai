@@ -1,0 +1,15 @@
+# Maintainer-only — installed via `npm install`. End users get the
+# pre-built dist/ that ships in the FastAPI install.
+node_modules/
+
+# Built output — committed deliberately so end users (and the FastAPI
+# static serving) have the bundle without needing Node. Maintainer
+# rebuilds with `npm run build` and commits the result.
+# (uncomment the next line if you decide to keep dist/ out of git
+# instead — would require a build step in the install flow.)
+# dist/
+
+# Editor / OS
+.DS_Store
+*.log
+.vite/

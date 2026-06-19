@@ -1,0 +1,114 @@
+[Unit]
+# Yorik per-tenant FastAPI process. The `@` makes this a parameterised
+# template — `systemctl start yorik-tenant@momyorik` instantiates it
+# for the `momyorik` tenant, reading its YORIK_DB_NAME + HOMEOS_PORT
+# from data/tenants/momyorik/manifest.env.
+#
+# Install (one-time, host operator):
+#   sudo cp infra/systemd/yorik-tenant@.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#
+# Per-tenant (after `scripts/create-tenant.sh <name>`):
+#   sudo systemctl enable --now yorik-tenant@<name>.service
+#
+# Tear down (handled by scripts/drop-tenant.sh, but if you want
+# manually):
+#   sudo systemctl disable --now yorik-tenant@<name>.service
+#
+# The %i specifier expands to the instance name (the part after `@`).
+# The repo lives under /home/<user>/yorikai/yorik-ai — adjust the
+# User=, WorkingDirectory=, EnvironmentFile= paths if your layout
+# differs (install.sh does this substitution automatically; this
+# checked-in template assumes the standard self-host layout).
+
+Description=Yorik tenant FastAPI: %i
+After=network-online.target docker.service yorik.service
+Wants=network-online.target
+Requires=docker.service
+# Wait for the host's own yorik.service to be up. The host startup
+# hook waits for supabase-db readiness + applies host migrations +
+# stamps data/internal_token. Without this, tenants race the host
+# at boot, hit "Postgres connection refused" / "no internal_token,"
+# hit StartLimit, and stay permanently disabled. PartOf=yorik.service
+# also makes `systemctl restart yorik` cascade-restart every tenant —
+# the right behaviour when the host comes back from a fresh deploy.
+PartOf=yorik.service
+
+# StartLimit lives in [Unit] (systemd >=230). Means: if the service
+# fails > Burst times within IntervalSec seconds, give up. 10 failed
+# starts in 5 minutes → systemd stops restarting. Prevents a wedged
+# tenant from spin-restarting forever.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User={{INSTALL_USER}}
+Group={{INSTALL_USER}}
+WorkingDirectory={{INSTALL_DIR}}
+
+# Pull the tenant's YORIK_DB_NAME + HOMEOS_PORT from its manifest.
+# EnvironmentFile is "fail if missing"; `-` prefix would silently
+# skip and the tenant would boot against the host's DB — exactly the
+# isolation breach this whole architecture is built to prevent.
+EnvironmentFile={{INSTALL_DIR}}/data/tenants/%i/manifest.env
+
+# `${HOMEOS_PORT}` comes from the manifest (auto-allocated by
+# create-tenant.sh). Bind to 127.0.0.1 only — Caddy / nginx in front
+# does the public-facing TLS termination + subdomain routing.
+ExecStart={{INSTALL_DIR}}/venv/bin/python -m uvicorn backend.main:app \
+  --host 127.0.0.1 --port ${HOMEOS_PORT}
+
+# Restart on crash, but back off so a broken tenant doesn't spin the
+# whole box. The StartLimit pair lives up in [Unit] (above).
+Restart=on-failure
+RestartSec=5
+
+# Graceful shutdown: give uvicorn 30s to drain in-flight requests
+# (LLM streams especially) before SIGKILL. Matches the host Yorik's
+# behaviour so tenants feel the same as the host on restart.
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Sandbox the tenant process. Each tenant only needs:
+#   * read+write on its OWN tenant subdir (data/tenants/%i/...)
+#   * read on the repo (for code, frontend dist, voice-ack cache)
+#   * read on data/internal_token (the proxy bearer secret)
+#   * network (LLM endpoint, Immich, Paperless, the host proxy)
+# No /home access, no OTHER tenants' directories, no /etc writes.
+# The narrow ReadWritePaths is load-bearing: a single-tenant
+# compromise must not yield read access to other tenants'
+# manifests / docs / Immich tokens, and must not be able to
+# overwrite data/internal_token to invalidate every tenant's RPC
+# auth in one move. See the Phase F-lite isolation audit.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+# Per-tenant carved write paths. The %i specifier expands to the
+# tenant name. Any host-wide writable spot (data/logs, /tmp via
+# PrivateTmp) must be in ReadWritePaths or covered by PrivateTmp
+# above. Add data/logs because some app code rotates a per-process
+# log file at boot.
+ReadWritePaths={{INSTALL_DIR}}/data/tenants/%i
+ReadWritePaths={{INSTALL_DIR}}/data/logs
+
+# Resource caps — keeps one runaway tenant from OOM'ing the whole
+# box. The sentence-transformers embedder (~400MB) + Whisper-tiny
+# (~75MB) + voice ack cache + paperless reconciler push past 1G on
+# first request; 2.5G is the empirical floor before the OOM killer
+# trips. Larger embedders (BGE / E5) will want 4G.
+MemoryMax=2500M
+CPUQuota=50%
+
+# Journal-based logging; `journalctl -u yorik-tenant@momyorik` to
+# tail. The app also writes to data/logs/yorik.log inside the repo;
+# stdout/stderr come through here for "is the process even alive"
+# checks.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=yorik-tenant-%i
+
+[Install]
+WantedBy=multi-user.target
