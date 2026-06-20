@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Inbox, Star, Send, Archive, Trash2, Search, Pencil, AlertCircle,
-  Reply, ReplyAll, Forward, MoreVertical, Paperclip, Plus,
+  Reply, ReplyAll, Forward, MoreVertical, Paperclip, Plus, CornerDownRight,
   RefreshCw, Settings as SettingsIcon, AlertTriangle, Loader2,
   Mail, Folder, FileEdit, ShieldAlert, Clock, MessageSquare, Sparkles,
   MailX, Menu, ArrowLeft, Mic, Square, X,
@@ -523,6 +523,9 @@ export function EmailApp() {
               if (action === "star" || action === "unstar") {
                 await api.patch(`/api/email/messages/${m.id}`,
                   { is_starred: action === "star" });
+              } else if (action === "needs_reply_on" || action === "needs_reply_off") {
+                await api.patch(`/api/email/messages/${m.id}`,
+                  { needs_reply: action === "needs_reply_on" });
               } else if (action === "archive") {
                 await api.post(`/api/email/messages/${m.id}/archive`, {});
               } else {
@@ -786,7 +789,7 @@ function MessageList({
   /** Hover quick-actions — star / archive / snooze without opening
    *  the reader. The parent applies the PATCH + refetches. */
   onQuickAction?: (msg: EmailMessageRow,
-                   action: "star" | "unstar" | "archive" | "snooze-1d" | "snooze-tomorrow" | "snooze-nextweek") => void;
+                   action: "star" | "unstar" | "archive" | "needs_reply_on" | "needs_reply_off" | "snooze-1d" | "snooze-tomorrow" | "snooze-nextweek") => void;
 }) {
   if (error) {
     return <div className="p-4 text-sm text-destructive">{error}</div>;
@@ -822,9 +825,24 @@ function MessageList({
           onClick={() => onSelect(m.id)}
           className={cn(
             "group w-full text-left px-4 py-3 border-b border-border/60 transition cursor-pointer relative",
-            selectedId === m.id ? "bg-accent" : "bg-background hover:bg-muted/40",
+            // Three visual states, layered:
+            //  1) selected      → accent bg (wins over everything)
+            //  2) unread        → faint primary tint + slightly stronger
+            //                     on hover, plus a 3px leading bar below
+            //  3) read (default)→ plain background
+            selectedId === m.id
+              ? "bg-accent"
+              : m.is_unread
+                ? "bg-primary/[0.04] hover:bg-primary/[0.08]"
+                : "bg-background hover:bg-muted/40",
           )}
         >
+          {/* Leading accent bar: only on unread + non-selected rows.
+              Sits flush against the row's left edge so it acts as a
+              "this is new" tick mark you can scan in a long list. */}
+          {m.is_unread && selectedId !== m.id && (
+            <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-primary" aria-hidden />
+          )}
           {/* Hover quick-actions — appear in the top-right of the row.
               Wired through onQuickAction so the parent owns the PATCH
               + list refetch. stopPropagation keeps the row from also
@@ -841,6 +859,11 @@ function MessageList({
                 onClick={(e) => { e.stopPropagation(); onQuickAction(m, m.is_starred ? "unstar" : "star"); }}
               />
               <QuickActionBtn
+                icon={Reply} label={m.needs_reply ? "Reply-needed off" : "Mark needs reply"}
+                active={!!m.needs_reply}
+                onClick={(e) => { e.stopPropagation(); onQuickAction(m, m.needs_reply ? "needs_reply_off" : "needs_reply_on"); }}
+              />
+              <QuickActionBtn
                 icon={Archive} label="Archive"
                 onClick={(e) => { e.stopPropagation(); onQuickAction(m, "archive"); }}
               />
@@ -855,7 +878,10 @@ function MessageList({
             </PersonHover>
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline justify-between gap-2">
-                <span className={cn("text-sm truncate", m.is_unread && "font-semibold")}>
+                <span className={cn(
+                  "text-sm truncate",
+                  m.is_unread ? "font-semibold text-foreground" : "text-muted-foreground",
+                )}>
                   {m.is_sent ? (
                     <span className="text-muted-foreground">to {addrLabel(m.to_addrs)}</span>
                   ) : (
@@ -872,6 +898,12 @@ function MessageList({
                 "text-sm truncate mt-0.5 flex items-center gap-1.5",
                 m.is_unread ? "font-medium" : "text-muted-foreground"
               )}>
+                {m.has_my_reply && (
+                  <CornerDownRight
+                    className="w-3 h-3 text-emerald-600 dark:text-emerald-500 shrink-0"
+                    aria-label="You replied to this"
+                  />
+                )}
                 <span className="truncate">{m.subject || "(no subject)"}</span>
                 {typeof m.thread_count === "number" && m.thread_count > 1 && (
                   <span
@@ -887,6 +919,14 @@ function MessageList({
                 {m.snippet}
               </div>
               <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                {m.needs_reply && (
+                  <span
+                    className="px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/[0.08] text-amber-700 dark:text-amber-400 text-[10px] font-medium leading-none inline-flex items-center gap-1"
+                    title="You marked this as needing a reply"
+                  >
+                    <Reply className="w-2.5 h-2.5" /> reply
+                  </span>
+                )}
                 {m.category && CATEGORY_BADGE[m.category] && (
                   <span className={cn(
                     "px-1.5 py-0.5 rounded border text-[10px] font-medium leading-none",
@@ -1439,6 +1479,17 @@ function Reader({
             onClick={async () => {
               try {
                 await api.patch(`/api/email/messages/${messageRow.id}`, { is_unread: !messageRow.is_unread });
+                onActionDone(false);
+              } catch (e: any) { alert("Failed: " + e.message); }
+            }} />
+          <ToolbarBtn
+            icon={Reply}
+            label={m.needs_reply ? "Reply-needed off" : "Mark needs reply"}
+            active={!!m.needs_reply}
+            onClick={async () => {
+              try {
+                await api.patch(`/api/email/messages/${messageRow.id}`,
+                  { needs_reply: !m.needs_reply });
                 onActionDone(false);
               } catch (e: any) { alert("Failed: " + e.message); }
             }} />

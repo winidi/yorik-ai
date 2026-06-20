@@ -39,6 +39,12 @@ export interface EmailMessageRow {
   is_starred: boolean;
   is_sent: boolean;
   has_attachments: boolean;
+  /** True when the current user has a sent message whose In-Reply-To
+   *  points at this row's Message-ID. Drives the ↪ glyph in the list. */
+  has_my_reply?: boolean;
+  /** User-set "I need to reply to this" flag. Local-only, no IMAP
+   *  round-trip. Drives the amber pill + reply-needed sidebar count. */
+  needs_reply?: boolean;
   category?: string | null;
   /** ISO datetime; set when the user snoozed the message (mig 024). */
   snoozed_until?: string | null;

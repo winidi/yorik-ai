@@ -468,7 +468,16 @@ def list_messages(
         "SELECT m.id, m.account_id, a.email AS account_email, a.display_name AS account_display_name, "
         "       m.message_id, m.thread_id, m.from_email, m.from_name, m.to_addrs, "
         "       m.subject, m.snippet, m.date_received, m.is_unread, m.is_starred, "
-        "       m.is_sent, m.has_attachments, m.category"
+        "       m.is_sent, m.has_attachments, m.needs_reply, m.category, "
+        # has_my_reply: true when the user has a sent message whose
+        # In-Reply-To header points at this row's Message-ID. Backed by
+        # the partial index from migration 114 — stays cheap on big
+        # mailboxes.
+        "       EXISTS (SELECT 1 FROM email_messages r "
+        "               WHERE r.owner_user_id = m.owner_user_id "
+        "                 AND r.is_sent = 1 "
+        "                 AND r.in_reply_to IS NOT NULL "
+        "                 AND r.in_reply_to = m.message_id) AS has_my_reply"
         + snooze_select +
         " FROM email_messages m JOIN email_accounts a ON a.id = m.account_id "
         "WHERE m.owner_user_id = ?"
@@ -519,6 +528,8 @@ def list_messages(
         d["is_starred"] = bool(d["is_starred"])
         d["is_sent"] = bool(d["is_sent"])
         d["has_attachments"] = bool(d["has_attachments"])
+        d["has_my_reply"] = bool(d.get("has_my_reply"))
+        d["needs_reply"] = bool(d.get("needs_reply"))
         flat.append(d)
 
     if not group_by_thread:
@@ -672,14 +683,16 @@ def untrust_sender_images(msg_id: int, user: dict = Depends(current_user)):
 class MessagePatch(BaseModel):
     is_unread:  Optional[bool] = None
     is_starred: Optional[bool] = None
+    needs_reply: Optional[bool] = None
 
 
 @router.patch("/messages/{msg_id}")
 async def patch_message(msg_id: int, body: MessagePatch,
                          user: dict = Depends(current_user)):
-    """Update message flags (read/unread, starred). Issues the IMAP
-    STORE command + updates local SQLite."""
-    if body.is_unread is None and body.is_starred is None:
+    """Update message flags. is_unread + is_starred round-trip to IMAP
+    (so other clients see the change); needs_reply is yorik-local
+    metadata only and just writes the DB row."""
+    if body.is_unread is None and body.is_starred is None and body.needs_reply is None:
         raise HTTPException(400, "nothing to update")
     if body.is_unread is not None:
         # is_unread=True → mark UNSEEN, is_unread=False → mark SEEN.
@@ -690,6 +703,19 @@ async def patch_message(msg_id: int, body: MessagePatch,
         ok = await asyncio.to_thread(email_actions.set_starred, msg_id, user["id"], body.is_starred)
         if not ok:
             raise HTTPException(502, "IMAP flag update failed")
+    if body.needs_reply is not None:
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM email_messages WHERE id=? AND owner_user_id=?",
+                (msg_id, user["id"]),
+            ).fetchone()
+            if not row:
+                raise HTTPException(404, "message not found")
+            conn.execute(
+                "UPDATE email_messages SET needs_reply=? WHERE id=?",
+                (1 if body.needs_reply else 0, msg_id),
+            )
+            conn.commit()
     return {"ok": True}
 
 
