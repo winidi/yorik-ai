@@ -172,15 +172,164 @@ def move_to_folder(message_id: int, user_id: str, target_folder_id: int) -> bool
         return False
 
     # Update the local row. The UID is no longer valid in the old
-    # folder; we set folder_id and clear uid (resync picks it up
-    # under the new folder later via the standard fetch loop).
+    # folder; we set folder_id and NULL the uid so the next fetcher
+    # tick fills in the real UID under the destination folder. NULL
+    # (not 0) so the UNIQUE(account_id, folder_id, uid) constraint
+    # admits multiple moved-but-not-yet-synced rows — Postgres treats
+    # NULL as distinct in unique indexes. uid=0 was the original
+    # sentinel and silently broke bulk moves into the same folder.
     with get_conn() as conn:
         conn.execute(
-            "UPDATE email_messages SET folder_id=?, uid=? WHERE id=?",
-            (target["id"], 0, message_id),
+            "UPDATE email_messages SET folder_id=?, uid=NULL WHERE id=?",
+            (target["id"], message_id),
         )
         conn.commit()
     return True
+
+
+def delete_messages_bulk(message_ids: list[int], user_id: str) -> dict:
+    """Move many messages to Trash in batches grouped by (account, folder).
+    One IMAP login per (account, folder), one MOVE call per group —
+    typical bulk-cleanup goes from ~500ms × N to a couple of seconds
+    total even for hundreds of messages.
+
+    Falls back per-group to COPY-then-flag-then-EXPUNGE when MOVE
+    isn't supported, and to per-message delete_message() when even
+    that fails. Returns {deleted, failed, by_group: [...]}."""
+    if not message_ids:
+        return {"deleted": 0, "failed": 0, "groups": []}
+
+    # Resolve all (msg_id → account_id, folder_id, folder_name, uid,
+    # message_id, source_folder_id) up front with one query so we
+    # don't N+1 the lookup.
+    with get_conn() as conn:
+        ph = ",".join(["?"] * len(message_ids))
+        rows = conn.execute(
+            "SELECT m.id, m.account_id, m.folder_id, m.uid, m.message_id, "
+            "       f.name AS folder_name "
+            "FROM email_messages m "
+            "LEFT JOIN email_folders f ON f.id = m.folder_id "
+            "JOIN email_accounts a ON a.id = m.account_id "
+            f"WHERE m.id IN ({ph}) AND a.owner_user_id = ?",
+            (*message_ids, user_id),
+        ).fetchall()
+
+    # Group by (account_id, folder_id, folder_name). UIDs without a
+    # folder name (folder row gone — shouldn't happen, defensive) or
+    # without a uid (already-moved rows) get individually delete_message'd
+    # as a last resort instead of polluting the batch.
+    grouped: dict[tuple[int, int, str], list[dict]] = {}
+    leftovers: list[int] = []
+    for r in rows:
+        if not r["folder_name"] or not r["uid"]:
+            leftovers.append(int(r["id"]))
+            continue
+        key = (int(r["account_id"]), int(r["folder_id"]), r["folder_name"])
+        grouped.setdefault(key, []).append(dict(r))
+
+    deleted_total = 0
+    failed_total = 0
+    group_results: list[dict] = []
+
+    for (account_id, folder_id, folder_name), msgs in grouped.items():
+        msg_ids_in_group = [m["id"] for m in msgs]
+        uids_in_group   = [int(m["uid"]) for m in msgs]
+        mids_for_tomb   = [m["message_id"] for m in msgs]
+
+        # Find this account's Trash folder. Empty = no Trash, we hard-
+        # delete with STORE+EXPUNGE in the source folder instead.
+        with get_conn() as conn:
+            trash = conn.execute(
+                "SELECT id, name FROM email_folders WHERE account_id=? AND "
+                "(flags LIKE '%\\\\Trash%' OR LOWER(name) IN ('trash','gelöscht','geloescht','deleted','papierkorb')) "
+                "LIMIT 1",
+                (account_id,),
+            ).fetchone()
+
+        group_status: dict[str, Any] = {
+            "account_id": account_id,
+            "folder_id": folder_id,
+            "count": len(msgs),
+        }
+
+        try:
+            with imap_for_account(account_id) as c:
+                c.select_folder(folder_name)
+                if trash and trash["name"]:
+                    if c.has_capability(b"MOVE"):
+                        c.move(uids_in_group, trash["name"])
+                    else:
+                        c.copy(uids_in_group, trash["name"])
+                        c.delete_messages(uids_in_group)
+                        c.expunge()
+                    # Update local rows to point at Trash with NULL uid
+                    # so the unique constraint admits all of them; the
+                    # fetcher's next pass under the Trash folder fills
+                    # in real UIDs.
+                    with get_conn() as conn:
+                        for mid in msg_ids_in_group:
+                            conn.execute(
+                                "UPDATE email_messages SET folder_id=?, uid=NULL WHERE id=?",
+                                (int(trash["id"]), mid),
+                            )
+                        # Tombstone — block re-insert from the source folder.
+                        for mmid in mids_for_tomb:
+                            if mmid:
+                                conn.execute(
+                                    "INSERT OR REPLACE INTO email_deleted_message_ids "
+                                    "(account_id, message_id, suppress_folder_id) "
+                                    "VALUES (?, ?, ?)",
+                                    (account_id, mmid, folder_id),
+                                )
+                        conn.commit()
+                else:
+                    # No Trash → hard delete in source.
+                    c.delete_messages(uids_in_group)
+                    c.expunge()
+                    with get_conn() as conn:
+                        conn.execute(
+                            f"DELETE FROM email_messages WHERE id IN ({','.join(['?'] * len(msg_ids_in_group))})",
+                            tuple(msg_ids_in_group),
+                        )
+                        for mmid in mids_for_tomb:
+                            if mmid:
+                                conn.execute(
+                                    "INSERT OR REPLACE INTO email_deleted_message_ids "
+                                    "(account_id, message_id, suppress_folder_id) "
+                                    "VALUES (?, ?, ?)",
+                                    (account_id, mmid, folder_id),
+                                )
+                        conn.commit()
+            deleted_total += len(msgs)
+            group_status["ok"] = True
+            group_status["deleted"] = len(msgs)
+        except Exception as exc:  # noqa: BLE001
+            # Group-level failure → fall back to single-message delete
+            # for each, which has its own multi-step fallback chain.
+            log.warning("bulk delete group acct=%s folder=%s failed (%s); "
+                        "falling back per-message", account_id, folder_name, exc)
+            fallback_ok = 0
+            for mid in msg_ids_in_group:
+                if delete_message(mid, user_id):
+                    fallback_ok += 1
+            deleted_total += fallback_ok
+            failed_total += len(msgs) - fallback_ok
+            group_status["ok"] = False
+            group_status["error"] = str(exc)
+            group_status["deleted"] = fallback_ok
+            group_status["failed"] = len(msgs) - fallback_ok
+        group_results.append(group_status)
+
+    # Anything excluded from grouping (missing folder/uid) — handle
+    # one by one. Rare edge case; keeps the bulk path predictable.
+    if leftovers:
+        for mid in leftovers:
+            if delete_message(mid, user_id):
+                deleted_total += 1
+            else:
+                failed_total += 1
+
+    return {"deleted": deleted_total, "failed": failed_total, "groups": group_results}
 
 
 def delete_message(message_id: int, user_id: str) -> bool:
@@ -268,10 +417,12 @@ def delete_message(message_id: int, user_id: str) -> bool:
                 c.copy([msg["uid"]], trash["name"])
             with get_conn() as conn:
                 # UID is unknown in Trash until the fetcher resyncs;
-                # clear to 0 (matches move_to_folder).
+                # NULL so multiple deletions into Trash don't collide
+                # on UNIQUE(account_id, folder_id, uid). Was uid=0 — a
+                # sentinel that broke after the first row.
                 conn.execute(
-                    "UPDATE email_messages SET folder_id=?, uid=? WHERE id=?",
-                    (int(trash["id"]), 0, message_id),
+                    "UPDATE email_messages SET folder_id=?, uid=NULL WHERE id=?",
+                    (int(trash["id"]), message_id),
                 )
                 conn.commit()
             _tombstone(suppress_folder_id=msg_source_folder)

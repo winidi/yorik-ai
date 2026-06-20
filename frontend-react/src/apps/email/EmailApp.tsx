@@ -17,6 +17,7 @@ import {
   RefreshCw, Settings as SettingsIcon, AlertTriangle, Loader2,
   Mail, Folder, FileEdit, ShieldAlert, Clock, MessageSquare, Sparkles,
   MailX, Menu, ArrowLeft, Mic, Square, X,
+  Bell, Calendar, Newspaper, Receipt,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,9 @@ interface FolderSelection {
   starredOnly?: boolean;
   /** Mig 024: show currently-snoozed messages (the dedicated view). */
   snoozedView?: boolean;
+  /** Filter to messages whose classifier category is one of these.
+   *  Comma-joined on the wire; on null/empty the filter is omitted. */
+  categories?: string[] | null;
 }
 
 
@@ -195,6 +199,7 @@ function usePagedMessages(
 
 export function EmailApp() {
   const [showWizard, setShowWizard] = useState(false);
+  const [showCleanup, setShowCleanup] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<number | "all">("all");
   const [folderSel, setFolderSel] = useState<FolderSelection>({
@@ -283,6 +288,9 @@ export function EmailApp() {
     if (folderSel.unreadOnly)  params.set("unread_only", "true");
     if (folderSel.starredOnly) params.set("starred_only", "true");
     if (folderSel.snoozedView) params.set("snoozed_view", "true");
+    if (folderSel.categories?.length) {
+      params.set("category", folderSel.categories.join(","));
+    }
     const qs = params.toString();
     return qs ? `/api/email/messages?${qs}` : `/api/email/messages`;
   }, [selectedAccount, folderSel]);
@@ -526,6 +534,41 @@ export function EmailApp() {
             }} />
         </nav>
 
+        {/* Categories — filter the unified inbox by the classifier's
+            tag. Quick way to scan "all newsletters" or "all bills"
+            without searching. Same FolderSelection state model, just
+            with a categories array set. */}
+        <div className="border-t border-border mt-2 pt-3 px-2">
+          <div className="px-2 pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+            Categories
+          </div>
+          <nav className="space-y-0.5">
+            {CATEGORY_NAV.map(c => {
+              const active = folderSel.folderId === null
+                && (folderSel.categories?.length === 1)
+                && folderSel.categories[0] === c.key
+                && !folderSel.starredOnly && !folderSel.snoozedView && !folderSel.unreadOnly;
+              return (
+                <SidebarItem
+                  key={c.key}
+                  icon={c.icon}
+                  label={c.label}
+                  active={active}
+                  onClick={() => {
+                    setSelectedAccount("all");
+                    setFolderSel({
+                      folderId: null,
+                      semantic: "inbox",
+                      unreadOnly: false,
+                      categories: [c.key],
+                    });
+                  }}
+                />
+              );
+            })}
+          </nav>
+        </div>
+
         {/* Per-account expanded folder lists */}
         <div className="border-t border-border mt-2 pt-3 px-2 flex-1 overflow-y-auto">
           <div className="px-2 pb-2 flex items-center justify-between">
@@ -622,6 +665,8 @@ export function EmailApp() {
               {folderSel.starredOnly ? "Starred"
                 : folderSel.snoozedView ? "Snoozed"
                 : folderSel.unreadOnly ? "Unread"
+                : folderSel.categories?.length === 1
+                  ? (CATEGORY_NAV.find(c => c.key === folderSel.categories![0])?.label || "Filtered")
                 : folderSel.semantic === "inbox" ? "Inbox"
                 : folderSel.semantic === "sent" ? "Sent"
                 : folderSel.semantic === "all" ? "All mail"
@@ -649,6 +694,15 @@ export function EmailApp() {
               </button>
             )}
           </div>
+          {folderSel.categories?.length ? (
+            <button
+              onClick={() => setShowCleanup(true)}
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 h-9 rounded-md border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
+              title="Bulk unsubscribe / block / delete by sender"
+            >
+              <Sparkles className="w-3.5 h-3.5" /> Cleanup
+            </button>
+          ) : null}
           <button
             onClick={() => (search ? searchApi.refetch() : listApi.refetch())}
             disabled={listApi.loading || searchApi.loading}
@@ -750,6 +804,13 @@ export function EmailApp() {
           onSaved={() => { setShowWizard(false); accountsApi.refetch(); listApi.refetch(); }}
         />
       )}
+      {showCleanup && (
+        <CleanupModal
+          categories={folderSel.categories || []}
+          onClose={() => setShowCleanup(false)}
+          onApplied={() => { setShowCleanup(false); listApi.refetch(); }}
+        />
+      )}
       {showSettings && (
         <EmailSettingsModal
           accounts={accounts}
@@ -803,6 +864,17 @@ const CATEGORY_BADGE: Record<string, { label: string; cls: string }> = {
   newsletter:   { label: "Newsletter",   cls: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30" },
   notification: { label: "Notification", cls: "bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/30" },
 };
+
+// Sidebar category quick-filters. Skips "personal" and "other" — those
+// are catch-alls without a clear "all of these" action. The user
+// clicks a category → the unified inbox filters to messages with that
+// classifier tag.
+const CATEGORY_NAV: Array<{ key: string; label: string; icon: any }> = [
+  { key: "newsletter",   label: "Newsletters",   icon: Newspaper },
+  { key: "bill",         label: "Bills",         icon: Receipt },
+  { key: "appointment",  label: "Appointments",  icon: Calendar },
+  { key: "notification", label: "Notifications", icon: Bell },
+];
 
 // Folder category → icon. Keeps the sidebar visually parseable at
 // a glance (envelope for Inbox, paper-plane for Sent, shield for Spam, etc.).
@@ -1270,6 +1342,307 @@ function SnoozeMenuItem({ label, onClick }: { label: string; onClick: () => void
     </button>
   );
 }
+
+// Bulk-cleanup modal for a category-filtered inbox view. Lists every
+// sender that contributed mail in this category, sorted by count
+// (loudest first), so the user can blast through a year of newsletter
+// build-up in one screen. Each sender has up to three independent
+// toggles:
+//   * Unsubscribe  — runs the existing per-message unsubscribe on the
+//                    most recent message from that sender. The route
+//                    already adds the sender to the blocklist on
+//                    success, so toggling block is only useful when
+//                    unsubscribe fails or is unavailable.
+//   * Block        — adds the address to email_blocklist immediately.
+//   * Delete all   — moves every existing message from this sender to
+//                    Trash across ALL of the user's accounts.
+// Works the same regardless of how many mailboxes are connected:
+// senders are grouped by address (lower-cased), and per-sender actions
+// fan out server-side over every account that has mail from them.
+type CleanupSender = {
+  sender_email: string;
+  sender_name?: string | null;
+  msg_count: number;
+  last_received?: string | null;
+  has_unsubscribe: boolean;
+  sample_subject?: string | null;
+  account_emails: string[];
+};
+
+type CleanupChoice = {
+  unsubscribe: boolean;
+  block: boolean;
+  block_domain: boolean;
+  delete_existing: boolean;
+};
+
+function CleanupModal({
+  categories, onClose, onApplied,
+}: {
+  categories: string[];
+  onClose: () => void;
+  onApplied: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [senders, setSenders] = useState<CleanupSender[]>([]);
+  const [choices, setChoices] = useState<Record<string, CleanupChoice>>({});
+  const [applying, setApplying] = useState(false);
+  const [results, setResults] = useState<Array<Record<string, any>> | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number; current?: string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    const qs = categories.length ? `?category=${encodeURIComponent(categories.join(","))}` : "";
+    api.get<{ senders: CleanupSender[] }>(`/api/email/cleanup/senders${qs}`)
+      .then(r => { if (alive) setSenders(r.senders); })
+      .catch((e: any) => { if (alive) setErr(e?.message || "load failed"); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [categories.join(",")]);
+
+  function toggle(sender: string, key: keyof CleanupChoice) {
+    setChoices(prev => {
+      const cur = prev[sender] || { unsubscribe: false, block: false, block_domain: false, delete_existing: false };
+      return { ...prev, [sender]: { ...cur, [key]: !cur[key] } };
+    });
+  }
+
+  async function apply() {
+    const actions = Object.entries(choices)
+      .map(([sender_email, c]) => ({ sender_email, ...c }))
+      .filter(a => a.unsubscribe || a.block || a.block_domain || a.delete_existing);
+    if (actions.length === 0) return;
+    setApplying(true); setErr(null);
+    setProgress({ done: 0, total: actions.length });
+    // Loop one sender at a time so the progress bar reflects real-time
+    // state. Delete-all in particular can take many seconds per sender
+    // (one IMAP STORE+EXPUNGE per message); batching them all into a
+    // single request leaves the user staring at a frozen modal for
+    // minutes. Per-sender calls are slightly slower in total (extra
+    // HTTP overhead × N) but the UX win is worth it.
+    const collected: Array<Record<string, any>> = [];
+    for (let i = 0; i < actions.length; i++) {
+      const a = actions[i];
+      setProgress({ done: i, total: actions.length, current: a.sender_email });
+      try {
+        const r = await api.post<{ results: Array<Record<string, any>> }>(
+          "/api/email/cleanup/apply", { actions: [a] });
+        collected.push(...(r.results || []));
+      } catch (e: any) {
+        collected.push({ sender_email: a.sender_email, error: e?.message || "failed" });
+      }
+    }
+    setProgress({ done: actions.length, total: actions.length });
+    setResults(collected);
+    setApplying(false);
+  }
+
+  // Selection bookkeeping for the per-column "select all" toggles.
+  const selectAll = (key: keyof CleanupChoice, onlyEligible?: (s: CleanupSender) => boolean) => {
+    setChoices(prev => {
+      const next: Record<string, CleanupChoice> = { ...prev };
+      // If everyone (eligible) already has it on, turn off; otherwise turn on.
+      const eligible = senders.filter(s => !onlyEligible || onlyEligible(s));
+      const allOn = eligible.every(s => next[s.sender_email]?.[key]);
+      eligible.forEach(s => {
+        const cur = next[s.sender_email] || { unsubscribe: false, block: false, block_domain: false, delete_existing: false };
+        next[s.sender_email] = { ...cur, [key]: !allOn };
+      });
+      return next;
+    });
+  };
+
+  const actionCount = Object.values(choices).filter(c =>
+    c.unsubscribe || c.block || c.block_domain || c.delete_existing
+  ).length;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <div>
+            <h2 className="font-semibold text-base">
+              Inbox cleanup — {categories.length === 1
+                ? (CATEGORY_NAV.find(c => c.key === categories[0])?.label || categories[0])
+                : "filtered"}
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {senders.length} sender{senders.length === 1 ? "" : "s"} found across all connected mailboxes.
+              Pick what to do with each, then Apply.
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {results ? (
+          <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-2">
+            <div className="text-sm font-medium">Cleanup applied — results</div>
+            {results.map((r, i) => (
+              <div key={i} className="p-3 border border-border rounded-md text-xs space-y-1">
+                <div className="font-medium">{r.sender_email}</div>
+                {r.unsubscribe && (
+                  <div className={cn(r.unsubscribe.ok === false ? "text-destructive" : "text-emerald-600 dark:text-emerald-500")}>
+                    unsubscribe: {JSON.stringify(r.unsubscribe)}
+                  </div>
+                )}
+                {r.blocked && (
+                  <div className="text-emerald-600 dark:text-emerald-500">
+                    blocked: sender={String(r.blocked.sender ?? false)}, domain={String(r.blocked.domain ?? false)}
+                  </div>
+                )}
+                {r.deleted && (
+                  <div className="text-muted-foreground">
+                    deleted {r.deleted.deleted}/{r.deleted.matched} message(s)
+                    {r.deleted.errors?.length ? ` · errors: ${r.deleted.errors.join("; ")}` : ""}
+                  </div>
+                )}
+              </div>
+            ))}
+            <div className="pt-2">
+              <button
+                onClick={onApplied}
+                className="px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 text-sm"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="px-5 py-2 border-b border-border flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex-1">{senders.length} senders</span>
+              <button onClick={() => selectAll("unsubscribe", s => s.has_unsubscribe)} className="hover:text-foreground">
+                Toggle all unsubscribe (eligible)
+              </button>
+              <button onClick={() => selectAll("block")} className="hover:text-foreground">
+                Toggle all block
+              </button>
+              <button onClick={() => selectAll("delete_existing")} className="hover:text-foreground">
+                Toggle all delete
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {loading && (
+                <div className="p-8 text-center text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Loading senders…
+                </div>
+              )}
+              {!loading && senders.length === 0 && (
+                <div className="p-8 text-center text-sm text-muted-foreground">No senders found in this category.</div>
+              )}
+              {!loading && senders.map(s => {
+                const c = choices[s.sender_email] || { unsubscribe: false, block: false, block_domain: false, delete_existing: false };
+                return (
+                  <div key={s.sender_email} className="px-5 py-3 border-b border-border/60 flex items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">{s.sender_name || s.sender_email}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {s.sender_email} · {s.msg_count} mail{s.msg_count === 1 ? "" : "s"}
+                        {s.account_emails.length > 1 && ` · across ${s.account_emails.length} mailboxes`}
+                      </div>
+                      {s.sample_subject && (
+                        <div className="text-xs text-muted-foreground/80 italic truncate mt-0.5">
+                          "{s.sample_subject}"
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1 text-xs shrink-0 w-44">
+                      <label className={cn(
+                        "flex items-center gap-2",
+                        !s.has_unsubscribe && "opacity-50 cursor-not-allowed",
+                      )} title={s.has_unsubscribe ? "RFC 8058 / 2369 unsubscribe" : "No List-Unsubscribe header on any message from this sender"}>
+                        <input
+                          type="checkbox"
+                          checked={c.unsubscribe}
+                          disabled={!s.has_unsubscribe}
+                          onChange={() => toggle(s.sender_email, "unsubscribe")}
+                          className="h-3.5 w-3.5"
+                        />
+                        Unsubscribe
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={c.block}
+                          onChange={() => toggle(s.sender_email, "block")}
+                          className="h-3.5 w-3.5"
+                        />
+                        Block sender
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={c.block_domain}
+                          onChange={() => toggle(s.sender_email, "block_domain")}
+                          className="h-3.5 w-3.5"
+                        />
+                        Block domain
+                      </label>
+                      <label className="flex items-center gap-2 text-destructive/90">
+                        <input
+                          type="checkbox"
+                          checked={c.delete_existing}
+                          onChange={() => toggle(s.sender_email, "delete_existing")}
+                          className="h-3.5 w-3.5"
+                        />
+                        Delete all ({s.msg_count})
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="p-5 border-t border-border space-y-3">
+              {applying && progress && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      Processing {progress.done} of {progress.total}
+                      {progress.current && <> · <span className="text-foreground/80">{progress.current}</span></>}
+                    </span>
+                    <span>{Math.round((progress.done / progress.total) * 100)}%</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{ width: `${(progress.done / Math.max(progress.total, 1)) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                {err && <span className="text-xs text-destructive">{err}</span>}
+                <div className="flex-1 text-xs text-muted-foreground">
+                  {actionCount} sender{actionCount === 1 ? "" : "s"} selected
+                </div>
+                <button
+                  onClick={onClose}
+                  disabled={applying}
+                  className="px-4 h-9 rounded-md hover:bg-muted text-sm disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={apply}
+                  disabled={applying || actionCount === 0}
+                  className="px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 text-sm inline-flex items-center gap-2"
+                >
+                  {applying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {applying ? "Applying…" : "Apply"}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 // Banner shown above the body when the classifier tagged the message
 // as 'appointment'. Single-click "Add to Calendar" — the server-side

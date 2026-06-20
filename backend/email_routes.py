@@ -407,6 +407,7 @@ def list_messages(
     starred_only: bool = Query(False, description="Show only starred messages (cross-folder)."),
     snoozed_view: bool = Query(False, description="Show currently-snoozed messages instead of hiding them."),
     group_by_thread: bool = Query(True, description="Collapse messages with the same thread_id; return only the latest."),
+    category: Optional[str] = Query(None, description="Comma-separated list of classifier categories (bill / appointment / notification / newsletter / personal / other). Filters to messages whose stored category is in this set."),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: dict = Depends(current_user),
@@ -491,6 +492,19 @@ def list_messages(
         sql += " AND m.is_unread = 1"
     if starred_only:
         sql += " AND m.is_starred = 1"
+    if category:
+        # Accept comma-separated so the sidebar can pre-bucket multiple
+        # classifier categories under one entry (e.g. "Promotional" =
+        # newsletter + notification). Sanitise to the known set so the
+        # query never hits an arbitrary user-supplied value — even
+        # though it's parameterised, this keeps the URL honest.
+        known = {"bill", "appointment", "notification", "newsletter", "personal", "other"}
+        cats = [c.strip().lower() for c in category.split(",") if c.strip()]
+        cats = [c for c in cats if c in known]
+        if cats:
+            placeholders = ",".join(["?"] * len(cats))
+            sql += f" AND m.category IN ({placeholders})"
+            params.extend(cats)
     if folder_id is not None:
         # Specific folder selected — most precise filter.
         sql += " AND m.folder_id = ?"
@@ -674,6 +688,197 @@ async def load_older(
     results = await asyncio.gather(*[_one(int(r["id"]), r["email"]) for r in rows])
     total = sum(r.get("fetched", 0) for r in results)
     return {"per_account": list(results), "total_fetched": total}
+
+
+@router.get("/cleanup/senders")
+def cleanup_senders(
+    category: Optional[str] = Query(None, description="Comma-separated category list. When unset, all incoming mail is included."),
+    user: dict = Depends(current_user),
+):
+    """Per-sender aggregate of messages in the given classifier
+    categories. Powers the bulk-cleanup screen: 'show me every
+    newsletter sender grouped, sorted by how many they sent me,
+    with the option to unsubscribe / block / wipe in one go'."""
+    known = {"bill", "appointment", "notification", "newsletter", "personal", "other"}
+    cats: list[str] = []
+    if category:
+        cats = [c.strip().lower() for c in category.split(",") if c.strip().lower() in known]
+
+    # Exclude Trash/Junk/Drafts so already-cleaned-up senders don't
+    # reappear in the cleanup modal — same filter the inbox-folder
+    # list query uses. Otherwise a successful delete-all moves the
+    # rows to Trash but they remain is_sent=0, so the senders query
+    # would still surface them with the original count.
+    sql = (
+        "SELECT LOWER(m.from_email) AS sender_email, "
+        "       MIN(m.from_name) AS sender_name, "
+        "       COUNT(*) AS msg_count, "
+        "       MAX(m.date_received) AS last_received, "
+        "       MAX(CASE WHEN m.list_unsubscribe IS NOT NULL "
+        "                  OR m.list_unsubscribe_post IS NOT NULL "
+        "                THEN 1 ELSE 0 END) AS has_unsubscribe, "
+        "       MAX(m.subject) AS sample_subject "
+        "FROM email_messages m "
+        "WHERE m.owner_user_id = ? AND m.is_sent = 0 "
+        "  AND COALESCE(m.from_email, '') <> '' "
+        "  AND m.folder_id NOT IN ("
+        "    SELECT id FROM email_folders WHERE"
+        "      flags LIKE '%\\\\Trash%'"
+        "   OR flags LIKE '%\\\\Junk%'"
+        "   OR flags LIKE '%\\\\Drafts%'"
+        "  ) "
+    )
+    params: list[Any] = [user["id"]]
+    if cats:
+        ph = ",".join(["?"] * len(cats))
+        sql += f"  AND m.category IN ({ph}) "
+        params.extend(cats)
+    sql += (
+        "GROUP BY LOWER(m.from_email) "
+        "ORDER BY COUNT(*) DESC, MAX(m.date_received) DESC NULLS LAST "
+        "LIMIT 500"
+    )
+
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+        # Per-sender list of accounts that received mail — useful when
+        # the user has 3 inboxes and wants to know which one a
+        # newsletter slipped into. Done as a second cheap pass so the
+        # main aggregate stays a single GROUP BY without an array_agg.
+        senders = [r["sender_email"] for r in rows if r["sender_email"]]
+        accts_by_sender: dict[str, list[str]] = {s: [] for s in senders}
+        if senders:
+            inph = ",".join(["?"] * len(senders))
+            acct_rows = conn.execute(
+                "SELECT DISTINCT LOWER(m.from_email) AS sender_email, a.email AS account_email "
+                "FROM email_messages m JOIN email_accounts a ON a.id = m.account_id "
+                f"WHERE m.owner_user_id = ? AND m.is_sent = 0 AND LOWER(m.from_email) IN ({inph}) "
+                "  AND m.folder_id NOT IN ("
+                "    SELECT id FROM email_folders WHERE"
+                "      flags LIKE '%\\\\Trash%'"
+                "   OR flags LIKE '%\\\\Junk%'"
+                "   OR flags LIKE '%\\\\Drafts%'"
+                "  )",
+                [user["id"], *senders],
+            ).fetchall()
+            for r in acct_rows:
+                accts_by_sender.setdefault(r["sender_email"], []).append(r["account_email"])
+
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["has_unsubscribe"] = bool(d.get("has_unsubscribe"))
+        d["account_emails"] = sorted(accts_by_sender.get(d["sender_email"], []))
+        out.append(d)
+    return {"senders": out, "categories": cats}
+
+
+class CleanupAction(BaseModel):
+    sender_email: str
+    # User intent flags. Each is independent; running unsubscribe also
+    # blocks (the existing /unsubscribe route already does that), so
+    # `block` set additionally is harmless.
+    unsubscribe: bool = False
+    block: bool = False
+    block_domain: bool = False
+    delete_existing: bool = False
+
+
+class CleanupApplyBody(BaseModel):
+    actions: list[CleanupAction]
+
+
+@router.post("/cleanup/apply")
+async def cleanup_apply(body: CleanupApplyBody, user: dict = Depends(current_user)):
+    """Execute the cleanup actions selected in the bulk screen.
+    Returns a per-sender result so the UI can show what happened —
+    including http-style unsubscribe targets that the browser needs
+    to open in a new tab (we don't auto-navigate; might be CAPTCHAs)."""
+    from . import email_blocklist
+    if not body.actions:
+        return {"results": []}
+
+    results: list[dict] = []
+    for action in body.actions:
+        sender = (action.sender_email or "").strip().lower()
+        if not sender:
+            continue
+        per: dict[str, Any] = {"sender_email": sender}
+
+        # Unsubscribe via the freshest message from this sender that
+        # actually has a List-Unsubscribe header. We pick newest so the
+        # signed one-click POSTs (RFC 8058) are still within their
+        # validity window.
+        if action.unsubscribe:
+            with get_conn() as conn:
+                msg_row = conn.execute(
+                    "SELECT id FROM email_messages "
+                    "WHERE owner_user_id=? AND LOWER(from_email)=? AND is_sent=0 "
+                    "  AND (list_unsubscribe IS NOT NULL OR list_unsubscribe_post IS NOT NULL) "
+                    "  AND folder_id NOT IN ("
+                    "    SELECT id FROM email_folders WHERE"
+                    "      flags LIKE '%\\\\Trash%'"
+                    "   OR flags LIKE '%\\\\Junk%'"
+                    "   OR flags LIKE '%\\\\Drafts%'"
+                    "  ) "
+                    "ORDER BY date_received DESC NULLS LAST, id DESC LIMIT 1",
+                    (user["id"], sender),
+                ).fetchone()
+            if not msg_row:
+                per["unsubscribe"] = {"ok": False, "error": "no message with List-Unsubscribe header"}
+            else:
+                try:
+                    sub_result = await unsubscribe_route(int(msg_row["id"]), user)
+                    per["unsubscribe"] = sub_result
+                except HTTPException as exc:
+                    per["unsubscribe"] = {"ok": False, "error": exc.detail, "status_code": exc.status_code}
+                except Exception as exc:  # noqa: BLE001
+                    per["unsubscribe"] = {"ok": False, "error": str(exc)}
+
+        # Blocklist — sender exact, or sender + domain wildcard.
+        if action.block or action.block_domain:
+            try:
+                if action.block:
+                    email_blocklist.add_sender(user["id"], sender, reason="bulk cleanup")
+                if action.block_domain and "@" in sender:
+                    domain = sender.split("@", 1)[1]
+                    if domain:
+                        email_blocklist.add_domain(user["id"], domain, reason="bulk cleanup")
+                per["blocked"] = {"sender": action.block, "domain": action.block_domain}
+            except Exception as exc:  # noqa: BLE001
+                per["blocked"] = {"ok": False, "error": str(exc)}
+
+        # Wipe every existing message from this sender across ALL of
+        # the user's accounts. delete_message moves to Trash where the
+        # folder exists, hard-deletes otherwise — same behavior as the
+        # single-message DELETE route.
+        if action.delete_existing:
+            with get_conn() as conn:
+                msg_rows = conn.execute(
+                    "SELECT id FROM email_messages "
+                    "WHERE owner_user_id=? AND LOWER(from_email)=? AND is_sent=0 "
+                    "  AND folder_id NOT IN ("
+                    "    SELECT id FROM email_folders WHERE"
+                    "      flags LIKE '%\\\\Trash%'"
+                    "   OR flags LIKE '%\\\\Junk%'"
+                    "   OR flags LIKE '%\\\\Drafts%'"
+                    "  )",
+                    (user["id"], sender),
+                ).fetchall()
+            ids = [int(r["id"]) for r in msg_rows]
+            try:
+                result = await asyncio.to_thread(email_actions.delete_messages_bulk, ids, user["id"])
+                per["deleted"] = {
+                    "matched": len(ids),
+                    "deleted": result.get("deleted", 0),
+                    "failed":  result.get("failed", 0),
+                }
+            except Exception as exc:  # noqa: BLE001
+                per["deleted"] = {"matched": len(ids), "deleted": 0, "error": str(exc)}
+
+        results.append(per)
+
+    return {"results": results}
 
 
 @router.post("/messages/{msg_id}/trust-sender-images")
