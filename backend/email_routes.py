@@ -633,6 +633,49 @@ def _is_image_sender_trusted(user_id: str, sender_email: str) -> bool:
     return bool(row)
 
 
+class LoadOlderBody(BaseModel):
+    # Defaults to 200 so each click pulls a comfortable chunk without
+    # taking too long. Caller can raise it for a big pull.
+    count: int = Field(default=200, ge=10, le=2000)
+    # When set, backfill only this account (used when the user is
+    # viewing a specific mailbox in the sidebar). When None, all of
+    # the user's enabled accounts run in parallel.
+    account_id: Optional[int] = None
+
+
+@router.post("/load-older")
+async def load_older(
+    body: LoadOlderBody = Body(default_factory=LoadOlderBody),
+    user: dict = Depends(current_user),
+):
+    """Pull older messages on demand. Initial-sync only grabs the most
+    recent ~200 UIDs per account; this endpoint reaches further back.
+    Optionally scoped to a single account via body.account_id."""
+    from .email_fetcher import backfill_older
+    with get_conn() as conn:
+        sql = "SELECT id, email FROM email_accounts WHERE owner_user_id=? AND enabled=1"
+        params: list[Any] = [user["id"]]
+        if body.account_id is not None:
+            sql += " AND id=?"
+            params.append(body.account_id)
+        sql += " ORDER BY id"
+        rows = conn.execute(sql, params).fetchall()
+    if not rows:
+        return {"per_account": [], "total_fetched": 0}
+
+    async def _one(account_id: int, account_email: str):
+        try:
+            result = await asyncio.to_thread(backfill_older, account_id, body.count)
+            return {"account_id": account_id, "account_email": account_email, **result}
+        except Exception as e:  # noqa: BLE001
+            return {"account_id": account_id, "account_email": account_email,
+                    "fetched": 0, "error": str(e)}
+
+    results = await asyncio.gather(*[_one(int(r["id"]), r["email"]) for r in rows])
+    total = sum(r.get("fetched", 0) for r in results)
+    return {"per_account": list(results), "total_fetched": total}
+
+
 @router.post("/messages/{msg_id}/trust-sender-images")
 def trust_sender_images(msg_id: int, user: dict = Depends(current_user)):
     """Mark the message's From: address as trusted for remote images.

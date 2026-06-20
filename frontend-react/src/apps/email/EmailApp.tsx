@@ -10,7 +10,7 @@
  * adopt zustand, but not yet.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   Inbox, Star, Send, Archive, Trash2, Search, Pencil, AlertCircle,
   Reply, ReplyAll, Forward, MoreVertical, Paperclip, Plus, CornerDownRight,
@@ -44,6 +44,154 @@ interface FolderSelection {
   /** Mig 024: show currently-snoozed messages (the dedicated view). */
   snoozedView?: boolean;
 }
+
+
+// Page size for the messages list. Picked to balance "first paint is
+// fast" with "you don't have to scroll-load five times to find a thread
+// from this morning". The backend caps at 200 per call.
+const MESSAGES_PAGE_SIZE = 100;
+
+// Defensive normaliser: dedupe by id (latest wins) and re-sort by
+// (date_received DESC, id DESC) — mirrors the server's ORDER BY. Used
+// as a safety net after every state mutation in the paged hook so no
+// merge/append/race can leave the rendered list out of order. Server
+// already sorts each page, but the client may *combine* pages whose
+// dates overlap when polling refreshes the top while a load-more is
+// in flight; without this sort, the combined array can interleave
+// older mails between newer ones.
+function dedupeSortRows(rows: EmailMessageRow[]): EmailMessageRow[] {
+  const byId = new Map<number, EmailMessageRow>();
+  for (const r of rows) byId.set(r.id, r);
+  const out = Array.from(byId.values());
+  out.sort((a, b) => {
+    const da = a.date_received || "";
+    const db = b.date_received || "";
+    if (da > db) return -1;
+    if (da < db) return 1;
+    // Ties broken by id DESC, mirroring the server.
+    return b.id - a.id;
+  });
+  return out;
+}
+
+// Paginated message list with append-on-loadMore + poll-the-top-only
+// refresh. Replaces a single fixed-limit useApi which silently capped
+// the inbox at 100. `accountIdForBackfill` is passed to /load-older so
+// only the currently-viewed mailbox is backfilled from IMAP when the
+// DB is exhausted ("all" view → null → backfill every account).
+function usePagedMessages(
+  basePath: string | null,
+  accountIdForBackfill: number | null,
+  pollMs: number,
+) {
+  const [messages, setMessages] = useState<EmailMessageRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hasMoreInDb, setHasMoreInDb] = useState(true);
+  const [backfilling, setBackfilling] = useState(false);
+
+  const reqIdRef = useRef(0);
+  const messagesRef = useRef<EmailMessageRow[]>([]);
+  messagesRef.current = messages;
+  // Track the server-side offset we'd request next on append. We can't
+  // derive this from messages.length because dedupe may strip overlap
+  // rows — if we recomputed offset from length after a no-op dedup, the
+  // sentinel observer would re-fire the same fetch endlessly and the
+  // UI would jiggle "Scroll for more" ↔ "Loading…" without progress.
+  const nextOffsetRef = useRef(0);
+
+  async function fetchPage(offset: number, mode: "replace" | "merge_top" | "append") {
+    if (!basePath) return;
+    const myReq = ++reqIdRef.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const sep = basePath.includes("?") ? "&" : "?";
+      const url = `${basePath}${sep}offset=${offset}&limit=${MESSAGES_PAGE_SIZE}`;
+      const data = await api.get<EmailMessageRow[]>(url);
+      if (myReq !== reqIdRef.current) return;  // stale, discard
+      if (mode === "replace") {
+        setMessages(dedupeSortRows(data));
+        nextOffsetRef.current = data.length;
+      } else if (mode === "merge_top") {
+        // Refresh the first page in place. Don't touch nextOffsetRef —
+        // merge_top doesn't advance the append cursor, it just refreshes
+        // the head of the list.
+        setMessages(dedupeSortRows([...data, ...messagesRef.current]));
+      } else {
+        setMessages(dedupeSortRows([...messagesRef.current, ...data]));
+        nextOffsetRef.current = offset + data.length;
+      }
+      // hasMoreInDb is driven by what the SERVER returned, not by what
+      // dedupe kept. A full page back from the server means "more
+      // exists at the next offset" regardless of whether we already had
+      // some of these rows from a recent merge_top.
+      const more = data.length >= MESSAGES_PAGE_SIZE;
+      setHasMoreInDb(more);
+    } catch (e: any) {
+      if (myReq === reqIdRef.current) setError(e?.message || "fetch failed");
+    } finally {
+      if (myReq === reqIdRef.current) setLoading(false);
+    }
+  }
+
+  // Reset + initial load when basePath changes.
+  useEffect(() => {
+    if (!basePath) {
+      setMessages([]);
+      setHasMoreInDb(true);
+      nextOffsetRef.current = 0;
+      return;
+    }
+    nextOffsetRef.current = 0;
+    fetchPage(0, "replace");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [basePath]);
+
+  // Polling for new mail — only refreshes the top page.
+  useEffect(() => {
+    if (!basePath || !pollMs) return;
+    const id = setInterval(() => fetchPage(0, "merge_top"), pollMs);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [basePath, pollMs]);
+
+  async function loadMore() {
+    if (loading) return;
+    await fetchPage(nextOffsetRef.current, "append");
+  }
+
+  async function loadOlderFromImap() {
+    if (backfilling) return;
+    setBackfilling(true);
+    try {
+      await api.post("/api/email/load-older", {
+        count: 200,
+        account_id: accountIdForBackfill,
+      });
+      // After IMAP backfill the DB has more rows below our current
+      // tail — keep advancing from the same server-side offset we'd
+      // hit next on a regular loadMore.
+      await fetchPage(nextOffsetRef.current, "append");
+    } catch (e: any) {
+      setError(e?.message || "load-older failed");
+    } finally {
+      setBackfilling(false);
+    }
+  }
+
+  return {
+    messages,
+    loading,
+    error,
+    hasMoreInDb,
+    backfilling,
+    loadMore,
+    loadOlderFromImap,
+    refetch: () => { nextOffsetRef.current = 0; return fetchPage(0, "replace"); },
+  };
+}
+
 
 export function EmailApp() {
   const [showWizard, setShowWizard] = useState(false);
@@ -119,10 +267,13 @@ export function EmailApp() {
     if (accounts.length === 0) setShowWizard(true);
   }, [accountsApi.loading, accounts.length]);
 
-  // Message list — poll every 8s for new mail (IMAP IDLE already pushes
-  // them into the DB, this just refreshes the UI).
-  const listPath = useMemo(() => {
-    const params = new URLSearchParams({ limit: "100" });
+  // Message list — paginated. The base path is everything except the
+  // offset/limit query params; usePagedMessages appends those per page.
+  // Polled every 8s for the FIRST page only — IMAP IDLE pushes new mail
+  // into the DB, polling just keeps the top of the list fresh without
+  // refetching everything the user has scrolled past.
+  const listBase = useMemo(() => {
+    const params = new URLSearchParams();
     if (folderSel.folderId !== null) {
       params.set("folder_id", String(folderSel.folderId));
     } else {
@@ -132,14 +283,15 @@ export function EmailApp() {
     if (folderSel.unreadOnly)  params.set("unread_only", "true");
     if (folderSel.starredOnly) params.set("starred_only", "true");
     if (folderSel.snoozedView) params.set("snoozed_view", "true");
-    return `/api/email/messages?${params.toString()}`;
+    const qs = params.toString();
+    return qs ? `/api/email/messages?${qs}` : `/api/email/messages`;
   }, [selectedAccount, folderSel]);
-  const listApi = useApi<EmailMessageRow[]>(
-    accounts.length > 0 ? listPath : null,
-    [],
+  const listApi = usePagedMessages(
+    accounts.length > 0 ? listBase : null,
+    selectedAccount === "all" ? null : Number(selectedAccount),
     8000,
   );
-  const messages = listApi.data || [];
+  const messages = listApi.messages;
 
   // Mobile drill-down state. On md+ this is ignored; on mobile the
   // sidebar is a drawer (off by default) and the message list / reader
@@ -518,6 +670,10 @@ export function EmailApp() {
             : folderSel.snoozedView ? "Nothing snoozed right now."
             : folderSel.starredOnly ? "No starred messages yet."
             : "No messages in this view yet."}
+          hasMoreInDb={listApi.hasMoreInDb}
+          backfilling={listApi.backfilling}
+          onLoadMore={listApi.loadMore}
+          onLoadOlderFromImap={listApi.loadOlderFromImap}
           onQuickAction={async (m, action) => {
             try {
               if (action === "star" || action === "unstar") {
@@ -778,7 +934,7 @@ function SidebarItem({
 
 function MessageList({
   messages, selectedId, onSelect, loading, error, empty,
-  onQuickAction,
+  onQuickAction, hasMoreInDb, onLoadMore, onLoadOlderFromImap, backfilling,
 }: {
   messages: EmailMessageRow[];
   selectedId: number | null;
@@ -790,6 +946,18 @@ function MessageList({
    *  the reader. The parent applies the PATCH + refetches. */
   onQuickAction?: (msg: EmailMessageRow,
                    action: "star" | "unstar" | "archive" | "needs_reply_on" | "needs_reply_off" | "snooze-1d" | "snooze-tomorrow" | "snooze-nextweek") => void;
+  /** True when more rows exist in the local DB for the current
+   *  query (we returned a full page on the last fetch). */
+  hasMoreInDb?: boolean;
+  /** Append the next page from the DB. Invoked by the sentinel's
+   *  IntersectionObserver when the user nears the bottom. */
+  onLoadMore?: () => Promise<void> | void;
+  /** Fall-through when the DB has nothing more: ask IMAP for an
+   *  older slice and try again. */
+  onLoadOlderFromImap?: () => Promise<void> | void;
+  /** True while an IMAP backfill is in flight — drives the spinner
+   *  next to "Loading older messages…". */
+  backfilling?: boolean;
 }) {
   if (error) {
     return <div className="p-4 text-sm text-destructive">{error}</div>;
@@ -819,9 +987,22 @@ function MessageList({
     // last few messages sit visually underneath it. 96px clears the
     // dock zone with a small breathing margin.
     <div className="flex-1 overflow-y-auto pb-24">
-      {messages.map(m => (
+      {messages.map((m, i) => {
+        // Year divider — inserted just before the first message of a
+        // new (older) year. Apple-Mail-style: small muted heading +
+        // hairline. Helps the user visually parse the long backward
+        // scroll from 2026 → 2025 → 2024 etc.
+        const thisYear = yearOf(m.date_received);
+        const prevYear = i > 0 ? yearOf(messages[i - 1].date_received) : null;
+        const showDivider = thisYear && thisYear !== prevYear;
+        return (
+        <Fragment key={m.id}>
+        {showDivider && (
+          <div className="sticky top-0 z-10 px-4 py-1.5 bg-muted/80 backdrop-blur-sm border-y border-border text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+            {thisYear}
+          </div>
+        )}
         <div
-          key={m.id}
           onClick={() => onSelect(m.id)}
           className={cn(
             "group w-full text-left px-4 py-3 border-b border-border/60 transition cursor-pointer relative",
@@ -953,7 +1134,73 @@ function MessageList({
             </div>
           </div>
         </div>
-      ))}
+        </Fragment>
+        );
+      })}
+      {onLoadMore && (
+        <ListBottomSentinel
+          loading={!!loading}
+          hasMoreInDb={!!hasMoreInDb}
+          backfilling={!!backfilling}
+          onLoadMore={onLoadMore}
+          onLoadOlderFromImap={onLoadOlderFromImap}
+        />
+      )}
+    </div>
+  );
+}
+
+
+// Sentinel at the bottom of the list — drives infinite scroll. Two
+// stages: while the local DB still has rows for the current query,
+// onLoadMore fetches the next page. When the DB is exhausted, the
+// sentinel calls onLoadOlderFromImap exactly once per "session at the
+// bottom" to backfill from IMAP. Re-firing protection: an internal
+// flag resets only when the sentinel leaves the viewport, so the user
+// scrolling back and then to the bottom doesn't hammer IMAP.
+function ListBottomSentinel({
+  loading, hasMoreInDb, backfilling, onLoadMore, onLoadOlderFromImap,
+}: {
+  loading: boolean;
+  hasMoreInDb: boolean;
+  backfilling: boolean;
+  onLoadMore?: () => Promise<void> | void;
+  onLoadOlderFromImap?: () => Promise<void> | void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const triedBackfillRef = useRef(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(async (entries) => {
+      const e = entries[0];
+      if (!e.isIntersecting) {
+        triedBackfillRef.current = false;  // user scrolled away, re-arm
+        return;
+      }
+      if (loading || backfilling) return;
+      if (hasMoreInDb && onLoadMore) {
+        await onLoadMore();
+      } else if (!triedBackfillRef.current && onLoadOlderFromImap) {
+        triedBackfillRef.current = true;
+        await onLoadOlderFromImap();
+      }
+    }, { rootMargin: "300px" });  // pre-fetch before fully reaching bottom
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [loading, backfilling, hasMoreInDb, onLoadMore, onLoadOlderFromImap]);
+
+  return (
+    <div ref={ref} className="px-4 py-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+      {(loading || backfilling) && <Loader2 className="w-3 h-3 animate-spin" />}
+      {backfilling
+        ? "Fetching older messages from server…"
+        : loading
+          ? "Loading…"
+          : hasMoreInDb
+            ? "Scroll for more"
+            : "End of inbox"}
     </div>
   );
 }
@@ -2201,6 +2448,15 @@ function snoozePresetToIso(preset: "snooze-1d" | "snooze-tomorrow" | "snooze-nex
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T`
        + `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+// Year of an ISO-ish timestamp. Returns null on missing/unparseable —
+// the row simply gets no divider rather than rendering "NaN".
+function yearOf(iso?: string | null): number | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.getFullYear();
 }
 
 function formatWhen(iso?: string | null): string {

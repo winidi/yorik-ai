@@ -301,11 +301,26 @@ def _select_inbox(c: IMAPClient) -> str:
     return "INBOX"
 
 
-def _sync_new_messages(c: IMAPClient, cfg: dict, folder_id: int, initial_cap: int = 200) -> int:
+def _sync_new_messages(c: IMAPClient, cfg: dict, folder_id: int,
+                        initial_cap: int = 200,
+                        force_start_uid: Optional[int] = None,
+                        force_end_uid: Optional[int] = None,
+                        freeze_uid_next: bool = False) -> int:
     """Fetch every UID >= last_uid_next and insert into email_messages.
-    Returns count actually inserted. `initial_cap` is the maximum number
-    of messages pulled on the FIRST sync (subsequent syncs do pure
-    deltas regardless). 200 for INBOX, ~30 for secondary folders."""
+    Returns count actually inserted.
+
+    `initial_cap` is the maximum number of messages pulled on the FIRST
+    sync (subsequent syncs do pure deltas regardless). 200 for INBOX,
+    ~30 for secondary folders.
+
+    `force_start_uid` overrides the prev_next high-watermark — used by
+    the "Load older" backfill path which scans UIDs *below* the
+    locally-known min. Pair with `force_end_uid` to bound the upper
+    side; otherwise the search uses `:*`.
+
+    `freeze_uid_next` skips the trailing `UPDATE email_folders SET
+    uid_next=…` so a backfill pass doesn't accidentally pretend the
+    older UIDs are the new high-watermark."""
     folder_name = _folder_name(folder_id)
     with get_conn() as conn:
         row = conn.execute(
@@ -331,7 +346,10 @@ def _sync_new_messages(c: IMAPClient, cfg: dict, folder_id: int, initial_cap: in
     # wake us again with fresh state. NOT a real failure, so we don't
     # surface it as last_error to the UI.
     try:
-        if prev_next == 1:
+        if force_start_uid is not None:
+            end_part = str(force_end_uid) if force_end_uid is not None else "*"
+            new_uids = c.search([u"UID", f"{force_start_uid}:{end_part}"])
+        elif prev_next == 1:
             start = max(1, next_uid - initial_cap)
             new_uids = c.search([u"UID", f"{start}:*"])
         else:
@@ -344,15 +362,24 @@ def _sync_new_messages(c: IMAPClient, cfg: dict, folder_id: int, initial_cap: in
             return 0
         # Real IMAP error — let the outer reconnect loop handle it.
         raise
-    new_uids = sorted(u for u in new_uids if u and u >= prev_next)
+    # Backfill mode: keep ALL the returned UIDs (no lower-bound filter
+    # against prev_next, because we're explicitly scanning UIDs below
+    # it). Optionally clip to force_end_uid so we don't reach past it.
+    if force_start_uid is not None:
+        new_uids = sorted(u for u in new_uids if u
+                          and u >= force_start_uid
+                          and (force_end_uid is None or u <= force_end_uid))
+    else:
+        new_uids = sorted(u for u in new_uids if u and u >= prev_next)
     if not new_uids:
-        # Still update UIDVALIDITY/UIDNEXT so we don't re-search next time.
-        with get_conn() as conn:
-            conn.execute(
-                "UPDATE email_folders SET uid_validity=?, uid_next=?, last_sync_at=datetime('now') WHERE id=?",
-                (validity, max(prev_next, next_uid), folder_id),
-            )
-            conn.commit()
+        if not freeze_uid_next:
+            # Still update UIDVALIDITY/UIDNEXT so we don't re-search next time.
+            with get_conn() as conn:
+                conn.execute(
+                    "UPDATE email_folders SET uid_validity=?, uid_next=?, last_sync_at=datetime('now') WHERE id=?",
+                    (validity, max(prev_next, next_uid), folder_id),
+                )
+                conn.commit()
         return 0
 
     # Fetch headers + body in one round-trip. ENVELOPE has structured
@@ -375,13 +402,75 @@ def _sync_new_messages(c: IMAPClient, cfg: dict, folder_id: int, initial_cap: in
             log.exception("account %d UID %d parse failed: %s", cfg["id"], uid, e)
             continue
 
-    with get_conn() as conn:
-        conn.execute(
-            "UPDATE email_folders SET uid_validity=?, uid_next=?, last_sync_at=datetime('now') WHERE id=?",
-            (validity, max(highest_uid + 1, next_uid), folder_id),
-        )
-        conn.commit()
+    if not freeze_uid_next:
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE email_folders SET uid_validity=?, uid_next=?, last_sync_at=datetime('now') WHERE id=?",
+                (validity, max(highest_uid + 1, next_uid), folder_id),
+            )
+            conn.commit()
     return inserted
+
+
+def backfill_older(account_id: int, count: int = 200) -> dict:
+    """Fetch up to `count` IMAP UIDs immediately BELOW the locally-known
+    minimum UID for the account's INBOX. Used by the user-triggered
+    "Load older messages" action — does NOT touch uid_next (so the
+    forward delta-sync isn't affected). Returns a small status dict
+    the endpoint can hand back to the UI.
+
+    Synchronous + IMAP-blocking — runners should call it via
+    asyncio.to_thread."""
+    from . import email_actions as _ea
+    # Resolve account's INBOX folder + current local min uid.
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id AS folder_id, name FROM email_folders "
+            "WHERE account_id=? "
+            "  AND (flags LIKE '%\\\\Inbox%' OR UPPER(name)='INBOX') "
+            "ORDER BY id LIMIT 1",
+            (account_id,),
+        ).fetchone()
+        if not row:
+            return {"fetched": 0, "error": "no INBOX folder on this account"}
+        folder_id = int(row["folder_id"])
+        folder_name = row["name"]
+        min_row = conn.execute(
+            "SELECT MIN(uid) AS min_uid FROM email_messages "
+            "WHERE account_id=? AND folder_id=?",
+            (account_id, folder_id),
+        ).fetchone()
+    local_min = int(min_row["min_uid"] or 0)
+    if local_min <= 1:
+        return {"fetched": 0, "already_at_start": True, "min_uid": local_min}
+    start = max(1, local_min - count)
+    end = local_min - 1
+
+    # Pull account cfg the same shape _sync_new_messages expects.
+    with get_conn() as conn:
+        cfg_row = conn.execute(
+            "SELECT id, imap_host, imap_port, imap_ssl, imap_starttls, "
+            "       imap_username, credential_key, owner_user_id "
+            "FROM email_accounts WHERE id=?",
+            (account_id,),
+        ).fetchone()
+    if not cfg_row:
+        return {"fetched": 0, "error": "account not found"}
+    cfg = dict(cfg_row)
+
+    with _ea.imap_for_account(account_id) as c:
+        try:
+            c.select_folder(folder_name)
+        except Exception as exc:
+            return {"fetched": 0, "error": f"cannot select {folder_name}: {exc}"}
+        n = _sync_new_messages(
+            c, cfg, folder_id,
+            force_start_uid=start, force_end_uid=end,
+            freeze_uid_next=True,
+        )
+    log.info("account %d backfill_older: fetched %d msg(s) in UID range %d-%d",
+             account_id, n, start, end)
+    return {"fetched": n, "uid_range": [start, end], "previous_min_uid": local_min}
 
 
 def _insert_message(cfg: dict, folder_id: int, uid: int,
