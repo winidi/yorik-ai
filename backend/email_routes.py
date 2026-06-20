@@ -17,7 +17,7 @@ from fastapi.responses import Response
 from . import credential_store
 from .auth_sessions import current_user
 from .database import get_conn
-from .email_providers import generic_preset, lookup_provider
+from .email_providers import generic_preset, lookup_provider, list_providers
 from .email_sender import send, test_imap, test_smtp
 from . import email_actions
 
@@ -102,6 +102,13 @@ def probe(body: ProviderProbe):
     Add Account wizard to pre-fill hosts."""
     preset = lookup_provider(body.email) or generic_preset()
     return {"preset": preset, "email": body.email}
+
+
+@router.get("/providers")
+def providers():
+    """Full list of known providers — populates the Add-Account dropdown
+    so users can pick their vendor instead of typing servers/ports."""
+    return {"providers": list_providers()}
 
 
 # ──────────────────────────── account CRUD ──────────────────────────

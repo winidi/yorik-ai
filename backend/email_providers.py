@@ -156,3 +156,16 @@ def generic_preset() -> dict:
         "smtp_host": "", "smtp_port": 465, "smtp_ssl": True, "smtp_starttls": False,
         "notes": "Enter your provider's IMAP and SMTP server settings. Most modern services use port 993 for IMAP (SSL) and 465 (SSL) or 587 (STARTTLS) for SMTP.",
     }
+
+
+def list_providers() -> list[dict]:
+    """Curated, alias-resolved list of known providers for the
+    Add-Account dropdown. Each entry has the same shape as a preset
+    plus a stable `key` (the canonical domain) for client-side lookup."""
+    out: list[dict] = []
+    for domain, preset in PROVIDERS.items():
+        if isinstance(preset, str):
+            continue  # alias — skip; the target is already in the list
+        out.append({"key": domain, **preset})
+    out.sort(key=lambda p: p["name"].lower())
+    return out
