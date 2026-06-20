@@ -4527,6 +4527,7 @@ def triage_list(
 
     sql = (
         "SELECT c.id, c.display_name, c.kind, "
+        "  c.triage_verdict, c.triage_reason, c.triage_confidence, "
         "  (SELECT proposed_json FROM contact_extraction_proposals "
         "   WHERE (match_candidate_id = c.id OR created_contact_id = c.id) "
         "   ORDER BY created_at DESC LIMIT 1) AS proposal_json "
@@ -4594,13 +4595,31 @@ def triage_list(
             "channels":  channels_by_contact.get(cid, []),
             "addresses": addresses_by_contact.get(cid, []),
             "doc_id":    pj.get("source_paperless_doc_id"),
+            # LLM-suggested verdicts populated by triage_auto_classify.
+            # The modal pre-fills decisions from these so the user can
+            # scan + confirm instead of classifying every row by hand.
+            "triage_verdict":    r["triage_verdict"],
+            "triage_reason":     r["triage_reason"],
+            "triage_confidence": r["triage_confidence"],
         })
     return {"items": items, "total": total, "limit": limit, "offset": offset, "kind": kind}
 
 
 class _TriageApplyBody(BaseModel):
+    # Legacy 2-way decisions — kept for backward compat with anything
+    # that still posts the old shape.
     approve: List[int] = []
     dismiss: List[int] = []
+    # 4-way decisions — the new vocabulary the LLM-triaged modal posts.
+    # Each list maps to a (status, kind) outcome:
+    #   active_person   → status=active, kind=person
+    #   active_business → status=active, kind=business
+    #   archived        → status=archived (gentler than spam, no block)
+    #   spam            → status=spam (sender-block hook trigger)
+    active_person:   List[int] = []
+    active_business: List[int] = []
+    archived:        List[int] = []
+    spam:            List[int] = []
 
 
 @app.post("/api/contacts/triage/apply")
@@ -4608,43 +4627,299 @@ def triage_apply(
     body: _TriageApplyBody,
     user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
-    """Bulk pending → active (approve) or pending → spam (dismiss).
-
-    Single round-trip for a whole modal-page of decisions. Each list
-    is independent — the same id appearing in both is undefined
-    behaviour and the caller's bug, but it can't corrupt: both lists
-    are filtered to ``status='pending'`` rows, and the SQL runs
-    approve first then dismiss so the second write wins deterministically."""
+    """Bulk pending → {active_person, active_business, archived, spam}.
+    Legacy approve/dismiss arrays still accepted and map to active_person
+    / spam respectively. Multiple lists in one body run as sequential
+    UPDATEs so the user can submit a whole modal-page of mixed decisions
+    in one round-trip. All updates are filtered to status='pending' so
+    a stale id can't accidentally re-flip a row that's already been
+    triaged in another tab."""
     if (user.get("role") or "").lower() not in ("admin", "platform_admin"):
         raise HTTPException(403, "admin only")
-    approve_ids = list({int(i) for i in (body.approve or []) if int(i)})
-    dismiss_ids = list({int(i) for i in (body.dismiss or []) if int(i)})
 
-    approved  = 0
-    dismissed = 0
+    # Merge legacy + new fields. Duplicates resolve by "last list wins"
+    # in the dict order below; in practice the modal only sends one
+    # outcome per id so this matters mostly for legacy callers.
+    person_ids   = list({int(i) for i in (body.active_person or []) + (body.approve or []) if int(i)})
+    business_ids = list({int(i) for i in (body.active_business or []) if int(i)})
+    archived_ids = list({int(i) for i in (body.archived or []) if int(i)})
+    spam_ids     = list({int(i) for i in (body.spam or []) + (body.dismiss or []) if int(i)})
+
+    counts = {"active_person": 0, "active_business": 0, "archived": 0, "spam": 0}
+    # When a row lands in active_*, also clear triage_verdict so it
+    # doesn't ghost-pre-fill on the next pass; same for archived/spam.
     with conn_ctx() as c:
-        if approve_ids:
-            ph = ",".join("?" * len(approve_ids))
+        def _bulk(ids: list[int], set_clause: str) -> int:
+            if not ids:
+                return 0
+            ph = ",".join("?" * len(ids))
             cur = c.execute(
                 f"UPDATE contacts "
-                f"SET status='active', "
-                f"    last_used_at=datetime('now'), "
+                f"SET {set_clause}, "
+                f"    triage_verdict=NULL, triage_reason=NULL, triage_confidence=NULL, "
                 f"    updated_at=datetime('now') "
                 f"WHERE status='pending' AND id IN ({ph})",
-                approve_ids,
+                ids,
             )
-            approved = cur.rowcount or 0
-        if dismiss_ids:
-            ph = ",".join("?" * len(dismiss_ids))
-            cur = c.execute(
-                f"UPDATE contacts "
-                f"SET status='spam', updated_at=datetime('now') "
-                f"WHERE status='pending' AND id IN ({ph})",
-                dismiss_ids,
-            )
-            dismissed = cur.rowcount or 0
+            return cur.rowcount or 0
 
-    return {"approved": approved, "dismissed": dismissed}
+        counts["active_person"]   = _bulk(person_ids,   "status='active', kind='person', last_used_at=datetime('now')")
+        counts["active_business"] = _bulk(business_ids, "status='active', kind='business', last_used_at=datetime('now')")
+        counts["archived"]        = _bulk(archived_ids, "status='archived'")
+        counts["spam"]            = _bulk(spam_ids,     "status='spam'")
+
+    # Backward-compat: still surface the old approved/dismissed totals
+    # so any legacy frontend reading them keeps working until it
+    # picks up the new shape.
+    return {
+        **counts,
+        "approved":  counts["active_person"] + counts["active_business"],
+        "dismissed": counts["spam"],
+    }
+
+
+# ─── triage auto-classify (LLM pre-pass) ────────────────────────────
+# Background pass over every pending contact. For each, the LLM looks
+# at engagement signals (incoming count, user replies, sample subjects,
+# body excerpt, account-number patterns) and returns one of four
+# verdicts: active_person, active_business, archived, spam. Stored on
+# the contact row; TriageModal opens with these pre-filled so the user
+# becomes the reviewer, not the classifier.
+
+# In-process registry of running auto-classify tasks. Repeated POST
+# calls while one is running short-circuit (the DB progress row also
+# catches this, but having the handle here lets a future cancel
+# endpoint stop it cleanly).
+_contacts_triage_tasks: dict[str, asyncio.Task] = {}
+
+
+def _collect_triage_signals(contact_id: int) -> dict[str, Any]:
+    """Gather the engagement signals the LLM needs to judge a pending
+    contact. Cheap-ish — one query for channels + one aggregate per
+    contact across email_messages. Returns the kwargs the LLM
+    classify_contact() expects."""
+    with conn_ctx() as c:
+        crow = c.execute(
+            "SELECT display_name FROM contacts WHERE id=?",
+            (contact_id,),
+        ).fetchone()
+        name = (crow["display_name"] if crow else "") or ""
+
+        # Channel rows — also serve as the join key for finding the
+        # message corpus that mentions this contact.
+        ch_rows = c.execute(
+            "SELECT kind, value FROM contact_channels WHERE contact_id=?",
+            (contact_id,),
+        ).fetchall()
+        channels = [{"kind": r["kind"], "value": r["value"]} for r in ch_rows]
+
+        email_values = [r["value"] for r in ch_rows if r["kind"] == "email"]
+        # Engagement aggregate. We only do this for email-channel
+        # contacts — WhatsApp / phone / etc. can be added later via
+        # the modality registry. For now, the LLM still gets the
+        # contact name + channels even without engagement signals,
+        # which is enough to triage WA-only contacts roughly.
+        received_count = 0
+        sent_count = 0
+        sample_subjects: list[str] = []
+        last_received: Optional[str] = None
+        body_excerpt = ""
+        if email_values:
+            ph = ",".join(["?"] * len(email_values))
+            agg = c.execute(
+                f"SELECT COUNT(*) AS cnt, MAX(date_received) AS last_ts "
+                f"FROM email_messages "
+                f"WHERE LOWER(from_email) IN ({ph}) AND is_sent=0",
+                [v.lower() for v in email_values],
+            ).fetchone()
+            received_count = int(agg["cnt"] if agg else 0)
+            last_received = agg["last_ts"] if agg else None
+
+            # User replies = outgoing messages whose to_addrs JSON
+            # contains this email. Postgres JSONB @> would be ideal,
+            # but to_addrs is stored as TEXT (JSON-encoded) in the
+            # schema. Substring match is a 99%-correct cheap proxy.
+            placeholders = " OR ".join(["LOWER(to_addrs) LIKE ?"] * len(email_values))
+            patterns = [f"%{v.lower()}%" for v in email_values]
+            rep = c.execute(
+                f"SELECT COUNT(*) AS cnt FROM email_messages "
+                f"WHERE is_sent=1 AND ({placeholders})",
+                patterns,
+            ).fetchone()
+            sent_count = int(rep["cnt"] if rep else 0)
+
+            subj_rows = c.execute(
+                f"SELECT subject, body_text FROM email_messages "
+                f"WHERE LOWER(from_email) IN ({ph}) AND is_sent=0 "
+                f"ORDER BY date_received DESC NULLS LAST, id DESC LIMIT 5",
+                [v.lower() for v in email_values],
+            ).fetchall()
+            sample_subjects = [r["subject"] or "" for r in subj_rows]
+            if subj_rows:
+                body_excerpt = (subj_rows[0]["body_text"] or "")[:1200]
+
+    return {
+        "name": name,
+        "channels": channels,
+        "received_count": received_count,
+        "sent_count": sent_count,
+        "last_received": last_received,
+        "sample_subjects": sample_subjects,
+        "body_excerpt": body_excerpt,
+    }
+
+
+@app.post("/api/contacts/triage/auto-classify")
+async def triage_auto_classify(
+    user: dict[str, Any] = Depends(_auth.current_user),
+) -> Dict[str, Any]:
+    """Kick a background LLM pass over every pending contact. Repeated
+    calls while one is running short-circuit. Idempotent — verdicts
+    are overwritten on each run (the latest model wins), so re-running
+    after tweaking the prompt is safe."""
+    if (user.get("role") or "").lower() not in ("admin", "platform_admin"):
+        raise HTTPException(403, "admin only")
+    uid = user["id"]
+    if uid in _contacts_triage_tasks and not _contacts_triage_tasks[uid].done():
+        return {"ok": True, "status": "already_running"}
+
+    with conn_ctx() as c:
+        total_row = c.execute(
+            "SELECT COUNT(*) AS cnt FROM contacts WHERE status='pending'"
+        ).fetchone()
+        total = int(total_row["cnt"]) if total_row else 0
+        # Clear every pending row's triage stamp so the inner loop's
+        # "triage_classified_at IS NULL" cursor picks them all up.
+        # Without this, repeat clicks of Auto-classify would either
+        # report 0 work (rows already stamped) OR — far worse — loop
+        # forever because Python's "2026-06-20T12:54:..." ISO string
+        # compares as GREATER than Postgres's "2026-06-20 12:54:..." TEXT
+        # cast of NOW(): chr('T')=0x54 > chr(' ')=0x20, so the per-run
+        # < cursor approach made every row look perpetually eligible.
+        # IS-NULL cursor is dialect-proof.
+        c.execute(
+            "UPDATE contacts "
+            "SET triage_verdict=NULL, triage_reason=NULL, "
+            "    triage_confidence=NULL, triage_classified_at=NULL "
+            "WHERE status='pending'"
+        )
+        c.execute(
+            "INSERT INTO contacts_triage_progress "
+            "(owner_user_id, total, done, status, started_at, finished_at, last_error) "
+            "VALUES (?, ?, 0, 'running', NOW(), NULL, NULL) "
+            "ON CONFLICT (owner_user_id) DO UPDATE SET "
+            "  total = EXCLUDED.total, done = 0, status = 'running', "
+            "  started_at = NOW(), finished_at = NULL, last_error = NULL",
+            (uid, total),
+        )
+        c.commit()
+
+    async def _run():
+        # Local logger handle — main.py doesn't define a module-level
+        # `log`, and referencing one inside the task would crash with
+        # NameError at the FIRST log.info call (silently, because
+        # asyncio task exceptions aren't surfaced unless awaited).
+        _log = logging.getLogger("yorik.contacts_triage")
+        try:
+            from . import contacts_triage_llm as _tl
+        except Exception as _imp_exc:
+            _log.exception("contact triage import failed: %s", _imp_exc)
+            raise
+        _log.info("contact triage auto-classify starting for user %s (total=%d)", uid, total)
+        done = 0
+        last_error: Optional[str] = None
+        try:
+            while True:
+                with conn_ctx() as c:
+                    batch = c.execute(
+                        "SELECT id FROM contacts "
+                        "WHERE status='pending' AND triage_classified_at IS NULL "
+                        "ORDER BY id ASC LIMIT 25"
+                    ).fetchall()
+                if not batch:
+                    break
+                for r in batch:
+                    cid = int(r["id"])
+                    try:
+                        signals = await asyncio.to_thread(_collect_triage_signals, cid)
+                        verdict = await asyncio.to_thread(
+                            _tl.classify_contact, **signals,
+                        )
+                        # Always stamp triage_classified_at so a None
+                        # verdict (LLM parse failure) doesn't make the
+                        # loop revisit this row forever.
+                        with conn_ctx() as c:
+                            if verdict is not None:
+                                c.execute(
+                                    "UPDATE contacts "
+                                    "SET triage_verdict=?, triage_reason=?, "
+                                    "    triage_confidence=?, triage_classified_at=NOW() "
+                                    "WHERE id=?",
+                                    (verdict["verdict"], verdict["reason"],
+                                     verdict["confidence"], cid),
+                                )
+                            else:
+                                c.execute(
+                                    "UPDATE contacts SET triage_classified_at=NOW() WHERE id=?",
+                                    (cid,),
+                                )
+                            c.commit()
+                        done += 1
+                    except Exception as exc:  # noqa: BLE001
+                        last_error = f"contact {cid}: {exc}"
+                        _log.warning("contact triage classify error %s", last_error)
+                with conn_ctx() as c:
+                    c.execute(
+                        "UPDATE contacts_triage_progress SET done=?, last_error=? "
+                        "WHERE owner_user_id=?",
+                        (done, last_error, uid),
+                    )
+                    c.commit()
+            final_status = "done"
+        except asyncio.CancelledError:
+            final_status = "cancelled"
+            raise
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("contact triage backfill failed: %s", exc)
+            final_status = "error"
+            last_error = str(exc)
+        finally:
+            with conn_ctx() as c:
+                c.execute(
+                    "UPDATE contacts_triage_progress "
+                    "SET status=?, done=?, finished_at=NOW(), last_error=? "
+                    "WHERE owner_user_id=?",
+                    (final_status, done, last_error, uid),
+                )
+                c.commit()
+            _log.info("contact triage auto-classify finished for user %s: status=%s, done=%d/%d",
+                      uid, final_status, done, total)
+
+    task = asyncio.create_task(_run())
+    _contacts_triage_tasks[uid] = task
+    return {"ok": True, "status": "started", "total": total}
+
+
+@app.get("/api/contacts/triage/auto-classify/status")
+def triage_auto_classify_status(
+    user: dict[str, Any] = Depends(_auth.current_user),
+) -> Dict[str, Any]:
+    with conn_ctx() as c:
+        row = c.execute(
+            "SELECT total, done, status, started_at, finished_at, last_error "
+            "FROM contacts_triage_progress WHERE owner_user_id=?",
+            (user["id"],),
+        ).fetchone()
+    if not row:
+        return {"status": "idle", "total": 0, "done": 0}
+    return {
+        "status": row["status"],
+        "total": int(row["total"] or 0),
+        "done": int(row["done"] or 0),
+        "started_at": str(row["started_at"]) if row["started_at"] else None,
+        "finished_at": str(row["finished_at"]) if row["finished_at"] else None,
+        "last_error": row["last_error"],
+    }
 
 
 @app.post("/api/contacts/crosslink-mailbox")

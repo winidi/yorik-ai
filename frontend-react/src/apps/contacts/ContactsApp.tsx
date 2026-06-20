@@ -24,7 +24,7 @@ import {
   Pencil, Phone as PhoneIcon, Cake, ExternalLink, MessageSquare,
   CalendarDays, Pin as PinIcon, PinOff,
   Briefcase, User as UserIcon, FileText, Send, Upload,
-  Wand2, StopCircle, ChevronDown, AlertTriangle,
+  Wand2, StopCircle, ChevronDown, AlertTriangle, Sparkles,
 } from "lucide-react";
 import { VcardImportModal } from "@/components/VcardImportModal";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -249,7 +249,10 @@ export function ContactsApp() {
           <ExtractButton />
           <CrosslinkMailboxButton onDone={refresh} />
           {tab === "pending" && counts.pending > 0 && (
-            <TriageButton onDone={refresh} />
+            <>
+              <AutoClassifyButton onDone={refresh} />
+              <TriageButton onDone={refresh} />
+            </>
           )}
           {tab === "pending" && counts.pending > 1 && (
             <DedupeButton onDone={refresh} />
@@ -1565,7 +1568,12 @@ function CrosslinkResultModal({
 // Keyboard: Y/A approve, N/D dismiss, S skip, ↑↓ cursor, Cmd-Enter apply,
 // Esc close. Pagination at 100/page to keep the DOM light.
 
-type TriageDecision = "approve" | "dismiss" | null;
+// Four-way verdict: gentler than the legacy approve/dismiss split.
+//   active_person   → status=active, kind=person
+//   active_business → status=active, kind=business
+//   archived        → status=archived (gentle; no sender block)
+//   spam            → status=spam (sender-block hook)
+type TriageDecision = "active_person" | "active_business" | "archived" | "spam" | null;
 
 type TriageChannel = { kind: string; value: string };
 type TriageAddress = { line1: string; postcode: string; city: string; country: string };
@@ -1578,6 +1586,12 @@ type TriageItem = {
   channels: TriageChannel[];
   addresses: TriageAddress[];
   doc_id?: number | null;
+  // LLM-suggested verdict from /api/contacts/triage/auto-classify.
+  // null when the LLM pass hasn't run yet (or returned an unparseable
+  // verdict for this row).
+  triage_verdict?:    TriageDecision;
+  triage_reason?:     string | null;
+  triage_confidence?: "low" | "medium" | "high" | null;
 };
 
 type TriageListResponse = {
@@ -1658,12 +1672,24 @@ function TriageModal({ onClose, onApplied }: {
       // or shape mismatch), keep items as [] so .length / .map don't blow
       // up the render. The empty-state shows "Inbox zero" which at least
       // doesn't crash the page.
-      setItems(Array.isArray(r?.items) ? r.items : []);
+      const fetched = Array.isArray(r?.items) ? r.items : [];
+      setItems(fetched);
       setTotal(Number(r?.total) || 0);
       setOffset(Number(r?.offset) || 0);
       setCursor(0);
-      // Don't reset decisions on page change — they accumulate across pages
-      // so the user can blast through several pages, then apply all at once.
+      // Pre-fill decisions from LLM verdicts for any newly-fetched
+      // rows that don't already have a user decision. Existing
+      // decisions (the user has explicitly overridden a row earlier)
+      // are preserved.
+      setDecisions(prev => {
+        const next = new Map(prev);
+        for (const it of fetched) {
+          if (!next.has(it.id) && it.triage_verdict) {
+            next.set(it.id, it.triage_verdict);
+          }
+        }
+        return next;
+      });
     } catch (err: any) {
       console.error("triage: fetch failed", err);
       setItems([]);
@@ -1686,9 +1712,11 @@ function TriageModal({ onClose, onApplied }: {
   }, []);
 
   const approveAll = useCallback(() => {
+    // Legacy bulk-approve still useful when the LLM pass hasn't run:
+    // marks every matching row as active_person.
     setDecisions(prev => {
       const next = new Map(prev);
-      for (const it of matchingItems) next.set(it.id, "approve");
+      for (const it of matchingItems) next.set(it.id, "active_person");
       return next;
     });
   }, [matchingItems]);
@@ -1696,7 +1724,20 @@ function TriageModal({ onClose, onApplied }: {
   const dismissAll = useCallback(() => {
     setDecisions(prev => {
       const next = new Map(prev);
-      for (const it of matchingItems) next.set(it.id, "dismiss");
+      for (const it of matchingItems) next.set(it.id, "spam");
+      return next;
+    });
+  }, [matchingItems]);
+
+  const acceptLLMAll = useCallback(() => {
+    // "Trust Yorik for everyone on this page" — pre-fills decisions
+    // from each row's triage_verdict. Skips rows the LLM didn't
+    // classify (verdict missing or null).
+    setDecisions(prev => {
+      const next = new Map(prev);
+      for (const it of matchingItems) {
+        if (it.triage_verdict) next.set(it.id, it.triage_verdict);
+      }
       return next;
     });
   }, [matchingItems]);
@@ -1712,24 +1753,31 @@ function TriageModal({ onClose, onApplied }: {
   }, [items]);
 
   const apply = useCallback(async () => {
-    const approve = [...decisions].filter(([, d]) => d === "approve").map(([id]) => id);
-    const dismiss = [...decisions].filter(([, d]) => d === "dismiss").map(([id]) => id);
-    if (approve.length === 0 && dismiss.length === 0) return;
+    // Group decisions into the four buckets the new triage_apply
+    // endpoint expects. An empty body short-circuits — no round-trip
+    // when the user hasn't decided anything yet.
+    const active_person   = [...decisions].filter(([, d]) => d === "active_person").map(([id]) => id);
+    const active_business = [...decisions].filter(([, d]) => d === "active_business").map(([id]) => id);
+    const archived        = [...decisions].filter(([, d]) => d === "archived").map(([id]) => id);
+    const spam            = [...decisions].filter(([, d]) => d === "spam").map(([id]) => id);
+    const totalDecisions = active_person.length + active_business.length + archived.length + spam.length;
+    if (totalDecisions === 0) return;
     setApplying(true);
     try {
-      const r = await api.post<{ approved: number; dismissed: number }>(
+      const r = await api.post<{
+        active_person: number; active_business: number;
+        archived: number; spam: number;
+      }>(
         "/api/contacts/triage/apply",
-        { approve, dismiss },
+        { active_person, active_business, archived, spam },
       );
       setDecisions(new Map());
       await onApplied();
-      // Refresh the same page — applied rows fall out of pending so
-      // the page naturally fills with the next batch.
       await fetchPage(0, kindFilter);
-      // Stay in modal — user can keep going. Light toast via title-bar
-      // counts instead of a blocking alert.
-      const msg = `Applied: ${r.approved} approved, ${r.dismissed} dismissed.`;
-      console.log(msg);
+      console.log(
+        `Applied: ${r.active_person} person, ${r.active_business} business, ` +
+        `${r.archived} archived, ${r.spam} spam.`,
+      );
     } catch (err: any) {
       alert("Apply failed: " + (err?.message || err));
     } finally {
@@ -1738,6 +1786,15 @@ function TriageModal({ onClose, onApplied }: {
   }, [decisions, onApplied, fetchPage, kindFilter]);
 
   // Keyboard shortcuts. Tied to the cursor row.
+  //   p / 1   → active_person
+  //   b / 2   → active_business
+  //   a / 3   → archived
+  //   s / 4   → spam
+  //   0 / x   → clear decision
+  //   ↓ / j   → next row (without changing decision — accepts LLM verdict if pre-filled)
+  //   ↑ / k   → previous row
+  //   ⌘↵     → apply
+  //   Esc    → close
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (applying) return;
@@ -1748,22 +1805,21 @@ function TriageModal({ onClose, onApplied }: {
       if (items.length === 0) return;
       const current = items[cursor];
       if (!current) return;
-      if (e.key === "y" || e.key === "Y" || e.key === "a" || e.key === "A") {
-        e.preventDefault();
-        decide(current.id, "approve");
-        setCursor(c => Math.min(c + 1, items.length - 1));
-      } else if (e.key === "n" || e.key === "N" || e.key === "d" || e.key === "D") {
-        e.preventDefault();
-        decide(current.id, "dismiss");
-        setCursor(c => Math.min(c + 1, items.length - 1));
-      } else if (e.key === "s" || e.key === "S" || e.key === " ") {
-        e.preventDefault();
-        decide(current.id, null);
-        setCursor(c => Math.min(c + 1, items.length - 1));
-      } else if (e.key === "ArrowDown" || e.key === "j") {
-        e.preventDefault();
-        setCursor(c => Math.min(c + 1, items.length - 1));
-      } else if (e.key === "ArrowUp" || e.key === "k") {
+      const advance = () => setCursor(c => Math.min(c + 1, items.length - 1));
+      const k = e.key.toLowerCase();
+      if (k === "p" || k === "1") {
+        e.preventDefault(); decide(current.id, "active_person"); advance();
+      } else if (k === "b" || k === "2") {
+        e.preventDefault(); decide(current.id, "active_business"); advance();
+      } else if (k === "a" || k === "3") {
+        e.preventDefault(); decide(current.id, "archived"); advance();
+      } else if (k === "s" || k === "4") {
+        e.preventDefault(); decide(current.id, "spam"); advance();
+      } else if (k === "0" || k === "x") {
+        e.preventDefault(); decide(current.id, null); advance();
+      } else if (e.key === "ArrowDown" || k === "j" || e.key === " ") {
+        e.preventDefault(); advance();
+      } else if (e.key === "ArrowUp" || k === "k") {
         e.preventDefault();
         setCursor(c => Math.max(c - 1, 0));
       }
@@ -1778,9 +1834,15 @@ function TriageModal({ onClose, onApplied }: {
     node?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [cursor]);
 
-  const approveCount = [...decisions.values()].filter(d => d === "approve").length;
-  const dismissCount = [...decisions.values()].filter(d => d === "dismiss").length;
-  const pendingChanges = approveCount + dismissCount;
+  const personCount   = [...decisions.values()].filter(d => d === "active_person").length;
+  const businessCount = [...decisions.values()].filter(d => d === "active_business").length;
+  const archivedCount = [...decisions.values()].filter(d => d === "archived").length;
+  const spamCount     = [...decisions.values()].filter(d => d === "spam").length;
+  const pendingChanges = personCount + businessCount + archivedCount + spamCount;
+  // How many rows on the current page still have no decision (and no
+  // pre-fill from an LLM verdict)?  Drives the empty-state hint
+  // suggesting the user run auto-classify.
+  const undecidedOnPage = items.filter(it => !decisions.has(it.id)).length;
 
   return (
     <div
@@ -1799,8 +1861,10 @@ function TriageModal({ onClose, onApplied }: {
               {total} pending{kindFilter ? ` ${kindFilter}` : ""} ·
               {" "}showing {items.length} ·
               {" "}{pendingChanges} decision{pendingChanges === 1 ? "" : "s"} ready
-              {approveCount > 0 && <span className="text-emerald-600 dark:text-emerald-400"> · {approveCount} approve</span>}
-              {dismissCount > 0 && <span className="text-rose-600 dark:text-rose-400"> · {dismissCount} dismiss</span>}
+              {personCount   > 0 && <span className="text-emerald-600 dark:text-emerald-400"> · {personCount} person</span>}
+              {businessCount > 0 && <span className="text-sky-600 dark:text-sky-400"> · {businessCount} business</span>}
+              {archivedCount > 0 && <span className="text-muted-foreground"> · {archivedCount} archive</span>}
+              {spamCount     > 0 && <span className="text-rose-600 dark:text-rose-400"> · {spamCount} spam</span>}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1896,26 +1960,40 @@ function TriageModal({ onClose, onApplied }: {
         {/* Bulk toolbar — prominent action buttons */}
         <div className="px-5 py-3 border-b border-border flex items-center flex-wrap gap-2">
           <button
+            onClick={acceptLLMAll}
+            disabled={
+              matchingItems.length === 0 ||
+              applying ||
+              loading ||
+              !matchingItems.some(it => it.triage_verdict)
+            }
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-primary/50 bg-primary/10 text-primary hover:bg-primary/15 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Trust Yorik's per-row verdicts and pre-fill all decisions on this page"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Accept Yorik's verdicts
+          </button>
+          <button
             onClick={approveAll}
             disabled={matchingItems.length === 0 || applying || loading}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
             title={filterActive
-              ? "Approve every row that matches the current filter"
-              : "Mark every visible row as approve"}
+              ? "Mark every matching row as Person"
+              : "Mark every visible row as Person"}
           >
             <Check className="w-3.5 h-3.5" />
-            Approve {filterActive ? `${matchingItems.length} matching` : `all ${items.length}`}
+            All as person
           </button>
           <button
             onClick={dismissAll}
             disabled={matchingItems.length === 0 || applying || loading}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
             title={filterActive
-              ? "Dismiss every row that matches the current filter"
-              : "Mark every visible row as dismiss (spam)"}
+              ? "Mark every matching row as Spam"
+              : "Mark every visible row as Spam"}
           >
             <X className="w-3.5 h-3.5" />
-            Dismiss {filterActive ? `${matchingItems.length} matching` : `all ${items.length}`}
+            All as spam
           </button>
           <button
             onClick={clearPage}
@@ -1926,9 +2004,10 @@ function TriageModal({ onClose, onApplied }: {
             Clear page
           </button>
           <span className="ml-auto text-[11px] text-muted-foreground text-right hidden md:inline">
-            <kbd className="font-mono px-1 rounded bg-muted/60">Y</kbd>=approve ·
-            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">N</kbd>=dismiss ·
-            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">S</kbd>=skip ·
+            <kbd className="font-mono px-1 rounded bg-muted/60">P</kbd>=person ·
+            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">B</kbd>=business ·
+            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">A</kbd>=archive ·
+            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">S</kbd>=spam ·
             {" "}<kbd className="font-mono px-1 rounded bg-muted/60">↑↓</kbd>=move ·
             {" "}<kbd className="font-mono px-1 rounded bg-muted/60">⌘↵</kbd>=apply
           </span>
@@ -1964,8 +2043,10 @@ function TriageModal({ onClose, onApplied }: {
                 className={cn(
                   "rounded-lg border p-3.5 transition cursor-pointer flex items-start gap-4",
                   isCursor && "ring-2 ring-primary/50",
-                  decision === "approve" && "bg-emerald-500/5 border-emerald-500/40",
-                  decision === "dismiss" && "bg-rose-500/5 border-rose-500/40",
+                  decision === "active_person"   && "bg-emerald-500/5 border-emerald-500/40",
+                  decision === "active_business" && "bg-sky-500/5 border-sky-500/40",
+                  decision === "archived"        && "bg-muted/40 border-border",
+                  decision === "spam"            && "bg-rose-500/5 border-rose-500/40",
                   !decision && "bg-card border-border hover:bg-muted/30",
                   isOutsideFilter && !decision && "opacity-40",
                 )}
@@ -1986,6 +2067,20 @@ function TriageModal({ onClose, onApplied }: {
                   {it.summary && (
                     <div className="text-[12.5px] text-muted-foreground mt-1.5 leading-snug line-clamp-2">
                       {it.summary}
+                    </div>
+                  )}
+
+                  {it.triage_reason && (
+                    <div className="mt-1.5 text-[11.5px] flex items-start gap-1.5 text-foreground/70 leading-snug">
+                      <Sparkles className="w-3 h-3 text-primary/70 mt-[2px] shrink-0" />
+                      <span className="italic">
+                        Yorik: {it.triage_reason}
+                        {it.triage_confidence && (
+                          <span className="ml-1 text-[10px] uppercase tracking-wider text-muted-foreground/70 not-italic">
+                            · {it.triage_confidence}
+                          </span>
+                        )}
+                      </span>
                     </div>
                   )}
 
@@ -2018,34 +2113,46 @@ function TriageModal({ onClose, onApplied }: {
                   )}
                 </div>
 
-                {/* Right: decision buttons side-by-side */}
-                <div className="flex items-center gap-2 shrink-0 self-start pt-0.5">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); decide(it.id, decision === "approve" ? null : "approve"); }}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 px-3 py-2 rounded-md border text-xs font-medium transition min-w-[88px] justify-center",
-                      decision === "approve"
-                        ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                        : "border-border text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 hover:border-emerald-500/40 hover:bg-emerald-500/5",
-                    )}
-                    title="Approve (Y) — moves to Active"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    Approve
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); decide(it.id, decision === "dismiss" ? null : "dismiss"); }}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 px-3 py-2 rounded-md border text-xs font-medium transition min-w-[88px] justify-center",
-                      decision === "dismiss"
-                        ? "border-rose-500/60 bg-rose-500/15 text-rose-700 dark:text-rose-300"
-                        : "border-border text-muted-foreground hover:text-rose-700 dark:hover:text-rose-300 hover:border-rose-500/40 hover:bg-rose-500/5",
-                    )}
-                    title="Dismiss (N) — marks as spam"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    Dismiss
-                  </button>
+                {/* Right: four outcome chips (P/B/A/S). The chip whose
+                    outcome matches the active decision is highlighted.
+                    Clicking the active chip clears the decision. */}
+                <div className="flex items-center gap-1 shrink-0 self-start pt-0.5">
+                  <TriageChip
+                    label="Person"
+                    shortcut="P"
+                    icon={Check}
+                    active={decision === "active_person"}
+                    tone="emerald"
+                    onClick={(e) => { e.stopPropagation(); decide(it.id, decision === "active_person" ? null : "active_person"); }}
+                    suggested={it.triage_verdict === "active_person"}
+                  />
+                  <TriageChip
+                    label="Business"
+                    shortcut="B"
+                    icon={Globe}
+                    active={decision === "active_business"}
+                    tone="sky"
+                    onClick={(e) => { e.stopPropagation(); decide(it.id, decision === "active_business" ? null : "active_business"); }}
+                    suggested={it.triage_verdict === "active_business"}
+                  />
+                  <TriageChip
+                    label="Archive"
+                    shortcut="A"
+                    icon={MapPin}
+                    active={decision === "archived"}
+                    tone="muted"
+                    onClick={(e) => { e.stopPropagation(); decide(it.id, decision === "archived" ? null : "archived"); }}
+                    suggested={it.triage_verdict === "archived"}
+                  />
+                  <TriageChip
+                    label="Spam"
+                    shortcut="S"
+                    icon={X}
+                    active={decision === "spam"}
+                    tone="rose"
+                    onClick={(e) => { e.stopPropagation(); decide(it.id, decision === "spam" ? null : "spam"); }}
+                    suggested={it.triage_verdict === "spam"}
+                  />
                 </div>
               </div>
             );
@@ -2092,6 +2199,131 @@ function TriageModal({ onClose, onApplied }: {
           </div>
         </footer>
       </div>
+    </div>
+  );
+}
+
+
+// One outcome button in the triage modal's per-row chip row. Compact
+// (icon + first letter) on narrow screens, with the keyboard shortcut
+// shown on hover. The "suggested" prop adds a subtle ring around chips
+// the LLM verdict pre-filled, so the user can spot Yorik's recommendation
+// even when they've already overridden it.
+function TriageChip({
+  label, shortcut, icon: Icon, tone, active, suggested, onClick,
+}: {
+  label: string;
+  shortcut: string;
+  icon: any;
+  tone: "emerald" | "sky" | "muted" | "rose";
+  active: boolean;
+  suggested?: boolean;
+  onClick: (e: React.MouseEvent) => void;
+}) {
+  // Tailwind v4 JIT requires the full class strings — can't interpolate.
+  const toneActive: Record<typeof tone, string> = {
+    emerald: "border-emerald-500/60 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+    sky:     "border-sky-500/60 bg-sky-500/15 text-sky-700 dark:text-sky-300",
+    muted:   "border-border bg-muted text-foreground",
+    rose:    "border-rose-500/60 bg-rose-500/15 text-rose-700 dark:text-rose-300",
+  };
+  const toneHover: Record<typeof tone, string> = {
+    emerald: "hover:border-emerald-500/40 hover:bg-emerald-500/5 hover:text-emerald-700 dark:hover:text-emerald-300",
+    sky:     "hover:border-sky-500/40 hover:bg-sky-500/5 hover:text-sky-700 dark:hover:text-sky-300",
+    muted:   "hover:border-border hover:bg-muted hover:text-foreground",
+    rose:    "hover:border-rose-500/40 hover:bg-rose-500/5 hover:text-rose-700 dark:hover:text-rose-300",
+  };
+  return (
+    <button
+      onClick={onClick}
+      title={`${label} (${shortcut})${suggested ? " — Yorik's verdict" : ""}`}
+      className={cn(
+        "inline-flex items-center gap-1 px-2 py-1.5 rounded-md border text-[11px] font-medium transition min-w-[28px] justify-center",
+        active ? toneActive[tone] : `border-border text-muted-foreground ${toneHover[tone]}`,
+        suggested && !active && "ring-1 ring-primary/30",
+      )}
+    >
+      <Icon className="w-3 h-3" />
+      <span className="hidden sm:inline">{label}</span>
+    </button>
+  );
+}
+
+
+// Kicks /api/contacts/triage/auto-classify. Polls status while the
+// background job runs, shows a progress bar inline, and notifies the
+// parent on completion so the TriageModal — if open — can refetch
+// rows and pick up the new verdicts. Lives next to the existing
+// TriageButton in the contacts toolbar.
+function AutoClassifyButton({ onDone }: { onDone: () => Promise<void> | void }) {
+  const [status, setStatus] = useState<{ status: string; total: number; done: number; last_error?: string | null } | null>(null);
+  const [starting, setStarting] = useState(false);
+
+  const refreshStatus = useCallback(async () => {
+    try {
+      const r = await api.get<{ status: string; total: number; done: number; last_error?: string | null }>(
+        "/api/contacts/triage/auto-classify/status",
+      );
+      setStatus(r);
+      return r;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  useEffect(() => { refreshStatus(); }, [refreshStatus]);
+
+  // Poll status during a running classify so the progress bar advances
+  // live. Stop polling once we transition out of running.
+  useEffect(() => {
+    if (status?.status !== "running") return;
+    const id = setInterval(async () => {
+      const r = await refreshStatus();
+      if (r && r.status !== "running") {
+        onDone();  // refresh the contact list / triage queue
+      }
+    }, 1500);
+    return () => clearInterval(id);
+  }, [status?.status, refreshStatus, onDone]);
+
+  async function start() {
+    setStarting(true);
+    try {
+      await api.post("/api/contacts/triage/auto-classify", {});
+      // Tiny delay so the server has time to flip status=running before
+      // we poll — otherwise the button briefly shows "Idle" again.
+      setTimeout(refreshStatus, 250);
+    } catch (e: any) {
+      alert("Couldn't start auto-classify: " + (e?.message || e));
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  const running = status?.status === "running";
+  const pct = status && status.total > 0 ? Math.round((status.done / status.total) * 100) : 0;
+
+  return (
+    <div className="hidden md:flex items-center gap-2">
+      <button
+        onClick={start}
+        disabled={starting || running}
+        className={cn(
+          "text-xs h-8 px-3 rounded-md border transition inline-flex items-center gap-1.5",
+          running
+            ? "border-primary/40 bg-primary/5 text-primary"
+            : "bg-card border-border text-foreground hover:bg-muted",
+        )}
+        title="Run the LLM over every pending contact and pre-fill triage verdicts"
+      >
+        {(running || starting) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+        {running ? `Auto-classifying ${status!.done}/${status!.total}` : "Auto-classify"}
+      </button>
+      {running && (
+        <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
+          <div className="h-full bg-primary transition-all duration-500" style={{ width: `${pct}%` }} />
+        </div>
+      )}
     </div>
   );
 }
