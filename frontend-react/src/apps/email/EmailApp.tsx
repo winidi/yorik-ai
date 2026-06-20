@@ -1333,11 +1333,17 @@ function Reader({
   const m = detail.data;
 
   // Remote-image gate. Off by default (privacy) — flipped per-message
-  // when the user clicks "Show images". Reset when the message id
-  // changes so a previous email's "show" choice doesn't carry over
-  // to the next one.
+  // when the user clicks "Show images". When the sender is on the
+  // user's image-trust list (server returns images_auto_allowed=true)
+  // we init to true so the banner never appears. Reset on message
+  // change so a previous email's per-message "show" doesn't carry over.
   const [showImages, setShowImages] = useState(false);
-  useEffect(() => { setShowImages(false); }, [messageRow.id]);
+  const [senderTrusted, setSenderTrusted] = useState(false);
+  useEffect(() => {
+    const auto = !!m?.images_auto_allowed;
+    setShowImages(auto);
+    setSenderTrusted(auto);
+  }, [messageRow.id, m?.images_auto_allowed]);
 
   // cid:foo@bar -> attachment id, used by HtmlBody to resolve <img>
   // tags that reference inline attachments. Strips the angle brackets
@@ -1535,16 +1541,72 @@ function Reader({
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-6 py-4 h-full flex flex-col">
           {hasRemoteImages && !showImages && (
-            <div className="mb-3 p-2.5 rounded-md bg-amber-500/[0.08] border border-amber-500/30 text-xs flex items-center gap-2 shrink-0">
+            <div className="mb-3 p-2.5 rounded-md bg-amber-500/[0.08] border border-amber-500/30 text-xs flex items-center gap-2 flex-wrap shrink-0">
               <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-500 shrink-0" />
-              <span className="flex-1 text-foreground/85">
+              <span className="flex-1 min-w-[12rem] text-foreground/85">
                 Remote images blocked. Senders use these to track when you open emails.
               </span>
               <button
                 onClick={() => setShowImages(true)}
-                className="px-3 h-7 rounded bg-primary text-primary-foreground hover:opacity-90 text-xs shrink-0"
+                className="px-3 h-7 rounded border border-border hover:bg-muted text-xs shrink-0"
               >
-                Show images
+                Show once
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await api.post(`/api/email/messages/${m.id}/trust-sender-images`);
+                    setSenderTrusted(true);
+                    setShowImages(true);
+                  } catch (e: any) {
+                    // Fall back to one-time show so the user isn't stuck
+                    // staring at a blocked email if the trust call fails.
+                    setShowImages(true);
+                    console.warn("[email] trust-sender-images failed:", e);
+                  }
+                }}
+                className="px-3 h-7 rounded bg-primary text-primary-foreground hover:opacity-90 text-xs shrink-0"
+                title={`Always show images from ${m.from_email}`}
+              >
+                Always from {shortAddress(m.from_email)}
+              </button>
+            </div>
+          )}
+          {hasRemoteImages && showImages && !senderTrusted && (
+            <div className="mb-3 p-2 rounded-md bg-muted/40 border border-border text-xs flex items-center gap-2 shrink-0">
+              <span className="flex-1 text-muted-foreground">
+                Want to skip the prompt for future mail from {m.from_email}?
+              </span>
+              <button
+                onClick={async () => {
+                  try {
+                    await api.post(`/api/email/messages/${m.id}/trust-sender-images`);
+                    setSenderTrusted(true);
+                  } catch (e: any) {
+                    console.warn("[email] trust-sender-images failed:", e);
+                  }
+                }}
+                className="px-3 h-7 rounded border border-border hover:bg-muted text-xs shrink-0"
+              >
+                Always show from this sender
+              </button>
+            </div>
+          )}
+          {senderTrusted && hasRemoteImages && (
+            <div className="mb-3 text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-2 shrink-0">
+              <span>Images auto-shown — sender is trusted.</span>
+              <button
+                onClick={async () => {
+                  try {
+                    await api.delete(`/api/email/messages/${m.id}/trust-sender-images`);
+                    setSenderTrusted(false);
+                  } catch (e: any) {
+                    console.warn("[email] untrust-sender-images failed:", e);
+                  }
+                }}
+                className="text-foreground/70 hover:text-foreground underline"
+              >
+                Revoke
               </button>
             </div>
           )}
@@ -2129,6 +2191,19 @@ function humanSize(n?: number): string {
   if (n < 1024) return n + " B";
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
   return (n / 1024 / 1024).toFixed(1) + " MB";
+}
+
+// Compact a "user@host" address for tight button labels. Keeps the
+// local part if it fits, otherwise shows the host so the user knows
+// who they'd be trusting.
+function shortAddress(email?: string | null): string {
+  if (!email) return "sender";
+  const at = email.indexOf("@");
+  if (at < 0) return email.length > 20 ? email.slice(0, 18) + "…" : email;
+  const local = email.slice(0, at);
+  const host = email.slice(at + 1);
+  if (local.length <= 14) return email;
+  return `…@${host}`;
 }
 
 

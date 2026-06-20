@@ -76,6 +76,10 @@ export interface EmailMessageDetail extends EmailMessageRow {
   references_ids: string[];
   cc_addrs: Array<{ name?: string; email: string }>;
   attachments: EmailAttachment[];
+  /** True when the user has marked this sender's address as trusted
+   *  for remote images. The Reader uses this to initialise its
+   *  showImages state to true so the privacy banner doesn't appear. */
+  images_auto_allowed?: boolean;
   /** List-Unsubscribe analysis (RFC 2369 + 8058). Always present in the
    *  detail response — method='none' when the message has no header at
    *  all, so the frontend can show a disabled state or hide the button. */

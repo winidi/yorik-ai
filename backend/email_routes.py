@@ -602,7 +602,71 @@ def get_message(msg_id: int, user: dict = Depends(current_user)):
         d.pop("list_unsubscribe",      None),
         d.pop("list_unsubscribe_post", None),
     )
+    # Remote-image trust check. When the user has previously marked
+    # this sender as "always show images", the Reader inits its
+    # showImages state to true so the privacy banner doesn't appear.
+    d["images_auto_allowed"] = _is_image_sender_trusted(user["id"], d.get("from_email") or "")
     return d
+
+
+def _is_image_sender_trusted(user_id: str, sender_email: str) -> bool:
+    """True iff (user, sender) has a row in email_image_trust."""
+    if not sender_email:
+        return False
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM email_image_trust "
+            "WHERE owner_user_id=? AND sender_email=? LIMIT 1",
+            (user_id, sender_email.strip().lower()),
+        ).fetchone()
+    return bool(row)
+
+
+@router.post("/messages/{msg_id}/trust-sender-images")
+def trust_sender_images(msg_id: int, user: dict = Depends(current_user)):
+    """Mark the message's From: address as trusted for remote images.
+    All future emails from that sender will have images auto-allowed
+    (no privacy banner)."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT from_email FROM email_messages "
+            "WHERE id=? AND owner_user_id=?",
+            (msg_id, user["id"]),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "message not found")
+        sender = (row["from_email"] or "").strip().lower()
+        if not sender:
+            raise HTTPException(400, "message has no parseable From: address")
+        conn.execute(
+            "INSERT INTO email_image_trust (owner_user_id, sender_email) "
+            "VALUES (?, ?) "
+            "ON CONFLICT (owner_user_id, sender_email) DO NOTHING",
+            (user["id"], sender),
+        )
+        conn.commit()
+    return {"ok": True, "sender_email": sender}
+
+
+@router.delete("/messages/{msg_id}/trust-sender-images")
+def untrust_sender_images(msg_id: int, user: dict = Depends(current_user)):
+    """Revoke image-trust for this message's sender."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT from_email FROM email_messages "
+            "WHERE id=? AND owner_user_id=?",
+            (msg_id, user["id"]),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "message not found")
+        sender = (row["from_email"] or "").strip().lower()
+        conn.execute(
+            "DELETE FROM email_image_trust "
+            "WHERE owner_user_id=? AND sender_email=?",
+            (user["id"], sender),
+        )
+        conn.commit()
+    return {"ok": True, "sender_email": sender}
 
 
 class MessagePatch(BaseModel):
