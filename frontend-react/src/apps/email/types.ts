@@ -48,6 +48,14 @@ export interface EmailMessageRow {
   thread_has_unread?: boolean;
 }
 
+export type PaperlessState =
+  | null
+  | "suggested"   // Tier 2 — awaiting user action
+  | "auto_filed"  // Tier 1 — auto-ingested on arrival
+  | "filed"       // Tier 2 confirmed — user clicked "File to Paperless"
+  | "discarded"   // User declined the suggestion
+  | "failed";     // Upload attempted but failed (retry available)
+
 export interface EmailAttachment {
   id: number;
   filename?: string;
@@ -56,6 +64,7 @@ export interface EmailAttachment {
   content_id?: string;
   is_inline: number;
   paperless_id?: number | null;
+  paperless_state?: PaperlessState;
   immich_id?: string | null;
 }
 

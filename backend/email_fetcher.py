@@ -454,7 +454,10 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
             pass
 
     inserted_id = None
-    attachment_ids_for_paperless: list[tuple[int, dict]] = []
+    # Every document-shaped attachment lands here. After we know the
+    # category + sender-trust the loop below decides which become Tier 1
+    # (auto-file) vs Tier 2 (suggested, awaiting user click).
+    doc_attachment_candidates: list[tuple[int, dict]] = []
     with get_conn() as conn:
         # Tombstone gate: if the user already deleted this message,
         # skip the insert under any folder the tombstone is scoped to.
@@ -592,17 +595,32 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
             # raise it deliberately. Catches the OOM-via-malicious-
             # giant-PDF class the security audit flagged.
             max_bytes = int(os.getenv("YORIK_MAX_IMAP_ATTACHMENT_MB", "25")) * 1024 * 1024
+            # mailparser occasionally emits the same MIME part twice for
+            # messages that wrap an attachment in BOTH multipart/mixed
+            # AND multipart/related (netcup invoices, Web.de Terms emails,
+            # some signed mail). Both copies arrive with identical
+            # filename + mimetype + empty content_id. For inline images
+            # (each with a distinct CID, same generic filename "inline")
+            # this key keeps them apart correctly.
+            seen_att_keys: set[tuple[str, str, str]] = set()
             for att in (parsed.attachments or []):
                 payload = att.get("payload")
                 size = len(payload) if isinstance(payload, (bytes, bytearray)) else 0
                 mt = (att.get("mail_content_type") or "").lower()
                 fn = att.get("filename") or ""
                 cd = att.get("content-disposition") or ""
+                cid = att.get("content-id") or ""
+                dedup_key = (fn, mt, cid)
+                if dedup_key in seen_att_keys:
+                    log.debug("skip duplicate attachment in msg %s: %s (mt=%s cid=%r)",
+                              msg_id, fn or "<no-name>", mt, cid)
+                    continue
+                seen_att_keys.add(dedup_key)
                 acur = conn.execute(
                     "INSERT INTO email_attachments (message_id, filename, mimetype, size_bytes, content_id, is_inline) "
                     "VALUES (?, ?, ?, ?, ?, ?)",
-                    (msg_id, fn, mt, size,
-                     att.get("content-id"), 1 if cd.startswith("inline") else 0),
+                    (msg_id, fn, mt, size, cid or None,
+                     1 if cd.startswith("inline") else 0),
                 )
                 att_id = acur.lastrowid
                 if size > max_bytes:
@@ -612,7 +630,7 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
                              size // (1024*1024))
                     continue
                 if _is_paperless_route(mt, fn) and isinstance(payload, (bytes, bytearray)) and payload:
-                    attachment_ids_for_paperless.append((att_id, {
+                    doc_attachment_candidates.append((att_id, {
                         "bytes": bytes(payload),
                         "filename": fn or f"email-att-{att_id}.pdf",
                         "mimetype": mt or "application/pdf",
@@ -627,11 +645,13 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
     # Classify the message (bill / appointment / newsletter / …) so the
     # email list can show a colored badge and downstream features (e.g.
     # "add to bills?" prompt) can act on it. Heuristic-only — cheap and
-    # synchronous, no LLM call.
+    # synchronous, no LLM call. The returned category also drives the
+    # Tier 1 vs Tier 2 Paperless decision below.
+    message_category: Optional[str] = None
     if inserted_id:
         try:
             from . import email_classifier
-            email_classifier.apply_to_message(inserted_id)
+            message_category = email_classifier.apply_to_message(inserted_id)
         except Exception as e:
             log.debug("classify msg %s failed: %s", inserted_id, e)
 
@@ -672,16 +692,54 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
         except Exception as e:
             log.debug("autodraft schedule failed: %s", e)
 
-    # Auto-route document attachments to Paperless. Same pattern as
-    # whatsapp_media — synchronous to the IMAP worker thread (since
-    # we already have the bytes in memory). Failures are logged, not
-    # raised — one bad upload shouldn't fail the message ingest.
-    for att_id, blob in attachment_ids_for_paperless:
+    # Tier 1 vs Tier 2 routing for document attachments. The old code
+    # auto-uploaded every PDF/DOCX/XLSX unconditionally, which turned
+    # Paperless into a dumping ground for advertising and notification
+    # PDFs. Now only emails that meet BOTH tests get the auto-file:
+    #
+    #   * sender is in the user's contacts with status='active' (i.e.
+    #     someone they actually know, not auto-captured "pending"); AND
+    #   * classifier says the message is transactional (bill or
+    #     appointment) — the categories with the highest signal-to-noise
+    #     ratio for "this is a document the user wants to keep".
+    #
+    # Anything that fails either test is still recorded as a candidate
+    # (paperless_state='suggested') so the email UI can show a one-click
+    # "File to Paperless" pill. Discarded suggestions stay flagged so
+    # the prompt doesn't reappear.
+    if doc_attachment_candidates:
         try:
-            _file_to_paperless(att_id, blob, cfg["owner_user_id"],
-                                from_name or from_email, subject)
-        except Exception as e:
-            log.warning("email att %d → Paperless failed: %s", att_id, e)
+            from . import contacts as _contacts
+            contact = _contacts.find_by_channel("email", from_email or "")
+        except Exception:
+            contact = None
+        contact_active = bool(contact and contact.get("status") == "active")
+        tier1_categories = {"bill", "appointment"}
+        auto_eligible = (
+            contact_active
+            and message_category in tier1_categories
+            and autocapture_category != "spam"
+        )
+        for att_id, blob in doc_attachment_candidates:
+            if auto_eligible:
+                try:
+                    _file_to_paperless(
+                        att_id, blob, cfg["owner_user_id"],
+                        from_name or from_email, subject,
+                        new_state="auto_filed",
+                    )
+                except Exception as e:
+                    log.warning("email att %d → Paperless failed: %s", att_id, e)
+            else:
+                try:
+                    with get_conn() as _c:
+                        _c.execute(
+                            "UPDATE email_attachments SET paperless_state='suggested' WHERE id=?",
+                            (att_id,),
+                        )
+                        _c.commit()
+                except Exception as e:
+                    log.debug("mark suggested failed for att %s: %s", att_id, e)
 
 
 _PAPERLESS_MIMES = {
@@ -703,43 +761,56 @@ def _is_paperless_route(mimetype: str, filename: str) -> bool:
 
 
 def _file_to_paperless(att_id: int, blob: dict, user_id: str,
-                        sender_label: str, subject: str) -> None:
-    """Upload one attachment to Paperless using the per-user token
-    (wave 3 multi-user). Stores the resulting task-id on the
-    email_attachments row."""
+                        sender_label: str, subject: str,
+                        new_state: str = "auto_filed") -> bool:
+    """Upload one attachment to Paperless using the per-user token.
+    On success, marks the attachment row with paperless_id=0 (sentinel
+    meaning "uploaded, real doc id will be backfilled by webhook") and
+    paperless_state=new_state ('auto_filed' for Tier 1 fetcher path,
+    'filed' for Tier 2 user-confirm). On any failure, sets
+    paperless_state='failed' so the UI can offer a retry.
+    Returns True iff the upload succeeded."""
     from .external_users import get_user_paperless_creds
     creds = get_user_paperless_creds(user_id)
     if not creds or not creds.get("api_key"):
-        return  # Paperless not configured for this user
+        return False  # Paperless not configured for this user — leave state untouched
     import requests as _rq
     headers = {"Authorization": f"Token {creds['api_key']}"}
     files = {"document": (blob["filename"], blob["bytes"], blob["mimetype"])}
     title = f"Email · {sender_label} · {subject[:60] if subject else blob['filename']}"
     data = {"title": title}
+    failure_reason: Optional[str] = None
+    task_id: Optional[str] = None
     try:
         r = _rq.post(f"{creds['base_url'].rstrip('/')}/api/documents/post_document/",
                       headers=headers, files=files, data=data, timeout=30)
         if not r.ok:
             log.warning("Paperless upload returned %d: %s", r.status_code, r.text[:200])
-            return
-        task_id = r.text.strip().strip('"')
+            failure_reason = f"HTTP {r.status_code}"
+        else:
+            task_id = r.text.strip().strip('"')
     except _rq.RequestException as e:
         log.warning("Paperless POST failed: %s", e)
-        return
-    # Mark on the attachment row that we filed it (using the task id;
-    # the post-consume webhook backfills the real doc id later).
+        failure_reason = str(e)
     with get_conn() as conn:
-        # We store the task id in paperless_id as a string for now;
-        # column is INTEGER but Paperless task ids are UUIDs. Easier
-        # to add a paperless_task_id text column later than to risk
-        # data loss; we use 0 as sentinel meaning "uploaded, doc id
-        # not yet backfilled".
-        conn.execute(
-            "UPDATE email_attachments SET paperless_id=0 WHERE id=?",
-            (att_id,),
-        )
+        if failure_reason is None:
+            conn.execute(
+                "UPDATE email_attachments "
+                "SET paperless_id=0, paperless_state=?, paperless_task_id=? "
+                "WHERE id=?",
+                (new_state, task_id, att_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE email_attachments SET paperless_state='failed' WHERE id=?",
+                (att_id,),
+            )
         conn.commit()
-    log.info("email att %d → Paperless (task=%s) from %s", att_id, task_id, sender_label)
+    if failure_reason is None:
+        log.info("email att %d → Paperless (task=%s, state=%s) from %s",
+                 att_id, task_id, new_state, sender_label)
+        return True
+    return False
 
 
 def _should_autodraft(from_email: str, subject: str, to_addrs_json: str) -> bool:

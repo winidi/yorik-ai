@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { useApi } from "@/lib/useApi";
 import { api } from "@/lib/api";
 import type {
-  EmailAccount, EmailMessageRow, EmailMessageDetail, EmailFolder,
+  EmailAccount, EmailAttachment, EmailMessageRow, EmailMessageDetail, EmailFolder,
 } from "./types";
 import { AccountWizard } from "./AccountWizard";
 import { Composer, type ComposeDraft } from "./Composer";
@@ -984,6 +984,338 @@ function SnoozeMenuItem({ label, onClick }: { label: string; onClick: () => void
   );
 }
 
+// Banner shown above the body when the classifier tagged the message
+// as 'appointment'. Single-click "Add to Calendar" — the server-side
+// endpoint re-extracts the date/time and runs the same skill the bell
+// notification's Accept handler would. After a successful add we show
+// a soft "Added · open" line so the user has a confirmation without a
+// modal toast system in play.
+function AppointmentBanner({ messageId }: { messageId: number }) {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<{ starts_at: string; event_id?: number | string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function add() {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.post<{
+        starts_at: string;
+        skill_result?: { event_id?: number | string };
+      }>(`/api/email/messages/${messageId}/calendar-event`);
+      setDone({ starts_at: r.starts_at, event_id: r.skill_result?.event_id });
+    } catch (e: any) {
+      setErr(e.message || "could not add to calendar");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <div className="mt-3 p-2.5 rounded-md bg-emerald-500/[0.08] border border-emerald-500/30 text-xs flex items-center gap-2">
+        <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-500" />
+        <span className="text-emerald-700 dark:text-emerald-400">
+          Added to calendar — {done.starts_at.replace("T", " ").slice(0, 16)}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 p-2.5 rounded-md bg-sky-500/[0.08] border border-sky-500/30 text-xs flex items-center gap-2">
+      <Clock className="w-3.5 h-3.5 text-sky-600 dark:text-sky-500" />
+      <span className="flex-1 text-foreground/85">
+        This email looks like an appointment.
+      </span>
+      <button
+        onClick={add}
+        disabled={busy}
+        className="px-3 h-7 rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+      >
+        Add to calendar
+      </button>
+      {err && <span className="text-destructive ml-2">{err}</span>}
+    </div>
+  );
+}
+
+
+// One row in the Attachments list. Clicking the row opens the preview
+// modal where the user can see the file AND decide whether to file it
+// to Paperless. Inline state hint stays in the row so the user can
+// tell the status of each attachment at a glance without opening the
+// modal.
+function AttachmentRow({
+  att, onActionDone,
+}: {
+  att: EmailAttachment;
+  onActionDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const state = att.paperless_state ?? null;
+
+  return (
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
+        className="p-3 border border-border rounded-lg bg-card hover:bg-muted/40 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring/40"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+            {ext(att.filename)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium truncate">{att.filename || "attachment"}</div>
+            <div className="text-xs text-muted-foreground truncate">
+              {humanSize(att.size_bytes)} · {att.mimetype || "?"}
+              {state === "auto_filed" && (
+                <span className="ml-2 text-emerald-600 dark:text-emerald-500">✓ Filed (auto)</span>
+              )}
+              {state === "filed" && (
+                <span className="ml-2 text-emerald-600 dark:text-emerald-500">✓ Filed</span>
+              )}
+              {state === "suggested" && (
+                <span className="ml-2 text-sky-600 dark:text-sky-500">📎 Suggested</span>
+              )}
+              {state === "failed" && (
+                <span className="ml-2 text-destructive">Upload failed</span>
+              )}
+              {state === "discarded" && (
+                <span className="ml-2 text-muted-foreground">Not filed</span>
+              )}
+            </div>
+          </div>
+          <a
+            href={`/api/email/attachments/${att.id}/download`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-xs text-muted-foreground hover:text-foreground no-underline shrink-0"
+            download
+            title="Save to disk"
+          >
+            ↓ download
+          </a>
+        </div>
+      </div>
+      {open && (
+        <AttachmentPreviewModal
+          att={att}
+          onClose={() => setOpen(false)}
+          onActionDone={onActionDone}
+        />
+      )}
+    </>
+  );
+}
+
+
+// Full-screen preview modal. PDFs / images / text render inline; other
+// types fall back to a Download CTA (no browser has a native viewer
+// for DOCX/XLSX/etc., so we don't pretend). All Paperless actions for
+// this attachment live in the footer — File / Discard / Undo / Retry
+// pick themselves based on current state.
+function AttachmentPreviewModal({
+  att, onClose, onActionDone,
+}: {
+  att: EmailAttachment;
+  onClose: () => void;
+  onActionDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  // Optimistic local state so the footer updates immediately after a
+  // click without waiting on the parent's refetch. parent still refetches
+  // (via onActionDone) so the source-of-truth converges.
+  const [localState, setLocalState] = useState<typeof att.paperless_state>(att.paperless_state ?? null);
+
+  const inlineUrl = `/api/email/attachments/${att.id}/inline`;
+  const downloadUrl = `/api/email/attachments/${att.id}/download`;
+  const mt = (att.mimetype || "").toLowerCase();
+  const fnLower = (att.filename || "").toLowerCase();
+  const isPdf = mt === "application/pdf" || fnLower.endsWith(".pdf");
+  const isImage = mt.startsWith("image/");
+  const isText = mt.startsWith("text/") || fnLower.endsWith(".txt") || fnLower.endsWith(".csv");
+  const canPreview = isPdf || isImage || isText;
+
+  async function call(action: "file" | "discard" | "undo") {
+    setBusy(true); setErr(null);
+    try {
+      if (action === "file") {
+        await api.post(`/api/email/attachments/${att.id}/paperless`);
+        setLocalState("filed");
+      } else if (action === "discard") {
+        await api.delete(`/api/email/attachments/${att.id}/paperless-suggestion`);
+        setLocalState("discarded");
+      } else if (action === "undo") {
+        await api.post(`/api/email/attachments/${att.id}/paperless/undo`);
+        setLocalState("discarded");
+      }
+      onActionDone();
+    } catch (e: any) {
+      setErr(e.message || `${action} failed`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Close on backdrop click — but NOT on Escape during action (would
+  // tear the user away mid-Undo confirm). Escape is fine because the
+  // user is the one initiating; backdrop click is fine too because the
+  // expensive thing (preview load) is already done.
+  return (
+    <div
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
+          <div className="min-w-0">
+            <div className="font-semibold truncate">{att.filename || "attachment"}</div>
+            <div className="text-xs text-muted-foreground">
+              {humanSize(att.size_bytes)} · {att.mimetype || "?"}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-muted rounded-md text-muted-foreground shrink-0 ml-2"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 min-h-0 bg-muted/40">
+          {isPdf || isText ? (
+            <>
+              {/* Desktop / tablet: render inline via iframe. Mobile
+                  browsers handle PDF-in-iframe poorly (iOS Safari shows
+                  only the first page with no controls, Android Chrome
+                  often forces a download). On narrow viewports we
+                  surface a "Open PDF" CTA that hands off to the OS
+                  native viewer — strictly better quality than any
+                  embed we could produce, and the Add-to-Paperless
+                  buttons stay reachable in the same modal once they
+                  return. */}
+              <iframe
+                src={inlineUrl}
+                className="hidden md:block w-full h-full bg-white"
+                title={att.filename || "attachment"}
+              />
+              <div className="md:hidden h-full flex flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground">
+                <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center text-base font-bold">
+                  {ext(att.filename)}
+                </div>
+                <div>Tap below to view this file in your browser or system PDF viewer.</div>
+                <a
+                  href={inlineUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 h-10 rounded-md bg-primary text-primary-foreground hover:opacity-90 inline-flex items-center"
+                >
+                  Open {isPdf ? "PDF" : "file"}
+                </a>
+              </div>
+            </>
+          ) : isImage ? (
+            <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
+              <img src={inlineUrl} alt={att.filename || ""} className="max-w-full max-h-full object-contain" />
+            </div>
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center text-sm text-muted-foreground gap-3 px-6 text-center">
+              <div>Preview not available for {att.mimetype || "this file type"}.</div>
+              <a
+                href={downloadUrl}
+                download
+                className="px-3 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 inline-flex items-center"
+              >
+                ↓ Download to view
+              </a>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-border flex items-center gap-2 flex-wrap shrink-0">
+          {/* Left: status text. */}
+          <div className="text-xs flex-1 min-w-0">
+            {localState === "auto_filed" && (
+              <span className="text-emerald-600 dark:text-emerald-500">✓ Filed to Paperless · auto (trusted sender)</span>
+            )}
+            {localState === "filed" && (
+              <span className="text-emerald-600 dark:text-emerald-500">✓ Filed to Paperless</span>
+            )}
+            {localState === "suggested" && (
+              <span className="text-sky-600 dark:text-sky-500">📎 This looks like a document worth keeping. File it to Paperless?</span>
+            )}
+            {localState === "discarded" && (
+              <span className="text-muted-foreground">Not filed</span>
+            )}
+            {localState === "failed" && (
+              <span className="text-destructive">Last Paperless upload failed</span>
+            )}
+            {err && <span className="block text-destructive mt-1">{err}</span>}
+          </div>
+
+          {/* Right: action buttons (vary by state). */}
+          {(localState === "auto_filed" || localState === "filed") ? (
+            <button
+              onClick={() => call("undo")}
+              disabled={busy}
+              className="px-3 h-9 rounded-md border border-border hover:bg-muted text-sm disabled:opacity-50"
+              title="Delete from Paperless"
+            >
+              Undo
+            </button>
+          ) : (
+            <>
+              {localState === "suggested" && (
+                <button
+                  onClick={() => call("discard")}
+                  disabled={busy}
+                  className="px-3 h-9 rounded-md border border-border hover:bg-muted text-sm disabled:opacity-50"
+                >
+                  Discard
+                </button>
+              )}
+              <button
+                onClick={() => call("file")}
+                disabled={busy}
+                className="px-3 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 text-sm disabled:opacity-50"
+              >
+                {localState === "failed" ? "Retry upload" : "Add to Paperless"}
+              </button>
+            </>
+          )}
+
+          {canPreview && (
+            <a
+              href={inlineUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="px-3 h-9 rounded-md border border-border hover:bg-muted text-sm no-underline text-foreground inline-flex items-center"
+              title="Open in a new browser tab"
+            >
+              Open in tab
+            </a>
+          )}
+          <a
+            href={downloadUrl}
+            download
+            className="px-3 h-9 rounded-md border border-border hover:bg-muted text-sm no-underline text-foreground inline-flex items-center"
+          >
+            Download
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function Reader({
   messageRow, accounts, onReply, onRefresh, onActionDone, onBack,
 }: {
@@ -999,6 +1331,32 @@ function Reader({
   // Refetch the full message detail when the selected id changes.
   const detail = useApi<EmailMessageDetail>(`/api/email/messages/${messageRow.id}`, []);
   const m = detail.data;
+
+  // Remote-image gate. Off by default (privacy) — flipped per-message
+  // when the user clicks "Show images". Reset when the message id
+  // changes so a previous email's "show" choice doesn't carry over
+  // to the next one.
+  const [showImages, setShowImages] = useState(false);
+  useEffect(() => { setShowImages(false); }, [messageRow.id]);
+
+  // cid:foo@bar -> attachment id, used by HtmlBody to resolve <img>
+  // tags that reference inline attachments. Strips the angle brackets
+  // some emails wrap the content-id in (RFC 2392).
+  const cidMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    (m?.attachments || []).forEach((a) => {
+      if (a.content_id) {
+        const cleaned = a.content_id.replace(/^<|>$/g, "");
+        if (cleaned) map[cleaned] = a.id;
+      }
+    });
+    return map;
+  }, [m?.attachments]);
+
+  const hasRemoteImages = useMemo(() => {
+    if (!m?.body_html) return false;
+    return /<img\b[^>]*\bsrc\s*=\s*["'][^"']*https?:/i.test(m.body_html);
+  }, [m?.body_html]);
   if (detail.loading || !m) {
     return (
       <div className="p-8 space-y-3">
@@ -1167,15 +1525,38 @@ function Reader({
           </div>
         </div>
         <h1 className="text-xl font-semibold break-words">{m.subject || "(no subject)"}</h1>
+        {m.category === "appointment" && (
+          <AppointmentBanner messageId={m.id} />
+        )}
       </div>
 
       {/* Body region: flex-1 + min-h-0 so it can shrink AND grow inside
           the flex column. Internal scroll for long emails. */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-6 py-4 h-full flex flex-col">
+          {hasRemoteImages && !showImages && (
+            <div className="mb-3 p-2.5 rounded-md bg-amber-500/[0.08] border border-amber-500/30 text-xs flex items-center gap-2 shrink-0">
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-500 shrink-0" />
+              <span className="flex-1 text-foreground/85">
+                Remote images blocked. Senders use these to track when you open emails.
+              </span>
+              <button
+                onClick={() => setShowImages(true)}
+                className="px-3 h-7 rounded bg-primary text-primary-foreground hover:opacity-90 text-xs shrink-0"
+              >
+                Show images
+              </button>
+            </div>
+          )}
           <div className="flex-1 min-h-0">
             {m.body_html ? (
-              <HtmlBody html={m.body_html} fill />
+              <HtmlBody
+                html={m.body_html}
+                fill
+                messageId={m.id}
+                allowImages={showImages}
+                cidMap={cidMap}
+              />
             ) : (
               <div className="text-sm leading-relaxed whitespace-pre-wrap break-words h-full">
                 {m.body_text || "(empty body)"}
@@ -1188,26 +1569,11 @@ function Reader({
                 Attachments
               </div>
               {m.attachments.map(att => (
-                <a
+                <AttachmentRow
                   key={att.id}
-                  href={`/api/email/attachments/${att.id}/download`}
-                  className="p-3 border border-border rounded-lg flex items-center gap-3 bg-card hover:bg-muted transition no-underline text-foreground"
-                  download
-                >
-                  <div className="w-10 h-10 rounded bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                    {ext(att.filename)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{att.filename || "attachment"}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {humanSize(att.size_bytes)} · {att.mimetype || "?"}
-                      {att.paperless_id !== null && att.paperless_id !== undefined && (
-                        <span className="ml-2 text-emerald-500">✓ Filed to Paperless</span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-xs text-muted-foreground">↓ download</span>
-                </a>
+                  att={att}
+                  onActionDone={() => detail.refetch()}
+                />
               ))}
             </div>
           )}

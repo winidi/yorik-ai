@@ -578,7 +578,7 @@ def get_message(msg_id: int, user: dict = Depends(current_user)):
             raise HTTPException(404, "message not found")
         atts = conn.execute(
             "SELECT id, filename, mimetype, size_bytes, content_id, is_inline, "
-            "       paperless_id, immich_id "
+            "       paperless_id, paperless_state, paperless_task_id, immich_id "
             "FROM email_attachments WHERE message_id=?",
             (msg_id,),
         ).fetchall()
@@ -786,6 +786,264 @@ async def unsubscribe_route(msg_id: int, user: dict = Depends(current_user)):
     }
 
 
+@router.post("/attachments/{att_id}/paperless")
+async def file_attachment_to_paperless(att_id: int, user: dict = Depends(current_user)):
+    """Tier-2 confirmation: user clicked 'File to Paperless' on a
+    'suggested' attachment. Fetches the binary on demand (same path as
+    /download), then runs the same uploader the fetcher uses but tags
+    the row 'filed' (vs 'auto_filed') so the UI knows it was a user
+    decision."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT a.id, a.filename, a.mimetype, a.paperless_state, m.from_email, m.from_name, m.subject "
+            "FROM email_attachments a "
+            "JOIN email_messages m ON m.id = a.message_id "
+            "WHERE a.id=? AND m.owner_user_id=?",
+            (att_id, user["id"]),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "attachment not found")
+    if row["paperless_state"] in ("auto_filed", "filed"):
+        return {"ok": True, "already_filed": True, "state": row["paperless_state"]}
+
+    blob = await asyncio.to_thread(email_actions.fetch_attachment_binary, att_id, user["id"])
+    if not blob:
+        raise HTTPException(502, "attachment binary unavailable on the IMAP server")
+
+    from .email_fetcher import _file_to_paperless as _upload
+    sender_label = row["from_name"] or row["from_email"] or "unknown sender"
+    ok = await asyncio.to_thread(
+        _upload, att_id,
+        {"bytes": blob["content"], "filename": row["filename"] or "document.pdf",
+         "mimetype": row["mimetype"] or "application/pdf"},
+        user["id"], sender_label, row["subject"] or "",
+        "filed",
+    )
+    if not ok:
+        raise HTTPException(502, "Paperless upload failed — check Paperless is reachable + the per-user token is set")
+    return {"ok": True, "state": "filed"}
+
+
+@router.post("/attachments/{att_id}/paperless/undo")
+async def undo_paperless_filing(att_id: int, user: dict = Depends(current_user)):
+    """Remove an auto-filed (Tier 1) or user-filed (Tier 2) attachment
+    from Paperless. Looks up the task -> doc id, then DELETEs the doc.
+    If the task hasn't finished consuming yet, returns 425 so the UI
+    can ask the user to retry in a few seconds — we deliberately don't
+    queue background deletes from here to keep the failure mode obvious
+    instead of "I clicked Undo and ... nothing seemed to happen"."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT a.id, a.paperless_state, a.paperless_task_id, a.paperless_id "
+            "FROM email_attachments a "
+            "JOIN email_messages m ON m.id = a.message_id "
+            "WHERE a.id=? AND m.owner_user_id=?",
+            (att_id, user["id"]),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "attachment not found")
+    if row["paperless_state"] not in ("auto_filed", "filed"):
+        raise HTTPException(409, f"can't undo from state={row['paperless_state']!r}")
+
+    from .external_users import get_user_paperless_creds
+    creds = get_user_paperless_creds(user["id"])
+    if not creds or not creds.get("api_key"):
+        raise HTTPException(503, "Paperless not configured for this user")
+
+    import requests as _rq
+    base = creds["base_url"].rstrip("/")
+    headers = {"Authorization": f"Token {creds['api_key']}"}
+
+    doc_id = row["paperless_id"] if row["paperless_id"] and row["paperless_id"] > 0 else None
+    task_id = row["paperless_task_id"]
+
+    # Resolve task -> doc id if we don't already have it (paperless_id
+    # backfill via webhook may not have run yet).
+    if not doc_id and task_id:
+        try:
+            r = await asyncio.to_thread(
+                _rq.get,
+                f"{base}/api/tasks/?task_id={task_id}",
+                headers=headers, timeout=10,
+            )
+            if r.ok:
+                data = r.json()
+                items = data if isinstance(data, list) else data.get("results", [])
+                if items:
+                    rd = items[0].get("related_document")
+                    if rd:
+                        doc_id = int(rd)
+        except _rq.RequestException as e:
+            raise HTTPException(502, f"could not reach Paperless: {e}")
+
+    if not doc_id:
+        raise HTTPException(
+            425,  # "Too Early" — task still processing
+            "Paperless is still importing this document — try Undo again in a few seconds",
+        )
+
+    # Best-effort DELETE; we still flip our row even if Paperless 404s
+    # (means the doc was already removed externally — desired end state).
+    try:
+        r = await asyncio.to_thread(
+            _rq.delete,
+            f"{base}/api/documents/{doc_id}/",
+            headers=headers, timeout=15,
+        )
+        if r.status_code not in (200, 202, 204, 404):
+            raise HTTPException(502, f"Paperless DELETE {doc_id} returned {r.status_code}: {r.text[:200]}")
+    except _rq.RequestException as e:
+        raise HTTPException(502, f"could not reach Paperless: {e}")
+
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE email_attachments "
+            "SET paperless_state='discarded', paperless_id=NULL, paperless_task_id=NULL "
+            "WHERE id=?",
+            (att_id,),
+        )
+        conn.commit()
+    return {"ok": True, "state": "discarded", "deleted_paperless_doc_id": doc_id}
+
+
+@router.post("/messages/{msg_id}/calendar-event")
+async def add_message_to_calendar(msg_id: int, user: dict = Depends(current_user)):
+    """Create a calendar event from an email's extracted appointment
+    data. Same skill the bell-notification 'Accept' button runs, but
+    surfaced inline in the Reader so the user doesn't have to dig
+    through notifications for it.
+
+    400 if no date can be extracted from the body — the user should
+    add the event manually in that case."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, subject, body_text, from_email, from_name "
+            "FROM email_messages WHERE id=? AND owner_user_id=?",
+            (msg_id, user["id"]),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "message not found")
+
+    from .email_classifier import _extract_appointment
+    text = " ".join(filter(None, [row["subject"], row["body_text"]]))
+    extracted = _extract_appointment(text)
+    date = extracted.get("date")
+    time = extracted.get("time") or "09:00"
+    if not date:
+        raise HTTPException(400, "no date could be extracted from this email")
+    starts_at = f"{date}T{time}:00"
+
+    sender_label = row["from_name"] or row["from_email"] or "unknown"
+    skill_args = {
+        "title": row["subject"] or "Appointment",
+        "starts_at": starts_at,
+        "notes": f"With {sender_label}. Imported from email #{msg_id}.",
+    }
+    from .notification_routes import _run_skill
+    result = await _run_skill("add_calendar_event", skill_args, user)
+    return {"ok": True, "starts_at": starts_at, "extracted": extracted, "skill_result": result}
+
+
+@router.delete("/attachments/{att_id}/paperless-suggestion")
+def discard_paperless_suggestion(att_id: int, user: dict = Depends(current_user)):
+    """Tier-2 decline: user clicked 'Discard' on a suggested
+    attachment. Marks state='discarded' so the pill doesn't reappear
+    next time the message is opened."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT a.id, a.paperless_state "
+            "FROM email_attachments a "
+            "JOIN email_messages m ON m.id = a.message_id "
+            "WHERE a.id=? AND m.owner_user_id=?",
+            (att_id, user["id"]),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "attachment not found")
+        if row["paperless_state"] not in (None, "suggested", "failed"):
+            raise HTTPException(409, f"can't discard from state={row['paperless_state']!r}")
+        conn.execute(
+            "UPDATE email_attachments SET paperless_state='discarded' WHERE id=?",
+            (att_id,),
+        )
+        conn.commit()
+    return {"ok": True, "state": "discarded"}
+
+
+@router.get("/messages/{msg_id}/proxy-image")
+async def proxy_email_image(
+    msg_id: int,
+    url: str = Query(..., min_length=8),
+    user: dict = Depends(current_user),
+):
+    """Privacy-preserving image proxy for HTML email bodies. The
+    sender's image host sees a request from the yorik server, not from
+    the user's browser/IP — no tracking pixels learning when/where the
+    user opened the mail, no User-Agent leak, no read-receipt by image
+    load.
+
+    We require the message to belong to the calling user (auth + ACL).
+    We don't try to validate the URL is one that appears in the
+    message's body — that check has poor failure mode (HTML rewriting
+    quirks block legit images) and the privacy property holds even
+    without it: an attacker who's already logged in can fetch any URL
+    via /proxy-image, but they could also just open it themselves.
+    The proxy doesn't echo cookies and caps the response size."""
+    # Auth: confirm message ownership.
+    with get_conn() as conn:
+        owns = conn.execute(
+            "SELECT 1 FROM email_messages WHERE id=? AND owner_user_id=?",
+            (msg_id, user["id"]),
+        ).fetchone()
+    if not owns:
+        raise HTTPException(404, "message not found")
+
+    # Only http(s). Block file://, data:, gopher:, etc.
+    low = url.lower().strip()
+    if not (low.startswith("http://") or low.startswith("https://")):
+        raise HTTPException(400, "only http(s) URLs are proxied")
+
+    import requests as _rq
+    try:
+        r = await asyncio.to_thread(
+            _rq.get, url,
+            timeout=10,
+            stream=True,
+            headers={
+                # Conservative UA — no version-leak, no preferred-language.
+                "User-Agent": "Mozilla/5.0 (yorik-image-proxy)",
+                "Accept": "image/*,*/*;q=0.5",
+            },
+            allow_redirects=True,
+        )
+    except _rq.RequestException as e:
+        raise HTTPException(502, f"upstream fetch failed: {e}")
+
+    if r.status_code != 200:
+        raise HTTPException(r.status_code if r.status_code in (404, 410) else 502,
+                            f"upstream returned {r.status_code}")
+
+    ctype = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
+    if not (ctype.startswith("image/") or ctype in ("application/octet-stream",)):
+        raise HTTPException(415, f"upstream returned non-image content-type: {ctype!r}")
+
+    # Cap at 8 MB — newsletter images shouldn't be larger; protects against
+    # a malicious host streaming gigabytes through our endpoint.
+    MAX_BYTES = 8 * 1024 * 1024
+    chunks: list[bytes] = []
+    total = 0
+    for chunk in r.iter_content(chunk_size=64 * 1024):
+        if chunk:
+            total += len(chunk)
+            if total > MAX_BYTES:
+                raise HTTPException(413, "upstream image exceeds 8 MB cap")
+            chunks.append(chunk)
+    return Response(
+        content=b"".join(chunks),
+        media_type=ctype if ctype.startswith("image/") else "application/octet-stream",
+        headers={"cache-control": "private, max-age=86400"},
+    )
+
+
 @router.get("/attachments/{att_id}/download")
 async def download_attachment(att_id: int, user: dict = Depends(current_user)):
     """Fetch and stream an attachment's binary. Lazy — IMAP re-fetches
@@ -801,32 +1059,79 @@ async def download_attachment(att_id: int, user: dict = Depends(current_user)):
     )
 
 
+@router.get("/attachments/{att_id}/inline")
+async def view_attachment_inline(att_id: int, user: dict = Depends(current_user)):
+    """Same payload as /download, but with `Content-Disposition: inline`
+    so browsers render PDFs / images / text directly instead of forcing
+    a save dialog. Used by the attachment row's clickable filename so
+    the user can preview without downloading first. Office formats
+    (DOCX/XLSX/…) still trigger a download because no browser has a
+    native viewer for them — that's a client-side fallback, not a
+    server choice."""
+    blob = await asyncio.to_thread(email_actions.fetch_attachment_binary, att_id, user["id"])
+    if not blob:
+        raise HTTPException(404, "attachment not available")
+    safe_name = (blob["filename"] or "attachment").replace('"', "_")
+    return Response(
+        content=blob["content"],
+        media_type=blob["mimetype"],
+        headers={"content-disposition": f'inline; filename="{safe_name}"'},
+    )
+
+
 @router.get("/search")
 def search_email(q: str = Query(..., min_length=2),
                   limit: int = Query(30, ge=1, le=100),
                   user: dict = Depends(current_user)):
-    """FTS5 across subject + sender + snippet + body. Same triggers
-    that maintain wa_messages_fts maintain this one — no separate
-    indexing pass needed."""
-    # FTS5 query: tokenise the user's input and require ALL words
-    # so 'müller invoice' doesn't match either alone.
-    terms = [t for t in q.split() if t]
-    if not terms:
+    """Full-text search across subject + sender + snippet + body.
+    Dual-backend: SQLite installs use the email_messages_fts FTS5
+    virtual table; Postgres installs use the search_tsv generated
+    tsvector column (GIN-indexed). Both require ALL terms to match
+    (prefix-friendly) so 'müller invoice' doesn't match either alone."""
+    raw_terms = [t for t in q.split() if t]
+    if not raw_terms:
         return []
-    match = " ".join(f'"{t.replace(chr(34), "")}"*' for t in terms)
+    from .database import _use_postgres
+    is_pg = _use_postgres()
+
     with get_conn() as conn:
         try:
-            rows = conn.execute(
-                "SELECT m.id, m.account_id, a.email AS account_email, "
-                "       m.from_email, m.from_name, m.subject, m.snippet, "
-                "       m.date_received, m.is_unread, m.is_starred, m.has_attachments "
-                "FROM email_messages_fts f "
-                "JOIN email_messages m ON m.rowid = f.rowid "
-                "JOIN email_accounts a ON a.id = m.account_id "
-                "WHERE f MATCH ? AND m.owner_user_id = ? "
-                "ORDER BY m.date_received DESC LIMIT ?",
-                (match, user["id"], limit),
-            ).fetchall()
+            if is_pg:
+                # Build a tsquery: strip anything that has special meaning
+                # in tsquery syntax (& | ! ( ) : * \) — we only allow
+                # alphanumerics, underscores, hyphens, German diacritics
+                # and similar word chars. Then join with & and append :*
+                # for prefix matching.
+                import re as _re
+                cleaned = [_re.sub(r"[^\w\-]", "", t, flags=_re.UNICODE) for t in raw_terms]
+                cleaned = [t for t in cleaned if t]
+                if not cleaned:
+                    return []
+                tsq = " & ".join(f"{t}:*" for t in cleaned)
+                rows = conn.execute(
+                    "SELECT m.id, m.account_id, a.email AS account_email, "
+                    "       m.from_email, m.from_name, m.subject, m.snippet, "
+                    "       m.date_received, m.is_unread, m.is_starred, m.has_attachments "
+                    "FROM email_messages m "
+                    "JOIN email_accounts a ON a.id = m.account_id "
+                    "WHERE m.search_tsv @@ to_tsquery('simple', ?) "
+                    "  AND m.owner_user_id = ? "
+                    "ORDER BY m.date_received DESC LIMIT ?",
+                    (tsq, user["id"], limit),
+                ).fetchall()
+            else:
+                match = " ".join(f'"{t.replace(chr(34), "")}"*' for t in raw_terms)
+                rows = conn.execute(
+                    "SELECT m.id, m.account_id, a.email AS account_email, "
+                    "       m.from_email, m.from_name, m.subject, m.snippet, "
+                    "       m.date_received, m.is_unread, m.is_starred, m.has_attachments "
+                    "FROM email_messages_fts f "
+                    "JOIN email_messages m ON m.rowid = f.rowid "
+                    "JOIN email_accounts a ON a.id = m.account_id "
+                    "WHERE f MATCH ? AND m.owner_user_id = ? "
+                    "ORDER BY m.date_received DESC LIMIT ?",
+                    (match, user["id"], limit),
+                ).fetchall()
         except Exception as e:
             raise HTTPException(400, f"search query invalid: {e}")
     return [{
@@ -834,7 +1139,7 @@ def search_email(q: str = Query(..., min_length=2),
         "is_unread": bool(r["is_unread"]),
         "is_starred": bool(r["is_starred"]),
         "has_attachments": bool(r["has_attachments"]),
-        "to_addrs": [],  # FTS rows don't carry to_addrs; UI handles
+        "to_addrs": [],
         "is_sent": False,
         "account_display_name": None,
     } for r in rows]
