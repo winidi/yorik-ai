@@ -122,22 +122,78 @@ def backfill_all(limit: int = 5000) -> int:
     return n
 
 
+HEURISTIC_VERSION = "h1"
+
+
+def _user_classifier_mode(conn, user_id: Any) -> str:
+    """Resolve the user's classifier preference. Defaults to heuristic
+    so existing behaviour doesn't change silently when the column is
+    NULL (e.g. on fresh installs that haven't run migration 117 yet)."""
+    try:
+        row = conn.execute(
+            "SELECT classifier_mode FROM user_profiles WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        return (row["classifier_mode"] if row and row["classifier_mode"] else "heuristic")
+    except Exception:  # noqa: BLE001
+        return "heuristic"
+
+
 def apply_to_message(message_id: int) -> Optional[str]:
-    """Look up the message, classify it, persist the category. Returns
-    the category (also for callers that want to act on it immediately,
-    e.g. push a 'New bill — add to bills?' notification)."""
+    """Look up the message, classify it (per the owner's preference),
+    persist the category. Returns the category — callers that want
+    to act on the result (e.g. propose 'New bill — add to bills?')
+    don't have to re-fetch."""
     from .database import get_conn
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT subject, body_text, from_email, owner_user_id "
+            "SELECT subject, body_text, snippet, from_email, from_name, owner_user_id "
             "FROM email_messages WHERE id = ?",
             (message_id,),
         ).fetchone()
         if not row:
             return None
-        category = classify(row["subject"] or "", row["body_text"] or "", row["from_email"] or "")
-        conn.execute("UPDATE email_messages SET category = ? WHERE id = ?", (category, message_id))
-    log.debug("classified message %s → %s", message_id, category)
+        mode = _user_classifier_mode(conn, row["owner_user_id"])
+        body_text = row["body_text"] or ""
+        snippet   = row["snippet"] or ""
+        # Many HTML-only mailers have an empty / near-empty body_text
+        # because the alternative-text part is missing. Fall back to
+        # the snippet (the pre-header / first lines that the inbox
+        # shows alongside the subject) so the classifier always sees
+        # the message's most informative inline text, not just the
+        # subject + sender. When body_text already has substance,
+        # appending the snippet adds the pre-header headline that
+        # often signals the category ("Your invoice is attached" vs
+        # "20% off everything!").
+        if len(body_text.strip()) < 200 and snippet:
+            llm_body = (snippet + "\n\n" + body_text).strip()
+        else:
+            llm_body = body_text
+        # LLM path: try the LLM, fall back to heuristic on any failure
+        # (network blip, parse miss, unknown category). Belt-and-braces:
+        # the heuristic always runs at least as a fallback, so a flaky
+        # LLM endpoint never leaves rows uncategorised.
+        category: Optional[str] = None
+        version = HEURISTIC_VERSION
+        if mode == "llm":
+            from . import email_classifier_llm as _llm
+            category = _llm.classify_llm(
+                row["subject"] or "",
+                llm_body,
+                row["from_email"] or "",
+                row["from_name"] or "",
+            )
+            if category is not None:
+                version = _llm.LLM_VERSION
+        if category is None:
+            category = classify(
+                row["subject"] or "", body_text, row["from_email"] or "",
+            )
+        conn.execute(
+            "UPDATE email_messages SET category = ?, classifier_version = ? WHERE id = ?",
+            (category, version, message_id),
+        )
+    log.debug("classified message %s → %s (mode=%s, version=%s)", message_id, category, mode, version)
     # For actionable categories (bill / appointment), surface a one-click
     # proposal in the notification bell. The user accepts → we run the
     # existing add_bill / add_calendar_event skill with extracted data.

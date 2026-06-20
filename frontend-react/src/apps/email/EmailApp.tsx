@@ -2899,6 +2899,157 @@ function shortAddress(email?: string | null): string {
 
 
 
+// Inline panel inside the email settings modal that exposes the
+// classifier preference + the backfill control. Kept separate from
+// the modal so it can be reused on a future "AI settings" page
+// without dragging the account-disconnect logic with it.
+function ClassifierSettingsPanel() {
+  const [mode, setMode] = useState<"heuristic" | "llm" | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [job, setJob] = useState<{ status: string; total: number; done: number; last_error?: string | null } | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.get<{ mode: "heuristic" | "llm" }>("/api/email/classifier/settings")
+      .then(r => setMode(r.mode))
+      .catch(() => setMode("heuristic"));
+    refreshStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Poll status while a backfill is running so the progress bar
+  // advances live. Stop polling once it transitions out of 'running'.
+  useEffect(() => {
+    if (job?.status !== "running") return;
+    const id = setInterval(refreshStatus, 1500);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.status]);
+
+  async function refreshStatus() {
+    try {
+      const r = await api.get<{ status: string; total: number; done: number; last_error?: string | null }>(
+        "/api/email/classifier/backfill/status");
+      setJob(r);
+    } catch {
+      // Silent — the panel still shows the toggle.
+    }
+  }
+
+  async function save(next: "heuristic" | "llm") {
+    setSaving(true); setErr(null);
+    try {
+      await api.post("/api/email/classifier/settings", { mode: next });
+      setMode(next);
+    } catch (e: any) {
+      setErr(e?.message || "save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function startBackfill() {
+    setStarting(true); setErr(null);
+    try {
+      await api.post("/api/email/classifier/backfill", {});
+      // Give the server a moment to flip status to running before we
+      // poll, so the bar doesn't show idle for one tick.
+      setTimeout(refreshStatus, 250);
+    } catch (e: any) {
+      setErr(e?.message || "start failed");
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  if (mode === null) return <div className="text-xs text-muted-foreground">Loading classifier…</div>;
+
+  const pct = job && job.total > 0 ? Math.round((job.done / job.total) * 100) : 0;
+  const running = job?.status === "running";
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="text-sm font-medium">Email classifier</div>
+        <div className="text-xs text-muted-foreground">
+          Picks the category badge ("Newsletter", "Bill", ...) on each incoming mail.
+          Heuristic is instant and offline; LLM uses your local Yorik LLM for sharper tagging.
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => save("heuristic")}
+          disabled={saving || running}
+          className={cn(
+            "p-3 rounded-md border text-left transition disabled:opacity-50",
+            mode === "heuristic"
+              ? "border-primary bg-primary/[0.06]"
+              : "border-border hover:bg-muted",
+          )}
+        >
+          <div className="text-sm font-medium">Heuristic</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">
+            Regex rules. ~1 ms per mail. Reliable but coarse.
+          </div>
+        </button>
+        <button
+          onClick={() => save("llm")}
+          disabled={saving || running}
+          className={cn(
+            "p-3 rounded-md border text-left transition disabled:opacity-50",
+            mode === "llm"
+              ? "border-primary bg-primary/[0.06]"
+              : "border-border hover:bg-muted",
+          )}
+        >
+          <div className="text-sm font-medium">LLM (Yorik)</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">
+            Local Qwen via HOMEOS_LLM_BASE_URL. ~1–2 s per mail. Sharper categories.
+          </div>
+        </button>
+      </div>
+
+      <div className="border border-border rounded-md p-3 space-y-2 bg-muted/20">
+        <div className="flex items-center gap-2">
+          <div className="text-xs flex-1">
+            {running ? (
+              <>Reclassifying inbox — {job!.done}/{job!.total} ({pct}%)</>
+            ) : job?.status === "done" ? (
+              <>Last backfill complete — {job.done}/{job.total} classified.</>
+            ) : job?.status === "error" ? (
+              <span className="text-destructive">Last backfill errored: {job.last_error || "unknown"}</span>
+            ) : (
+              <>
+                Reclassify existing mail with the current setting.
+                {job && job.total > 0 ? <> {job.done}/{job.total} already at this version.</> : null}
+              </>
+            )}
+          </div>
+          <button
+            onClick={startBackfill}
+            disabled={starting || running}
+            className="px-3 h-8 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 text-xs inline-flex items-center gap-1.5"
+          >
+            {(starting || running) && <Loader2 className="w-3 h-3 animate-spin" />}
+            {running ? "Running…" : "Reclassify all"}
+          </button>
+        </div>
+        {running && (
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all duration-500"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        )}
+      </div>
+      {err && <div className="text-xs text-destructive">{err}</div>}
+    </div>
+  );
+}
+
+
 // ─── EmailSettingsModal ───────────────────────────────────────────────
 // Opened from the gear icon in the email-app header. Until this
 // landed, the gear icon was actually a <a href="/"> labeled "Back to
@@ -3047,6 +3198,10 @@ function EmailSettingsModal({
             {error}
           </div>
         )}
+
+        <div className="mt-6 pt-4 border-t border-border">
+          <ClassifierSettingsPanel />
+        </div>
 
         <div className="flex justify-between items-center mt-6 pt-4 border-t border-border">
           <button

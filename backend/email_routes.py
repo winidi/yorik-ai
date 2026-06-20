@@ -881,6 +881,184 @@ async def cleanup_apply(body: CleanupApplyBody, user: dict = Depends(current_use
     return {"results": results}
 
 
+class ClassifierSettings(BaseModel):
+    mode: str  # 'heuristic' | 'llm'
+
+
+@router.get("/classifier/settings")
+def get_classifier_settings(user: dict = Depends(current_user)):
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT classifier_mode FROM user_profiles WHERE id=?",
+            (user["id"],),
+        ).fetchone()
+    mode = (row["classifier_mode"] if row and row["classifier_mode"] else "heuristic")
+    return {"mode": mode}
+
+
+@router.post("/classifier/settings")
+def put_classifier_settings(body: ClassifierSettings, user: dict = Depends(current_user)):
+    if body.mode not in ("heuristic", "llm"):
+        raise HTTPException(400, "mode must be 'heuristic' or 'llm'")
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE user_profiles SET classifier_mode=? WHERE id=?",
+            (body.mode, user["id"]),
+        )
+        conn.commit()
+    return {"ok": True, "mode": body.mode}
+
+
+# In-process registry of running backfill tasks. We keep references so
+# repeated POST /backfill calls don't fire a second worker on top of
+# an already-running one — the DB status row would also catch this,
+# but having the task handle here lets a future cancel endpoint stop
+# it cleanly.
+_classifier_backfill_tasks: dict[str, asyncio.Task] = {}
+
+
+@router.post("/classifier/backfill")
+async def start_classifier_backfill(user: dict = Depends(current_user)):
+    """Reclassify every email the user has whose classifier_version
+    doesn't match what their current mode would produce. Runs in a
+    background asyncio task; poll /classifier/backfill/status for
+    progress. Idempotent — calling again while one is running just
+    returns the current status."""
+    uid = user["id"]
+    if uid in _classifier_backfill_tasks and not _classifier_backfill_tasks[uid].done():
+        return {"ok": True, "status": "already_running"}
+
+    with get_conn() as conn:
+        mode_row = conn.execute(
+            "SELECT classifier_mode FROM user_profiles WHERE id=?",
+            (uid,),
+        ).fetchone()
+        mode = (mode_row["classifier_mode"] if mode_row and mode_row["classifier_mode"] else "heuristic")
+
+        # User-initiated "Reclassify all" = redo every row, regardless of
+        # what classifier_version they're currently stamped with. Older
+        # design used the version stamp to only re-do gaps — confusing
+        # because re-clicking the button would report "0/0 classified"
+        # the second time. The version stamp still gets written by
+        # apply_to_message, it just isn't used to filter eligibility.
+        from . import email_classifier_llm as _llm
+        target_version = (_llm.LLM_VERSION if mode == "llm" else "h1")
+
+        eligible_row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM email_messages "
+            "WHERE owner_user_id=? AND is_sent=0",
+            (uid,),
+        ).fetchone()
+        total = int(eligible_row["cnt"]) if eligible_row else 0
+
+        # Clear the version stamp on every eligible row so the inner
+        # loop (which filters "classifier_version IS NULL OR <> target")
+        # picks them all up. Without this reset, a click of "Reclassify
+        # all" after a previous successful run would report 0/0 — the
+        # rows are already at the target version, the cursor finds
+        # nothing. apply_to_message stamps them back as it processes.
+        conn.execute(
+            "UPDATE email_messages SET classifier_version=NULL "
+            "WHERE owner_user_id=? AND is_sent=0",
+            (uid,),
+        )
+        conn.commit()
+
+        # Stamp the progress row to running so the UI sees state
+        # immediately, not after the first message classifies.
+        conn.execute(
+            "INSERT INTO email_classifier_progress "
+            "(user_id, total, done, status, started_at, finished_at, last_error) "
+            "VALUES (?, ?, 0, 'running', NOW(), NULL, NULL) "
+            "ON CONFLICT (user_id) DO UPDATE SET "
+            "  total = EXCLUDED.total, done = 0, status = 'running', "
+            "  started_at = NOW(), finished_at = NULL, last_error = NULL",
+            (uid, total),
+        )
+        conn.commit()
+
+    async def _run():
+        from . import email_classifier as _cls
+        log.info("classifier backfill starting for user %s (mode=%s, total=%d)",
+                 uid, mode, total)
+        done = 0
+        last_error: Optional[str] = None
+        try:
+            while True:
+                with get_conn() as conn:
+                    # Pull the next batch of rows that DON'T yet match the
+                    # target version. We computed `total` from "everything",
+                    # but inside the loop we use the version stamp as a
+                    # cursor so we don't reprocess rows we already classified
+                    # earlier in THIS run. After each apply_to_message the
+                    # row's classifier_version flips to target_version, so
+                    # it falls out of this query and the loop converges.
+                    batch = conn.execute(
+                        "SELECT id FROM email_messages "
+                        "WHERE owner_user_id=? AND is_sent=0 "
+                        "  AND (classifier_version IS NULL OR classifier_version <> ?) "
+                        "ORDER BY id DESC LIMIT 25",
+                        (uid, target_version),
+                    ).fetchall()
+                if not batch:
+                    break
+                for r in batch:
+                    try:
+                        await asyncio.to_thread(_cls.apply_to_message, int(r["id"]))
+                        done += 1
+                    except Exception as exc:  # noqa: BLE001
+                        last_error = f"msg {r['id']}: {exc}"
+                        log.warning("classifier backfill error %s", last_error)
+                with get_conn() as conn:
+                    conn.execute(
+                        "UPDATE email_classifier_progress SET done=?, last_error=? WHERE user_id=?",
+                        (done, last_error, uid),
+                    )
+                    conn.commit()
+            final_status = "done"
+        except asyncio.CancelledError:
+            final_status = "cancelled"
+            raise
+        except Exception as exc:  # noqa: BLE001
+            log.exception("classifier backfill failed: %s", exc)
+            final_status = "error"
+            last_error = str(exc)
+        finally:
+            with get_conn() as conn:
+                conn.execute(
+                    "UPDATE email_classifier_progress "
+                    "SET status=?, done=?, finished_at=NOW(), last_error=? WHERE user_id=?",
+                    (final_status, done, last_error, uid),
+                )
+                conn.commit()
+            log.info("classifier backfill finished for user %s: status=%s, done=%d/%d",
+                     uid, final_status, done, total)
+
+    task = asyncio.create_task(_run())
+    _classifier_backfill_tasks[uid] = task
+    return {"ok": True, "status": "started", "total": total, "mode": mode}
+
+
+@router.get("/classifier/backfill/status")
+def get_classifier_backfill_status(user: dict = Depends(current_user)):
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT total, done, status, started_at, finished_at, last_error "
+            "FROM email_classifier_progress WHERE user_id=?",
+            (user["id"],),
+        ).fetchone()
+    if not row:
+        return {"status": "idle", "total": 0, "done": 0}
+    return {
+        "status": row["status"],
+        "total": int(row["total"] or 0),
+        "done": int(row["done"] or 0),
+        "started_at": str(row["started_at"]) if row["started_at"] else None,
+        "finished_at": str(row["finished_at"]) if row["finished_at"] else None,
+        "last_error": row["last_error"],
+    }
+
+
 @router.post("/messages/{msg_id}/trust-sender-images")
 def trust_sender_images(msg_id: int, user: dict = Depends(current_user)):
     """Mark the message's From: address as trusted for remote images.
