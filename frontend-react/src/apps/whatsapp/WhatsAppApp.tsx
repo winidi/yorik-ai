@@ -79,6 +79,22 @@ export function WhatsAppApp() {
   // re-fire and there's no loop window for React's safeguard to trip on.
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
+  // Auto-sync on first connect after pairing. The bridge holds the
+  // history burst it received while we weren't subscribed yet — without
+  // this, the chat list stays empty until the user clicks "Sync from
+  // phone" manually. We detect the actual disconnected→connected
+  // transition (not the initial-mount load of an already-paired status)
+  // so a normal page reload doesn't re-trigger the heavy sync.
+  const wasConnectedRef = useRef<boolean | null>(null);
+  const connectedHint = statusApi.data?.connected;
+  useEffect(() => {
+    if (connectedHint == null) return;
+    if (wasConnectedRef.current === false && connectedHint === true) {
+      api.post("/api/whatsapp/sync").then(() => refreshAll()).catch(() => {});
+    }
+    wasConnectedRef.current = connectedHint;
+  }, [connectedHint, refreshAll]);
+
   // Coalesce WS-driven refreshes. Without this, a backlog of N message
   // events on (re)connect kicks off N parallel refreshAll calls. 400ms
   // window is fine for human-perceptible "new message arrived" UX.

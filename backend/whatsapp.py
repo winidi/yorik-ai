@@ -319,12 +319,16 @@ async def _handle_event(evt: dict[str, Any]) -> None:
     t = evt.get("type")
     p = evt.get("payload") or {}
     # Bridge tags every event with the userId of the WhatsApp session
-    # it came from. Default to admin (1) so events from older bridges
-    # that don't tag yet still get ingested somewhere sensible.
-    try:
-        owner_user_id = int(evt.get("userId") or DEFAULT_OWNER)
-    except (TypeError, ValueError):
-        owner_user_id = DEFAULT_OWNER
+    # it came from — a UUID string matching the bridge's per-user
+    # session storage and our user_profiles.id. Older code coerced to
+    # int with DEFAULT_OWNER fallback, which meant every UUID event
+    # silently re-attributed to user 1 and the per-user WS fan-out
+    # (_browser_ws keyed by uuid) never matched. Drop events without
+    # a userId rather than silently mis-attributing.
+    owner_user_id = evt.get("userId")
+    if not owner_user_id:
+        log.warning("bridge event missing userId, skipping type=%s", t)
+        return
     # Fan out to browser WS clients FIRST so the UI updates as fast as
     # possible. Scoped by owner_user_id — only that user's tabs see it.
     await _broadcast_to_browsers({"type": t, "payload": p}, user_id=owner_user_id)
