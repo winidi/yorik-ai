@@ -17,7 +17,7 @@ import {
   RefreshCw, Settings as SettingsIcon, AlertTriangle, Loader2,
   Mail, Folder, FileEdit, ShieldAlert, Clock, MessageSquare, Sparkles,
   MailX, Menu, ArrowLeft, Mic, Square, X,
-  Bell, Calendar, Newspaper, Receipt,
+  Bell, Calendar, Newspaper, Receipt, Users,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -544,13 +544,16 @@ export function EmailApp() {
           </div>
           <nav className="space-y-0.5">
             {CATEGORY_NAV.map(c => {
+              const navKey = [...c.categories].sort().join(",");
+              const selKey = folderSel.categories
+                ? [...folderSel.categories].sort().join(",")
+                : "";
               const active = folderSel.folderId === null
-                && (folderSel.categories?.length === 1)
-                && folderSel.categories[0] === c.key
+                && selKey === navKey
                 && !folderSel.starredOnly && !folderSel.snoozedView && !folderSel.unreadOnly;
               return (
                 <SidebarItem
-                  key={c.key}
+                  key={c.id}
                   icon={c.icon}
                   label={c.label}
                   active={active}
@@ -560,7 +563,7 @@ export function EmailApp() {
                       folderId: null,
                       semantic: "inbox",
                       unreadOnly: false,
-                      categories: [c.key],
+                      categories: c.categories,
                     });
                   }}
                 />
@@ -665,8 +668,8 @@ export function EmailApp() {
               {folderSel.starredOnly ? "Starred"
                 : folderSel.snoozedView ? "Snoozed"
                 : folderSel.unreadOnly ? "Unread"
-                : folderSel.categories?.length === 1
-                  ? (CATEGORY_NAV.find(c => c.key === folderSel.categories![0])?.label || "Filtered")
+                : folderSel.categories?.length
+                  ? (findCategoryNav(folderSel.categories)?.label || "Filtered")
                 : folderSel.semantic === "inbox" ? "Inbox"
                 : folderSel.semantic === "sent" ? "Sent"
                 : folderSel.semantic === "all" ? "All mail"
@@ -865,16 +868,26 @@ const CATEGORY_BADGE: Record<string, { label: string; cls: string }> = {
   notification: { label: "Notification", cls: "bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/30" },
 };
 
-// Sidebar category quick-filters. Skips "personal" and "other" — those
-// are catch-alls without a clear "all of these" action. The user
-// clicks a category → the unified inbox filters to messages with that
-// classifier tag.
-const CATEGORY_NAV: Array<{ key: string; label: string; icon: any }> = [
-  { key: "newsletter",   label: "Newsletters",   icon: Newspaper },
-  { key: "bill",         label: "Bills",         icon: Receipt },
-  { key: "appointment",  label: "Appointments",  icon: Calendar },
-  { key: "notification", label: "Notifications", icon: Bell },
+// Sidebar category quick-filters. Each entry can map to ONE OR MORE
+// classifier categories — "People" bundles the two catch-all tags
+// (personal + other) into the "actual humans writing to me, not
+// broadcasts" view. The id is the URL-stable identifier; categories
+// is what we send to the backend's ?category= filter.
+const CATEGORY_NAV: Array<{ id: string; label: string; icon: any; categories: string[] }> = [
+  { id: "people",       label: "People",        icon: Users,     categories: ["personal", "other"] },
+  { id: "newsletter",   label: "Newsletters",   icon: Newspaper, categories: ["newsletter"] },
+  { id: "bill",         label: "Bills",         icon: Receipt,   categories: ["bill"] },
+  { id: "appointment",  label: "Appointments",  icon: Calendar,  categories: ["appointment"] },
+  { id: "notification", label: "Notifications", icon: Bell,      categories: ["notification"] },
 ];
+
+// Look up the nav entry whose categories match an active filter — used
+// by the header strip and the cleanup modal to show the friendly name.
+function findCategoryNav(active: string[] | null | undefined) {
+  if (!active?.length) return null;
+  const key = [...active].sort().join(",");
+  return CATEGORY_NAV.find(c => [...c.categories].sort().join(",") === key) || null;
+}
 
 // Folder category → icon. Keeps the sidebar visually parseable at
 // a glance (envelope for Inbox, paper-plane for Sent, shield for Spam, etc.).
@@ -1464,9 +1477,7 @@ function CleanupModal({
         <div className="flex items-center justify-between p-5 border-b border-border">
           <div>
             <h2 className="font-semibold text-base">
-              Inbox cleanup — {categories.length === 1
-                ? (CATEGORY_NAV.find(c => c.key === categories[0])?.label || categories[0])
-                : "filtered"}
+              Inbox cleanup — {findCategoryNav(categories)?.label || categories.join(", ") || "filtered"}
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
               {senders.length} sender{senders.length === 1 ? "" : "s"} found across all connected mailboxes.
