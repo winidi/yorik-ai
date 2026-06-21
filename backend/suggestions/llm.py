@@ -48,7 +48,16 @@ Output schema (exact):
 
 Rules for specific types:
 
-- draft_reply: emit when the message clearly warrants a personal reply — it asks a direct question, requests information, proposes something to confirm, or otherwise expects an answer from the user. Body MUST be in the same language as the incoming message. Mirror the sender's tone (du/Sie, formal/casual). Skip for: automated notifications, calendar invite emails, receipts/shipment updates, marketing/newsletters, no-reply senders, group blasts where no answer is expected.
+- draft_reply: emit when the message clearly warrants a PERSONAL reply — a real human asking the user something the user actually needs to answer. Body MUST be in the same language as the incoming message. Mirror the sender's tone (du/Sie, formal/casual). Skip for: automated notifications, calendar invite emails, receipts/shipment updates, marketing/newsletters, no-reply senders, group blasts where no answer is expected.
+
+  CRITICAL — skip sales-funnel / lead-fishing emails even when they look personal:
+  * Tracking URLs in the body (utm_source, utm_medium, utm_campaign, perspectivefunnel, mailchimp links, bit.ly, click.*, t.co, /r/?…) → sales blast, not a person.
+  * Scarcity / FOMO copy ("nur noch X Plätze frei", "letzte Chance", "noch heute", "endet bald", "limited spots", "act now").
+  * Re-engagement bait posing as a question ("Ist das hier noch Ihre aktuelle E-Mail-Adresse?", "Are you still interested?", "Hattest du Zeit, dir … anzusehen?") — the goal is to confirm a live address or restart a funnel, not get an answer.
+  * CTAs to webinars / Infoabende / "kostenlose" events / free consultations / discovery calls.
+  * Sender signs as "duale Studentin", "Vertriebsteam", "Sales", "Growth", "BDR", "SDR", or any role whose job is outbound.
+  * Footer with unsubscribe link, "Sie erhalten diese E-Mail weil…", or an obvious mailing-list footprint.
+  Any ONE of these is enough to skip. Personalized first names + polite tone don't override these signals — that's exactly how good sales emails are written.
 
 - propose_meeting_slot: emit ONLY when the message EXPLICITLY proposes a date/time OR explicitly ASKS to schedule a meeting. Do NOT emit for vague "we should catch up" mentions. Check the calendar context: if the proposed time conflicts with an existing event, suggest an alternative. NEVER propose a slot for purely informational scheduling mentions ("dentist on Friday") or for messages that just inform you of an event (calendar invitations, RSVPs, event reminders). If the user is already invited to the event referenced in <context>, do not propose a new slot.
 
