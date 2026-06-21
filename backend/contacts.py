@@ -162,6 +162,52 @@ _MASS_MAILER_DOMAINS = (
 )
 
 
+# Personal-email domains — when a sender's domain is on this list,
+# the autocapture default is kind='person' (their real address with a
+# real human behind it). Anything NOT on this list is more likely a
+# business / role address than a personal one — the next batch of
+# cold outreach proves that. Used by is_personal_email_domain().
+_PERSONAL_EMAIL_DOMAINS = frozenset({
+    # Google
+    "gmail.com", "googlemail.com",
+    # German freemail (where most German individuals are)
+    "gmx.de", "gmx.net", "gmx.at", "gmx.ch", "gmx.com",
+    "web.de", "t-online.de", "freenet.de",
+    "posteo.de", "posteo.net", "posteo.org", "mailbox.org",
+    # Microsoft
+    "outlook.com", "outlook.de", "outlook.at", "hotmail.com",
+    "hotmail.de", "hotmail.co.uk", "hotmail.fr", "live.com",
+    "live.de", "msn.com",
+    # Apple
+    "icloud.com", "me.com", "mac.com",
+    # Yahoo & friends
+    "yahoo.com", "yahoo.de", "yahoo.co.uk", "yahoo.fr", "yahoo.it",
+    "ymail.com", "rocketmail.com",
+    # Privacy-first / Pro freemail
+    "proton.me", "protonmail.com", "protonmail.ch", "pm.me",
+    "tutanota.com", "tuta.io", "tutanota.de",
+    "fastmail.com", "fastmail.fm",
+    # AOL / older
+    "aol.com", "aol.de",
+    # Russian / Eastern European personal mail
+    "mail.ru", "yandex.com", "yandex.ru",
+    # Misc personal
+    "mail.de", "zoho.com",  # zoho-personal; businesses on Zoho usually have their own domain
+})
+
+
+def is_personal_email_domain(email: str) -> bool:
+    """True when the sender's domain looks like a personal-email
+    provider (gmail.com, gmx.de, …). Used by autocapture to decide
+    the kind default: personal-domain → 'person', anything else →
+    'business' (most cold senders from a company-owned domain are
+    businesses, even when they sign with a first name)."""
+    e = normalize_email(email)
+    if not e or "@" not in e:
+        return False
+    return e.split("@", 1)[1] in _PERSONAL_EMAIL_DOMAINS
+
+
 def is_mass_mailer_email(email: str) -> bool:
     """Heuristic: does this sender look like a marketing/promotional
     mass-mailer (ebay, amazon, paypal, bonprix, …)?
@@ -723,7 +769,7 @@ def _to_address_dict(row: Any) -> Dict[str, Any]:
 __all__ = [
     "normalize_email", "normalize_phone", "normalize_channel",
     "is_transactional_email", "is_mass_mailer_email",
-    "find_business_by_email_domain",
+    "is_personal_email_domain", "find_business_by_email_domain",
     "find_by_channel", "search", "get",
     "create", "update", "delete", "archive",
     "add_channel", "remove_channel",

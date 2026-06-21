@@ -147,9 +147,17 @@ def on_inbound_email(
         # transactional filter above only catches the obvious cases).
         # The user reviews them in /r/contacts before they enter
         # autocomplete.
+        #
+        # kind default: 'person' only when the sender's domain is a
+        # personal-email provider (gmail.com, gmx.de, web.de, etc.).
+        # Anything else → 'business'. Most cold senders from a
+        # company-owned domain are businesses even when they sign
+        # with a first name; AutoClassify can later flip the few
+        # real-people-using-company-mail cases.
+        guessed_kind = "person" if _contacts.is_personal_email_domain(addr) else "business"
         contact_id = _contacts.create(
             display_name=(from_name or "").strip() or addr.split("@")[0],
-            kind="person",
+            kind=guessed_kind,
             status="pending",
             source="email_in",
         )
