@@ -4505,6 +4505,15 @@ def list_contacts(
         if not r: continue
         c = _contacts.get(r["id"], role=role, user_id=uid if uid is not None else None)
         if c: hydrated.append(c)
+    # Bulk-inject per-user yorik_assist_enabled (mig 123). One query
+    # instead of N. Missing prefs row → False.
+    if hydrated and uid is not None:
+        from . import contact_user_prefs as _cup
+        ids = [int(c["id"]) for c in hydrated if c.get("id") is not None]
+        with conn_ctx(DB_PATH) as _conn:
+            assist_map = _cup.enabled_map_for_user(_conn, ids, uid)
+        for c in hydrated:
+            c["yorik_assist_enabled"] = bool(assist_map.get(int(c["id"]), False))
     return hydrated
 
 
@@ -5315,22 +5324,24 @@ def bulk_yorik_assist(
     enabled = bool(body.get("enabled", True))
     role = user.get("role")
     uid = user.get("id")
+    if not uid:
+        raise HTTPException(401, "no user id")
     # Reuse the same visibility gate the list view uses — never enable
     # AI on a contact the user can't see.
     visible = _contacts.search(
         "", status=None if scope == "all" else scope,
-        limit=10000, role=role, user_id=uid if uid is not None else None,
+        limit=10000, role=role, user_id=uid,
     )
     ids = [int(r["id"]) for r in visible if r and r.get("id") is not None]
     if not ids:
         return {"ok": True, "updated_count": 0, "scope": scope, "enabled": enabled}
-    placeholders = ",".join(["?"] * len(ids))
+    # Per-user prefs (mig 123): each user's bulk-enable creates/updates
+    # rows in contact_user_prefs for THEIR user_id only. Wife clicking
+    # the bulk button doesn't flip flags on Dirk's behalf.
+    from . import contact_user_prefs as _cup
     with conn_ctx(DB_PATH) as c:
-        c.execute(
-            f"UPDATE contacts SET yorik_assist_enabled=?, updated_at=datetime('now') "
-            f"WHERE id IN ({placeholders})",
-            (enabled, *ids),
-        )
+        _cup.bulk_set_assist_enabled(c, ids, uid, enabled)
+        c.commit()
     return {"ok": True, "updated_count": len(ids), "scope": scope, "enabled": enabled}
 
 
@@ -5406,16 +5417,30 @@ def reconcile_whatsapp_pending(
     return {"examined": examined, "merged": merged}
 
 
+def _hydrate_contact_for_user(contact_id: int, user_id: str,
+                              *, role: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Fetch a contact + inject the per-user yorik_assist_enabled flag
+    from contact_user_prefs (mig 123). Returns None when the contact
+    is invisible / missing — same surface as _contacts.get."""
+    from . import contact_user_prefs as _cup
+    c = _contacts.get(contact_id, role=role, user_id=user_id)
+    if not c:
+        return None
+    with conn_ctx(DB_PATH) as _conn:
+        c["yorik_assist_enabled"] = _cup.is_assist_enabled(_conn, contact_id, user_id)
+    return c
+
+
 @app.get("/api/contacts/{contact_id}")
 def get_contact(
     contact_id: int,
     user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
     uid = user.get("id")
-    c = _contacts.get(
+    c = _hydrate_contact_for_user(
         contact_id,
+        uid if uid is not None else "",
         role=user.get("role"),
-        user_id=uid if uid is not None else None,
     )
     # contacts.get returns None for both "not found" and "not visible to
     # this user" — same 404 surface so callers can't probe for existence.
@@ -6063,13 +6088,21 @@ def patch_contact(
             if r is None:
                 raise HTTPException(400, detail=f"unknown space {s!r}")
             fields["space_id"] = int(r["id"])
-    if not fields:
-        return _contacts.get(contact_id) or {}
-    try:
-        _contacts.update(contact_id, **fields)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    return _contacts.get(contact_id) or {}
+    # yorik_assist_enabled lives in contact_user_prefs (mig 123) per-user
+    # — handle it BEFORE delegating the rest to contacts.update which
+    # only knows about columns on the contacts table.
+    yorik_assist = fields.pop("yorik_assist_enabled", None)
+    if yorik_assist is not None:
+        from . import contact_user_prefs as _cup
+        with conn_ctx(DB_PATH) as _c:
+            _cup.set_assist_enabled(_c, contact_id, user["id"], bool(yorik_assist))
+            _c.commit()
+    if fields:
+        try:
+            _contacts.update(contact_id, **fields)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    return _hydrate_contact_for_user(contact_id, user["id"]) or {}
 
 
 @app.delete("/api/contacts/{contact_id}", status_code=204, response_class=Response)

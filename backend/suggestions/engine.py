@@ -79,30 +79,43 @@ def _resolve_contact_for_source(
     """Find the canonical contact for the sender of this message.
     Modality-specific lookup keys; falls back to None when no contact
     matches (engine then skips with reason='no_contact')."""
+    from .. import contact_user_prefs as _cup
     if source_kind == "email":
         addr = (source_row.get("from_email") or "").strip().lower()
         if not addr:
             return None
         r = conn.execute(
-            "SELECT c.id, c.display_name, c.yorik_assist_enabled "
+            "SELECT c.id, c.display_name "
             "FROM contacts c "
             "JOIN contact_channels ch ON ch.contact_id = c.id "
             "WHERE ch.kind='email' AND LOWER(ch.value)=? LIMIT 1",
             (addr,),
         ).fetchone()
-        return dict(r) if r else None
+        if not r:
+            return None
+        out = dict(r)
+        out["yorik_assist_enabled"] = _cup.is_assist_enabled(
+            conn, int(out["id"]), owner_user_id,
+        )
+        return out
     if source_kind == "wa":
         jid = (source_row.get("chat_jid") or "").strip()
         if not jid:
             return None
         r = conn.execute(
-            "SELECT c.id, c.display_name, c.yorik_assist_enabled "
+            "SELECT c.id, c.display_name "
             "FROM contacts c "
             "JOIN contact_channels ch ON ch.contact_id = c.id "
             "WHERE ch.kind='whatsapp' AND ch.value=? LIMIT 1",
             (jid,),
         ).fetchone()
-        return dict(r) if r else None
+        if not r:
+            return None
+        out = dict(r)
+        out["yorik_assist_enabled"] = _cup.is_assist_enabled(
+            conn, int(out["id"]), owner_user_id,
+        )
+        return out
     return None
 
 

@@ -405,8 +405,8 @@ def update(contact_id: int, **fields: Any) -> Dict[str, Any]:
         "last_used_at", "last_interaction_at", "space_id",
         # mig 045 — person identity columns.
         "first_name", "last_name", "role", "employer_contact_id",
-        # mig 121 — per-contact suggestion-engine opt-in.
-        "yorik_assist_enabled",
+        # NOTE: yorik_assist_enabled migrated to contact_user_prefs in mig 123
+        # — set via backend.contact_user_prefs, NOT via update().
     }
     bad = set(fields) - allowed
     if bad:
@@ -611,9 +611,6 @@ def _to_contact_dict(row: Any) -> Dict[str, Any]:
     # Mig 025: surface `pinned` as a real bool (SQLite gives back 0/1).
     if "pinned" in d:
         d["pinned"] = bool(d["pinned"])
-    # Mig 121: per-contact suggestion-engine opt-in, surfaced as bool.
-    if "yorik_assist_enabled" in d:
-        d["yorik_assist_enabled"] = bool(d["yorik_assist_enabled"])
     return d
 
 
