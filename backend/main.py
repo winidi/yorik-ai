@@ -4693,79 +4693,168 @@ def triage_apply(
 _contacts_triage_tasks: dict[str, asyncio.Task] = {}
 
 
+# ─── modality signal collectors ─────────────────────────────────────
+# One collector per channel kind. Each returns a {} when the contact
+# has no presence on that modality, so the LLM prompt can render only
+# the sections that have actual data. Adding a new modality (Telegram,
+# Signal, paperless when it has enough corpus) is one new function +
+# one entry in the dispatch dict below — no other code changes.
+
+def _email_signals(c, channels: list[dict]) -> dict[str, Any]:
+    """Engagement signals from email_messages. Counts incoming, user
+    replies (via to_addrs LIKE — to_addrs is JSON-as-TEXT, so JSONB
+    operators aren't available; substring is a 99%-correct cheap
+    proxy), most-recent received, and 5 sample subjects + 1 body
+    excerpt for the LLM prompt."""
+    email_values = [r["value"] for r in channels if r["kind"] == "email"]
+    if not email_values:
+        return {}
+    lowered = [v.lower() for v in email_values]
+    ph = ",".join(["?"] * len(email_values))
+    agg = c.execute(
+        f"SELECT COUNT(*) AS cnt, MAX(date_received) AS last_ts "
+        f"FROM email_messages "
+        f"WHERE LOWER(from_email) IN ({ph}) AND is_sent=0",
+        lowered,
+    ).fetchone()
+    received_count = int(agg["cnt"] if agg else 0)
+    last_received = agg["last_ts"] if agg else None
+    or_clauses = " OR ".join(["LOWER(to_addrs) LIKE ?"] * len(email_values))
+    patterns = [f"%{v}%" for v in lowered]
+    rep = c.execute(
+        f"SELECT COUNT(*) AS cnt FROM email_messages "
+        f"WHERE is_sent=1 AND ({or_clauses})",
+        patterns,
+    ).fetchone()
+    sent_count = int(rep["cnt"] if rep else 0)
+    subj_rows = c.execute(
+        f"SELECT subject, body_text FROM email_messages "
+        f"WHERE LOWER(from_email) IN ({ph}) AND is_sent=0 "
+        f"ORDER BY date_received DESC NULLS LAST, id DESC LIMIT 5",
+        lowered,
+    ).fetchall()
+    sample_subjects = [r["subject"] or "" for r in subj_rows]
+    body_excerpt = (subj_rows[0]["body_text"] or "")[:1200] if subj_rows else ""
+    if received_count == 0 and sent_count == 0:
+        return {}
+    return {
+        "received": received_count,
+        "user_replies": sent_count,
+        "last_received": last_received,
+        "sample_subjects": sample_subjects,
+        "body_excerpt": body_excerpt,
+    }
+
+
+def _whatsapp_signals(c, channels: list[dict]) -> dict[str, Any]:
+    """WhatsApp message engagement per chat_jid join. from_me=0 is
+    incoming, from_me=1 is the user replying. Strong signal: a
+    contact with 50+ user replies in 1:1 chat is unambiguously a
+    real human relationship regardless of email volume."""
+    jids = [r["value"] for r in channels if r["kind"] == "whatsapp"]
+    if not jids:
+        return {}
+    ph = ",".join(["?"] * len(jids))
+    agg = c.execute(
+        f"SELECT COUNT(*) FILTER (WHERE from_me=0) AS incoming, "
+        f"       COUNT(*) FILTER (WHERE from_me=1) AS user_replies, "
+        f"       MAX(timestamp) AS latest_ts "
+        f"FROM wa_messages "
+        f"WHERE chat_jid IN ({ph})",
+        jids,
+    ).fetchone()
+    incoming = int(agg["incoming"] if agg else 0)
+    replies  = int(agg["user_replies"] if agg else 0)
+    if incoming == 0 and replies == 0:
+        return {}
+    latest_ts = agg["latest_ts"]
+    sample_rows = c.execute(
+        f"SELECT text FROM wa_messages "
+        f"WHERE chat_jid IN ({ph}) AND from_me=0 AND text IS NOT NULL AND text <> '' "
+        f"ORDER BY timestamp DESC LIMIT 5",
+        jids,
+    ).fetchall()
+    samples = [r["text"][:140] for r in sample_rows if r["text"]]
+    return {
+        "incoming": incoming,
+        "user_replies": replies,
+        "latest_unix_ts": latest_ts,
+        "sample_texts": samples,
+    }
+
+
+def _calendar_signals(c, channels: list[dict], display_name: str) -> dict[str, Any]:
+    """Calendar attendance by exact-name match (case-insensitive).
+    event_attendees.person_name is free-text and there's no FK back
+    to contacts.id, so the join is on display_name. Rough but useful:
+    a contact appearing in N future or recent events is a strong
+    active-person signal independent of email/WA. Returns {} when
+    no matches found (current state of most installs)."""
+    nm = (display_name or "").strip().lower()
+    if not nm:
+        return {}
+    agg = c.execute(
+        "SELECT COUNT(DISTINCT event_id) AS cnt "
+        "FROM event_attendees "
+        "WHERE LOWER(person_name) = ?",
+        (nm,),
+    ).fetchone()
+    cnt = int(agg["cnt"] if agg else 0)
+    if cnt == 0:
+        return {}
+    titles = c.execute(
+        "SELECT e.title FROM events e "
+        "JOIN event_attendees a ON a.event_id = e.id "
+        "WHERE LOWER(a.person_name) = ? "
+        "ORDER BY e.starts_at DESC LIMIT 5",
+        (nm,),
+    ).fetchall()
+    return {
+        "event_count": cnt,
+        "sample_titles": [r["title"] for r in titles if r["title"]],
+    }
+
+
+# Paperless: skipped for now (corpus too small to derive useful per-
+# contact signals on this install). When the contact_extraction_proposals
+# table fills out, add _paperless_signals here and the prompt picks it
+# up automatically.
+
+
 def _collect_triage_signals(contact_id: int) -> dict[str, Any]:
-    """Gather the engagement signals the LLM needs to judge a pending
-    contact. Cheap-ish — one query for channels + one aggregate per
-    contact across email_messages. Returns the kwargs the LLM
-    classify_contact() expects."""
+    """Modality-keyed engagement signals for one pending contact.
+    Cross-modal by design: every active modality's collector runs and
+    contributes its block to the returned dict. The LLM prompt
+    renders only sections that have data, so a contact who exists
+    only on WhatsApp gets WA signals (and no empty email section),
+    and a contact with email + calendar gets both. Adding Telegram
+    or Signal later is one new collector + one dispatch entry."""
     with conn_ctx() as c:
         crow = c.execute(
             "SELECT display_name FROM contacts WHERE id=?",
             (contact_id,),
         ).fetchone()
         name = (crow["display_name"] if crow else "") or ""
-
-        # Channel rows — also serve as the join key for finding the
-        # message corpus that mentions this contact.
         ch_rows = c.execute(
             "SELECT kind, value FROM contact_channels WHERE contact_id=?",
             (contact_id,),
         ).fetchall()
         channels = [{"kind": r["kind"], "value": r["value"]} for r in ch_rows]
 
-        email_values = [r["value"] for r in ch_rows if r["kind"] == "email"]
-        # Engagement aggregate. We only do this for email-channel
-        # contacts — WhatsApp / phone / etc. can be added later via
-        # the modality registry. For now, the LLM still gets the
-        # contact name + channels even without engagement signals,
-        # which is enough to triage WA-only contacts roughly.
-        received_count = 0
-        sent_count = 0
-        sample_subjects: list[str] = []
-        last_received: Optional[str] = None
-        body_excerpt = ""
-        if email_values:
-            ph = ",".join(["?"] * len(email_values))
-            agg = c.execute(
-                f"SELECT COUNT(*) AS cnt, MAX(date_received) AS last_ts "
-                f"FROM email_messages "
-                f"WHERE LOWER(from_email) IN ({ph}) AND is_sent=0",
-                [v.lower() for v in email_values],
-            ).fetchone()
-            received_count = int(agg["cnt"] if agg else 0)
-            last_received = agg["last_ts"] if agg else None
-
-            # User replies = outgoing messages whose to_addrs JSON
-            # contains this email. Postgres JSONB @> would be ideal,
-            # but to_addrs is stored as TEXT (JSON-encoded) in the
-            # schema. Substring match is a 99%-correct cheap proxy.
-            placeholders = " OR ".join(["LOWER(to_addrs) LIKE ?"] * len(email_values))
-            patterns = [f"%{v.lower()}%" for v in email_values]
-            rep = c.execute(
-                f"SELECT COUNT(*) AS cnt FROM email_messages "
-                f"WHERE is_sent=1 AND ({placeholders})",
-                patterns,
-            ).fetchone()
-            sent_count = int(rep["cnt"] if rep else 0)
-
-            subj_rows = c.execute(
-                f"SELECT subject, body_text FROM email_messages "
-                f"WHERE LOWER(from_email) IN ({ph}) AND is_sent=0 "
-                f"ORDER BY date_received DESC NULLS LAST, id DESC LIMIT 5",
-                [v.lower() for v in email_values],
-            ).fetchall()
-            sample_subjects = [r["subject"] or "" for r in subj_rows]
-            if subj_rows:
-                body_excerpt = (subj_rows[0]["body_text"] or "")[:1200]
+        # Modality dispatch table. Each entry: kind label → callable
+        # that returns a dict (empty when no data for this contact).
+        modalities: dict[str, dict[str, Any]] = {}
+        email_sig = _email_signals(c, channels)
+        if email_sig: modalities["email"] = email_sig
+        wa_sig = _whatsapp_signals(c, channels)
+        if wa_sig:    modalities["whatsapp"] = wa_sig
+        cal_sig = _calendar_signals(c, channels, name)
+        if cal_sig:   modalities["calendar"] = cal_sig
 
     return {
         "name": name,
         "channels": channels,
-        "received_count": received_count,
-        "sent_count": sent_count,
-        "last_received": last_received,
-        "sample_subjects": sample_subjects,
-        "body_excerpt": body_excerpt,
+        "modalities": modalities,
     }
 
 
@@ -4894,10 +4983,56 @@ async def triage_auto_classify(
                 c.commit()
             _log.info("contact triage auto-classify finished for user %s: status=%s, done=%d/%d",
                       uid, final_status, done, total)
+            # Post a bell notification on success so the user gets
+            # pinged even if they navigated away from the contacts
+            # page during the run. navigate_to deep-links into the
+            # Triage modal — ContactsApp opens it automatically on
+            # ?triage=open. Skipped on error/cancel — those surface
+            # in the status polling, no need to interrupt with a bell.
+            if final_status == "done" and done > 0:
+                try:
+                    from . import notifications as _notif
+                    _notif.create(
+                        user_id=uid,
+                        kind="contacts_triage_ready",
+                        title=f"Yorik classified {done} contact{'s' if done != 1 else ''}",
+                        body="Open Contacts → Triage to review the verdicts.",
+                        navigate_to="/r/contacts?triage=open",
+                    )
+                except Exception as _nx:  # noqa: BLE001
+                    _log.warning("triage notification create failed: %s", _nx)
 
     task = asyncio.create_task(_run())
     _contacts_triage_tasks[uid] = task
     return {"ok": True, "status": "started", "total": total}
+
+
+@app.post("/api/contacts/triage/reclassify-archived")
+def triage_reclassify_archived(
+    user: dict[str, Any] = Depends(_auth.current_user),
+) -> Dict[str, Any]:
+    """Move every status='archived' contact back to status='pending'
+    so the next auto-classify pass picks them up. Useful after
+    extending the signal collectors (e.g. WhatsApp signals weren't
+    consulted in the first triage pass) — gives the LLM a second
+    look at contacts that were archived blind.
+
+    No LLM call here; just a status flip. The user is expected to
+    click Auto-classify afterward to actually run the new pass."""
+    if (user.get("role") or "").lower() not in ("admin", "platform_admin"):
+        raise HTTPException(403, "admin only")
+    with conn_ctx() as c:
+        cur = c.execute(
+            "UPDATE contacts "
+            "SET status='pending', "
+            "    triage_verdict=NULL, triage_reason=NULL, "
+            "    triage_confidence=NULL, triage_classified_at=NULL, "
+            "    updated_at=datetime('now') "
+            "WHERE status='archived'"
+        )
+        moved = cur.rowcount or 0
+        c.commit()
+    return {"moved": moved}
 
 
 @app.get("/api/contacts/triage/auto-classify/status")

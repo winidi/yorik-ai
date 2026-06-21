@@ -54,6 +54,19 @@ const CHANNEL_ICONS: Record<ChannelKind, ReactElement> = {
 
 export function ContactsApp() {
   const [tab, setTab] = useState<Tab>("active");
+  // Bumped whenever something OTHER than AutoClassifyButton kicks the
+  // auto-classify pass — currently the "Re-review archived" button
+  // chains into classify after moving rows back to pending. The bump
+  // wakes AutoClassifyButton's status poll so its inline progress bar
+  // lights up without the user having to navigate away and back.
+  const [classifyKickCount, setClassifyKickCount] = useState(0);
+  // Lifted up from TriageButton so AutoClassifyButton can auto-open
+  // the modal on its running → done transition. Without this, the
+  // user sees the progress bar fill, the page silently refreshes,
+  // and nothing happens — they have to find and click Triage
+  // themselves to see the LLM verdicts they just paid 2-5 min of
+  // GPU time for.
+  const [triageModalOpen, setTriageModalOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [counts, setCounts] = useState<StatusCounts>({ active: 0, pending: 0, spam: 0, archived: 0 });
@@ -127,6 +140,21 @@ export function ContactsApp() {
     // each render so guard by the raw value.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.get("contact")]);
+
+  // Deep-link from the notification bell: /r/contacts?triage=open
+  // jumps the user to Pending and pops the TriageModal so they can
+  // review the LLM verdicts the background classify-pass produced.
+  // Strip the param after opening so a refresh later doesn't keep
+  // re-opening it.
+  useEffect(() => {
+    if (searchParams.get("triage") !== "open") return;
+    setTab("pending");
+    setTriageModalOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete("triage");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get("triage")]);
 
   const selected = useMemo(
     () =>
@@ -250,9 +278,25 @@ export function ContactsApp() {
           <CrosslinkMailboxButton onDone={refresh} />
           {tab === "pending" && counts.pending > 0 && (
             <>
-              <AutoClassifyButton onDone={refresh} />
-              <TriageButton onDone={refresh} />
+              <AutoClassifyButton
+                onDone={refresh}
+                externalKick={classifyKickCount}
+                onComplete={() => setTriageModalOpen(true)}
+              />
+              <TriageButton onOpen={() => setTriageModalOpen(true)} />
             </>
+          )}
+          {tab === "pending" && counts.archived > 0 && (
+            <ReclassifyArchivedButton
+              archivedCount={counts.archived}
+              onDone={async () => {
+                await refresh();
+                // Tell AutoClassifyButton to re-poll its status so the
+                // inline progress bar lights up for the freshly-kicked
+                // classify run.
+                setClassifyKickCount(k => k + 1);
+              }}
+            />
           )}
           {tab === "pending" && counts.pending > 1 && (
             <DedupeButton onDone={refresh} />
@@ -455,6 +499,13 @@ export function ContactsApp() {
           onClose={() => setImporting(false)}
           onApplied={async () => { setImporting(false); await refresh(); }}
         />
+      )}
+      {triageModalOpen && createPortal(
+        <TriageModal
+          onClose={() => setTriageModalOpen(false)}
+          onApplied={async () => { await refresh(); }}
+        />,
+        document.body,
       )}
     </div>
   );
@@ -1602,25 +1653,15 @@ type TriageListResponse = {
   kind: string | null;
 };
 
-function TriageButton({ onDone }: { onDone: () => Promise<void> | void }) {
-  const [open, setOpen] = useState(false);
+function TriageButton({ onOpen }: { onOpen: () => void }) {
   return (
-    <>
-      <button
-        onClick={() => setOpen(true)}
-        className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5"
-        title="Fast keyboard-driven approval/dismiss for pending contacts"
-      >
-        <Check className="w-3.5 h-3.5" /> Triage
-      </button>
-      {open && createPortal(
-        <TriageModal
-          onClose={() => setOpen(false)}
-          onApplied={async () => { await onDone(); }}
-        />,
-        document.body,
-      )}
-    </>
+    <button
+      onClick={onOpen}
+      className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5"
+      title="Fast keyboard-driven approval/dismiss for pending contacts"
+    >
+      <Check className="w-3.5 h-3.5" /> Triage
+    </button>
   );
 }
 
@@ -2255,7 +2296,20 @@ function TriageChip({
 // parent on completion so the TriageModal — if open — can refetch
 // rows and pick up the new verdicts. Lives next to the existing
 // TriageButton in the contacts toolbar.
-function AutoClassifyButton({ onDone }: { onDone: () => Promise<void> | void }) {
+function AutoClassifyButton({ onDone, externalKick, onComplete }: {
+  onDone: () => Promise<void> | void;
+  // Counter the parent bumps whenever someone OTHER than this button
+  // kicks the auto-classify (e.g. the "Re-review archived" button
+  // chains into classify). When this changes we re-poll status so
+  // the inline progress bar picks up the new running state instead
+  // of silently sitting idle.
+  externalKick?: number;
+  // Fired when the classify pass transitions from running → done
+  // (regardless of who started it). Parent uses this to auto-open
+  // the TriageModal — otherwise the user has to manually click
+  // Triage to see the LLM verdicts.
+  onComplete?: () => void;
+}) {
   const [status, setStatus] = useState<{ status: string; total: number; done: number; last_error?: string | null } | null>(null);
   const [starting, setStarting] = useState(false);
 
@@ -2272,19 +2326,33 @@ function AutoClassifyButton({ onDone }: { onDone: () => Promise<void> | void }) 
   }, []);
 
   useEffect(() => { refreshStatus(); }, [refreshStatus]);
+  // Re-poll whenever an external kick happens — gives this button a
+  // chance to switch into "running" display mode without the user
+  // having to refresh the page.
+  useEffect(() => {
+    if (externalKick === undefined) return;
+    refreshStatus();
+  }, [externalKick, refreshStatus]);
 
   // Poll status during a running classify so the progress bar advances
-  // live. Stop polling once we transition out of running.
+  // live. Stop polling once we transition out of running. On the
+  // running → done edge, fire onComplete so the parent can auto-open
+  // the TriageModal — the whole point of this button is to set up
+  // the verdicts; making the user click a second button after seeing
+  // 348/348 finish is needless friction.
   useEffect(() => {
     if (status?.status !== "running") return;
     const id = setInterval(async () => {
       const r = await refreshStatus();
       if (r && r.status !== "running") {
-        onDone();  // refresh the contact list / triage queue
+        onDone();
+        if (r.status === "done") {
+          onComplete?.();
+        }
       }
     }, 1500);
     return () => clearInterval(id);
-  }, [status?.status, refreshStatus, onDone]);
+  }, [status?.status, refreshStatus, onDone, onComplete]);
 
   async function start() {
     setStarting(true);
@@ -2325,6 +2393,79 @@ function AutoClassifyButton({ onDone }: { onDone: () => Promise<void> | void }) 
         </div>
       )}
     </div>
+  );
+}
+
+
+// One-click "move every archived contact back to pending and kick a
+// fresh auto-classify." Used after extending the signal collectors
+// (e.g. the first triage pass was email-only; a later pass with
+// WhatsApp + calendar signals should re-judge the archived rows that
+// were classified blind). Shown only when counts.archived > 0.
+function ReclassifyArchivedButton({
+  archivedCount, onDone,
+}: {
+  archivedCount: number;
+  onDone: () => Promise<void> | void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  async function run() {
+    if (busy) return;
+    const ok = window.confirm(
+      `Move ${archivedCount} archived contact${archivedCount === 1 ? "" : "s"} back to Pending and re-run Yorik's triage on them? They'll get fresh verdicts based on the current signal collectors.`,
+    );
+    if (!ok) return;
+    setBusy(true);
+    let moved = 0;
+    let started = false;
+    try {
+      const r = await api.post<{ moved: number }>(
+        "/api/contacts/triage/reclassify-archived", {},
+      );
+      moved = r.moved || 0;
+      // Chain into auto-classify — the only reason to move-archived
+      // is to immediately re-judge, so chain the call to save a click.
+      if (moved > 0) {
+        await api.post("/api/contacts/triage/auto-classify", {});
+        started = true;
+      }
+      // onDone refreshes parent counts AND bumps the AutoClassifyButton
+      // kick counter so its progress bar lights up for the new run.
+      await onDone();
+      // Soft confirmation since there's no toast system here. The
+      // AutoClassifyButton handles the live progress display from
+      // here on.
+      if (started) {
+        // Browsers swallow confirms after async; alert is the
+        // load-bearing UX feedback that "yes, it's running now,
+        // watch the progress bar on the Auto-classify button."
+        alert(
+          `Moved ${moved} contact${moved === 1 ? "" : "s"} back to Pending. ` +
+          `Yorik is re-classifying them now — watch the Auto-classify button for progress.`,
+        );
+      } else if (moved > 0) {
+        alert(`Moved ${moved} contact${moved === 1 ? "" : "s"} back to Pending.`);
+      } else {
+        alert("Nothing to move.");
+      }
+    } catch (e: any) {
+      alert("Re-classify failed: " + (e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={run}
+      disabled={busy}
+      className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5"
+      title={`Move ${archivedCount} archived contacts back to Pending and re-run Yorik's triage with the current signal collectors`}
+    >
+      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+      {busy ? "Re-classifying…" : `Re-review ${archivedCount} archived`}
+    </button>
   );
 }
 
