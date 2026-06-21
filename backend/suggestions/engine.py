@@ -133,11 +133,13 @@ def _load_source_row(conn, source_kind: str, source_id: int) -> Optional[Dict[st
         ).fetchone()
         return dict(r) if r else None
     if source_kind == "wa":
+        # mig 124 added id BIGSERIAL to wa_messages — that's the
+        # surrogate the engine uses across all modalities.
         r = conn.execute(
-            "SELECT msg_id, chat_jid, from_me, push_name, timestamp, text, "
+            "SELECT id, msg_id, chat_jid, from_me, push_name, timestamp, text, "
             "       transcript, owner_user_id "
-            "FROM wa_messages WHERE msg_id=? LIMIT 1",
-            (str(source_id),),
+            "FROM wa_messages WHERE id=? LIMIT 1",
+            (int(source_id),),
         ).fetchone()
         return dict(r) if r else None
     return None

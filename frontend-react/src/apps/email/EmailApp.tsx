@@ -2357,7 +2357,7 @@ function Reader({
           )}
         </div>
       </div>
-      <SuggestionPanel messageId={messageRow.id} />
+      <SuggestionPanel sourceKind="email" sourceId={messageRow.id} />
       <AIDraftPanel
         messageId={messageRow.id}
         accountId={messageRow.account_id}

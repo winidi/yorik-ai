@@ -1629,7 +1629,7 @@ function SuggestionEngineCard({ toast }: {
 
   const KNOWN_SOURCES: Array<{ key: string; label: string; hint?: string }> = [
     { key: "email", label: "Email",    hint: "Inbound messages from opted-in contacts" },
-    { key: "wa",    label: "WhatsApp", hint: "Coming soon" },
+    { key: "wa",    label: "WhatsApp", hint: "1:1 chats from opted-in contacts (groups are skipped)" },
   ];
 
   return (
@@ -1674,11 +1674,11 @@ function SuggestionEngineCard({ toast }: {
               </div>
               <button
                 onClick={() => toggleSource(src.key)}
-                disabled={src.key === "wa" || saving === src.key}
+                disabled={saving === src.key}
                 className={cn(
                   "shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition",
                   sources[src.key] ? "bg-violet-500" : "bg-muted",
-                  (src.key === "wa" || saving === src.key) && "opacity-50 cursor-not-allowed",
+                  saving === src.key && "opacity-50 cursor-wait",
                 )}
                 aria-pressed={!!sources[src.key]}
               >

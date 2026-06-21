@@ -26,6 +26,7 @@ import { useApi } from "@/lib/useApi";
 import { Dock } from "@/components/Dock";
 import { PersonHover } from "@/components/PersonCard";
 import { SharedPhotoBanner } from "@/components/SharedPhotoBanner";
+import { SuggestionPanel } from "@/apps/email/SuggestionPanel";
 import {
   useTriPane, MobileTopBar, MobileBackdrop,
   mobileAsideLeft, mobileAsideRight,
@@ -237,13 +238,16 @@ export function WhatsAppApp() {
         mobileAsideRight(tri.rightOpen),
       )}>
         {activeJid ? (
-          <DraftPanel
-            jid={activeJid}
-            chat={activeChat}
-            onPicked={(text) => {
-              window.dispatchEvent(new CustomEvent("wa-load-draft", { detail: text }));
-            }}
-          />
+          <>
+            <WaSuggestions jid={activeJid} />
+            <DraftPanel
+              jid={activeJid}
+              chat={activeChat}
+              onPicked={(text) => {
+                window.dispatchEvent(new CustomEvent("wa-load-draft", { detail: text }));
+              }}
+            />
+          </>
         ) : (
           <EmptyDrafts />
         )}
@@ -823,6 +827,31 @@ const TONE_TINT_DEFAULT = {
   idle:   "bg-muted/60 text-foreground/85 hover:bg-muted",
   active: "bg-primary/15 text-primary ring-1 ring-primary/40",
 };
+
+// WaSuggestions — bridge between this chat's latest inbound message
+// and the shared SuggestionPanel. Polls the chat's messages list at
+// the same cadence DraftPanel does (8s) and feeds the most recent
+// from_me=0 message id to SuggestionPanel. When the engine fires on
+// a brand-new inbound message we want the card to surface here
+// without the user having to switch chats and switch back.
+function WaSuggestions({ jid }: { jid: string }) {
+  const msgsApi = useApi<WaMessage[]>(
+    `/api/whatsapp/chats/${encodeURIComponent(jid)}/messages?limit=20`,
+    [jid],
+    8000,
+  );
+  const messages = msgsApi.data || [];
+  // Most recent INBOUND (not fromMe) message — the engine only fires
+  // on inbound, so that's where suggestions could live.
+  const latestInbound = [...messages].reverse().find(m => !m.from_me && m.id != null);
+  if (!latestInbound?.id) return null;
+  return (
+    <div className="px-4 pt-4">
+      <SuggestionPanel sourceKind="wa" sourceId={latestInbound.id} />
+    </div>
+  );
+}
+
 
 function DraftPanel({ jid, chat, onPicked }:
   { jid: string; chat: WaChat | undefined; onPicked: (text: string) => void }) {

@@ -241,6 +241,40 @@ def _insert_message(m: dict[str, Any], owner_user_id: str = DEFAULT_OWNER) -> No
         except Exception as exc:
             log.debug("WA contact_autocapture failed: %s", exc)
 
+        # Suggestion engine — fire the wa.new trigger so the LLM can
+        # surface a suggestion (draft_reply, propose_meeting_slot)
+        # for opt-in contacts. Toggle hierarchy (master + per-source +
+        # per-contact) is enforced inside engine.analyse_message so
+        # this hook always runs cheaply; disabling the engine via
+        # Settings takes effect without restarting the WS subscriber.
+        # 1:1 only — groups are filtered above (the .endswith("@g.us")
+        # guard), and the engine's contact resolution uses chat_jid
+        # which only makes sense for a 1:1 contact.
+        try:
+            import asyncio as _asyncio
+            from .suggestions.triggers import wa_new as _wa_trig
+            # We need both the surrogate id (engine source_id) and a
+            # running loop. The id was assigned by the BIGSERIAL on
+            # INSERT; fetch it the same connection-free way the rest
+            # of this function does.
+            from .database import get_conn as _get_conn
+            with _get_conn() as _c:
+                _r = _c.execute(
+                    "SELECT id FROM wa_messages "
+                    "WHERE chat_jid=? AND msg_id=? AND owner_user_id=? LIMIT 1",
+                    (jid, msg_id, owner_user_id),
+                ).fetchone()
+            if _r:
+                try:
+                    _loop = _asyncio.get_event_loop()
+                except RuntimeError:
+                    _loop = None
+                if _loop and _loop.is_running():
+                    _wa_trig.fire_from_thread(
+                        _loop, owner_user_id, int(_r["id"]))
+        except Exception as exc:
+            log.debug("WA suggestions trigger failed: %s", exc)
+
 
 def _media_placeholder(m: dict[str, Any]) -> Optional[str]:
     """Generate a stand-in last-message preview for media-only messages."""
@@ -1301,7 +1335,7 @@ async def list_messages(
     uid = user["id"]
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT msg_id, chat_jid, from_me, push_name, timestamp, text, "
+            "SELECT id, msg_id, chat_jid, from_me, push_name, timestamp, text, "
             "       media_kind, mimetype, filename, transcript, "
             "       media_paperless_id, media_immich_id "
             "FROM wa_messages WHERE chat_jid=? AND owner_user_id=? "

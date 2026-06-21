@@ -8,3 +8,4 @@ decides whether to call engine.analyse_message."""
 from __future__ import annotations
 
 from . import email_new  # noqa: F401
+from . import wa_new  # noqa: F401

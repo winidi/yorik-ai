@@ -1,15 +1,18 @@
-/* Suggestion engine panel for the email Reader.
+/* Suggestion engine panel — shared across modalities (email + wa).
  *
- * Renders pending typed suggestions ABOVE the AI draft chips:
- *   - draft_reply   → Accept inserts the body into email_drafts; the
- *                     existing AIDraftPanel picks it up via its 8s poll.
- *   - propose_meeting_slot → Accept POSTs to /accept which inserts into
- *                            events; the calendar UI sees it next refresh.
+ * Renders pending typed suggestions for one source message:
+ *   - draft_reply           → Accept inserts the body into email_drafts
+ *                              OR wa_drafts depending on sourceKind;
+ *                              the existing per-modality DraftPanel
+ *                              picks it up via its normal pending-draft
+ *                              query.
+ *   - propose_meeting_slot  → Accept inserts into events; the calendar
+ *                              UI sees it on next refresh.
  *
  * Polls every 10s while the message is open so a backend run that
- * completes after the user opens the email still surfaces. Empty
- * silence (no suggestions) is intentional UX — the suggestion engine
- * is supposed to be quiet when there's nothing useful to say.
+ * completes after the user opens the message still surfaces. Empty
+ * silence (no suggestions) is intentional UX — the engine should be
+ * quiet when there's nothing useful to say.
  */
 
 import { useState } from "react";
@@ -41,15 +44,17 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 export function SuggestionPanel({
-  messageId,
+  sourceKind = "email",
+  sourceId,
   onAfterAccept,
 }: {
-  messageId: number;
+  sourceKind?: "email" | "wa";
+  sourceId: number;
   onAfterAccept?: () => void;
 }) {
   const listApi = useApi<{ items: Suggestion[] }>(
-    `/api/suggestions?source_kind=email&source_id=${messageId}`,
-    [messageId],
+    `/api/suggestions?source_kind=${sourceKind}&source_id=${sourceId}`,
+    [sourceKind, sourceId],
     10000,
   );
   const items = listApi.data?.items || [];

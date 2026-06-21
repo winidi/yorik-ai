@@ -19,6 +19,9 @@ export interface WaChat {
 }
 
 export interface WaMessage {
+  /** Surrogate BIGINT (mig 124) — the suggestion engine's source_id
+   *  for WA messages. msg_id is the WhatsApp-side TEXT identifier. */
+  id?: number;
   msg_id: string;
   chat_jid: string;
   from_me: number;        // 0/1
