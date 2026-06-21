@@ -5183,6 +5183,53 @@ def dedupe_contacts_llm(
     return {"dry_run": False, "plan_stats": plan.get("stats", {}), **result}
 
 
+class _GroupByEmployerBody(BaseModel):
+    status: str = "active"
+    dry_run: bool = True
+    # When dry_run=false, apply EXACTLY this plan (user has reviewed +
+    # filtered it via the modal). Same dance as /dedupe-llm.
+    plan: Optional[Dict[str, Any]] = None
+
+
+@app.post("/api/contacts/group-by-employer")
+def group_by_employer(
+    body: _GroupByEmployerBody,
+    user: dict[str, Any] = Depends(_auth.current_user),
+) -> Dict[str, Any]:
+    """Detect employer relationships among person-kind contacts and
+    auto-create / link business contacts.
+
+    Workflow mirrors /dedupe-llm:
+      1. POST with dry_run=true → returns full plan for review.
+      2. Frontend shows the plan in a modal, user deselects groups
+         they don't want.
+      3. POST with dry_run=false + plan=<filtered> → applies it.
+
+    The LLM is only called during build_plan (to extract canonical
+    company names / addresses from email signatures). Apply is pure
+    SQL.
+    """
+    if (user.get("role") or "").lower() not in ("admin", "platform_admin"):
+        raise HTTPException(403, "admin only")
+    from . import contacts_group_by_employer as _ge
+
+    if body.plan is not None and not body.dry_run:
+        return {"dry_run": False, **_ge.apply_plan(body.plan)}
+
+    try:
+        plan = _ge.build_plan(
+            role=user.get("role"),
+            user_id=user["id"] if user.get("id") is not None else None,
+            status=body.status,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    if body.dry_run:
+        return {"dry_run": True, **plan}
+    return {"dry_run": False, "plan_stats": plan.get("stats", {}),
+            **_ge.apply_plan(plan)}
+
+
 @app.post("/api/contacts/dedupe")
 def dedupe_contacts(
     body: _ContactDedupeBody,
