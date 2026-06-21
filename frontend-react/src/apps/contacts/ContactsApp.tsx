@@ -308,6 +308,9 @@ export function ContactsApp() {
           {tab === "active" && counts.active > 1 && (
             <DedupeButton onDone={refresh} status="active" />
           )}
+          {tab === "active" && counts.active > 1 && (
+            <GroupByEmployerButton onDone={refresh} />
+          )}
           <button
             onClick={() => { setImporting(true); }}
             className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5"
@@ -1630,6 +1633,347 @@ type CrosslinkResult = {
   skipped: Record<string, number>;
   additions: CrosslinkAddition[];
 };
+
+// ─── GroupByEmployerButton — propose business-employee links via LLM ──
+// Click → POST /api/contacts/group-by-employer with dry_run. Returns
+// a plan: for each business domain with ≥2 contacts, what's the
+// canonical firm + which rows are employees vs the firm itself.
+// User reviews, unchecks groups they don't want, hits Apply. The
+// backend flips kind business→person where needed, strips firm
+// prefix from display names, and sets employer_contact_id.
+
+type GroupByEmployerMember = {
+  id: number;
+  kind: "person" | "business";
+  display_name: string;
+  email: string;
+  type: "company" | "employee" | "skip";
+  clean_name: string | null;
+  is_canonical: boolean;
+};
+
+type GroupByEmployerGroup = {
+  domain: string;
+  existing_business_id: number | null;
+  proposed_business: {
+    display_name: string;
+    legal_name: string | null;
+    website: string | null;
+    address: { line1: string | null; postcode: string | null;
+               city: string | null; country: string | null } | null;
+  };
+  members: GroupByEmployerMember[];
+};
+
+type GroupByEmployerPlan = {
+  groups: GroupByEmployerGroup[];
+  stats: { domains_scanned: number; groups_proposed: number;
+           members_total: number; elapsed_ms: number };
+};
+
+function GroupByEmployerButton({ onDone }: { onDone: () => Promise<void> | void }) {
+  type State = "closed" | "loading" | "review" | "applying";
+  const [state, setState] = useState<State>("closed");
+  const [plan, setPlan] = useState<GroupByEmployerPlan | null>(null);
+  // Set of (group domain) selected for apply. Pre-selected with all
+  // groups; user unchecks ones they don't trust.
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
+  // Per-member override: maps member id → new classification, when
+  // user changes the LLM's pick.
+  const [overrides, setOverrides] = useState<Map<number, "employee" | "skip">>(new Map());
+
+  async function start() {
+    setState("loading");
+    setPlan(null);
+    setOverrides(new Map());
+    try {
+      const r = await api.post<GroupByEmployerPlan>(
+        "/api/contacts/group-by-employer",
+        { status: "active", dry_run: true },
+      );
+      setPlan(r);
+      // Pre-select every group; user opts OUT, not IN.
+      setSelectedGroups(new Set(r.groups.map(g => g.domain)));
+      setState("review");
+    } catch (e: any) {
+      alert("Failed to build plan: " + (e?.message || e));
+      setState("closed");
+    }
+  }
+
+  function close() {
+    setState("closed");
+    setPlan(null);
+    setOverrides(new Map());
+  }
+
+  async function apply() {
+    if (!plan) return;
+    setState("applying");
+    const filteredGroups = plan.groups
+      .filter(g => selectedGroups.has(g.domain))
+      .map(g => ({
+        ...g,
+        members: g.members.map(m => ({
+          ...m,
+          type: overrides.get(m.id) || m.type,
+        })),
+      }));
+    try {
+      const r = await api.post<{
+        groups_applied: number;
+        businesses_created: number;
+        businesses_reused: number;
+        employees_linked: number;
+        skipped_members: number;
+      }>("/api/contacts/group-by-employer", {
+        dry_run: false,
+        plan: { groups: filteredGroups },
+      });
+      alert(
+        `Applied ${r.groups_applied} groups.\n` +
+        `${r.businesses_created} new business contacts created.\n` +
+        `${r.businesses_reused} existing reused.\n` +
+        `${r.employees_linked} employees linked.\n` +
+        `${r.skipped_members} members skipped.`
+      );
+      await onDone();
+      close();
+    } catch (e: any) {
+      alert("Apply failed: " + (e?.message || e));
+      setState("review");
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={start}
+        className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5"
+        title="Detect multi-person firms among your contacts and group employees under one business contact"
+      >
+        <Briefcase className="w-3.5 h-3.5" /> Group by employer
+      </button>
+
+      {state === "loading" && createPortal(
+        <div className="fixed inset-0 z-[810] flex items-center justify-center bg-black/55 backdrop-blur-sm p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm text-center">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-primary" />
+            <div className="text-sm font-medium">Scanning contacts…</div>
+            <div className="text-xs text-muted-foreground mt-1">
+              The LLM is reading email signatures to identify companies. Takes ~20-40 s.
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {state === "review" && plan && createPortal(
+        <GroupByEmployerReviewModal
+          plan={plan}
+          selectedGroups={selectedGroups}
+          overrides={overrides}
+          onToggleGroup={(domain) => {
+            setSelectedGroups(s => {
+              const next = new Set(s);
+              if (next.has(domain)) next.delete(domain);
+              else next.add(domain);
+              return next;
+            });
+          }}
+          onSetMember={(id, type) => {
+            setOverrides(m => {
+              const next = new Map(m);
+              next.set(id, type);
+              return next;
+            });
+          }}
+          onCancel={close}
+          onApply={apply}
+        />,
+        document.body,
+      )}
+
+      {state === "applying" && createPortal(
+        <div className="fixed inset-0 z-[810] flex items-center justify-center bg-black/55 backdrop-blur-sm p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm text-center">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-primary" />
+            <div className="text-sm font-medium">Applying changes…</div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+function GroupByEmployerReviewModal({
+  plan, selectedGroups, overrides, onToggleGroup, onSetMember,
+  onCancel, onApply,
+}: {
+  plan: GroupByEmployerPlan;
+  selectedGroups: Set<string>;
+  overrides: Map<number, "employee" | "skip">;
+  onToggleGroup: (domain: string) => void;
+  onSetMember: (id: number, type: "employee" | "skip") => void;
+  onCancel: () => void;
+  onApply: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  const selectedCount = selectedGroups.size;
+
+  return (
+    <div
+      className="fixed inset-0 z-[810] flex items-center justify-center bg-black/55 backdrop-blur-sm p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-3xl max-h-[90vh] bg-card border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <header className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
+          <div>
+            <div className="font-semibold">Group by employer — review</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {plan.groups.length} groups proposed · {selectedCount} selected · scanned {plan.stats.domains_scanned} domains
+            </div>
+          </div>
+          <button onClick={onCancel} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground" aria-label="Close">
+            <X className="w-4 h-4" />
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {plan.groups.length === 0 && (
+            <div className="text-sm text-muted-foreground italic text-center py-8">
+              No groups proposed. The LLM didn't find any multi-person firms among your active contacts.
+            </div>
+          )}
+          {plan.groups.map(g => {
+            const isSelected = selectedGroups.has(g.domain);
+            const pb = g.proposed_business;
+            const addr = pb.address;
+            const addrStr = addr ? [addr.line1, addr.postcode, addr.city, addr.country]
+              .filter(Boolean).join(", ") : "";
+            return (
+              <div
+                key={g.domain}
+                className={cn(
+                  "rounded-lg border transition",
+                  isSelected ? "border-blue-500/40 bg-blue-500/[0.04]" : "border-border bg-card opacity-60",
+                )}
+              >
+                <label className="flex items-start gap-3 p-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggleGroup(g.domain)}
+                    className="mt-1 shrink-0 accent-blue-500"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="w-6 h-6 rounded-full bg-blue-500/15 text-blue-500 flex items-center justify-center shrink-0">
+                        <Briefcase className="w-3 h-3" />
+                      </div>
+                      <span className="font-medium text-sm">{pb.display_name}</span>
+                      {g.existing_business_id !== null && (
+                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                          reuse #{g.existing_business_id}
+                        </span>
+                      )}
+                      <span className="text-[11px] text-muted-foreground ml-auto">@{g.domain}</span>
+                    </div>
+                    {pb.legal_name && (
+                      <div className="text-[11px] text-muted-foreground italic mt-0.5 ml-8">{pb.legal_name}</div>
+                    )}
+                    {addrStr && (
+                      <div className="text-[11px] text-muted-foreground mt-0.5 ml-8">{addrStr}</div>
+                    )}
+                  </div>
+                </label>
+
+                {isSelected && (
+                  <ul className="border-t border-border px-3 py-2 space-y-1">
+                    {g.members.map(m => {
+                      const effective = overrides.get(m.id) ?? m.type;
+                      const isFirm = m.is_canonical || effective === "company";
+                      const willFlip = m.kind === "business" && effective === "employee";
+                      return (
+                        <li key={m.id} className="text-[12px] flex items-center gap-2">
+                          <span className={cn(
+                            "shrink-0 w-1.5 h-1.5 rounded-full",
+                            isFirm ? "bg-blue-500"
+                              : effective === "employee" ? "bg-amber-500"
+                              : "bg-muted-foreground/40",
+                          )} />
+                          <span className="font-mono text-[10px] text-muted-foreground/70">#{m.id}</span>
+                          <span className="text-foreground truncate">
+                            {m.clean_name && effective === "employee" && m.clean_name !== m.display_name ? (
+                              <>
+                                <span className="line-through text-muted-foreground/60">{m.display_name}</span>
+                                {" → "}
+                                <span className="font-medium">{m.clean_name}</span>
+                              </>
+                            ) : (
+                              m.display_name
+                            )}
+                          </span>
+                          <span className="text-muted-foreground/70 text-[10px]">{m.email}</span>
+                          <span className="ml-auto flex items-center gap-1">
+                            {isFirm && (
+                              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-500">firm</span>
+                            )}
+                            {!isFirm && willFlip && (
+                              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500" title="Will flip kind: business → person">flip</span>
+                            )}
+                            {!isFirm && (
+                              <button
+                                onClick={() => onSetMember(m.id, effective === "skip" ? "employee" : "skip")}
+                                className={cn(
+                                  "text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border transition",
+                                  effective === "skip"
+                                    ? "border-rose-500/40 text-rose-600 dark:text-rose-400 bg-rose-500/5"
+                                    : "border-border text-muted-foreground hover:text-rose-600",
+                                )}
+                                title={effective === "skip" ? "Cancel skip" : "Skip this row — don't link it"}
+                              >
+                                {effective === "skip" ? "skipped" : "skip"}
+                              </button>
+                            )}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <footer className="px-5 py-3 border-t border-border flex items-center justify-end gap-2">
+          <button onClick={onCancel} className="text-sm px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground">
+            Cancel
+          </button>
+          <button
+            onClick={onApply}
+            disabled={selectedCount === 0}
+            className="text-sm px-4 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Apply to {selectedCount} group{selectedCount === 1 ? "" : "s"}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
 
 function CrosslinkMailboxButton({ onDone }: { onDone: () => Promise<void> | void }) {
   type State = "idle" | "running" | "result";
