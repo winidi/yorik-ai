@@ -250,9 +250,27 @@ async def analyse_message(
         with get_conn() as conn:
             persisted_ids: List[int] = []
             for s in suggestions:
-                # Day 3 will add validate() pre-emit gate + evidence
-                # ref-id checks. Day 1 just persists what the stub
-                # gave us (which is nothing).
+                # Per-type validate() gate. Drops suggestions that
+                # fail the type-specific safety check (e.g. proposed
+                # slot overlapping an existing event). Failure is
+                # silent — the suggestion just doesn't appear.
+                stype = _reg.get_type(s["type"])
+                if stype and stype.validate:
+                    try:
+                        h_ctx = HandlerContext(
+                            owner_user_id=owner_user_id,
+                            user_role=user_role,
+                            suggestion_id=0,  # not yet persisted
+                            source_kind=source_kind,
+                            source_id=source_id,
+                            contact_id=contact_id,
+                        )
+                        ok = await stype.validate(s.get("payload") or {}, h_ctx)
+                    except Exception as exc:  # noqa: BLE001
+                        log.warning("validate %s failed: %s — dropping", s["type"], exc)
+                        ok = False
+                    if not ok:
+                        continue
                 cur = conn.execute(
                     "INSERT INTO suggestions "
                     "(run_id, owner_user_id, type, payload_json, confidence, reason) "

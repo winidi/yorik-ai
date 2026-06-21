@@ -781,6 +781,26 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
         except Exception as e:
             log.debug("autodraft schedule failed: %s", e)
 
+    # Suggestion engine — fire the email.new trigger. Toggle hierarchy
+    # (master + per-source + per-contact opt-in) is enforced inside
+    # engine.analyse_message; this hook always fires so disabling the
+    # engine takes effect immediately without a fetcher restart. Same
+    # spam skip as autodraft — no value generating suggestions for
+    # senders the user has already rejected.
+    if inserted_id and autocapture_category != "spam":
+        try:
+            import asyncio as _asyncio
+            from .suggestions.triggers import email_new as _email_new_trig
+            try:
+                _loop = _asyncio.get_event_loop()
+            except RuntimeError:
+                _loop = None
+            if _loop and _loop.is_running():
+                _email_new_trig.fire_from_thread(
+                    _loop, cfg["owner_user_id"], inserted_id)
+        except Exception as e:
+            log.debug("suggestions trigger failed: %s", e)
+
     # Tier 1 vs Tier 2 routing for document attachments. The old code
     # auto-uploaded every PDF/DOCX/XLSX unconditionally, which turned
     # Paperless into a dumping ground for advertising and notification

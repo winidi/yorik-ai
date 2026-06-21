@@ -48,9 +48,9 @@ Output schema (exact):
 
 Rules for specific types:
 
-- draft_reply: emit when the message reasonably warrants a reply AND the user typically replies to this sender. Use the prior email tone from context. Body MUST be in the same language as the incoming message.
+- draft_reply: emit when the message clearly warrants a personal reply — it asks a direct question, requests information, proposes something to confirm, or otherwise expects an answer from the user. Body MUST be in the same language as the incoming message. Mirror the sender's tone (du/Sie, formal/casual). Skip for: automated notifications, calendar invite emails, receipts/shipment updates, marketing/newsletters, no-reply senders, group blasts where no answer is expected.
 
-- propose_meeting_slot: emit ONLY when the message EXPLICITLY proposes a date/time OR explicitly ASKS to schedule. Do NOT emit for vague "we should catch up" mentions. Check the calendar context: if the proposed time conflicts with an existing event, suggest an alternative. If no conflict, prefer add_calendar_event over propose_meeting_slot. NEVER propose a slot for purely informational scheduling mentions ("dentist on Friday").
+- propose_meeting_slot: emit ONLY when the message EXPLICITLY proposes a date/time OR explicitly ASKS to schedule a meeting. Do NOT emit for vague "we should catch up" mentions. Check the calendar context: if the proposed time conflicts with an existing event, suggest an alternative. NEVER propose a slot for purely informational scheduling mentions ("dentist on Friday") or for messages that just inform you of an event (calendar invitations, RSVPs, event reminders). If the user is already invited to the event referenced in <context>, do not propose a new slot.
 
 If nothing meets these bars, return {"suggestions": []}.
 
