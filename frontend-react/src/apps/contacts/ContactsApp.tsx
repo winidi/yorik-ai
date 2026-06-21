@@ -303,7 +303,10 @@ export function ContactsApp() {
             />
           )}
           {tab === "pending" && counts.pending > 1 && (
-            <DedupeButton onDone={refresh} />
+            <DedupeButton onDone={refresh} status="pending" />
+          )}
+          {tab === "active" && counts.active > 1 && (
+            <DedupeButton onDone={refresh} status="active" />
           )}
           <button
             onClick={() => { setImporting(true); }}
@@ -2774,7 +2777,17 @@ function pickDefaultCanonical(members: DedupePlanMember[]): number {
 //   review   → plan is in, the user can pick which merges to apply
 type DedupeState = "closed" | "chooser" | "loading" | "review";
 
-function DedupeButton({ onDone }: { onDone: () => Promise<void> | void }) {
+function DedupeButton({
+  onDone,
+  status = "pending",
+}: {
+  onDone: () => Promise<void> | void;
+  /** Which status bucket to dedupe. Defaults to 'pending' — the
+   *  original use case (collapse before promoting). Pass 'active' to
+   *  clean up duplicates that slipped through (Anthropic-x8, Amazon-x4)
+   *  via the Active tab's "Dedupe actives" button. */
+  status?: "pending" | "active";
+}) {
   const [state, setState] = useState<DedupeState>("closed");
   const [plan, setPlan] = useState<DedupePlan | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -2807,9 +2820,9 @@ function DedupeButton({ onDone }: { onDone: () => Promise<void> | void }) {
     try {
       const r = await api.get<{ pending: number }>("/api/contacts/_counts");
       const both = await Promise.all([
-        api.get<{ id: number }[]>("/api/contacts?status=pending&kind=business&limit=1"),
-        api.get<{ id: number }[]>("/api/contacts?status=pending&kind=person&limit=1"),
-        api.get<{ id: number }[]>("/api/contacts?status=pending&limit=2000"),
+        api.get<{ id: number }[]>(`/api/contacts?status=${status}&kind=business&limit=1`),
+        api.get<{ id: number }[]>(`/api/contacts?status=${status}&kind=person&limit=1`),
+        api.get<{ id: number }[]>(`/api/contacts?status=${status}&limit=2000`),
       ]).then(([_b, _p, all]) => {
         // Count by kind from a single-page fetch — limit=2000 should
         // comfortably cover any household's pending pile.
@@ -2831,7 +2844,7 @@ function DedupeButton({ onDone }: { onDone: () => Promise<void> | void }) {
     setState("loading");
     try {
       const r = await api.post<DedupePlan>("/api/contacts/dedupe-llm", {
-        status: "pending",
+        status,
         kind: forKind,
         dry_run: true,
       });

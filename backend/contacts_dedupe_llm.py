@@ -734,15 +734,18 @@ def build_plan(
     Args:
         role: caller's role (passed to the visibility-gated contacts.search).
         user_id: caller's user_id (same).
-        status: 'pending' or 'spam'.
+        status: 'pending', 'active', or 'spam'. 'active' is for cleaning
+            up duplicates that slipped through pending review (e.g. the
+            same business autocaptured under different sender variants
+            before the dedupe gate existed).
         kind: None = both, 'business' = business only, 'person' = person only.
 
     Returns:
         ``{"merge": [...], "skip": [...], "stats": {...}}`` — the same
         shape ``apply_plan`` consumes.
     """
-    if status not in ("pending", "spam"):
-        raise ValueError(f"status must be 'pending' or 'spam', got {status!r}")
+    if status not in ("pending", "active", "spam"):
+        raise ValueError(f"status must be 'pending' / 'active' / 'spam', got {status!r}")
     if kind not in (None, "person", "business"):
         raise ValueError(f"kind must be None / 'person' / 'business', got {kind!r}")
 
