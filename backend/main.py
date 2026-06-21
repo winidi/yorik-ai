@@ -6319,6 +6319,10 @@ def contact_timeline(
                         "when":      r["date_received"],
                         "title":     r["subject"] or "(no subject)",
                         "sub":       (r["snippet"] or "")[:120],
+                        # React-Router-relative path (no /r basename
+                        # prefix). When opening in a new browser tab
+                        # the frontend must prepend "/r" to get the
+                        # right SPA — see triage email preview anchors.
                         "link":      f"/email?msg={r['id']}",
                         "direction": "outgoing" if r["is_sent"] else "incoming",
                     })

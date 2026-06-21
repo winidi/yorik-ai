@@ -3082,9 +3082,17 @@ function TriageEmailPreview({ contactId }: { contactId: number }) {
         <li key={i}>
           {/* Anchor (not navigate) → opens in a new tab so the triage
               modal stays untouched. Cmd/Ctrl+click also works natively,
-              and the URL is visible on hover for keyboard users. */}
+              and the URL is visible on hover for keyboard users.
+
+              `it.link` is React-Router-relative (e.g. "/email?msg=42").
+              When opening in a new browser tab we need the absolute
+              SPA URL "/r/email?msg=42" — the legacy vanilla frontend
+              lives at /email and shows the wrong app. Inside React
+              Router (navigate(it.link)) the /r basename gets added
+              automatically; only raw browser navigations need it
+              spelled out. */}
           <a
-            href={it.link}
+            href={`/r${it.link}`}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
