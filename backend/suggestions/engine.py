@@ -235,14 +235,37 @@ async def analyse_message(
             evidence.extend(batch or [])
 
     # Step 3: LLM call with structured output constrained to the
-    # SuggestionType registry. Returns [] on any failure (LLM down,
-    # parse fail, all unknown types) — engine persists a 'done' run
-    # with no suggestions, never a half-broken card.
-    suggestions = await _call_llm_for_suggestions(
+    # SuggestionType registry. Returns (suggestions, llm_ok). On
+    # llm_ok=False we still persist the run as 'error' so the
+    # activity view can distinguish "LLM down" from "LLM said no".
+    suggestions, llm_ok = await _call_llm_for_suggestions(
         source_row=source_row,
         source_kind=source_kind,
         contact=contact,
         evidence=evidence,
+    )
+    if not llm_ok:
+        try:
+            with get_conn() as conn:
+                _close_run(conn, run_id, "error", error="llm_unavailable")
+                conn.commit()
+        except Exception:  # noqa: BLE001
+            pass
+        return {"status": "error", "error": "llm_unavailable",
+                "evidence_count": len(evidence)}
+
+    # Evidence-pointer validation: build an allowlist of (kind, ref_id)
+    # pairs from what the retrievers actually returned. Anything the
+    # LLM cites that isn't in the allowlist is hallucinated; strip it.
+    # A suggestion whose evidence is *entirely* hallucinated is itself
+    # dropped — we'd rather show nothing than a card whose citations
+    # the user can't click through to.
+    allowed_refs: set[tuple[str, Any]] = {
+        (e.kind, e.ref_id) for e in evidence if e.ref_id is not None
+    }
+    allowed_refs.update(
+        (e.kind, e.ref_text) for e in evidence
+        if e.ref_text is not None and e.ref_id is None
     )
 
     # Step 4: persist + close run.
@@ -271,6 +294,33 @@ async def analyse_message(
                         ok = False
                     if not ok:
                         continue
+
+                # Evidence allowlist filter — keep only citations that
+                # match something the retrievers actually returned.
+                raw_ev = s.get("evidence") or []
+                clean_ev = []
+                dropped = 0
+                for ev in raw_ev:
+                    if not isinstance(ev, dict):
+                        continue
+                    k = ev.get("kind")
+                    ref_id = ev.get("ref_id")
+                    ref_text = ev.get("ref_text")
+                    if k and ((k, ref_id) in allowed_refs
+                              or (k, ref_text) in allowed_refs):
+                        clean_ev.append(ev)
+                    else:
+                        dropped += 1
+                if dropped:
+                    log.info("suggestion %s: dropped %d hallucinated evidence refs",
+                             s["type"], dropped)
+                if raw_ev and not clean_ev:
+                    # LLM cited only made-up rows — likely the whole
+                    # suggestion is hallucinated. Skip it.
+                    log.info("suggestion %s dropped: all evidence hallucinated", s["type"])
+                    continue
+                s["evidence"] = clean_ev
+
                 cur = conn.execute(
                     "INSERT INTO suggestions "
                     "(run_id, owner_user_id, type, payload_json, confidence, reason) "
@@ -306,17 +356,20 @@ async def analyse_message(
 async def _call_llm_for_suggestions(*, source_row: Dict[str, Any],
                                      source_kind: str,
                                      contact: Dict[str, Any],
-                                     evidence: List[Evidence]) -> List[Dict[str, Any]]:
-    """Run one Qwen pass via backend.suggestions.llm. Returns the
-    validated suggestion list. Failures (LLM down, unparseable
-    JSON, all-unknown-types) return [] silently — engine then
-    persists a 'done' run with zero suggestions."""
+                                     evidence: List[Evidence]
+                                     ) -> tuple[List[Dict[str, Any]], bool]:
+    """Run one Qwen pass via backend.suggestions.llm. Returns the tuple
+    (validated_suggestions, llm_ok). llm_ok=False signals a real
+    failure (LLM unreachable / network error) so the caller can mark
+    the run as 'error' rather than 'done' — important so the activity
+    view distinguishes "LLM down" from "LLM said no". An empty list
+    with llm_ok=True is a legitimate "no suggestions"."""
     if not _reg.all_types():
         # No suggestion types registered = nothing the LLM could
-        # legally emit. Skip the call entirely.
-        return []
+        # legally emit. Skip the call entirely; not an error.
+        return [], True
     from . import llm as _llm
-    return await _llm.call_llm(
+    return await _llm.call_llm_with_status(
         source_row=source_row,
         source_kind=source_kind,
         contact=contact,

@@ -173,16 +173,20 @@ def _parse_llm_output(raw: str) -> list[dict[str, Any]]:
     return out
 
 
-async def call_llm(*, source_row: dict, source_kind: str,
-                   contact: dict, evidence: list[Evidence]) -> list[dict[str, Any]]:
-    """Run one suggestion-generation pass. Returns the parsed +
-    validated suggestion list. [] on any failure (LLM down,
-    unparseable, all-unknown-types)."""
+async def call_llm_with_status(*, source_row: dict, source_kind: str,
+                                contact: dict, evidence: list[Evidence]
+                                ) -> tuple[list[dict[str, Any]], bool]:
+    """Variant of call_llm that surfaces an explicit llm_ok flag.
+    Returns ([], False) ONLY on a real LLM-side failure (client init,
+    network, HTTP error). An LLM that successfully said "no
+    suggestions" returns ([], True). Parse failures count as ok=True
+    because the LLM responded; the model is simply being weird, not
+    unavailable."""
     try:
         from ..agent.llm import LlmClient
     except Exception as exc:  # noqa: BLE001
         log.warning("LLM client unavailable: %s", exc)
-        return []
+        return [], False
 
     client = LlmClient(
         model=os.getenv("HOMEOS_MODEL", "qwen3.5-9b"),
@@ -201,6 +205,18 @@ async def call_llm(*, source_row: dict, source_kind: str,
         )
     except Exception as exc:  # noqa: BLE001
         log.warning("LLM call failed: %s", exc)
-        return []
+        return [], False
     raw = (resp.get("content") or "").strip()
-    return _parse_llm_output(raw)
+    return _parse_llm_output(raw), True
+
+
+async def call_llm(*, source_row: dict, source_kind: str,
+                   contact: dict, evidence: list[Evidence]) -> list[dict[str, Any]]:
+    """Compatibility wrapper — collapses llm-unavailable + llm-said-no
+    into the same [] return. Prefer call_llm_with_status from new
+    callers so they can distinguish the two cases."""
+    out, _ok = await call_llm_with_status(
+        source_row=source_row, source_kind=source_kind,
+        contact=contact, evidence=evidence,
+    )
+    return out

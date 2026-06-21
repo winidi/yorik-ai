@@ -62,19 +62,27 @@ def _row_to_suggestion(r: dict) -> dict[str, Any]:
     }
 
 
+_CONF_RANK = {"low": 0, "medium": 1, "high": 2}
+
+
 @router.get("")
 def list_suggestions(
     source_kind: str = Query(...),
     source_id:   int = Query(...),
     include:     str = Query("pending", description="csv of statuses: pending,accepted,edited,dismissed"),
+    min_confidence: str = Query("medium", description="low|medium|high"),
     user: dict = Depends(current_user),
 ) -> dict[str, Any]:
     """All suggestions for one source message. Defaults to pending —
-    the Reader pane only wants actionable cards."""
+    the Reader pane only wants actionable cards. min_confidence
+    drops weak cards before they hit the UI; default 'medium' so
+    the user only sees suggestions Yorik is reasonably confident
+    about. Pass 'low' to see everything (eg. the activity view)."""
     allowed = {s.strip() for s in include.split(",") if s.strip()}
     if not allowed:
         allowed = {"pending"}
     placeholders = ",".join(["?"] * len(allowed))
+    threshold = _CONF_RANK.get((min_confidence or "medium").lower(), 1)
     with get_conn() as c:
         rows = c.execute(
             f"SELECT s.id, s.type, s.payload_json, s.confidence, s.reason, "
@@ -86,6 +94,7 @@ def list_suggestions(
             f"ORDER BY s.id DESC",
             (user["id"], source_kind, int(source_id), *allowed),
         ).fetchall()
+        rows = [r for r in rows if _CONF_RANK.get((r["confidence"] or "medium").lower(), 1) >= threshold]
         out_items = []
         for r in rows:
             d = dict(r)
