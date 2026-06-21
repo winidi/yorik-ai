@@ -384,9 +384,42 @@ export function EmailApp() {
   );
   const visibleMessages = search.trim().length >= 2 ? (searchApi.data || []) : messages;
 
-  const selected = useMemo(
+  // Deep-link fallback — when the URL had ?msg=<id> (timeline click
+  // from a contact, briefing-bill link, etc.) the user expects to
+  // see THAT message even when it's outside the current folder/
+  // account filter. Fetch the message directly when the list view
+  // doesn't have it; the Reader's inner fetch fills the body
+  // either way, but we need at least {id, account_id} on the
+  // synthetic row so it can mount.
+  const fromList = useMemo(
     () => visibleMessages.find(m => m.id === selectedId),
     [visibleMessages, selectedId]
+  );
+  const needDeepLink = selectedId !== null && !fromList;
+  const deepLinkApi = useApi<any>(
+    needDeepLink ? `/api/email/messages/${selectedId}` : null,
+    [selectedId, needDeepLink],
+  );
+  const selected: EmailMessageRow | undefined = fromList ?? (
+    deepLinkApi.data
+      ? {
+          id:           deepLinkApi.data.id,
+          account_id:   deepLinkApi.data.account_id,
+          account_email: deepLinkApi.data.account_email,
+          message_id:   deepLinkApi.data.message_id,
+          thread_id:    deepLinkApi.data.thread_id,
+          from_email:   deepLinkApi.data.from_email,
+          from_name:    deepLinkApi.data.from_name,
+          to_addrs:     deepLinkApi.data.to_addrs || [],
+          subject:      deepLinkApi.data.subject || "",
+          snippet:      deepLinkApi.data.snippet || "",
+          date_received: deepLinkApi.data.date_received,
+          is_unread:    !!deepLinkApi.data.is_unread,
+          is_starred:   !!deepLinkApi.data.is_starred,
+          is_sent:      !!deepLinkApi.data.is_sent,
+          has_attachments: (deepLinkApi.data.attachments || []).length > 0,
+        } as EmailMessageRow
+      : undefined
   );
 
   // Keyboard shortcuts — j/k navigate, e archive, s star, r reply,
