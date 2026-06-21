@@ -55,10 +55,18 @@ Decision signals (in rough order of strength):
 1. User has REPLIED in WhatsApp 1:1 — by far the strongest signal for active_person (people generally only WA back-and-forth with people they know)
 2. User has REPLIED in email — very strong signal for active_person OR active_business
 3. Contact appears as an attendee on multiple calendar events — strong active_person signal
-4. Email body contains the user's name + account number / invoice / customer ID — active_business
+4. Email body contains the user's name + account number / invoice / customer ID AND there is prior history with this sender (received >= 2 OR user_replies >= 1) — active_business. A FIRST-TIME sender claiming an existing billing relationship is almost always a scam, NOT an active_business — see scam signals below.
 5. Sender name + email looks like a marketing/no-reply pattern with no replies → archived
-6. Repeated high-volume sends with no engagement → archived (use spam only for clearly hostile patterns)
+6. Repeated high-volume sends with no engagement → archived
 7. One-shot or near-one-shot sender, no replies, no account refs → archived
+
+SCAM / FRAUD signals — any ONE of these is enough for "spam", regardless of any "active_business" surface signals:
+* Free-email sender domain (gmail.com / googlemail.com / gmx.* / web.de / outlook.com / hotmail.* / yahoo.* / proton.* / aol.*) AND the local part looks like random characters (letters+digits, ≥ 10 chars, no firstname.lastname pattern). A real business uses its own domain; a real person's freemail address is recognisable as a name.
+* Generic display name that is NOT a real brand or person — "Dienst", "Service", "Support", "Verwaltung", "Administration", "Inkasso", "Rechnungsstelle", "Buchhaltung" — when the sender is on a free-email provider or the local part is anonymous.
+* Body claims an existing billing relationship ("Aktenzeichen", "Mahnung", "Zahlungsaufforderung", "Rechnung", "invoice", "Forderung", "account number", "customer ID") with ZERO prior received history with this sender (received <= 1 AND user_replies = 0).
+* Body is garbled, has obviously duplicated phrases ("Vielen Dank Vielen Dank"), broken grammar that no real company would send, or relies almost entirely on embedded base64 image data with the text part near-empty.
+* Lottery / prize / crypto-payout / inheritance / package-delivery claims with no prior history.
+* Aggressive urgency without context ("payment due within 24h" / "letzte Mahnung" / "Konto wird gesperrt") on a first contact.
 
 Importantly: a contact may have data on ONE modality only (e.g. only a WhatsApp section). Absence of an email section is NOT a signal against active — it just means the user doesn't email this person. Judge from the modalities present, not from the ones missing.
 
