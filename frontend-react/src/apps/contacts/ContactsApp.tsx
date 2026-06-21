@@ -1850,6 +1850,21 @@ function GroupByEmployerReviewModal({
           </button>
         </header>
 
+        <div className="px-5 py-3 border-b border-border bg-muted/20 space-y-1 text-[11px]">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-500 shrink-0">Parent</span>
+            <span className="text-muted-foreground">The parent business — others get linked under it</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 shrink-0">→ Person</span>
+            <span className="text-muted-foreground">Currently a Business; will be reclassified as Person</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-rose-500/40 text-rose-600 dark:text-rose-400 bg-rose-500/5 shrink-0">Skipped</span>
+            <span className="text-muted-foreground">Not linked to the parent — left alone</span>
+          </div>
+        </div>
+
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
           {plan.groups.length === 0 && (
             <div className="text-sm text-muted-foreground italic text-center py-8">
@@ -1928,10 +1943,10 @@ function GroupByEmployerReviewModal({
                           <span className="text-muted-foreground/70 text-[10px]">{m.email}</span>
                           <span className="ml-auto flex items-center gap-1">
                             {isFirm && (
-                              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-500">firm</span>
+                              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-500">Parent</span>
                             )}
                             {!isFirm && willFlip && (
-                              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500" title="Will flip kind: business → person">flip</span>
+                              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500" title="Currently a Business; will be reclassified as Person on Apply">→ Person</span>
                             )}
                             {!isFirm && (
                               <button
