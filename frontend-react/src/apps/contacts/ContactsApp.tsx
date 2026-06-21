@@ -2249,6 +2249,34 @@ type TriageListResponse = {
 // step-state badge ("ready · N" / "✓ done" / hidden when nothing to
 // do). Each step button stays independently clickable; numbers are
 // guidance, not a lock.
+// localStorage keys for "last run" stamps. Used by the pipeline to
+// flip a step's badge to ✓ after the user has run it, even when the
+// underlying count metric ("any merge candidates left?") would still
+// say "ready" (we don't pre-compute that cheaply). Per-browser, not
+// per-user — fine for v1, can move to user_profiles JSON later.
+const _LS_LAST_RUN = {
+  dedupePending: "yorik:contacts:lastrun:dedupe:pending",
+  dedupeActive:  "yorik:contacts:lastrun:dedupe:active",
+  groupByEmp:    "yorik:contacts:lastrun:group-by-employer",
+};
+// How long after running do we consider a step "done"? Long enough that
+// the user notices the green ✓ ("yeah, I did that"); short enough that
+// stale data eventually surfaces again as actionable.
+const _LAST_RUN_FRESH_MS = 7 * 24 * 60 * 60 * 1000;  // 7 days
+
+function _isFresh(key: string): boolean {
+  try {
+    const v = localStorage.getItem(key);
+    if (!v) return false;
+    const t = Date.parse(v);
+    if (isNaN(t)) return false;
+    return (Date.now() - t) < _LAST_RUN_FRESH_MS;
+  } catch { return false; }
+}
+function _stampRun(key: string): void {
+  try { localStorage.setItem(key, new Date().toISOString()); } catch {}
+}
+
 function CleanupPipeline({
   tab, counts, classifyKickCount, setClassifyKickCount, onOpenTriage, onRefresh,
 }: {
@@ -2259,6 +2287,28 @@ function CleanupPipeline({
   onOpenTriage: () => void;
   onRefresh: () => Promise<void> | void;
 }) {
+  // Bumped whenever a wrapped onDone fires so the badge logic re-reads
+  // localStorage. (localStorage writes don't fire React re-renders.)
+  const [runTick, setRunTick] = useState(0);
+  const dedupePendingDone = useMemo(
+    () => _isFresh(_LS_LAST_RUN.dedupePending),
+    [runTick, counts.pending],
+  );
+  const dedupeActiveDone = useMemo(
+    () => _isFresh(_LS_LAST_RUN.dedupeActive),
+    [runTick, counts.active],
+  );
+  const groupByEmpDone = useMemo(
+    () => _isFresh(_LS_LAST_RUN.groupByEmp),
+    [runTick, counts.active],
+  );
+
+  async function wrap(key: string) {
+    _stampRun(key);
+    setRunTick(t => t + 1);
+    await onRefresh();
+  }
+
   if (tab === "spam") return null;
   // Don't render the whole strip when there's no work either tab can
   // possibly do — keeps the empty state of the header clean.
@@ -2288,10 +2338,12 @@ function CleanupPipeline({
           <PipelineStep
             number={2}
             label="Dedupe"
-            badge={counts.pending > 1 ? "ready" : "✓"}
+            badge={
+              counts.pending <= 1 || dedupePendingDone ? "✓" : "ready"
+            }
             dimmed={counts.pending <= 1}
           >
-            <DedupeButton onDone={onRefresh} status="pending" />
+            <DedupeButton onDone={() => wrap(_LS_LAST_RUN.dedupePending)} status="pending" />
           </PipelineStep>
           <PipelineArrow />
           <PipelineStep
@@ -2309,18 +2361,20 @@ function CleanupPipeline({
           <PipelineStep
             number={1}
             label="Dedupe"
-            badge={counts.active > 1 ? "ready" : "✓"}
+            badge={
+              counts.active <= 1 || dedupeActiveDone ? "✓" : "ready"
+            }
             dimmed={counts.active <= 1}
           >
-            <DedupeButton onDone={onRefresh} status="active" />
+            <DedupeButton onDone={() => wrap(_LS_LAST_RUN.dedupeActive)} status="active" />
           </PipelineStep>
           <PipelineArrow />
           <PipelineStep
             number={2}
             label="Group by employer"
-            badge="ready"
+            badge={groupByEmpDone ? "✓" : "ready"}
           >
-            <GroupByEmployerButton onDone={onRefresh} />
+            <GroupByEmployerButton onDone={() => wrap(_LS_LAST_RUN.groupByEmp)} />
           </PipelineStep>
         </>
       )}
@@ -2402,6 +2456,10 @@ function TriageModal({ onClose, onApplied }: {
   const [cursor, setCursor] = useState(0);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
+  // Inline email preview — row id of the currently-expanded contact, or
+  // null when nothing is expanded. Single-open at a time so the modal
+  // doesn't balloon vertically when the user has many contacts open.
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 100;
 
@@ -2869,6 +2927,31 @@ function TriageModal({ onClose, onApplied }: {
                       })}
                     </div>
                   )}
+
+                  {/* Show emails — inline preview of recent inbound emails
+                      from this contact so the user can verify the LLM's
+                      verdict without closing the modal. Single row open
+                      at a time. */}
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedId(expandedId === it.id ? null : it.id);
+                      }}
+                      className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                    >
+                      <Mail className="w-3 h-3" />
+                      {expandedId === it.id ? "Hide emails" : "Show emails"}
+                      <ChevronRight className={cn(
+                        "w-3 h-3 transition-transform",
+                        expandedId === it.id && "rotate-90",
+                      )} />
+                    </button>
+                    {expandedId === it.id && (
+                      <TriageEmailPreview contactId={it.id} />
+                    )}
+                  </div>
                 </div>
 
                 {/* Right: four outcome chips (P/B/A/S). The chip whose
@@ -2967,6 +3050,62 @@ function TriageModal({ onClose, onApplied }: {
 // shown on hover. The "suggested" prop adds a subtle ring around chips
 // the LLM verdict pre-filled, so the user can spot Yorik's recommendation
 // even when they've already overridden it.
+// ─── TriageEmailPreview — inline last-emails for one row ───────────
+// Renders inside an expanded triage row so the user can verify the
+// LLM's verdict without closing the modal. Reuses the same
+// /api/contacts/{id}/timeline endpoint the contact detail view uses,
+// filtered to email items only.
+function TriageEmailPreview({ contactId }: { contactId: number }) {
+  const api_ = useApi<ContactTimeline>(
+    `/api/contacts/${contactId}/timeline?limit=5`,
+    [contactId],
+  );
+  const items = (api_.data?.items || []).filter(it => it.kind === "email");
+
+  if (api_.loading) {
+    return (
+      <div className="mt-2 text-[11px] text-muted-foreground italic">
+        Loading emails…
+      </div>
+    );
+  }
+  if (items.length === 0) {
+    return (
+      <div className="mt-2 text-[11px] text-muted-foreground italic">
+        No emails found from this sender.
+      </div>
+    );
+  }
+  return (
+    <ol className="mt-2 space-y-1 border-l-2 border-border pl-3">
+      {items.map((it, i) => (
+        <li key={i} className="text-[11.5px] leading-snug">
+          <div className="flex items-baseline gap-2">
+            <span className={cn(
+              "text-[9px] uppercase tracking-wider shrink-0 px-1 rounded",
+              it.direction === "outgoing"
+                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                : "bg-muted text-muted-foreground",
+            )}>
+              {it.direction === "outgoing" ? "sent" : "in"}
+            </span>
+            <span className="font-medium truncate">{it.title}</span>
+            {it.when && (
+              <span className="ml-auto text-[10px] text-muted-foreground/60 tabular-nums shrink-0">
+                {fmtShortDate(it.when)}
+              </span>
+            )}
+          </div>
+          {it.sub && (
+            <div className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{it.sub}</div>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+
 function TriageChip({
   label, shortcut, icon: Icon, tone, active, suggested, onClick,
 }: {
