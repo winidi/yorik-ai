@@ -101,4 +101,9 @@ export interface StatusCounts {
   pending: number;
   spam: number;
   archived: number;
+  /** Mig 119? — number of pending rows the LLM hasn't classified yet.
+   *  Drives the "Step 1: Classify · N ready" badge in the cleanup
+   *  pipeline. When 0, step 1 fades to ✓ done. */
+  pending_unclassified?: number;
+  pending_classified?:   number;
 }

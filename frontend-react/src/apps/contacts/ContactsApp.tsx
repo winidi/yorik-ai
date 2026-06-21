@@ -69,7 +69,7 @@ export function ContactsApp() {
   const [triageModalOpen, setTriageModalOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [counts, setCounts] = useState<StatusCounts>({ active: 0, pending: 0, spam: 0, archived: 0 });
+  const [counts, setCounts] = useState<StatusCounts>({ active: 0, pending: 0, spam: 0, archived: 0, pending_unclassified: 0, pending_classified: 0 });
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   // Fallback for the case where a deep-linked id (e.g. clicking "Works at"
@@ -280,16 +280,14 @@ export function ContactsApp() {
           <ExtractButton />
           <CrosslinkMailboxButton onDone={refresh} />
           <YorikAssistBulkButton tab={tab} counts={counts} onDone={refresh} />
-          {tab === "pending" && counts.pending > 0 && (
-            <>
-              <AutoClassifyButton
-                onDone={refresh}
-                externalKick={classifyKickCount}
-                onComplete={() => setTriageModalOpen(true)}
-              />
-              <TriageButton onOpen={() => setTriageModalOpen(true)} />
-            </>
-          )}
+          <CleanupPipeline
+            tab={tab}
+            counts={counts}
+            classifyKickCount={classifyKickCount}
+            setClassifyKickCount={setClassifyKickCount}
+            onOpenTriage={() => setTriageModalOpen(true)}
+            onRefresh={refresh}
+          />
           {tab === "pending" && counts.archived > 0 && (
             <ReclassifyArchivedButton
               archivedCount={counts.archived}
@@ -301,15 +299,6 @@ export function ContactsApp() {
                 setClassifyKickCount(k => k + 1);
               }}
             />
-          )}
-          {tab === "pending" && counts.pending > 1 && (
-            <DedupeButton onDone={refresh} status="pending" />
-          )}
-          {tab === "active" && counts.active > 1 && (
-            <DedupeButton onDone={refresh} status="active" />
-          )}
-          {tab === "active" && counts.active > 1 && (
-            <GroupByEmployerButton onDone={refresh} />
           )}
           <button
             onClick={() => { setImporting(true); }}
@@ -2247,6 +2236,139 @@ type TriageListResponse = {
   offset: number;
   kind: string | null;
 };
+
+// ─── CleanupPipeline — numbered steps for the per-tab cleanup ritual ───
+//
+// Solves the "wall of 8-11 unsorted buttons" problem on the contacts
+// header. Each tab has a small linear pipeline:
+//   Pending: 1. Classify  →  2. Dedupe  →  3. Review & promote
+//   Active:  1. Dedupe    →  2. Group by employer
+//
+// The pipeline doesn't replace the underlying components — it just
+// wraps them in a numbered strip with subtle ↦ connectors and a
+// step-state badge ("ready · N" / "✓ done" / hidden when nothing to
+// do). Each step button stays independently clickable; numbers are
+// guidance, not a lock.
+function CleanupPipeline({
+  tab, counts, classifyKickCount, setClassifyKickCount, onOpenTriage, onRefresh,
+}: {
+  tab: "active" | "pending" | "spam";
+  counts: StatusCounts;
+  classifyKickCount: number;
+  setClassifyKickCount: React.Dispatch<React.SetStateAction<number>>;
+  onOpenTriage: () => void;
+  onRefresh: () => Promise<void> | void;
+}) {
+  if (tab === "spam") return null;
+  // Don't render the whole strip when there's no work either tab can
+  // possibly do — keeps the empty state of the header clean.
+  if (tab === "pending" && counts.pending === 0) return null;
+  if (tab === "active" && counts.active < 2) return null;
+
+  return (
+    <div className="hidden md:inline-flex items-stretch gap-1.5 rounded-md border border-border bg-muted/30 px-1.5 py-1">
+      {tab === "pending" && (
+        <>
+          <PipelineStep
+            number={1}
+            label="Classify"
+            badge={
+              (counts.pending_unclassified ?? counts.pending) > 0
+                ? `${counts.pending_unclassified ?? counts.pending} ready`
+                : "✓"
+            }
+          >
+            <AutoClassifyButton
+              onDone={onRefresh}
+              externalKick={classifyKickCount}
+              onComplete={onOpenTriage}
+            />
+          </PipelineStep>
+          <PipelineArrow />
+          <PipelineStep
+            number={2}
+            label="Dedupe"
+            badge={counts.pending > 1 ? "ready" : "✓"}
+            dimmed={counts.pending <= 1}
+          >
+            <DedupeButton onDone={onRefresh} status="pending" />
+          </PipelineStep>
+          <PipelineArrow />
+          <PipelineStep
+            number={3}
+            label="Review"
+            badge={counts.pending > 0 ? `${counts.pending} ready` : "✓"}
+          >
+            <TriageButton onOpen={onOpenTriage} />
+          </PipelineStep>
+        </>
+      )}
+
+      {tab === "active" && (
+        <>
+          <PipelineStep
+            number={1}
+            label="Dedupe"
+            badge={counts.active > 1 ? "ready" : "✓"}
+            dimmed={counts.active <= 1}
+          >
+            <DedupeButton onDone={onRefresh} status="active" />
+          </PipelineStep>
+          <PipelineArrow />
+          <PipelineStep
+            number={2}
+            label="Group by employer"
+            badge="ready"
+          >
+            <GroupByEmployerButton onDone={onRefresh} />
+          </PipelineStep>
+        </>
+      )}
+    </div>
+  );
+}
+
+function PipelineStep({
+  number, label, badge, dimmed = false, children,
+}: {
+  number: number;
+  label: string;
+  badge: string;
+  dimmed?: boolean;
+  children: React.ReactNode;
+}) {
+  const isDone = badge === "✓";
+  return (
+    <div className={cn(
+      "flex flex-col items-stretch gap-0.5 px-1 transition",
+      dimmed && "opacity-50",
+    )}>
+      <div className="flex items-center gap-1.5 px-1 text-[10px] text-muted-foreground select-none">
+        <span className={cn(
+          "inline-flex w-4 h-4 rounded-full items-center justify-center text-[9px] font-semibold shrink-0",
+          isDone
+            ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+            : "bg-primary/20 text-primary",
+        )}>{isDone ? "✓" : number}</span>
+        <span className="font-medium text-foreground/80 truncate">{label}</span>
+        <span className={cn(
+          "ml-auto text-[10px] uppercase tracking-wider shrink-0",
+          isDone ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
+        )} title={badge}>
+          {badge}
+        </span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function PipelineArrow() {
+  return (
+    <div className="self-center text-muted-foreground/40 select-none px-0.5">→</div>
+  );
+}
+
 
 function TriageButton({ onOpen }: { onOpen: () => void }) {
   return (

@@ -724,14 +724,24 @@ def bump_use(contact_id: int) -> None:
 
 
 def status_counts(role: Optional[str] = None) -> Dict[str, int]:
-    """Return {active, pending, spam, archived} → count. Used by /r/contacts
-    to render the tab badges."""
-    sql = "SELECT status, COUNT(*) AS n FROM contacts GROUP BY status"
+    """Return {active, pending, spam, archived, pending_unclassified,
+    pending_classified} → count. The pending_(un)classified split
+    drives the cleanup pipeline's "Step 1: Classify" badge — it
+    fades to ✓ when every pending row has a triage_verdict."""
+    out = {"active": 0, "pending": 0, "spam": 0, "archived": 0,
+           "pending_unclassified": 0, "pending_classified": 0}
     with conn_ctx() as c:
-        rows = c.execute(sql).fetchall()
-    out = {"active": 0, "pending": 0, "spam": 0, "archived": 0}
-    for r in rows:
-        out[r["status"]] = r["n"]
+        for r in c.execute("SELECT status, COUNT(*) AS n FROM contacts GROUP BY status").fetchall():
+            out[r["status"]] = r["n"]
+        r = c.execute(
+            "SELECT "
+            "  COUNT(*) FILTER (WHERE triage_classified_at IS NULL) AS unc, "
+            "  COUNT(*) FILTER (WHERE triage_classified_at IS NOT NULL) AS cls "
+            "FROM contacts WHERE status='pending'"
+        ).fetchone()
+        if r:
+            out["pending_unclassified"] = int(r["unc"] or 0)
+            out["pending_classified"]   = int(r["cls"] or 0)
     return out
 
 
