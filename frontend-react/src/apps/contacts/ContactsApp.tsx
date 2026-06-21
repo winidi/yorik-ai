@@ -574,29 +574,44 @@ function ContactAvatar({
     : "bg-amber-500/15 text-amber-500";
   const iconSize = size === "lg" ? "w-6 h-6" : "w-3.5 h-3.5";
 
+  // Bottom-right dot indicator when Yorik AI is enabled for this contact.
+  // Small ring-card halo so the dot reads cleanly against any row
+  // background (default, selected, pending, spam tints).
+  const assistDotSize = size === "lg" ? "w-3.5 h-3.5" : "w-2.5 h-2.5";
   return (
-    <div ref={wrapRef} className={cn(
-      dims,
-      "shrink-0 rounded-full flex items-center justify-center font-semibold overflow-hidden",
-      imgLoaded !== true && tone,
-      className,
-    )}>
-      {imgLoaded !== false && jid && hasBeenVisible && (
-        <img
-          src={`/api/whatsapp/avatar/${encodeURIComponent(jid)}`}
-          alt=""
-          onLoad={() => setImgLoaded(true)}
-          onError={() => setImgLoaded(false)}
+    <div className={cn("relative shrink-0", className)}>
+      <div ref={wrapRef} className={cn(
+        dims,
+        "rounded-full flex items-center justify-center font-semibold overflow-hidden",
+        imgLoaded !== true && tone,
+      )}>
+        {imgLoaded !== false && jid && hasBeenVisible && (
+          <img
+            src={`/api/whatsapp/avatar/${encodeURIComponent(jid)}`}
+            alt=""
+            onLoad={() => setImgLoaded(true)}
+            onError={() => setImgLoaded(false)}
+            className={cn(
+              "w-full h-full object-cover",
+              imgLoaded === true ? "block" : "hidden",
+            )}
+          />
+        )}
+        {imgLoaded !== true && (
+          contact.kind === "business"
+            ? <Briefcase className={iconSize} />
+            : <span>{initials(bestContactName(contact))}</span>
+        )}
+      </div>
+      {contact.yorik_assist_enabled && (
+        <span
           className={cn(
-            "w-full h-full object-cover",
-            imgLoaded === true ? "block" : "hidden",
+            "absolute -bottom-0.5 -right-0.5 rounded-full bg-emerald-500 ring-2 ring-card",
+            assistDotSize,
           )}
+          title="Yorik assist enabled — new messages from this contact may surface suggestions"
+          aria-label="Yorik assist enabled"
         />
-      )}
-      {imgLoaded !== true && (
-        contact.kind === "business"
-          ? <Briefcase className={iconSize} />
-          : <span>{initials(bestContactName(contact))}</span>
       )}
     </div>
   );
