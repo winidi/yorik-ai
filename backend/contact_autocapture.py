@@ -77,11 +77,70 @@ def on_inbound_email(
 
         # Unknown sender — decide whether to create a Pending row.
         if _contacts.is_transactional_email(addr):
-            # no-reply / billing / notifications — don't pollute Pending
-            # with one-shot machines. The user can still find the email,
-            # but won't be nagged to "save this contact".
+            # no-reply / billing / notifications / role accounts —
+            # don't pollute Pending with one-shot machines. The user
+            # can still find the email, but won't be nagged to "save
+            # this contact".
             log.debug("contact_autocapture: transactional %s skipped", addr)
             return None
+
+        # Mass-mailer domains (ebay, amazon, paypal, temu, bonprix, …)
+        # — different rule from transactional. We DO want one contact
+        # per brand so the inbox can show "from <brand>" instead of
+        # raw addresses, but we consolidate all per-address variants
+        # into the same row and park it in Spam (not Pending) so the
+        # user isn't nagged. The user can recover from the Spam tab
+        # if they actually want that brand surfaced.
+        if _contacts.is_mass_mailer_email(addr):
+            domain = addr.split("@", 1)[1].lower()
+            existing_brand = _contacts.find_business_by_email_domain(domain)
+            if existing_brand:
+                # Attach this new sender variant as a channel on the
+                # existing brand contact. Bump interaction. Tag the
+                # email category based on the brand's current status —
+                # if the user promoted the brand to active/pending,
+                # leave the message uncategorised.
+                try:
+                    _contacts.add_channel(
+                        int(existing_brand["id"]), kind="email", value=addr,
+                        source="email_in",
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    log.debug("brand-channel attach failed: %s", exc)
+                try:
+                    _contacts.bump_interaction(int(existing_brand["id"]))
+                except Exception:  # noqa: BLE001
+                    pass
+                if existing_brand.get("status") == "spam":
+                    return "spam"
+                return None
+            # Brand-new mass-mailer brand → create one business contact
+            # with status='spam'. display_name prefers from_name; falls
+            # back to the domain root so the brand is recognisable
+            # even when the From header is a generic alias.
+            brand_name = (from_name or "").strip()
+            if not brand_name:
+                brand_name = domain.split(".")[0].title() if "." in domain else domain
+            contact_id = _contacts.create(
+                display_name=brand_name,
+                kind="business",
+                status="spam",
+                source="email_in",
+            )
+            try:
+                _contacts.add_channel(
+                    contact_id, kind="email", value=addr, source="email_in",
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.debug("mass-mailer channel insert failed: %s", exc)
+                try:
+                    _contacts.delete(contact_id)
+                except Exception:
+                    pass
+                return None
+            log.info("contact_autocapture: parked mass-mailer brand id=%d "
+                     "domain=%s name=%r", contact_id, domain, brand_name)
+            return "spam"
 
         # New pending contact — for EMAIL specifically we keep this
         # status='pending' because cold-mail noise is real (and the

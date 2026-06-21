@@ -91,16 +91,114 @@ def normalize_channel(kind: str, value: str) -> str:
 _TRANSACTIONAL_LOCALPART_RE = re.compile(
     r"^(?:"
     r"no[\-_]?reply|noreply|do[\-_]?not[\-_]?reply"
-    r"|notifications?|info|support|hello|contact"
+    r"|notifications?|info|support|hello|hi|contact"
     r"|automated|alerts?|news|newsletter|updates?"
     r"|mailer[\-_]?daemon|postmaster|abuse"
     r"|bounce|bounces|return|returns"
     r"|billing|invoice|invoices|receipts?"
     r"|orders?|shipping|tracking|delivery"
     r"|root|daemon|admin|webmaster"
+    # Role accounts that aren't a single person — catch the long
+    # tail of "service@", "member@", "team@", "marketing@", "sales@",
+    # "growth@", "presse@", "careers@", "events@", and the German
+    # "mein-*@" prefix (mein-ebay@…) that re-engagement mail uses.
+    r"|service|member|account|team"
+    r"|marketing|sales|growth|sdr|bdr|biz|partnerships?"
+    r"|press|presse|careers|jobs|hr|recruiting"
+    r"|events?|webinar|register|subscribe|subscriptions?"
+    r"|community|welcome|onboarding|feedback"
+    r"|help|helpdesk|help[\-_.]desk|digest"
+    r"|daily|weekly|monthly"
+    r"|email|mail|mailing|mailings"
+    r"|customer[\-_.]reviews?|customer[\-_.]service"
+    r"|mein[\-_]?[a-z]+"
     r")(?:@|\+|$)",
     re.IGNORECASE,
 )
+
+
+# Mass-mailer DOMAIN substrings. Any sender whose domain contains one
+# of these is treated as a business mass-mailer: a single business
+# contact per domain (deduplicated at autocapture time), status='spam'
+# so it doesn't clutter Pending. Different rule from
+# _TRANSACTIONAL_LOCALPART_RE which skips contact creation entirely —
+# here we DO create one contact per domain so future emails from the
+# same brand attach to it and the inbox can show "from <brand>" instead
+# of "from <raw email>". Conservative list — only domains where 95%+
+# of inbound is promotional, transactional, or sales blast. Match is
+# substring-on-domain (case insensitive).
+_MASS_MAILER_DOMAINS = (
+    # Big retail / marketplaces
+    "ebay", "amazon", "etsy", "aliexpress", "temu", "wish",
+    "bonprix", "otto.de", "zalando", "shein", "boohoo",
+    # Payment / financial-marketing (their TRANSACTIONAL mail uses
+    # role-account local-parts already filtered by the regex above;
+    # this catches the marketing blasts)
+    "paypal", "klarna", "stripe.email",
+    # Shipping / logistics — same logic as payment
+    "dhl", "ups.com", "fedex", "hermesworld", "dpd.",
+    # Travel / booking
+    "airbnb", "booking.com", "uber.com", "lyft.com", "expedia",
+    # Marketing-automation senders (when the sending domain itself
+    # is the platform, the message is by definition outbound marketing)
+    "mailchimp", "sendgrid", "mailgun", "hubspot.com",
+    "intercom", "mandrillapp",
+    # Newsletter / creator platforms — the from-domain IS the platform,
+    # which means whatever this message is, it's outbound bulk.
+    "beehiiv", "substack", "convertkit", "ghost.io",
+    "buttondown", "revue.email",
+    # Big social — they all send transactional mail but also a lot of
+    # "follow suggestions", "look who's posted" promo. Folder into
+    # one business+spam contact per platform rather than letting each
+    # subdomain pile up.
+    "instagram.com", "facebook.com", "facebookmail.com",
+    "linkedin.com", "twitter.com", "x.com", "pinterest",
+    "tiktok.com", "discord.com", "discord-mail",
+    # Subdomain markers — any domain containing these is a
+    # marketing/notification mailer, regardless of root domain.
+    "newsletter.", "marketing.", "mailing.", "mailings.",
+    "notifications.", ".email.", "news.", "info.", "hello.",
+    "deals.", "promo.", "offers.", "campaigns.",
+)
+
+
+def is_mass_mailer_email(email: str) -> bool:
+    """Heuristic: does this sender look like a marketing/promotional
+    mass-mailer (ebay, amazon, paypal, bonprix, …)?
+
+    Used by the autocapture pipeline to consolidate per-domain into a
+    single business contact instead of letting each per-address
+    variation pile up in Pending. Conservative — when in doubt,
+    returns False and the standard pending-person path runs."""
+    e = normalize_email(email)
+    if not e or "@" not in e:
+        return False
+    domain = e.split("@", 1)[1]
+    return any(pat in domain for pat in _MASS_MAILER_DOMAINS)
+
+
+def find_business_by_email_domain(domain: str) -> Optional[Dict[str, Any]]:
+    """Find an existing business-kind contact whose email channel ends
+    in @<domain>. Used to consolidate mass-mailer variants — "ebay@",
+    "member@", "noreply@" on ebay.com all attach to the same row.
+
+    Falls back to None when nothing matches. Case-insensitive on the
+    domain. Returns the first match (channels are unique per address,
+    but multiple per contact)."""
+    d = (domain or "").strip().lower()
+    if not d:
+        return None
+    with conn_ctx() as c:
+        row = c.execute(
+            "SELECT c.* FROM contacts c "
+            "JOIN contact_channels ch ON ch.contact_id = c.id "
+            "WHERE c.kind = 'business' "
+            "  AND ch.kind = 'email' "
+            "  AND LOWER(ch.value) LIKE ? "
+            "ORDER BY c.id ASC LIMIT 1",
+            (f"%@{d}",),
+        ).fetchone()
+        return _to_contact_dict(row) if row else None
 
 
 def is_transactional_email(email: str) -> bool:
@@ -624,7 +722,8 @@ def _to_address_dict(row: Any) -> Dict[str, Any]:
 
 __all__ = [
     "normalize_email", "normalize_phone", "normalize_channel",
-    "is_transactional_email",
+    "is_transactional_email", "is_mass_mailer_email",
+    "find_business_by_email_domain",
     "find_by_channel", "search", "get",
     "create", "update", "delete", "archive",
     "add_channel", "remove_channel",
