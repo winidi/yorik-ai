@@ -28,6 +28,7 @@ email pipeline. The caller wraps in try/except and logs.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Iterable, Optional
 
 from . import contacts as _contacts
@@ -375,6 +376,150 @@ def on_inbound_whatsapp(
 # ─── Backfill / seed ──────────────────────────────────────────────────
 
 
+def backfill_whatsapp_display_names(*, owner_user_id: Optional[int] = None) -> dict:
+    """Sync WhatsApp names from passive sources into contact_channels
+    and (when display_name is the JID-fallback) into contacts.
+
+    Sources, in priority order:
+      1. The bridge's persisted nameByJid map (populated from every
+         Baileys event with a name — chats.upsert, contacts.upsert,
+         messages.upsert, messaging-history.set).
+      2. wa_chats.name (older fallback, set per-chat).
+      3. wa_messages.push_name (matched on chat_jid OR participant).
+
+    Active per-JID lookup via presenceSubscribe was removed: it didn't
+    reliably return data even on a healthy session because Meta only
+    sends names through the init-sync / message channels, not in
+    response to presence requests. The bridge endpoint still exists
+    for future experimentation but this backfill is passive-only.
+
+    A contact's display_name is updated ONLY when it's purely digits
+    (the JID-prefix fallback we set at create time when no name was
+    available). channel.display_name is updated ALWAYS — that's the
+    per-modality field, designed to track the upstream-provided name
+    regardless of how the user has renamed the contact.
+    """
+    from .database import get_conn
+
+    updated_contacts = 0
+    updated_channels = 0
+    no_source = 0
+    inspected = 0
+    _BRIDGE_URL = os.getenv("YORIK_WA_BRIDGE_URL", "http://127.0.0.1:3015")
+    import requests as _rq
+
+    # Pull every WA contact row + its channel id (we'll update both
+    # the channel and the contact rows). Include rows that already
+    # have a real contact name — their channel.display_name might
+    # still be stale and worth updating from the bridge map.
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT c.id AS contact_id, c.display_name AS contact_name, "
+            "       ch.id AS channel_id, ch.value AS jid, "
+            "       ch.display_name AS channel_name "
+            "FROM contacts c "
+            "JOIN contact_channels ch ON ch.contact_id = c.id "
+            "WHERE ch.kind = 'whatsapp' "
+            "ORDER BY c.id"
+        ).fetchall()
+
+    bridge_names: dict[str, str] = {}
+    if owner_user_id:
+        try:
+            r = _rq.get(
+                f"{_BRIDGE_URL}/users/{owner_user_id}/contact-names",
+                timeout=5,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                bridge_names = data.get("contacts") or {}
+                log.info("backfill-wa-names: bridge contact-map has %d names", len(bridge_names))
+        except Exception as exc:  # noqa: BLE001
+            log.info("backfill-wa-names: bridge contact-names fetch failed: %s", exc)
+
+    for row in rows:
+        inspected += 1
+        cid = int(row["contact_id"])
+        chan_id = int(row["channel_id"])
+        jid = row["jid"]
+        contact_current = row["contact_name"] or ""
+        channel_current = row["channel_name"] or ""
+
+        # Three sources, strongest first. Skip the per-row work when
+        # all sources are empty so the no_source counter is meaningful.
+        best = ""
+        if jid in bridge_names and bridge_names[jid].strip():
+            best = bridge_names[jid].strip()
+        if not best:
+            try:
+                with get_conn() as conn:
+                    wc = conn.execute(
+                        "SELECT name FROM wa_chats WHERE jid = ?",
+                        (jid,),
+                    ).fetchone()
+                    if wc and (wc["name"] or "").strip():
+                        best = wc["name"].strip()
+                    else:
+                        # Most recent message's pushName: chat_jid match
+                        # (1:1 sender) OR participant match (group).
+                        # Participant covers @lid contacts who only
+                        # appear via their group activity.
+                        wm = conn.execute(
+                            "SELECT push_name FROM wa_messages "
+                            "WHERE push_name IS NOT NULL AND push_name <> '' "
+                            "  AND (chat_jid = ? OR participant = ?) "
+                            "ORDER BY timestamp DESC LIMIT 1",
+                            (jid, jid),
+                        ).fetchone()
+                        if wm and (wm["push_name"] or "").strip():
+                            best = wm["push_name"].strip()
+            except Exception as exc:  # noqa: BLE001
+                log.debug("backfill-wa-names: lookup failed for contact %d: %s", cid, exc)
+                continue
+
+        if not best:
+            no_source += 1
+            continue
+
+        try:
+            with get_conn() as conn:
+                # Always refresh channel.display_name when the discovered
+                # name differs — this is the per-modality field, kept
+                # current with WhatsApp's latest pushName regardless of
+                # what the contact's display_name is.
+                if channel_current != best:
+                    conn.execute(
+                        "UPDATE contact_channels SET display_name=? WHERE id=?",
+                        (best, chan_id),
+                    )
+                    updated_channels += 1
+                # Promote contact.display_name only if it's still the
+                # numeric JID-prefix fallback — never overwrite a
+                # user-set or earlier-promoted name.
+                if contact_current.isdigit():
+                    conn.execute(
+                        "UPDATE contacts SET display_name=?, updated_at=datetime('now') "
+                        "WHERE id=?",
+                        (best, cid),
+                    )
+                    updated_contacts += 1
+                conn.commit()
+        except Exception as exc:  # noqa: BLE001
+            log.debug("backfill-wa-names: update failed for contact %d: %s", cid, exc)
+
+    log.info("backfill_whatsapp_display_names: inspected=%d updated_contacts=%d updated_channels=%d no_source=%d",
+             inspected, updated_contacts, updated_channels, no_source)
+    return {
+        "inspected": inspected,
+        "updated_contacts": updated_contacts,
+        "updated_channels": updated_channels,
+        "no_source": no_source,
+        # Legacy alias kept so the frontend "updated" count doesn't
+        # disappear from existing alerts during the rollout.
+        "updated": updated_contacts,
+    }
+
+
 def seed_from_whatsapp_history(*, owner_user_id: Optional[int] = None) -> dict:
     """One-shot backfill — walk every 1:1 chat in wa_chats and create a
     pending contact for each sender that doesn't already have a contact
@@ -440,9 +585,16 @@ def seed_from_whatsapp_history(*, owner_user_id: Optional[int] = None) -> dict:
 
     log.info("seed_from_whatsapp_history: created=%d existing=%d groups=%d pseudo=%d",
              created, skipped_existing, skipped_groups, skipped_pseudo)
+    # Refresh display names for any rows whose display_name is still
+    # the raw phone-number fallback. The first seed-run typically
+    # creates many of these because wa_chats.name hasn't been synced
+    # by the bridge yet at that moment; a second seed-run (or any
+    # subsequent call) picks up the now-populated names.
+    name_fix = backfill_whatsapp_display_names(owner_user_id=owner_user_id)
     return {
         "created": created,
         "skipped_existing": skipped_existing,
         "skipped_groups": skipped_groups,
         "skipped_pseudo": skipped_pseudo,
+        **{f"names_{k}": v for k, v in name_fix.items()},
     }

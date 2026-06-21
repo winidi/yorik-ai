@@ -186,6 +186,55 @@ async function startSession(userId) {
     defaultQueryTimeoutMs: 120_000,
   });
   session.sock = sock;
+  // Per-session name map, persisted to disk so bridge restarts
+  // (deployments, server reboots, image rebuilds) don't lose what
+  // Baileys has taught us. File lives next to the auth dir as
+  // /data/sessions/<uid>/name-map.json — small JSON dict {jid: name}.
+  //
+  // Persistence is debounced: writing on every _learn() would thrash
+  // disk during init-sync bursts (thousands of names in seconds).
+  // We schedule one write per ~500ms instead.
+  session.nameByJid = new Map();
+  const nameMapPath = join(SESSIONS_DIR, userId, "name-map.json");
+  try {
+    const { readFileSync } = await import("fs");
+    if (existsSync(nameMapPath)) {
+      const loaded = JSON.parse(readFileSync(nameMapPath, "utf-8"));
+      for (const [jid, name] of Object.entries(loaded || {})) {
+        if (typeof name === "string" && name) session.nameByJid.set(jid, name);
+      }
+      session.logger.info(`name-map: loaded ${session.nameByJid.size} entries from disk`);
+    }
+  } catch (e) {
+    session.logger.warn({ err: String(e) }, "name-map: load failed (continuing with empty map)");
+  }
+
+  let _saveTimer = null;
+  const _scheduleSave = () => {
+    if (_saveTimer) return;
+    _saveTimer = setTimeout(async () => {
+      _saveTimer = null;
+      try {
+        const { writeFileSync } = await import("fs");
+        const obj = Object.fromEntries(session.nameByJid);
+        writeFileSync(nameMapPath, JSON.stringify(obj));
+      } catch (e) {
+        session.logger.warn({ err: String(e) }, "name-map: save failed");
+      }
+    }, 500);
+  };
+  session._saveNameMap = _scheduleSave;
+
+  const _learn = (jid, name) => {
+    if (!jid || typeof name !== "string") return;
+    const n = name.trim();
+    if (!n) return;
+    if (n === jid) return;
+    const prev = session.nameByJid.get(jid);
+    if (prev === n) return;  // no-op, skip the disk write
+    session.nameByJid.set(jid, n);
+    _scheduleSave();
+  };
 
   sock.ev.on("creds.update", saveCreds);
 
@@ -227,6 +276,16 @@ async function startSession(userId) {
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     for (const m of messages) {
       cacheMessage(session, m);
+      // Every inbound message carries a pushName that names the sender
+      // (or the group participant who sent it). Capture both so @lid
+      // pseudo-JIDs we only ever see as group participants still
+      // resolve to a human name.
+      const remote = m.key?.remoteJid;
+      const participant = m.key?.participant || null;
+      const pushName = m.pushName;
+      if (pushName) {
+        _learn(participant || remote, pushName);
+      }
       if (type === "notify" || type === "append") {
         const s = serializeMessage(m);
         if (s) broadcast(userId, "message", s);
@@ -235,29 +294,52 @@ async function startSession(userId) {
   });
 
   sock.ev.on("messaging-history.set", (payload) => {
-    const { chats = [], messages = [], isLatest = false } = payload;
+    const { chats = [], contacts = [], messages = [], isLatest = false } = payload;
     let kept = 0;
-    for (const c of chats) broadcast(userId, "chat", serializeChat(c));
+    for (const c of chats) {
+      _learn(c.id, c.name || c.subject);
+      broadcast(userId, "chat", serializeChat(c));
+    }
+    // The history payload also carries a contacts array — Baileys'
+    // initial-sync snapshot of the user's address book. Most reliable
+    // place to populate the name map after a restart.
+    for (const ct of contacts) _learn(ct.id, ct.name || ct.notify || ct.verifiedName);
     for (const m of messages) {
       cacheMessage(session, m);
+      const remote = m.key?.remoteJid;
+      const participant = m.key?.participant || null;
+      if (m.pushName) _learn(participant || remote, m.pushName);
       const s = serializeMessage(m);
       if (s) { broadcast(userId, "message", s); kept++; }
     }
     session.logger.info(
-      `history sync: ${chats.length} chats, ${kept}/${messages.length} messages forwarded (isLatest=${isLatest})`
+      `history sync: ${chats.length} chats, ${contacts.length} contacts, ${kept}/${messages.length} messages forwarded (isLatest=${isLatest}, nameMap=${session.nameByJid.size})`
     );
   });
 
   sock.ev.on("chats.upsert", (chats) => {
-    for (const c of chats) broadcast(userId, "chat", serializeChat(c));
+    for (const c of chats) {
+      _learn(c.id, c.name || c.subject);
+      broadcast(userId, "chat", serializeChat(c));
+    }
   });
   sock.ev.on("chats.update", (chats) => {
-    for (const c of chats) broadcast(userId, "chat", serializeChat(c));
+    for (const c of chats) {
+      _learn(c.id, c.name || c.subject);
+      broadcast(userId, "chat", serializeChat(c));
+    }
   });
   sock.ev.on("contacts.upsert", (contacts) => {
     for (const c of contacts) {
-      if (!c.id || !c.name) continue;
-      broadcast(userId, "chat", { jid: c.id, name: c.name, isGroup: false });
+      const name = c.name || c.notify || c.verifiedName;
+      _learn(c.id, name);
+      if (!c.id || !name) continue;
+      broadcast(userId, "chat", { jid: c.id, name, isGroup: false });
+    }
+  });
+  sock.ev.on("contacts.update", (updates) => {
+    for (const c of updates) {
+      _learn(c.id, c.name || c.notify || c.verifiedName);
     }
   });
 
@@ -480,6 +562,154 @@ app.get("/users/:userId/qr", async (req, res) => {
   }
 });
 
+// Names from Baileys' in-memory contact map. Baileys keeps a live
+// store of every contact it has ever seen — populated from the
+// chats sync, push events on every inbound, contacts.upsert, etc.
+// Each entry can carry up to three name fields: `name` (the contact's
+// WhatsApp profile name), `notify` (the pushName the contact has
+// configured), and `verifiedName` (only for business accounts).
+// First non-empty wins.
+//
+// Two response shapes:
+//   GET /users/:userId/contact-names           → {jid: name, ...}
+//                                                 (all known contacts)
+//   GET /users/:userId/contact-names/:jid      → {jid, name}
+//
+// Used by the backend's WhatsApp-names backfill as the strongest
+// source available (after wa_chats.name and message.push_name —
+// this one is most likely to actually have something for LID
+// pseudo-JIDs that the other sources can't see).
+function _pickContactName(c) {
+  if (!c) return null;
+  const candidates = [c.name, c.notify, c.verifiedName];
+  for (const n of candidates) {
+    if (n && typeof n === "string" && n.trim()) return n.trim();
+  }
+  return null;
+}
+
+app.get("/users/:userId/contact-names", (req, res) => {
+  const s = sessions.get(req.params.userId);
+  if (!s) return res.status(503).json({ error: "no_session" });
+  // Prefer our accumulator (populated from every event with a name);
+  // fall back to Baileys' sock.contacts if it happens to be populated.
+  const out = {};
+  if (s.nameByJid) {
+    for (const [jid, name] of s.nameByJid.entries()) out[jid] = name;
+  }
+  const store = s.sock?.contacts || {};
+  for (const jid of Object.keys(store)) {
+    if (out[jid]) continue;
+    const n = _pickContactName(store[jid]);
+    if (n) out[jid] = n;
+  }
+  res.json({ count: Object.keys(out).length, contacts: out });
+});
+
+// Active per-JID name lookup. The passive listener stack
+// (contacts.upsert, messaging-history.set, message pushNames) only
+// gets us names when Meta pushes them — and Meta is selective.
+// For JIDs where we have ZERO data (chat-stub rows from an old
+// init-sync that arrived without names), we need to actively poke
+// Meta's per-JID channel. presenceSubscribe is the cleanest:
+// "tell me about this contact's presence" → Meta typically responds
+// with a contacts.update carrying the name.
+//
+// Body: { jids: string[], waitMs?: number }
+// Returns: { found: {jid: name, ...}, queried: number, took_ms: number }
+//
+// Rate-limited: max ACTIVE_LOOKUP_MAX_CONCURRENT presenceSubscribe
+// calls in flight, ACTIVE_LOOKUP_GAP_MS between starts. Same pattern
+// as the avatar concurrency cap — keeps us well under Meta's
+// per-IP burst threshold.
+const ACTIVE_LOOKUP_MAX_CONCURRENT = Number(process.env.YORIK_WA_LOOKUP_MAX_CONCURRENT || 4);
+const ACTIVE_LOOKUP_GAP_MS         = Number(process.env.YORIK_WA_LOOKUP_GAP_MS         || 80);
+const ACTIVE_LOOKUP_DEFAULT_WAIT   = Number(process.env.YORIK_WA_LOOKUP_DEFAULT_WAIT_MS || 4000);
+
+async function _subscribePresenceWithThrottle(sock, jids, perUserLogger) {
+  let inFlight = 0;
+  let started  = 0;
+  let errored  = 0;
+  const sleep  = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (const jid of jids) {
+    while (inFlight >= ACTIVE_LOOKUP_MAX_CONCURRENT) await sleep(20);
+    inFlight++;
+    started++;
+    sock.presenceSubscribe(jid)
+      .catch((e) => {
+        errored++;
+        // Most failures are "not on WhatsApp" or transient — debug, not warn,
+        // because this fires for every unknown JID on lookup and would spam.
+        perUserLogger.debug?.({ jid, err: String(e) }, "presenceSubscribe failed");
+      })
+      .finally(() => { inFlight--; });
+    await sleep(ACTIVE_LOOKUP_GAP_MS);
+  }
+  // Wait for last in-flight to settle so the caller's waitMs starts
+  // counting AFTER all subscribes are actually sent.
+  while (inFlight > 0) await sleep(20);
+  return { started, errored };
+}
+
+app.post("/users/:userId/lookup-contact-names", async (req, res) => {
+  const s = sessions.get(req.params.userId);
+  if (!s || !s.connected) return res.status(503).json({ error: "not_connected" });
+  const jids = Array.isArray(req.body?.jids) ? req.body.jids.filter(j => typeof j === "string" && j) : [];
+  if (jids.length === 0) return res.json({ found: {}, queried: 0, took_ms: 0 });
+  // Hard cap to keep request latency bounded — Meta is unlikely to
+  // answer for huge batches anyway, and the cap protects us from a
+  // misconfigured frontend dumping 10k JIDs in one call.
+  const MAX_BATCH = 200;
+  const batch = jids.slice(0, MAX_BATCH);
+  const waitMs = Math.min(Math.max(Number(req.body?.waitMs) || ACTIVE_LOOKUP_DEFAULT_WAIT, 0), 15000);
+
+  const started = Date.now();
+  // Snapshot names we already had before subscribing — lets us tell
+  // the caller how many are NEW vs already-known, useful for UI.
+  const preexisting = new Set();
+  for (const jid of batch) {
+    if (s.nameByJid?.has(jid)) preexisting.add(jid);
+  }
+
+  await _subscribePresenceWithThrottle(s.sock, batch, s.logger);
+
+  // Let Baileys event callbacks run. We can't await individual
+  // contacts.update events because they're delivered globally, not
+  // per-call. Waiting a few seconds is the cheap pragmatic answer.
+  await new Promise((r) => setTimeout(r, waitMs));
+
+  const found = {};
+  let newCount = 0;
+  for (const jid of batch) {
+    const name = s.nameByJid?.get(jid);
+    if (name) {
+      found[jid] = name;
+      if (!preexisting.has(jid)) newCount++;
+    }
+  }
+  s.logger.info(
+    `lookup-contact-names: queried=${batch.length} preexisting=${preexisting.size} new=${newCount} took_ms=${Date.now() - started}`,
+  );
+  res.json({
+    found,
+    queried: batch.length,
+    new_names: newCount,
+    took_ms: Date.now() - started,
+  });
+});
+
+
+app.get("/users/:userId/contact-names/:jid", (req, res) => {
+  const s = sessions.get(req.params.userId);
+  if (!s) return res.status(503).json({ error: "no_session" });
+  const { jid } = req.params;
+  const fromMap = s.nameByJid?.get(jid);
+  if (fromMap) return res.json({ jid, name: fromMap });
+  const n = _pickContactName(s.sock?.contacts?.[jid]);
+  if (!n) return res.status(404).json({ error: "no_name" });
+  res.json({ jid, name: n });
+});
+
 app.get("/users/:userId/chats", (req, res) => {
   const s = sessions.get(req.params.userId);
   if (!s || !s.connected) return res.status(503).json({ error: "not_connected" });
@@ -516,7 +746,45 @@ app.get("/users/:userId/chats/:jid/messages", (req, res) => {
   res.json(out.slice(-limit));
 });
 
-const AVATAR_TTL_MS = 24 * 60 * 60 * 1000;
+// Cache TTLs. Positive (we have a picture) refreshes daily because
+// people occasionally change profile pictures. Negative (Meta said
+// "no picture") refreshes much less often because "no profile pic"
+// is the steady state for many contacts and re-asking is what
+// triggers Meta's anti-abuse heuristics. ENV-overridable for
+// debugging without rebuilding the bridge.
+const AVATAR_TTL_MS         = Number(process.env.YORIK_WA_AVATAR_TTL_MS         || 24 * 60 * 60 * 1000);   // 1 day
+const AVATAR_NEG_TTL_MS     = Number(process.env.YORIK_WA_AVATAR_NEG_TTL_MS     ||  7 * 24 * 60 * 60 * 1000); // 7 days
+const AVATAR_MAX_CONCURRENT = Number(process.env.YORIK_WA_AVATAR_MAX_CONCURRENT || 4);
+
+// Bridge-wide semaphore on outbound Meta calls. Without it, a single
+// page-load with 100 WhatsApp contacts fires 100 parallel
+// profilePictureUrl calls — exactly the burst pattern Meta uses to
+// detect bots. Capped at AVATAR_MAX_CONCURRENT in flight; the rest
+// queue. Per process, NOT per session — Meta sees ONE bridge IP
+// regardless of how many user sessions live behind it.
+let _avatarInFlight = 0;
+const _avatarWaitQueue = [];
+function _acquireAvatarSlot() {
+  return new Promise((resolve) => {
+    if (_avatarInFlight < AVATAR_MAX_CONCURRENT) {
+      _avatarInFlight++;
+      return resolve();
+    }
+    _avatarWaitQueue.push(resolve);
+  });
+}
+function _releaseAvatarSlot() {
+  const next = _avatarWaitQueue.shift();
+  if (next) next();
+  else _avatarInFlight--;
+}
+
+// In-flight dedupe: when the frontend renders the contact list,
+// duplicate avatar requests for the same JID can arrive in the
+// same millisecond (e.g. virtualised list re-rendering a row).
+// Without this, each duplicate is its own Meta call. The Map keys
+// by per-user safe-jid so different sessions don't collide.
+const _avatarPending = new Map();
 
 app.get("/users/:userId/profile-picture/:jid", async (req, res) => {
   const s = sessions.get(req.params.userId);
@@ -526,32 +794,83 @@ app.get("/users/:userId/profile-picture/:jid", async (req, res) => {
   const dir = avatarDir(req.params.userId);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const path = join(dir, `${safe}.jpg`);
-  try {
-    const { readFileSync, statSync: fsStat, writeFileSync } = await import("fs");
-    if (existsSync(path)) {
-      const age = Date.now() - fsStat(path).mtimeMs;
-      if (age < AVATAR_TTL_MS) {
-        res.setHeader("content-type", "image/jpeg");
-        res.setHeader("cache-control", "public, max-age=3600");
-        return res.send(readFileSync(path));
+  const negPath = `${path}.none`;
+  const { readFileSync, statSync: fsStat, writeFileSync } = await import("fs");
+
+  // Fast path 1: cached image, still fresh.
+  if (existsSync(path)) {
+    const age = Date.now() - fsStat(path).mtimeMs;
+    if (age < AVATAR_TTL_MS) {
+      res.setHeader("content-type", "image/jpeg");
+      res.setHeader("cache-control", "public, max-age=3600");
+      return res.send(readFileSync(path));
+    }
+  }
+  // Fast path 2: negative cache, still fresh. The original code
+  // wrote `.none` but never read it — every 404'd contact then
+  // generated a fresh Meta call on every page load. Honoring the
+  // sentinel cuts page-load Meta traffic in half on typical accounts.
+  if (existsSync(negPath)) {
+    const age = Date.now() - fsStat(negPath).mtimeMs;
+    if (age < AVATAR_NEG_TTL_MS) {
+      // Cache-control hints to the browser too; together with the
+      // backend's miss-cache the same JID won't even reach this
+      // bridge for the rest of the negative window.
+      res.setHeader("cache-control", "public, max-age=86400");
+      return res.status(404).json({ error: "no_picture", cached: true });
+    }
+  }
+
+  // Slow path: actually call Meta. Dedupe in-flight + cap concurrency
+  // so a busy page can't blast Meta. Cleanup is in the finally.
+  const dedupeKey = `${req.params.userId}:${safe}`;
+  let pending = _avatarPending.get(dedupeKey);
+  if (!pending) {
+    pending = (async () => {
+      await _acquireAvatarSlot();
+      try {
+        const url = await s.sock.profilePictureUrl(jid, "image").catch(() => null);
+        if (!url) {
+          writeFileSync(negPath, "");
+          return { ok: false };
+        }
+        const r = await fetch(url);
+        if (!r.ok) {
+          // Meta CDN sometimes returns 403 for contacts who restricted
+          // their photo visibility — same end-state for us as "no pic".
+          // Cache that too so we don't retry every load.
+          writeFileSync(negPath, "");
+          return { ok: false };
+        }
+        const buf = Buffer.from(await r.arrayBuffer());
+        writeFileSync(path, buf);
+        return { ok: true, buf };
+      } catch (e) {
+        // Network error / Baileys threw — DON'T write the negative
+        // cache (the contact may have a picture; we just couldn't
+        // reach it right now). Return an error WITHOUT a long
+        // cache so the next page load tries again.
+        return { ok: false, transient: true, err: String(e) };
+      } finally {
+        _releaseAvatarSlot();
+        _avatarPending.delete(dedupeKey);
       }
-    }
-    const url = await s.sock.profilePictureUrl(jid, "image").catch(() => null);
-    if (!url) {
-      writeFileSync(`${path}.none`, "");
-      return res.status(404).json({ error: "no_picture" });
-    }
-    const r = await fetch(url);
-    if (!r.ok) return res.status(404).json({ error: "fetch_failed" });
-    const buf = Buffer.from(await r.arrayBuffer());
-    writeFileSync(path, buf);
+    })();
+    _avatarPending.set(dedupeKey, pending);
+  }
+
+  const result = await pending;
+  if (result.ok) {
     res.setHeader("content-type", "image/jpeg");
     res.setHeader("cache-control", "public, max-age=3600");
-    res.send(buf);
-  } catch (e) {
-    console.error(`[bridge] profile picture error for ${req.params.userId}/${jid}:`, e);
-    res.status(500).json({ error: "fetch_failed", detail: String(e) });
+    return res.send(result.buf);
   }
+  if (result.transient) {
+    res.setHeader("cache-control", "no-store");
+    return res.status(502).json({ error: "fetch_failed", detail: result.err });
+  }
+  res.setHeader("cache-control", "public, max-age=86400");
+  res.status(404).json({ error: "no_picture" });
 });
 
 app.get("/users/:userId/media/:msgId", async (req, res) => {
@@ -640,6 +959,76 @@ app.post("/users/:userId/logout", async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: "logout_failed", detail: String(e) });
   }
+});
+
+
+// Full session teardown — used by the "Disconnect WhatsApp" button in
+// the UI. Three things have to happen for the next pair to be clean:
+//   1. WhatsApp-side logout (polite — removes the device from the
+//      user's phone "Linked Devices" list)
+//   2. Disk-side auth wipe (otherwise Baileys reuses the dead creds
+//      on the next session start)
+//   3. Fresh session start (so a QR appears immediately for the new
+//      account, no bridge restart needed)
+//
+// Tolerant of every "missing" state: if there's no session in memory,
+// we still wipe the auth dir; if the logout call fails because Meta
+// already de-paired us, we still wipe + restart. Idempotent — calling
+// twice in a row is safe.
+app.post("/users/:userId/disconnect", async (req, res) => {
+  const { userId } = req.params;
+  const result = {
+    logged_out: false,
+    auth_wiped: false,
+    restarted:  false,
+    warnings:   [],
+  };
+
+  // Step 1: WhatsApp-side logout. Tolerate any failure (already
+  // disconnected, network blip, Meta refused) — we still want to
+  // clear the local state.
+  const s = sessions.get(userId);
+  if (s && s.sock) {
+    try {
+      await s.sock.logout();
+      result.logged_out = true;
+    } catch (e) {
+      result.warnings.push(`logout: ${String(e)}`);
+    }
+    sessions.delete(userId);
+  }
+
+  // Step 2: disk-side auth wipe. rm -rf the auth dir so Baileys can't
+  // reuse the dead creds. Also wipe the persisted name-map — the next
+  // account's contacts won't share names with the old one and keeping
+  // stale entries would mis-name new pairings. Avatar cache is
+  // intentionally left alone (per-JID, the same JID would resolve to
+  // the same picture across accounts).
+  try {
+    const { rmSync, existsSync } = await import("fs");
+    const dir = authDir(userId);
+    if (existsSync(dir)) {
+      rmSync(dir, { recursive: true, force: true });
+      result.auth_wiped = true;
+    }
+    const nameMapFile = join(SESSIONS_DIR, userId, "name-map.json");
+    if (existsSync(nameMapFile)) rmSync(nameMapFile, { force: true });
+  } catch (e) {
+    result.warnings.push(`auth-wipe: ${String(e)}`);
+  }
+
+  // Step 3: start a fresh session so a QR is ready for the new pair
+  // without a bridge restart. The new session's connection.update
+  // event will fire with the QR string and our existing broadcast
+  // path will surface it to the frontend.
+  try {
+    await startSession(userId);
+    result.restarted = true;
+  } catch (e) {
+    result.warnings.push(`restart: ${String(e)}`);
+  }
+
+  res.json({ ok: true, ...result });
 });
 
 // ─────────────────────────── WS events ─────────────────────────────────

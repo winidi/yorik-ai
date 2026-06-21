@@ -17,6 +17,11 @@ export interface ContactChannel {
   label: string | null;
   verified_at: string | null;
   source: string;
+  /** Upstream-provided name for this channel. WhatsApp's pushName,
+   *  email's From-header name, Telegram's @username, etc. Modality-
+   *  specific; used by the UI when contacts.display_name isn't a
+   *  human name (still showing a JID/phone fallback). */
+  display_name: string | null;
 }
 
 export interface ContactAddress {

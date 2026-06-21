@@ -48,6 +48,7 @@ export function WhatsAppApp() {
   const [draftCounts, setDraftCounts] = useState<Record<string, number>>({});
   const [showImport, setShowImport] = useState(false);
   const [showBriefing, setShowBriefing] = useState(false);
+  const [showDisconnect, setShowDisconnect] = useState(false);
 
   const statusApi = useApi<WaStatus>("/api/whatsapp/status", []);
   const chatsApi = useApi<WaChat[]>("/api/whatsapp/chats", []);
@@ -199,6 +200,15 @@ export function WhatsAppApp() {
                 ? <span className="text-yellow-500">Bridge offline</span>
                 : "Not paired"}
           </span>
+          {status?.connected && (
+            <button
+              onClick={() => setShowDisconnect(true)}
+              className="text-muted-foreground hover:text-destructive underline-offset-2 hover:underline shrink-0"
+              title="Disconnect this WhatsApp account so you can pair a different one"
+            >
+              Disconnect
+            </button>
+          )}
         </footer>
       </aside>
 
@@ -242,6 +252,20 @@ export function WhatsAppApp() {
       {needsPairing && <QrModal status={status} onRefreshStatus={statusApi.refetch} />}
       {showImport && <ImportDialog onClose={() => setShowImport(false)} onImported={refreshAll} />}
       {showBriefing && <BriefingDialog onClose={() => setShowBriefing(false)} />}
+      {showDisconnect && (
+        <DisconnectDialog
+          currentName={status?.me?.name || status?.me?.id?.split(":")[0] || "(unknown)"}
+          onClose={() => setShowDisconnect(false)}
+          onDisconnected={async () => {
+            setShowDisconnect(false);
+            // After disconnect the bridge restarts the session fresh
+            // and emits a `qr` event. Refresh status so `needsPairing`
+            // flips true and the QR modal appears for the new pair.
+            await statusApi.refetch();
+            await refreshAll();
+          }}
+        />
+      )}
 
       <SharedPhotoBanner appLabel="WhatsApp" />
 
@@ -1276,6 +1300,110 @@ function ImportDialog({ onClose, onImported }:
     </div>
   );
 }
+
+// Disconnect this WhatsApp account so a different one can be paired.
+// Orchestrates: bridge sock.logout() → wipe bridge auth on disk →
+// bridge starts a fresh session (which fires a QR event). The user
+// can then scan the new QR with a different WhatsApp account.
+//
+// Local history (wa_messages / wa_chats / wa_drafts) is KEPT by
+// default — disconnect is most commonly used to swap accounts and
+// users almost always want the old conversation history retained
+// for archival. A checkbox makes the destructive "wipe history"
+// path explicit and opt-in.
+function DisconnectDialog({
+  currentName, onClose, onDisconnected,
+}: {
+  currentName: string;
+  onClose: () => void;
+  onDisconnected: () => Promise<void> | void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [wipeHistory, setWipeHistory] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function confirm() {
+    if (busy) return;
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.post<{
+        ok: boolean;
+        bridge?: { logged_out?: boolean; auth_wiped?: boolean; restarted?: boolean };
+        bridge_error?: string | null;
+        history_wiped?: { messages: number; chats: number; drafts: number } | null;
+      }>("/api/whatsapp/disconnect", { wipe_history: wipeHistory });
+      if (!r.ok && r.bridge_error) {
+        // Surface the bridge error explicitly — partial states (e.g.
+        // auth was wiped but logout failed) leave you in a workable
+        // state but worth telling the user.
+        setErr(`Disconnect partially failed: ${r.bridge_error}. You may need to reload the page.`);
+        return;
+      }
+      await onDisconnected();
+    } catch (e: any) {
+      setErr(e?.message || "disconnect failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[800] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={busy ? undefined : onClose}>
+      <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md p-6"
+        onClick={e => e.stopPropagation()}>
+        <h2 className="font-semibold text-base mb-1">Disconnect WhatsApp?</h2>
+        <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+          Currently connected as <span className="font-medium text-foreground">{currentName}</span>.
+          Your phone's "Linked Devices" list will lose this connection.
+          A fresh QR will appear so you can pair a different account.
+        </p>
+
+        <label className="flex items-start gap-2 mb-4 cursor-pointer select-none p-2.5 rounded-md border border-border hover:bg-muted/40">
+          <input
+            type="checkbox"
+            checked={wipeHistory}
+            onChange={e => setWipeHistory(e.target.checked)}
+            disabled={busy}
+            className="mt-0.5 accent-primary"
+          />
+          <span className="text-xs leading-snug">
+            <span className="text-foreground font-medium">Also delete all message history from Yorik</span>
+            <span className="block text-muted-foreground mt-0.5">
+              By default, conversations stay archived locally — only the connection is reset.
+              Check this only if you want a completely clean slate.
+            </span>
+          </span>
+        </label>
+
+        {err && (
+          <div className="mb-3 text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
+            {err}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="flex-1 py-2 text-sm text-muted-foreground hover:bg-muted rounded-md disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={confirm}
+            disabled={busy}
+            className="flex-1 py-2 text-sm rounded-md bg-destructive text-destructive-foreground hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
+          >
+            {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {busy ? "Disconnecting…" : "Disconnect"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function BriefingDialog({ onClose }: { onClose: () => void }) {
   const briefingApi = useApi<{ summary: string; stats: any; generated_at: string }>(

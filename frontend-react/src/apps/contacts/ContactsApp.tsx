@@ -90,7 +90,10 @@ export function ContactsApp() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ status: tab, limit: "200" });
+      // Ask for the backend's max so the whole address book renders.
+      // The backend caps at 500; if your contacts grow past that we'll
+      // need proper pagination instead of just bumping this number.
+      const params = new URLSearchParams({ status: tab, limit: "500" });
       if (query.trim()) params.set("q", query.trim());
       const [list, c] = await Promise.all([
         api.get<Contact[]>(`/api/contacts?${params}`),
@@ -513,6 +516,97 @@ export function ContactsApp() {
 
 
 
+// Avatar that prefers the WhatsApp profile picture (via the bridge
+// proxy at /api/whatsapp/avatar/<jid>) when the contact has a
+// whatsapp channel. Falls back gracefully:
+//   - no whatsapp channel → initials / icon (immediate)
+//   - whatsapp channel but the fetch 404s → initials / icon
+//   - whatsapp channel + fetch returns 200 → image
+//
+// The fetch is gated by IntersectionObserver: off-screen rows do NOT
+// request their avatars. A long contact list with 100+ WhatsApp
+// contacts thus produces ~20 initial requests (the visible window)
+// instead of 100 simultaneous calls. Combined with the bridge's
+// negative-cache + concurrency cap, this keeps Meta-traffic well
+// under the rate-limit threshold even on a hot page load.
+function ContactAvatar({
+  contact, size, className,
+}: {
+  contact: Contact;
+  size: "sm" | "lg";
+  className?: string;
+}) {
+  const jid = (contact.channels || [])
+    .find(ch => ch.kind === "whatsapp")?.value;
+
+  // imgLoaded === null   → not tried yet
+  // imgLoaded === true   → render the <img>
+  // imgLoaded === false  → render the initials/icon fallback
+  const [imgLoaded, setImgLoaded] = useState<boolean | null>(null);
+  // hasBeenVisible flips true the first time this row scrolls within
+  // ~200px of the viewport. Stays true after — we don't want avatars
+  // unmounting and re-fetching when the user scrolls past.
+  const [hasBeenVisible, setHasBeenVisible] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setImgLoaded(jid ? null : false);
+  }, [jid]);
+
+  useEffect(() => {
+    if (!jid || hasBeenVisible) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          setHasBeenVisible(true);
+          obs.disconnect();
+          break;
+        }
+      }
+    }, { rootMargin: "200px" });  // start fetching just before scroll-into-view
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [jid, hasBeenVisible]);
+
+  const dims = size === "lg"
+    ? "w-14 h-14 text-base"
+    : "w-8 h-8 text-xs";
+  const tone = contact.kind === "business"
+    ? "bg-blue-500/15 text-blue-500"
+    : "bg-amber-500/15 text-amber-500";
+  const iconSize = size === "lg" ? "w-6 h-6" : "w-3.5 h-3.5";
+
+  return (
+    <div ref={wrapRef} className={cn(
+      dims,
+      "shrink-0 rounded-full flex items-center justify-center font-semibold overflow-hidden",
+      imgLoaded !== true && tone,
+      className,
+    )}>
+      {imgLoaded !== false && jid && hasBeenVisible && (
+        <img
+          src={`/api/whatsapp/avatar/${encodeURIComponent(jid)}`}
+          alt=""
+          onLoad={() => setImgLoaded(true)}
+          onError={() => setImgLoaded(false)}
+          className={cn(
+            "w-full h-full object-cover",
+            imgLoaded === true ? "block" : "hidden",
+          )}
+        />
+      )}
+      {imgLoaded !== true && (
+        contact.kind === "business"
+          ? <Briefcase className={iconSize} />
+          : <span>{initials(bestContactName(contact))}</span>
+      )}
+    </div>
+  );
+}
+
+
 // ───────────────────────── list row ─────────────────────────
 
 function ContactListRow({
@@ -574,17 +668,10 @@ function ContactListRow({
         selected ? "bg-primary/10 border border-primary/30" : "hover:bg-muted/40 border border-transparent",
       )}
     >
-      <div className={cn(
-        "w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-xs font-semibold",
-        contact.kind === "business" ? "bg-blue-500/15 text-blue-500" : "bg-amber-500/15 text-amber-500",
-      )}>
-        {contact.kind === "business"
-          ? <Briefcase className="w-3.5 h-3.5" />
-          : initials(contact.display_name)}
-      </div>
+      <ContactAvatar contact={contact} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium truncate flex items-center gap-1.5">
-          {contact.display_name}
+          {bestContactName(contact)}
           {contact.status === "pending" && (
             <span className="text-[9px] uppercase tracking-wider px-1 rounded bg-amber-500/15 text-amber-500">pending</span>
           )}
@@ -705,6 +792,54 @@ function RowActionIcon({ icon, title, onClick, enabled, tone }: {
 
 function initials(name: string): string {
   return name.trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase() || "").join("") || "?";
+}
+
+// Modality preference for falling back to channel.display_name when
+// contact.display_name is still the JID-prefix fallback (purely digits).
+// WhatsApp wins because it's the most likely modality to carry a
+// human pushName. Adding Telegram/Signal later = append here.
+const CHANNEL_NAME_PRIORITY: ReadonlyArray<string> = [
+  "whatsapp", "telegram", "signal", "sms", "email",
+];
+
+// Format a WhatsApp JID as a readable phone-style label. Strips the
+// @s.whatsapp.net suffix and prepends a + so it looks like the number
+// it represents. @lid stays as a short fingerprint — there's no
+// phone number to recover. Used for the last-resort fallback when
+// no name is available anywhere.
+function formatJidForDisplay(jid: string): string {
+  if (!jid) return "";
+  if (jid.endsWith("@s.whatsapp.net")) {
+    const digits = jid.slice(0, jid.length - "@s.whatsapp.net".length);
+    return digits ? `+${digits}` : jid;
+  }
+  if (jid.endsWith("@lid")) {
+    const digits = jid.slice(0, jid.length - "@lid".length);
+    return `WhatsApp #${digits.slice(-6)}`;
+  }
+  return jid;
+}
+
+// Best display name for a contact, respecting precedence:
+//   1. contact.display_name if it's a real human-readable name
+//      (not empty, not purely digits — which is our JID-fallback)
+//   2. The display_name from the first channel that has one, ordered
+//      by CHANNEL_NAME_PRIORITY
+//   3. The formatted value of the first channel (e.g. +49 1234)
+//   4. Empty fallback "?"
+function bestContactName(contact: Contact): string {
+  const d = (contact.display_name || "").trim();
+  if (d && !/^[0-9]+$/.test(d)) return d;
+  const chans = contact.channels || [];
+  for (const kind of CHANNEL_NAME_PRIORITY) {
+    const ch = chans.find(c => c.kind === kind && (c.display_name || "").trim());
+    if (ch) return (ch.display_name || "").trim();
+  }
+  // Last resort: format the JID/value of the first channel.
+  if (chans.length > 0) return formatJidForDisplay(chans[0].value);
+  // Truly nothing — fall back to whatever display_name held (probably
+  // the numeric JID-prefix), or a placeholder.
+  return d || "?";
 }
 
 /** Parse "Paperless doc #1234" tokens in extraction notes and render
@@ -841,20 +976,11 @@ function ContactView({
     <div className="space-y-5">
       {/* Header — avatar + name + identity chips + pin/edit */}
       <header className="flex items-start gap-4">
-        <div className={cn(
-          "w-14 h-14 rounded-full flex items-center justify-center text-base font-semibold shrink-0",
-          contact.kind === "business"
-            ? "bg-blue-500/15 text-blue-500"
-            : "bg-amber-500/15 text-amber-500",
-        )}>
-          {contact.kind === "business"
-            ? <Briefcase className="w-6 h-6" />
-            : initials(contact.display_name)}
-        </div>
+        <ContactAvatar contact={contact} size="lg" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-xl font-semibold leading-tight truncate">
-              {contact.display_name}
+              {bestContactName(contact)}
             </h2>
             {contact.pinned && (
               <PinIcon className="w-3.5 h-3.5 text-rose-500" />

@@ -315,6 +315,67 @@ async def _ws_subscriber() -> None:
             backoff = min(backoff * 1.7, 30.0)
 
 
+def _maybe_promote_contact_name(jid: str, new_name: str) -> None:
+    """Always-on self-healing names. When ANY bridge event arrives
+    with a pushName for a JID we have a contact for:
+
+      A. Always update contact_channels.display_name for that
+         (kind=whatsapp, value=jid) row — this is the modality-
+         specific name field, queryable per channel, and modality-
+         agnostic in design (Telegram/Signal will populate the same
+         column on their channel rows).
+      B. Promote contact.display_name ONLY when it's still the raw
+         JID-prefix fallback (purely digits). User-set names like
+         "Mom" or any name we promoted from a stronger source earlier
+         are never overwritten.
+
+    Cheap (two indexed lookups + at most two UPDATEs). Never raises;
+    name-update failures should never block message ingest."""
+    if not jid or not new_name:
+        return
+    cleaned = new_name.strip()
+    if not cleaned or cleaned == jid:
+        return
+    try:
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT c.id AS contact_id, c.display_name AS contact_name, "
+                "       ch.id AS channel_id, ch.display_name AS channel_name "
+                "FROM contacts c "
+                "JOIN contact_channels ch ON ch.contact_id = c.id "
+                "WHERE ch.kind='whatsapp' AND ch.value=? LIMIT 1",
+                (jid,),
+            ).fetchone()
+            if not row:
+                return
+            # A. Update channel.display_name if it changed. Always
+            # writes when the new name differs from what's stored, so
+            # the per-channel field stays current with WhatsApp's
+            # latest pushName regardless of contact.display_name state.
+            channel_id = row["channel_id"]
+            channel_current = row["channel_name"] or ""
+            if channel_current != cleaned:
+                conn.execute(
+                    "UPDATE contact_channels SET display_name=? WHERE id=?",
+                    (cleaned, channel_id),
+                )
+            # B. Promote contact.display_name only if it's still the
+            # numeric fallback. Preserves manual renames and earlier
+            # promotions (which by definition contain letters).
+            contact_current = row["contact_name"] or ""
+            if contact_current.isdigit():
+                conn.execute(
+                    "UPDATE contacts SET display_name=?, updated_at=datetime('now') "
+                    "WHERE id=?",
+                    (cleaned, row["contact_id"]),
+                )
+                log.info("self-heal: promoted contact %d name %r → %r (jid=%s)",
+                         row["contact_id"], contact_current, cleaned, jid)
+            conn.commit()
+    except Exception as exc:  # noqa: BLE001
+        log.debug("self-heal: name promote failed for %s: %s", jid, exc)
+
+
 async def _handle_event(evt: dict[str, Any]) -> None:
     t = evt.get("type")
     p = evt.get("payload") or {}
@@ -334,6 +395,15 @@ async def _handle_event(evt: dict[str, Any]) -> None:
     await _broadcast_to_browsers({"type": t, "payload": p}, user_id=owner_user_id)
     if t == "message":
         _insert_message(p, owner_user_id=owner_user_id)
+        # Self-healing name: every inbound message carries a pushName
+        # — when the sender's contact is still showing the raw JID,
+        # promote to the real name immediately. Skip fromMe (the user's
+        # own messages don't tell us about other people's names).
+        if not p.get("fromMe"):
+            push_name = (p.get("pushName") or "").strip()
+            sender_jid = p.get("participant") or p.get("jid")
+            if push_name and sender_jid:
+                _maybe_promote_contact_name(sender_jid, push_name)
         # Auto-route media: PDFs → Paperless, images/video → Immich,
         # voice notes → Whisper transcript. Spawned, not awaited, so
         # a slow OCR/upload/transcribe pass never backs up the WS
@@ -371,7 +441,11 @@ async def _handle_event(evt: dict[str, Any]) -> None:
                 }, user_id=owner_user_id)
     elif t == "chat":
         # Bridge sends this on history sync, contacts.upsert, and chat
-        # name updates. Just refresh the chat row's name/group flag.
+        # name updates. Refresh the chat row's name/group flag AND
+        # opportunistically upgrade the linked contact's display_name
+        # when it's still the JID-prefix fallback. This is the always-on
+        # half of the "self-healing names" pipeline — any new name
+        # that arrives via any Baileys event promotes the contact.
         jid = p.get("jid")
         name = p.get("name")
         if jid:
@@ -383,6 +457,8 @@ async def _handle_event(evt: dict[str, Any]) -> None:
                 last_text=None,
                 owner_user_id=owner_user_id,
             )
+            if name and (name or "").strip():
+                _maybe_promote_contact_name(jid, name.strip())
     elif t == "ready":
         me = p.get("me") or {}
         log.info("bridge reports WA ready for user=%s: %s", owner_user_id, me)
@@ -1007,7 +1083,8 @@ async def reprocess_message(msg_id: str, chat_jid: str = Query(...)) -> dict[str
 
 
 @router.get("/avatar/{jid:path}")
-async def avatar(jid: str) -> Response:
+async def avatar(jid: str,
+                  user: dict[str, Any] = Depends(_auth.current_user)) -> Response:
     """Proxy the bridge's cached profile picture. Returns 404 with a long
     cache-control on miss/error so the browser stops re-requesting on
     every navigation.
@@ -1015,29 +1092,30 @@ async def avatar(jid: str) -> Response:
     Two classes of JID never have user profile pictures and we short-circuit
     them before touching the bridge:
       - status@broadcast       (WhatsApp's status broadcast pseudo-chat)
-      - *@newsletter, *@lid    (channel / linked-device pseudo-JIDs;
-                                bridge crashes on these — see logs)
-    Returning 404 immediately keeps the frontend fallback (initials) and
-    avoids hammering the bridge with N requests per chat-list render.
+      - *@newsletter           (channel pseudo-JIDs; bridge crashes)
+    *@lid is NOT short-circuited anymore — Baileys can resolve profile
+    pictures for many LID contacts when the in-memory contact map has
+    seen them, and the bridge wraps the call in a try/catch already.
     """
-    # Cache misses for an hour. Without this the browser memory cache is
-    # the only thing standing between us and N requests per page nav —
-    # not enough when the user bounces between Tasks / Calendar / WhatsApp.
-    miss_headers = {"cache-control": "public, max-age=3600"}
+    # Cache misses for a day in the browser (the bridge caches for 7
+    # days on disk via the `.none` sentinel — see whatsapp-bridge
+    # server.js avatar route). Profile-pic absence is the steady
+    # state for many contacts, so re-asking is what trips Meta's
+    # anti-abuse heuristics. 86400 keeps the browser quiet without
+    # forever-caching in case the contact eventually adds a pic.
+    miss_headers = {"cache-control": "public, max-age=86400"}
 
-    if (jid == "status@broadcast"
-            or jid.endswith("@newsletter")
-            or jid.endswith("@lid")):
+    if jid == "status@broadcast" or jid.endswith("@newsletter"):
         return Response(status_code=404, headers=miss_headers)
 
     try:
-        # Profile-pic fetch uses the legacy (un-prefixed) bridge URL —
-        # the bridge's compat shim routes it to the legacy admin
-        # session's avatar cache. Acceptable: profile pics are the same
-        # for any session looking at the same JID, and the shared cache
-        # avoids each user re-downloading.
+        # Use the CURRENT user's session, not the legacy un-prefixed
+        # compat path. The previous implementation routed every avatar
+        # request through the legacy admin's session via the bridge's
+        # compat shim, which silently 404s for everyone once that
+        # session no longer has Baileys auth (e.g. after a re-pair).
         async with httpx.AsyncClient(timeout=10.0) as c:
-            r = await c.get(f"{BRIDGE_URL}/profile-picture/{jid}")
+            r = await c.get(_bridge_url(f"/profile-picture/{jid}", user["id"]))
     except Exception:
         # Bridge unreachable or timeout — degrade gracefully to "no picture"
         # rather than 500. Frontend already shows initials on miss.
@@ -1068,6 +1146,54 @@ async def clear_all(
         n_drafts = conn.execute("DELETE FROM wa_drafts   WHERE owner_user_id=?", (uid,)).rowcount
         conn.commit()
     return {"chats_cleared": n_chats, "messages_cleared": n_msgs, "drafts_cleared": n_drafts}
+
+
+class _DisconnectBody(BaseModel):
+    # When true, also wipe this user's wa_messages / wa_chats / wa_drafts
+    # in addition to the WhatsApp-side session teardown. Default is
+    # KEEP history — disconnect is most commonly used to swap accounts
+    # and users usually want the old history archived, not destroyed.
+    wipe_history: bool = False
+
+
+@router.post("/disconnect")
+async def disconnect(body: _DisconnectBody, user: dict[str, Any] = Depends(_auth.current_user)) -> dict[str, Any]:
+    """Disconnect this user's WhatsApp session entirely. Orchestrates:
+      1. WhatsApp-side logout via the bridge (polite — removes the
+         device from the phone's Linked Devices list).
+      2. Disk-side bridge auth wipe so the next pair is clean.
+      3. Optional: local message-history wipe.
+      4. Triggers a fresh session start on the bridge so a QR appears
+         for re-pairing without any service restart.
+    Idempotent — calling on an already-disconnected account is safe."""
+    uid = user["id"]
+    bridge_result: dict[str, Any] = {}
+    bridge_error: Optional[str] = None
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as c:
+            r = await c.post(_bridge_url("/disconnect", uid))
+            try:
+                bridge_result = r.json()
+            except Exception:  # noqa: BLE001
+                bridge_result = {"status_code": r.status_code, "body": r.text[:200]}
+    except Exception as exc:  # noqa: BLE001
+        bridge_error = str(exc)
+
+    wiped: Optional[dict[str, int]] = None
+    if body.wipe_history:
+        with get_conn() as conn:
+            n_msgs   = conn.execute("DELETE FROM wa_messages WHERE owner_user_id=?", (uid,)).rowcount
+            n_chats  = conn.execute("DELETE FROM wa_chats    WHERE owner_user_id=?", (uid,)).rowcount
+            n_drafts = conn.execute("DELETE FROM wa_drafts   WHERE owner_user_id=?", (uid,)).rowcount
+            conn.commit()
+        wiped = {"messages": n_msgs, "chats": n_chats, "drafts": n_drafts}
+
+    return {
+        "ok": bridge_error is None,
+        "bridge": bridge_result,
+        "bridge_error": bridge_error,
+        "history_wiped": wiped,
+    }
 
 
 @router.post("/chats/{jid:path}/fetch-history")

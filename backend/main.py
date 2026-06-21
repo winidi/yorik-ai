@@ -6416,6 +6416,20 @@ def seed_contacts_from_whatsapp(
     return contact_autocapture.seed_from_whatsapp_history(owner_user_id=user.get("id"))
 
 
+@app.post("/api/contacts/backfill-whatsapp-names")
+def backfill_whatsapp_names(
+    user: dict[str, Any] = Depends(_auth.current_user),
+) -> Dict[str, Any]:
+    """Refresh display_name for contacts that still show a raw phone
+    number / JID prefix. Pulls wa_chats.name (preferred) or the latest
+    wa_messages.push_name as the new name. Idempotent — only touches
+    rows whose display_name is purely digits."""
+    from . import contact_autocapture
+    return contact_autocapture.backfill_whatsapp_display_names(
+        owner_user_id=user.get("id"),
+    )
+
+
 @app.get("/api/contacts/{contact_id}/address-suggestions")
 def address_suggestions(
     contact_id: int,
