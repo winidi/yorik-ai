@@ -234,11 +234,13 @@ async def analyse_message(
         for batch in results:
             evidence.extend(batch or [])
 
-    # Step 3: LLM call. Day 1 stub — returns empty. Day 2 wires the
-    # real Qwen call with structured output constrained to registered
-    # suggestion types.
+    # Step 3: LLM call with structured output constrained to the
+    # SuggestionType registry. Returns [] on any failure (LLM down,
+    # parse fail, all unknown types) — engine persists a 'done' run
+    # with no suggestions, never a half-broken card.
     suggestions = await _call_llm_for_suggestions(
         source_row=source_row,
+        source_kind=source_kind,
         contact=contact,
         evidence=evidence,
     )
@@ -284,16 +286,21 @@ async def analyse_message(
 
 
 async def _call_llm_for_suggestions(*, source_row: Dict[str, Any],
+                                     source_kind: str,
                                      contact: Dict[str, Any],
                                      evidence: List[Evidence]) -> List[Dict[str, Any]]:
-    """LLM hook. Day 1 returns empty — the engine plumbing is fully
-    wired but no LLM call is made yet. Day 2 fills this in with the
-    real Qwen call + structured output validation.
-
-    Returning [] cleanly = the engine persists zero suggestions but
-    still records the run as 'done'. That's the right behaviour both
-    on Day 1 and forever after, for messages the LLM doesn't think
-    deserve a suggestion."""
-    log.debug("LLM stub called for source %s — returning no suggestions",
-              source_row.get("id"))
-    return []
+    """Run one Qwen pass via backend.suggestions.llm. Returns the
+    validated suggestion list. Failures (LLM down, unparseable
+    JSON, all-unknown-types) return [] silently — engine then
+    persists a 'done' run with zero suggestions."""
+    if not _reg.all_types():
+        # No suggestion types registered = nothing the LLM could
+        # legally emit. Skip the call entirely.
+        return []
+    from . import llm as _llm
+    return await _llm.call_llm(
+        source_row=source_row,
+        source_kind=source_kind,
+        contact=contact,
+        evidence=evidence,
+    )

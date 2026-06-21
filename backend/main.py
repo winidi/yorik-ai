@@ -116,6 +116,13 @@ from . import briefing_routes as _briefing_routes
 _briefings_mod.load_all()
 app.include_router(_briefing_routes.router)
 
+# Suggestion engine — plugin-first architecture. bootstrap() registers
+# core retrievers / suggestion types / triggers via side-effect imports
+# so the registries are populated before the first analyse_message.
+from . import suggestions as _suggestions_pkg  # noqa: F401
+from .suggestions import bootstrap as _suggestions_bootstrap
+_suggestions_bootstrap.bootstrap()
+
 # Backup — age-encrypted snapshots, configurable target, daily schedule.
 from . import backup_routes as _backup_routes
 app.include_router(_backup_routes.router)
