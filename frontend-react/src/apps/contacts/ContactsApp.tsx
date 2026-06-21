@@ -3079,26 +3079,39 @@ function TriageEmailPreview({ contactId }: { contactId: number }) {
   return (
     <ol className="mt-2 space-y-1 border-l-2 border-border pl-3">
       {items.map((it, i) => (
-        <li key={i} className="text-[11.5px] leading-snug">
-          <div className="flex items-baseline gap-2">
-            <span className={cn(
-              "text-[9px] uppercase tracking-wider shrink-0 px-1 rounded",
-              it.direction === "outgoing"
-                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                : "bg-muted text-muted-foreground",
-            )}>
-              {it.direction === "outgoing" ? "sent" : "in"}
-            </span>
-            <span className="font-medium truncate">{it.title}</span>
-            {it.when && (
-              <span className="ml-auto text-[10px] text-muted-foreground/60 tabular-nums shrink-0">
-                {fmtShortDate(it.when)}
+        <li key={i}>
+          {/* Anchor (not navigate) → opens in a new tab so the triage
+              modal stays untouched. Cmd/Ctrl+click also works natively,
+              and the URL is visible on hover for keyboard users. */}
+          <a
+            href={it.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="block group text-[11.5px] leading-snug rounded px-1.5 -mx-1.5 py-0.5 hover:bg-muted/50 transition cursor-pointer"
+            title="Open this email in a new tab"
+          >
+            <div className="flex items-baseline gap-2">
+              <span className={cn(
+                "text-[9px] uppercase tracking-wider shrink-0 px-1 rounded",
+                it.direction === "outgoing"
+                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "bg-muted text-muted-foreground",
+              )}>
+                {it.direction === "outgoing" ? "sent" : "in"}
               </span>
+              <span className="font-medium truncate group-hover:underline">{it.title}</span>
+              <ExternalLink className="w-2.5 h-2.5 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0" />
+              {it.when && (
+                <span className="ml-auto text-[10px] text-muted-foreground/60 tabular-nums shrink-0">
+                  {fmtShortDate(it.when)}
+                </span>
+              )}
+            </div>
+            {it.sub && (
+              <div className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{it.sub}</div>
             )}
-          </div>
-          {it.sub && (
-            <div className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{it.sub}</div>
-          )}
+          </a>
         </li>
       ))}
     </ol>
