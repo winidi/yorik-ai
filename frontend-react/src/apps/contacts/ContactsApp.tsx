@@ -279,6 +279,7 @@ export function ContactsApp() {
           <EnrichButton />
           <ExtractButton />
           <CrosslinkMailboxButton onDone={refresh} />
+          <YorikAssistBulkButton tab={tab} counts={counts} onDone={refresh} />
           {tab === "pending" && counts.pending > 0 && (
             <>
               <AutoClassifyButton
@@ -934,6 +935,60 @@ function groupContacts(
 // `[Edit]` button flips to ContactEditor when the user wants to
 // change something.
 
+// Per-contact "Yorik assist" toggle — flips yorik_assist_enabled on
+// the contact row. When OFF (default), the suggestion engine skips
+// any message from this contact entirely, never sending body text
+// to the LLM. This is the contact-level privacy gate from the
+// 3-layer hierarchy (master → source → contact).
+function YorikAssistRow({ contact }: { contact: Contact }) {
+  const [enabled, setEnabled] = useState<boolean>(!!contact.yorik_assist_enabled);
+  const [saving, setSaving] = useState(false);
+
+  // Reset when the user switches contacts.
+  useEffect(() => { setEnabled(!!contact.yorik_assist_enabled); }, [contact.id, contact.yorik_assist_enabled]);
+
+  async function toggle() {
+    const next = !enabled;
+    setSaving(true);
+    setEnabled(next);  // optimistic
+    try {
+      await api.patch(`/api/contacts/${contact.id}`, { yorik_assist_enabled: next });
+    } catch (e: any) {
+      setEnabled(!next);
+      alert(e?.message || "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card/40 px-3 py-2">
+      <div className="text-xs">
+        <div className="font-medium">Yorik assist</div>
+        <div className="text-muted-foreground">
+          Let Yorik analyse messages from this contact and suggest one-click actions.
+        </div>
+      </div>
+      <button
+        onClick={toggle}
+        disabled={saving}
+        className={cn(
+          "shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition",
+          enabled ? "bg-violet-500" : "bg-muted",
+          saving && "opacity-60 cursor-wait",
+        )}
+        aria-pressed={enabled}
+        title={enabled ? "Disable Yorik assist for this contact" : "Enable Yorik assist for this contact"}
+      >
+        <span className={cn(
+          "inline-block h-3.5 w-3.5 transform rounded-full bg-white transition",
+          enabled ? "translate-x-5" : "translate-x-1",
+        )} />
+      </button>
+    </div>
+  );
+}
+
 function ContactView({
   contact, onEdit, onTogglePin,
 }: {
@@ -1034,6 +1089,8 @@ function ContactView({
           </button>
         </div>
       </header>
+
+      <YorikAssistRow contact={contact} />
 
       {/* Employer link — shown for kind="person" rows with a linked
           employer_contact_id (mig 045). Clicking jumps to the business
@@ -1259,6 +1316,56 @@ function TimelineList({ items }: { items: ContactTimelineItem[] }) {
  * is cooperative — current contact finishes its LLM call, then the
  * walk exits cleanly.
  */
+// Bulk "Enable Yorik assist" — scoped to the visible tab (active or
+// pending). Saves the user from clicking 200+ row toggles. Hidden on
+// the spam tab; nobody wants AI suggestions for senders they marked
+// as spam.
+function YorikAssistBulkButton({
+  tab, counts, onDone,
+}: {
+  tab: "active" | "pending" | "spam";
+  counts: { active: number; pending: number; spam: number; archived: number };
+  onDone: () => Promise<void> | void;
+}) {
+  const [busy, setBusy] = useState(false);
+  if (tab === "spam") return null;
+  const visibleCount = tab === "active" ? counts.active : counts.pending;
+  if (visibleCount === 0) return null;
+
+  async function run(enabled: boolean) {
+    const verb = enabled ? "Enable" : "Disable";
+    if (!confirm(
+      `${verb} Yorik assist for all ${visibleCount} ${tab} contact${visibleCount === 1 ? "" : "s"}?\n\n` +
+      `When enabled, Yorik may analyse new messages from these contacts and suggest one-click actions ` +
+      `(replies, meeting slots). Toggle individual contacts off any time.`
+    )) return;
+    setBusy(true);
+    try {
+      await api.post<{ updated_count: number }>(
+        "/api/contacts/yorik-assist/bulk",
+        { scope: tab, enabled },
+      );
+      await onDone();
+    } catch (e: any) {
+      alert("Couldn't update: " + (e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={() => run(true)}
+      disabled={busy}
+      className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5 disabled:opacity-50"
+      title={`Enable Yorik assist for all ${visibleCount} ${tab} contacts`}
+    >
+      <Sparkles className="w-3.5 h-3.5" /> Enable AI · {visibleCount}
+    </button>
+  );
+}
+
+
 function EnrichButton() {
   const [busy, setBusy] = useState(false);
   const [worker, setWorker] = useState<{ status: string; detail: string;

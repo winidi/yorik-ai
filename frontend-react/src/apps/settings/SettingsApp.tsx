@@ -362,6 +362,7 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
         <ConfirmMutationsToggle toast={toast} />
         <DevModeToggle toast={toast} />
         <DefaultDocVisibilityChips toast={toast} />
+        <SuggestionEngineCard toast={toast} />
 
         <div className="flex justify-end">
           <button
@@ -1571,6 +1572,129 @@ function ConfirmMutationsToggle({ toast }: {
     </Card>
   );
 }
+
+// ─── Suggestion engine ─ master toggle + per-source switches ───────
+
+function SuggestionEngineCard({ toast }: {
+  toast: (text: string, kind?: "info" | "success" | "error") => void;
+}) {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [sources, setSources] = useState<Record<string, boolean>>({ email: true });
+  const [saving, setSaving] = useState<"" | "master" | string>("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await api.get<{ suggestions_enabled: boolean; sources: Record<string, boolean> }>(
+          "/api/suggestions/settings",
+        );
+        setEnabled(!!r.suggestions_enabled);
+        setSources(r.sources || { email: true });
+      } catch {
+        setEnabled(false);
+      }
+    })();
+  }, []);
+
+  async function toggleMaster() {
+    if (enabled === null) return;
+    const next = !enabled;
+    setSaving("master");
+    try {
+      await api.post("/api/suggestions/settings", { suggestions_enabled: next });
+      setEnabled(next);
+      toast(next
+        ? "Suggestions ON — Yorik will analyse opted-in contacts' messages"
+        : "Suggestions OFF — no analysis, no cards",
+        "success");
+    } catch (e: any) {
+      toast(e.message || "Failed to save", "error");
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function toggleSource(key: string) {
+    const next = { ...sources, [key]: !sources[key] };
+    setSaving(key);
+    try {
+      await api.post("/api/suggestions/settings", { sources: next });
+      setSources(next);
+    } catch (e: any) {
+      toast(e.message || "Failed to save", "error");
+    } finally {
+      setSaving("");
+    }
+  }
+
+  const KNOWN_SOURCES: Array<{ key: string; label: string; hint?: string }> = [
+    { key: "email", label: "Email",    hint: "Inbound messages from opted-in contacts" },
+    { key: "wa",    label: "WhatsApp", hint: "Coming soon" },
+  ];
+
+  return (
+    <Card title="Suggestions">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <div className="text-sm font-medium">Let Yorik suggest actions</div>
+          <p className="text-xs text-muted-foreground mt-1">
+            When ON, Yorik reads new messages from contacts you've opted in and proposes
+            one-click actions (reply drafts, meeting slots). Privacy: only contacts with
+            "Yorik assist" enabled are analysed. Turn this OFF and nothing is sent to the LLM.
+          </p>
+        </div>
+        <button
+          onClick={toggleMaster}
+          disabled={enabled === null || saving === "master"}
+          className={cn(
+            "shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition",
+            enabled ? "bg-violet-500" : "bg-muted",
+            (enabled === null || saving === "master") && "opacity-60 cursor-wait",
+          )}
+          aria-pressed={!!enabled}
+        >
+          <span
+            className={cn(
+              "inline-block h-4 w-4 transform rounded-full bg-white transition",
+              enabled ? "translate-x-6" : "translate-x-1",
+            )}
+          />
+        </button>
+      </div>
+      {enabled && (
+        <div className="mt-4 pt-3 border-t border-border space-y-2">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+            Sources
+          </div>
+          {KNOWN_SOURCES.map((src) => (
+            <div key={src.key} className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium capitalize">{src.label}</div>
+                {src.hint && <div className="text-xs text-muted-foreground">{src.hint}</div>}
+              </div>
+              <button
+                onClick={() => toggleSource(src.key)}
+                disabled={src.key === "wa" || saving === src.key}
+                className={cn(
+                  "shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition",
+                  sources[src.key] ? "bg-violet-500" : "bg-muted",
+                  (src.key === "wa" || saving === src.key) && "opacity-50 cursor-not-allowed",
+                )}
+                aria-pressed={!!sources[src.key]}
+              >
+                <span className={cn(
+                  "inline-block h-3.5 w-3.5 transform rounded-full bg-white transition",
+                  sources[src.key] ? "translate-x-5" : "translate-x-1",
+                )} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 
 // ─── Dev-mode toggle — shows the per-iteration agent trace under each chat reply ──
 

@@ -122,6 +122,8 @@ app.include_router(_briefing_routes.router)
 from . import suggestions as _suggestions_pkg  # noqa: F401
 from .suggestions import bootstrap as _suggestions_bootstrap
 _suggestions_bootstrap.bootstrap()
+from . import suggestion_routes as _suggestion_routes
+app.include_router(_suggestion_routes.router)
 
 # Backup — age-encrypted snapshots, configurable target, daily schedule.
 from . import backup_routes as _backup_routes
@@ -4450,6 +4452,7 @@ class _ContactPatch(BaseModel):
     notes: Optional[str] = None
     tags: Optional[List[str]] = None
     space: Optional[str] = None  # Phase B: slug or numeric id to move the contact
+    yorik_assist_enabled: Optional[bool] = None  # per-contact AI opt-in
 
 
 class _ChannelIn(BaseModel):
@@ -5291,6 +5294,44 @@ def contact_counts(
 ) -> Dict[str, int]:
     """Counts per status — drives the tab badges."""
     return _contacts.status_counts()
+
+
+@app.post("/api/contacts/yorik-assist/bulk")
+def bulk_yorik_assist(
+    body: dict[str, Any] = Body(default_factory=dict),
+    user: dict[str, Any] = Depends(_auth.current_user),
+) -> Dict[str, Any]:
+    """Bulk-toggle yorik_assist_enabled across a status cohort. Body:
+    {scope: 'active'|'pending'|'all', enabled: bool}. Designed for the
+    Contacts page header "Enable AI for all active contacts" button —
+    saves the user from clicking 200+ rows manually.
+
+    MUST stay declared BEFORE /api/contacts/{contact_id} or FastAPI's
+    int-path-param converter will 422 on 'yorik-assist'.
+    """
+    scope = (body.get("scope") or "active").strip().lower()
+    if scope not in ("active", "pending", "all"):
+        raise HTTPException(400, "scope must be active|pending|all")
+    enabled = bool(body.get("enabled", True))
+    role = user.get("role")
+    uid = user.get("id")
+    # Reuse the same visibility gate the list view uses — never enable
+    # AI on a contact the user can't see.
+    visible = _contacts.search(
+        "", status=None if scope == "all" else scope,
+        limit=10000, role=role, user_id=uid if uid is not None else None,
+    )
+    ids = [int(r["id"]) for r in visible if r and r.get("id") is not None]
+    if not ids:
+        return {"ok": True, "updated_count": 0, "scope": scope, "enabled": enabled}
+    placeholders = ",".join(["?"] * len(ids))
+    with conn_ctx(DB_PATH) as c:
+        c.execute(
+            f"UPDATE contacts SET yorik_assist_enabled=?, updated_at=datetime('now') "
+            f"WHERE id IN ({placeholders})",
+            (enabled, *ids),
+        )
+    return {"ok": True, "updated_count": len(ids), "scope": scope, "enabled": enabled}
 
 
 @app.post("/api/contacts/enrich")

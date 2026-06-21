@@ -74,6 +74,8 @@ export interface Contact {
   last_interaction_at: string | null;
   /** Manual top-of-list flag (mig 025). */
   pinned?: boolean;
+  /** Per-contact opt-in for the suggestion engine (mig 121). */
+  yorik_assist_enabled?: boolean;
   channels: ContactChannel[];
   addresses: ContactAddress[];
 }

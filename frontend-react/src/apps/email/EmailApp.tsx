@@ -29,6 +29,7 @@ import type {
 import { AccountWizard } from "./AccountWizard";
 import { Composer, type ComposeDraft } from "./Composer";
 import { HtmlBody } from "./HtmlBody";
+import { SuggestionPanel } from "./SuggestionPanel";
 import { Dock } from "@/components/Dock";
 import { PersonHover } from "@/components/PersonCard";
 
@@ -2323,6 +2324,7 @@ function Reader({
           )}
         </div>
       </div>
+      <SuggestionPanel messageId={messageRow.id} />
       <AIDraftPanel
         messageId={messageRow.id}
         accountId={messageRow.account_id}
