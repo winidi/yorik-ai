@@ -3056,6 +3056,7 @@ function DedupeButton({
           counts={counts}
           onPick={startPlan}
           onCancel={close}
+          status={status}
         />,
         document.body,
       )}
@@ -3098,11 +3099,12 @@ function DedupeButton({
 
 
 function DedupeChooserModal({
-  counts, onPick, onCancel,
+  counts, onPick, onCancel, status = "pending",
 }: {
   counts: { business: number; person: number } | null;
   onPick: (kind: "business" | "person") => void;
   onCancel: () => void;
+  status?: "pending" | "active";
 }) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -3123,9 +3125,9 @@ function DedupeChooserModal({
       >
         <header className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div>
-            <div className="font-semibold">Dedupe pending contacts</div>
+            <div className="font-semibold">Dedupe {status} contacts</div>
             <div className="text-xs text-muted-foreground mt-0.5">
-              Pick which group of pending contacts to analyse. The LLM scans them and proposes safe merges.
+              Pick which group of {status} contacts to analyse. The LLM scans them and proposes safe merges.
             </div>
           </div>
           <button onClick={onCancel} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground" aria-label="Close">
@@ -3138,13 +3140,13 @@ function DedupeChooserModal({
             onClick={() => onPick("business")}
             className="w-full flex items-center gap-3 p-4 rounded-lg border border-border hover:bg-muted/30 hover:border-primary/30 transition text-left"
           >
-            <div className="w-9 h-9 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-full bg-blue-500/15 text-blue-500 flex items-center justify-center shrink-0">
               <Briefcase className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-medium text-sm">Businesses</div>
               <div className="text-[12px] text-muted-foreground">
-                {counts ? `${counts.business} pending` : "loading…"} · ~15 s
+                {counts ? `${counts.business} ${status}` : "loading…"} · ~15 s
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -3154,13 +3156,13 @@ function DedupeChooserModal({
             onClick={() => onPick("person")}
             className="w-full flex items-center gap-3 p-4 rounded-lg border border-border hover:bg-muted/30 hover:border-primary/30 transition text-left"
           >
-            <div className="w-9 h-9 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-full bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
               <UsersRound className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-medium text-sm">Persons</div>
               <div className="text-[12px] text-muted-foreground">
-                {counts ? `${counts.person} pending` : "loading…"} · ~1 min
+                {counts ? `${counts.person} ${status}` : "loading…"} · ~1 min
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
