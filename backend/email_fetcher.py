@@ -787,19 +787,24 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
     # engine takes effect immediately without a fetcher restart. Same
     # spam skip as autodraft — no value generating suggestions for
     # senders the user has already rejected.
+    #
+    # IMPORTANT: this function runs inside asyncio.to_thread, so
+    # asyncio.get_event_loop() from here raises RuntimeError. Use the
+    # main loop the FastAPI startup hook captured into
+    # backend.suggestions.get_main_loop() instead.
     if inserted_id and autocapture_category != "spam":
         try:
-            import asyncio as _asyncio
+            from . import suggestions as _suggestions_pkg
             from .suggestions.triggers import email_new as _email_new_trig
-            try:
-                _loop = _asyncio.get_event_loop()
-            except RuntimeError:
-                _loop = None
-            if _loop and _loop.is_running():
+            _loop = _suggestions_pkg.get_main_loop()
+            if _loop is not None:
                 _email_new_trig.fire_from_thread(
                     _loop, cfg["owner_user_id"], inserted_id)
+            else:
+                log.warning("suggestions trigger: main loop not captured yet — skipping msg %s",
+                            inserted_id)
         except Exception as e:
-            log.debug("suggestions trigger failed: %s", e)
+            log.warning("suggestions trigger failed for msg %s: %s", inserted_id, e)
 
     # Tier 1 vs Tier 2 routing for document attachments. The old code
     # auto-uploaded every PDF/DOCX/XLSX unconditionally, which turned

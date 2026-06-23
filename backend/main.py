@@ -125,6 +125,18 @@ _suggestions_bootstrap.bootstrap()
 from . import suggestion_routes as _suggestion_routes
 app.include_router(_suggestion_routes.router)
 
+
+@app.on_event("startup")
+async def _suggestions_capture_main_loop() -> None:
+    """Stash the asyncio main loop so worker threads (IMAP fetcher,
+    WA WS subscriber) can fire suggestion triggers via
+    run_coroutine_threadsafe. Without this, asyncio.get_event_loop()
+    from a worker thread raises RuntimeError on Python 3.10+ and the
+    old hooks silently skipped — so the suggestion engine never ran
+    on incoming emails."""
+    import asyncio as _asyncio
+    _suggestions_pkg.set_main_loop(_asyncio.get_running_loop())
+
 # Backup — age-encrypted snapshots, configurable target, daily schedule.
 from . import backup_routes as _backup_routes
 app.include_router(_backup_routes.router)

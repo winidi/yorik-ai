@@ -251,12 +251,14 @@ def _insert_message(m: dict[str, Any], owner_user_id: str = DEFAULT_OWNER) -> No
         # guard), and the engine's contact resolution uses chat_jid
         # which only makes sense for a 1:1 contact.
         try:
-            import asyncio as _asyncio
+            from . import suggestions as _suggestions_pkg
             from .suggestions.triggers import wa_new as _wa_trig
             # We need both the surrogate id (engine source_id) and a
-            # running loop. The id was assigned by the BIGSERIAL on
-            # INSERT; fetch it the same connection-free way the rest
-            # of this function does.
+            # captured main loop reference (the WS subscriber runs IN
+            # the main loop today so asyncio.get_event_loop() worked,
+            # but using the captured reference is robust against
+            # future architecture changes that move the subscriber to
+            # a worker thread).
             from .database import get_conn as _get_conn
             with _get_conn() as _c:
                 _r = _c.execute(
@@ -265,15 +267,12 @@ def _insert_message(m: dict[str, Any], owner_user_id: str = DEFAULT_OWNER) -> No
                     (jid, msg_id, owner_user_id),
                 ).fetchone()
             if _r:
-                try:
-                    _loop = _asyncio.get_event_loop()
-                except RuntimeError:
-                    _loop = None
-                if _loop and _loop.is_running():
+                _loop = _suggestions_pkg.get_main_loop()
+                if _loop is not None:
                     _wa_trig.fire_from_thread(
                         _loop, owner_user_id, int(_r["id"]))
         except Exception as exc:
-            log.debug("WA suggestions trigger failed: %s", exc)
+            log.warning("WA suggestions trigger failed: %s", exc)
 
 
 def _media_placeholder(m: dict[str, Any]) -> Optional[str]:
