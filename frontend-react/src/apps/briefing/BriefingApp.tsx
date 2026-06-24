@@ -150,7 +150,7 @@ export function BriefingApp() {
   const isSnapshot = !!data?._snapshot;
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-[max(5rem,env(safe-area-inset-bottom)+4rem)]">
+    <div className="h-screen overflow-y-auto bg-background text-foreground pb-[max(5rem,env(safe-area-inset-bottom)+4rem)]">
       {/* Header */}
       <header className="border-b border-border bg-card/40 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">

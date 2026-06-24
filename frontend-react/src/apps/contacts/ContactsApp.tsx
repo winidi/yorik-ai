@@ -209,7 +209,7 @@ export function ContactsApp() {
   const closeMobileDetail = () => { setSelectedId(null); setCreating(false); };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="h-screen overflow-y-auto flex flex-col bg-background">
       <main
         className="flex-1 flex flex-col max-w-7xl mx-auto w-full px-4 sm:px-8 pt-5 md:pt-10 pb-[max(8rem,calc(env(safe-area-inset-bottom)+6rem))] md:pb-32"
       >

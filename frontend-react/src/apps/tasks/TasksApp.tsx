@@ -489,7 +489,7 @@ export function TasksApp() {
   }, [tasks]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="h-screen overflow-y-auto flex flex-col bg-background">
       {/* pt: tighter on mobile so the heading + bar don't eat the first
           viewport. pb: reserves room for the dock + iOS home indicator
           (env safe-area). Used to also reserve ~88px for the sticky
@@ -1265,10 +1265,18 @@ function TaskRow({
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
-        <ChevronRight className={cn(
-          "w-3.5 h-3.5 text-muted-foreground shrink-0 transition",
-          expanded && "rotate-90",
-        )} />
+        <button
+          onClick={(e) => { e.stopPropagation(); onClick(); }}
+          className="shrink-0 inline-flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 -m-2 md:m-0 p-2 md:p-0 rounded text-muted-foreground hover:text-foreground"
+          title={expanded ? "Collapse" : "Expand"}
+          aria-label={expanded ? "Collapse task" : "Expand task"}
+          aria-expanded={expanded}
+        >
+          <ChevronRight className={cn(
+            "w-3.5 h-3.5 transition",
+            expanded && "rotate-90",
+          )} />
+        </button>
       </div>
 
       {expanded && (
