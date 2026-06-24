@@ -3497,6 +3497,13 @@ def update_task(
         added, _removed = _replace_task_assignees(task_id, ids)
         _notify_task_assigned(task_id, added, actor)
 
+    # Auto-stop the active timer on done-flip: fold elapsed minutes into
+    # actual_minutes so the historical "how long did this really take"
+    # data point lands cleanly. No-op when the task wasn't running.
+    if pre_done == 0 and patch.done is True:
+        with conn_ctx(DB_PATH) as conn:
+            _fold_elapsed_into_actual(conn, task_id)
+
     # Recurring task: if this PATCH just flipped done from 0→1, spawn
     # the next instance. Skip when patch.done wasn't actually part of
     # this request (silent reschedules shouldn't trigger).
@@ -3512,6 +3519,92 @@ def update_task(
             pass
 
     return _attach_assignees([result])[0]
+
+
+def _elapsed_minutes_since(started_at_str: Any) -> int:
+    """Minutes between an ISO-ish timestamp string and now (UTC).
+
+    Tolerates SQLite's space-separated format ('YYYY-MM-DD HH:MM:SS',
+    naive UTC) and ISO-T separated forms with or without offset. Returns
+    0 on unparseable input so a malformed row never poisons actual_minutes.
+    """
+    if not started_at_str:
+        return 0
+    from datetime import datetime, timezone
+    s = str(started_at_str).strip()
+    if " " in s and "T" not in s:
+        s = s.replace(" ", "T", 1)
+    try:
+        started = datetime.fromisoformat(s)
+    except ValueError:
+        return 0
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    delta = datetime.now(timezone.utc) - started
+    return max(0, int(delta.total_seconds() // 60))
+
+
+def _fold_elapsed_into_actual(conn, task_id: int) -> None:
+    """If the task is running, fold elapsed minutes into actual_minutes
+    and clear started_at. No-op when not running. Computed in Python
+    because the SQLite julianday()/Postgres EXTRACT(epoch) split would
+    require a dialect switch in SQL."""
+    row = conn.execute(
+        "SELECT started_at, actual_minutes FROM tasks WHERE id = ?",
+        (task_id,),
+    ).fetchone()
+    if not row or not row["started_at"]:
+        return
+    new_actual = int(row["actual_minutes"] or 0) + _elapsed_minutes_since(row["started_at"])
+    conn.execute(
+        "UPDATE tasks SET actual_minutes = ?, started_at = NULL WHERE id = ?",
+        (new_actual, task_id),
+    )
+
+
+@app.post("/api/tasks/{task_id}/start")
+def start_task(
+    task_id: int,
+    role: str = Depends(_auth.current_role),
+    actor: Optional[Dict[str, Any]] = Depends(_auth.current_user_optional),
+) -> Dict[str, Any]:
+    """Begin the active-timer on this task.
+
+    Single-active invariant: any other task owned by the same user that
+    is currently running gets folded into actual_minutes and cleared.
+    A user can only have one active task at a time.
+    """
+    _ensure_row_writable("tasks", task_id, role, user=actor)
+    user_id = actor.get("id") if actor else None
+    with conn_ctx(DB_PATH) as conn:
+        if user_id is not None:
+            others = conn.execute(
+                "SELECT id FROM tasks "
+                "WHERE created_by_user_id = ? AND started_at IS NOT NULL AND id != ?",
+                (user_id, task_id),
+            ).fetchall()
+            for r in others:
+                _fold_elapsed_into_actual(conn, int(r["id"]))
+        conn.execute(
+            "UPDATE tasks SET started_at = datetime('now') WHERE id = ?",
+            (task_id,),
+        )
+        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    return _attach_assignees([dict(row)])[0]
+
+
+@app.post("/api/tasks/{task_id}/stop")
+def stop_task(
+    task_id: int,
+    role: str = Depends(_auth.current_role),
+    actor: Optional[Dict[str, Any]] = Depends(_auth.current_user_optional),
+) -> Dict[str, Any]:
+    """Stop the active-timer, folding elapsed minutes into actual_minutes."""
+    _ensure_row_writable("tasks", task_id, role, user=actor)
+    with conn_ctx(DB_PATH) as conn:
+        _fold_elapsed_into_actual(conn, task_id)
+        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    return _attach_assignees([dict(row)])[0]
 
 
 @app.delete("/api/tasks/{task_id}", status_code=204, response_class=Response)

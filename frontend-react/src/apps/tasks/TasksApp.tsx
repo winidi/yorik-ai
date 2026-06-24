@@ -58,6 +58,10 @@ type ExtendedTask = Task & {
   estimated_minutes?: number | null;
   parent_task_id?: number | null;
   recurrence_rule?: string | null;
+  /** ISO datetime when the active-timer started; null/absent = not running. */
+  started_at?: string | null;
+  /** Minutes of recorded work folded in on each stop/done-flip. */
+  actual_minutes?: number | null;
 };
 
 interface ProposedUpdate {
@@ -279,6 +283,17 @@ export function TasksApp() {
       await api.patch(`/api/tasks/${t.id}?role=${ROLE}`, { due_date: newDue });
       tasksApi.refetch();
     } catch (e: any) { alert(`Snooze failed: ${e?.message || e}`); }
+  }, [tasksApi]);
+
+  // Long-press start / stop on the active-timer. Backend enforces the
+  // single-active invariant (starting one task auto-stops any other
+  // running task this user owns), so we don't need to manage that here.
+  const toggleTimer = useCallback(async (t: ExtendedTask) => {
+    try {
+      const endpoint = t.started_at ? "stop" : "start";
+      await api.post(`/api/tasks/${t.id}/${endpoint}?role=${ROLE}`);
+      tasksApi.refetch();
+    } catch (e: any) { alert(`Timer failed: ${e?.message || e}`); }
   }, [tasksApi]);
 
   const addTask = useCallback(async () => {
@@ -869,6 +884,7 @@ export function TasksApp() {
                         onClick={() => setEditingId(editingId === t.id ? null : t.id)}
                         onSaved={() => { tasksApi.refetch(); setEditingId(null); }}
                         onSnooze={(newDue) => snoozeTask(t, newDue)}
+                        onToggleTimer={() => toggleTimer(t)}
                         children_={childrenByParent.get(t.id) || []}
                         toggleChild={(child) => toggle(child)}
                         removeChild={(child) => remove(child)}
@@ -1124,7 +1140,7 @@ function SnoozeChip({ label, onClick }: { label: string; onClick: () => void }) 
 
 function TaskRow({
   task, expanded, onToggle, onRemove, onClick, onSaved,
-  onSnooze, children_, toggleChild, removeChild, onAddSubtask,
+  onSnooze, onToggleTimer, children_, toggleChild, removeChild, onAddSubtask,
 }: {
   task: ExtendedTask;
   expanded: boolean;
@@ -1134,6 +1150,8 @@ function TaskRow({
   onSaved: () => void;
   /** Patch the task's due_date forward to the given ISO date. */
   onSnooze?: (isoDate: string) => void;
+  /** Long-press handler: start the timer if idle, stop if running. */
+  onToggleTimer?: () => void;
   /** Subtasks (already sorted) — rendered nested below the main row. */
   children_?: ExtendedTask[];
   toggleChild?: (child: ExtendedTask) => void;
@@ -1153,12 +1171,124 @@ function TaskRow({
   const kidsTotal = kids.length;
   const [childrenOpen, setChildrenOpen] = useState(kidsOpen > 0);
 
+  // Active-timer tick. Only ticks while running, so an idle list of
+  // 200 rows costs zero intervals.
+  const running = !!task.started_at;
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!running) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+  // SQLite/Postgres both store started_at as 'YYYY-MM-DD HH:MM:SS' (naive
+  // UTC). Browser's Date() reads that as LOCAL time, which would show a
+  // huge bogus offset; append 'Z' so it's parsed as UTC.
+  const startedMs = task.started_at
+    ? new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(task.started_at) ? task.started_at : task.started_at.replace(" ", "T") + "Z").getTime()
+    : 0;
+  const liveMin = running ? Math.max(0, (nowMs - startedMs) / 60000) : 0;
+  // Accumulated prior work (folded in on each /stop and on done-flip)
+  // resumes the bar from where it left off instead of restarting at 0.
+  const priorMin = task.actual_minutes ?? 0;
+  const displayMin = priorMin + liveMin;
+  const estMin = task.estimated_minutes ?? 0;
+  const progress = estMin > 0 ? displayMin / estMin : 0;         // 0..∞
+  // Visual floor: 10% so the bar is visible the instant the user
+  // long-presses, even when 0 minutes have elapsed. Without this
+  // floor, activation looks like nothing happened until ~3min of a
+  // 30min task ticks past.
+  const fillPct = Math.max(10, Math.min(progress, 1) * 100);
+  // Color shifts as work runs into / past the estimate. Stays calm —
+  // /15 fill + /40 border keeps it editorial, not alarming.
+  const phase: "under" | "over" | "way-over" =
+    progress < 1 ? "under" : progress < 1.5 ? "over" : "way-over";
+  const fillClass = !running ? ""
+    : phase === "under"    ? "bg-emerald-500/15"
+    : phase === "over"     ? "bg-amber-500/15"
+    :                        "bg-rose-500/15";
+  const borderRunning = !running ? ""
+    : phase === "under"    ? "border-emerald-500/40"
+    : phase === "over"     ? "border-amber-500/50"
+    :                        "border-rose-500/50";
+  // Done tasks render the same bar at lower opacity so the list
+  // becomes a glance-able post-mortem: which estimates ran long. No
+  // floor here — a done task that actually took 0 minutes shouldn't
+  // pretend to have substance.
+  const showDoneBar = !!task.done && priorMin > 0 && estMin > 0 && !running;
+  const doneFillPct = showDoneBar ? Math.min(progress, 1) * 100 : 0;
+  const doneFillClass = !showDoneBar ? ""
+    : phase === "under"    ? "bg-emerald-500/10"
+    : phase === "over"     ? "bg-amber-500/10"
+    :                        "bg-rose-500/10";
+
+  // Long-press → toggle timer. Suppress the click that fires on
+  // pointerup so we don't ALSO expand the editor. Cancels if the
+  // pointer moves > 10px (treats it as a scroll-start, not a press).
+  const lpRef = useRef<{ timer: number | null; fired: boolean; x: number; y: number }>(
+    { timer: null, fired: false, x: 0, y: 0 }
+  );
+  const lpCancel = () => {
+    if (lpRef.current.timer) { clearTimeout(lpRef.current.timer); lpRef.current.timer = null; }
+  };
+  const lpDown = (e: React.PointerEvent) => {
+    if (!onToggleTimer) return;
+    lpRef.current.fired = false;
+    lpRef.current.x = e.clientX;
+    lpRef.current.y = e.clientY;
+    lpRef.current.timer = window.setTimeout(() => {
+      lpRef.current.fired = true;
+      lpRef.current.timer = null;
+      try { (navigator as any).vibrate?.(15); } catch { /* not supported */ }
+      onToggleTimer();
+    }, 500);
+  };
+  const lpMove = (e: React.PointerEvent) => {
+    if (!lpRef.current.timer) return;
+    if (Math.abs(e.clientX - lpRef.current.x) > 10 || Math.abs(e.clientY - lpRef.current.y) > 10) {
+      lpCancel();
+    }
+  };
+  const clickGuarded = (e: React.MouseEvent) => {
+    if (lpRef.current.fired) {
+      lpRef.current.fired = false;
+      e.preventDefault();
+      return;
+    }
+    onClick();
+  };
+
   return (
     <div className={cn(
-      "border rounded-lg bg-card transition",
-      expanded ? "border-primary/40 shadow-sm" : "border-border hover:border-foreground/15",
+      "relative overflow-hidden border rounded-lg bg-card transition",
+      expanded ? "border-primary/40 shadow-sm" : (running ? borderRunning : "border-border hover:border-foreground/15"),
     )}>
-      <div className="flex items-center gap-3 p-3 group">
+      {/* Progress fill. Tasks with an estimate get a filling bar; tasks
+          without one get a thin emerald hairline on the left edge so
+          "running but no estimate" still reads at a glance. */}
+      {running && estMin > 0 && (
+        <div
+          className={cn("absolute inset-y-0 left-0 transition-all duration-1000 ease-linear", fillClass)}
+          style={{ width: `${fillPct}%` }}
+          aria-hidden
+        />
+      )}
+      {running && estMin === 0 && (
+        <div
+          className="absolute inset-y-0 left-0 w-[3px] bg-emerald-500/50"
+          aria-hidden
+        />
+      )}
+      {/* Done-task post-mortem bar: dimmer than the running bar so the
+          line-through stays the dominant "done" cue, but still readable
+          as "this took N of M minutes". */}
+      {showDoneBar && (
+        <div
+          className={cn("absolute inset-y-0 left-0", doneFillClass)}
+          style={{ width: `${doneFillPct}%` }}
+          aria-hidden
+        />
+      )}
+      <div className="relative flex items-center gap-3 p-3 group">
         {/* Toggle: hit area expanded to 44px on mobile via padding +
             min-w/min-h, while the visual icon stays the same size.
             role/aria-checked make the custom button announce as a
@@ -1177,7 +1307,12 @@ function TaskRow({
             : <Square className="w-5 h-5 md:w-4 md:h-4 text-muted-foreground hover:text-foreground" />}
         </button>
         <button
-          onClick={onClick}
+          onClick={clickGuarded}
+          onPointerDown={lpDown}
+          onPointerMove={lpMove}
+          onPointerUp={lpCancel}
+          onPointerCancel={lpCancel}
+          onContextMenu={(e) => e.preventDefault()}
           className="flex-1 text-left min-w-0"
         >
           <div className="flex items-center gap-2">
@@ -1216,11 +1351,53 @@ function TaskRow({
                 <Repeat className="w-3 h-3" /> {task.recurrence_rule}
               </span>
             )}
-            {task.estimated_minutes && (
+            {/* When the timer is running, the estimate chip flips into a
+                live "Nm / Mm" badge (or "running · Nm" without estimate).
+                Promoted to visible on mobile too — it's the readout for
+                the green fill bar. */}
+            {running ? (
+              <span
+                className={cn(
+                  "flex items-center gap-1 font-medium",
+                  phase === "under"    && "text-emerald-600 dark:text-emerald-400",
+                  phase === "over"     && "text-amber-700 dark:text-amber-400",
+                  phase === "way-over" && "text-rose-600 dark:text-rose-400",
+                )}
+                title={estMin > 0
+                  ? `${Math.floor(displayMin)} of ${estMin} estimated minutes (incl. ${priorMin}m from prior sessions)`
+                  : `${Math.floor(displayMin)} minutes total (incl. ${priorMin}m from prior sessions, no estimate set)`}
+              >
+                <Clock className="w-3 h-3" />
+                {estMin > 0
+                  ? `${formatMinutes(Math.floor(displayMin))} / ${formatMinutes(estMin)}`
+                  : `running · ${formatMinutes(Math.floor(displayMin))}`}
+              </span>
+            ) : task.done && priorMin > 0 ? (
+              // Done-task post-mortem chip. With estimate: "took 14m / 30m"
+              // tinted by phase so over/under is glance-readable. Without
+              // estimate: a quiet "took 14m" so the recorded time still
+              // surfaces somewhere.
+              <span
+                className={cn(
+                  "flex items-center gap-1",
+                  estMin > 0 && phase === "under"    && "text-emerald-600/80 dark:text-emerald-400/80",
+                  estMin > 0 && phase === "over"     && "text-amber-700/80 dark:text-amber-400/80",
+                  estMin > 0 && phase === "way-over" && "text-rose-600/80 dark:text-rose-400/80",
+                )}
+                title={estMin > 0
+                  ? `Took ${priorMin} of ${estMin} estimated minutes`
+                  : `Took ${priorMin} minutes (no estimate was set)`}
+              >
+                <Clock className="w-3 h-3" />
+                {estMin > 0
+                  ? `took ${formatMinutes(priorMin)} / ${formatMinutes(estMin)}`
+                  : `took ${formatMinutes(priorMin)}`}
+              </span>
+            ) : task.estimated_minutes ? (
               <span className="hidden md:flex items-center gap-1">
                 <Clock className="w-3 h-3" /> {formatMinutes(task.estimated_minutes)}
               </span>
-            )}
+            ) : null}
             {task.category && <span className="opacity-60">#{task.category}</span>}
             {kidsTotal > 0 && (
               <span

@@ -810,6 +810,11 @@ def init_db(path: str | None = None) -> None:
             "category":           "TEXT",
             "priority":           "INTEGER NOT NULL DEFAULT 1",
             "estimated_minutes":  "INTEGER",
+            # Active-timer (one row per user can have started_at != NULL).
+            # actual_minutes accumulates across stop events + on done-flip
+            # so future "learn from history" estimation has clean data.
+            "started_at":         "TEXT",
+            "actual_minutes":     "INTEGER",
         })
         # Bills imported from email proposals carry a back-reference so
         # the home briefing card can deep-link the user to the source.
