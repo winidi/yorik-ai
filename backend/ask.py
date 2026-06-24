@@ -1019,7 +1019,7 @@ _CATEGORY_PROSE: dict[str, str] = {
         "IMAP mailbox. Composing a new email goes through Compose with kind=\"email\". "
         "For \"such / finde / hol mir die E-Mail von X / zur Y\": find_email_by_subject — "
         "NEVER web_search (web_search is the public internet; find_email_by_subject reads the user's mailbox). "
-        "Inbox actions: find_email_by_subject → email_draft (reply) or update_email (star / unread).",
+        "Inbox actions: find_email_by_subject → read_email (full body) / email_draft (reply) / update_email (star / unread).",
     "whatsapp":
         "Phone-paired chat. Pipeline for \"schreib WhatsApp an X\": find_person (Contacts) → whatsapp_draft.",
     "maps":

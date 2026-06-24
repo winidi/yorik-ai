@@ -642,6 +642,14 @@ class UseSkillTool(Tool[UseSkillArgs]):
                 )
             else:
                 preview = hint
+        elif isinstance(result, dict) and result.get("_full_output"):
+            # Opt-out for skills whose entire job is to hand the LLM a
+            # long verbatim payload (e.g. read_email returns the full
+            # body so the agent can answer questions about it). The
+            # default 800-char cap below would defeat that purpose and
+            # stamp "(truncated)" on a deliberately complete result.
+            data = {k: v for k, v in result.items() if k != "_full_output"}
+            preview = str(data)
         else:
             preview = str(result)
             if len(preview) > 800:
