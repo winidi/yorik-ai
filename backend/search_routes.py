@@ -175,6 +175,21 @@ async def _search_whatsapp(q: str, user_id: str) -> list[dict[str, Any]]:
 
 # ───────────────────────── Paperless ────────────────────────────────
 
+# Cosine-distance threshold for surfacing paperless hits in
+# universal search. paperless_ingest.search uses nearest-neighbour
+# without a cutoff, so even when nothing in the corpus is actually
+# related to the query it returns the K closest documents. For a
+# user-facing search panel that's a noise factory — empirically the
+# closest match for unrelated queries lands at distance 0.7-0.9.
+# 0.55 keeps the "broadly the same topic" matches (~50° angle or
+# cleaner) and drops everything weaker.
+#
+# Other callers of paperless_ingest.search (agent RAG context,
+# explicit /docs search) still see all hits — only the universal
+# /api/search panel gates by relevance.
+_PAPERLESS_MAX_DISTANCE = 0.55
+
+
 def _search_paperless(q: str, user_id: str) -> list[dict[str, Any]]:
     """Semantic search through paperless_ingest with the user's per-user
     Paperless token (so Anna's search only sees Anna's docs)."""
@@ -185,6 +200,10 @@ def _search_paperless(q: str, user_id: str) -> list[dict[str, Any]]:
         hits = paperless_ingest.search(q, k=PER_SOURCE_LIMIT, creds_override=creds)
     except Exception:
         return []
+    relevant = [
+        h for h in (hits or [])
+        if h.get("distance") is not None and h["distance"] <= _PAPERLESS_MAX_DISTANCE
+    ]
     return [{
         "source":      "paperless",
         "id":          h.get("paperless_doc_id"),
@@ -194,7 +213,7 @@ def _search_paperless(q: str, user_id: str) -> list[dict[str, Any]]:
         "timestamp":   h.get("doc_date"),
         "navigate_to": h.get("doc_url") or "/docs",
         "thumbnail_url": h.get("preview_url"),
-    } for h in (hits or [])]
+    } for h in relevant]
 
 
 # ───────────────────────── Immich ───────────────────────────────────
