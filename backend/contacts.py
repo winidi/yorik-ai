@@ -689,6 +689,18 @@ def remove_channel(channel_id: int) -> Optional[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
+def _addr_norm(s: Optional[str]) -> str:
+    """Address-comparison normaliser: lowercase, collapse whitespace,
+    drop punctuation we don't care about for equality. "Vahrenwalder
+    Str. 251" and "vahrenwalder str 251" should match."""
+    if not s:
+        return ""
+    out = " ".join(s.lower().split())
+    for ch in (".", ",", ";", ":"):
+        out = out.replace(ch, "")
+    return " ".join(out.split())
+
+
 def add_address(
     contact_id: int,
     *,
@@ -702,9 +714,41 @@ def add_address(
     label: Optional[str] = None,
     source: str = "manual",
 ) -> int:
+    """Insert an address for `contact_id`, or return the id of an
+    existing identical row.
+
+    Idempotent on (contact_id, line1, postcode, city, country) under
+    a normalised comparison (case/whitespace/punctuation insensitive)
+    — repeated calls with the same address don't create duplicates.
+    This guards against the LLM agent calling both the one-shot
+    add_contact(address=...) path AND a follow-up add_contact_address
+    in the same turn despite the skill docs telling it not to.
+    """
     if not any([line1, line2, postcode, city]):
         raise ValueError("at least one address field is required")
+    n_line1 = _addr_norm(line1)
+    n_postcode = _addr_norm(postcode)
+    n_city = _addr_norm(city)
+    n_country = (country or "").strip().upper()
     with conn_ctx() as c:
+        existing = c.execute(
+            "SELECT id FROM contact_addresses WHERE contact_id = ?",
+            (contact_id,),
+        ).fetchall()
+        for r in existing:
+            row = c.execute(
+                "SELECT id, line1, postcode, city, country "
+                "FROM contact_addresses WHERE id = ?",
+                (r["id"],),
+            ).fetchone()
+            if not row:
+                continue
+            if (_addr_norm(row["line1"])   == n_line1
+                and _addr_norm(row["postcode"]) == n_postcode
+                and _addr_norm(row["city"])     == n_city
+                and (row["country"] or "").strip().upper() == n_country
+                and n_line1):  # require at least line1 to match — empty addresses don't count
+                return int(row["id"])
         cur = c.execute(
             "INSERT INTO contact_addresses ("
             " contact_id, kind, line1, line2, postcode, city, region, country, label, source"
