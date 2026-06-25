@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -33,6 +34,20 @@ from .auth_sessions import current_user
 from .database import get_conn
 
 log = logging.getLogger("yorik.search")
+
+
+def _build_tsquery(query: str) -> Optional[str]:
+    """Turn a user query like "Müller invoice 2025" into a Postgres
+    tsquery string: tokens AND-joined with prefix matching ("müller &
+    invoice:* & 2025:*"). Strips characters that have special meaning
+    in tsquery syntax so a stray `:` or `&` from the user doesn't blow
+    up the planner. Returns None when no usable tokens remain."""
+    raw = [t for t in (query or "").split() if t]
+    cleaned = [re.sub(r"[^\w\-]", "", t, flags=re.UNICODE) for t in raw]
+    cleaned = [t for t in cleaned if t]
+    if not cleaned:
+        return None
+    return " & ".join(f"{t}:*" for t in cleaned)
 
 router = APIRouter(prefix="/api", tags=["search"])
 
@@ -80,22 +95,26 @@ async def universal_search(q: str = Query(..., min_length=2),
 # ───────────────────────── email ────────────────────────────────────
 
 async def _search_email(q: str, user_id: str) -> list[dict[str, Any]]:
-    """FTS5 across email_messages_fts."""
-    terms = [t for t in q.split() if t]
-    if not terms:
+    """Postgres tsvector search over email_messages.search_tsv (a
+    generated column with a GIN index). The previous implementation
+    queried email_messages_fts (SQLite FTS5 virtual table) which
+    doesn't exist post-migration — silently returned 0 hits."""
+    tsq = _build_tsquery(q)
+    if not tsq:
         return []
-    match = " ".join(f'"{t.replace(chr(34), "")}"*' for t in terms)
     with get_conn() as conn:
         try:
             rows = conn.execute(
                 "SELECT m.id, m.subject, m.from_name, m.from_email, m.snippet, "
                 "       m.date_received "
-                "FROM email_messages_fts f JOIN email_messages m ON m.rowid=f.rowid "
-                "WHERE f MATCH ? AND m.owner_user_id=? "
-                "ORDER BY m.date_received DESC LIMIT ?",
-                (match, user_id, PER_SOURCE_LIMIT),
+                "FROM email_messages m "
+                "WHERE m.search_tsv @@ to_tsquery('simple', ?) "
+                "  AND m.owner_user_id = ? "
+                "ORDER BY m.date_received DESC NULLS LAST LIMIT ?",
+                (tsq, user_id, PER_SOURCE_LIMIT),
             ).fetchall()
-        except Exception:
+        except Exception as exc:
+            log.warning("universal-search email branch failed: %s", exc)
             return []
     return [{
         "source":      "email",
@@ -104,30 +123,36 @@ async def _search_email(q: str, user_id: str) -> list[dict[str, Any]]:
         "subtitle":    r["from_name"] or r["from_email"],
         "snippet":     r["snippet"] or "",
         "timestamp":   r["date_received"],
-        "navigate_to": f"/r/email?open={r['id']}",
+        # Mig 124: react app lives at /r/email; ?msg=<id> is the deep-
+        # link the EmailApp parses on mount. /r/email?open=<id> never
+        # existed.
+        "navigate_to": f"/r/email?msg={r['id']}",
     } for r in rows]
 
 
 # ───────────────────────── WhatsApp ─────────────────────────────────
 
 async def _search_whatsapp(q: str, user_id: str) -> list[dict[str, Any]]:
-    """FTS5 across wa_messages_fts. JID gets resolved to chat name."""
-    terms = [t for t in q.split() if t]
-    if not terms:
+    """Postgres tsvector search over wa_messages.search_tsv. Same
+    fix as email: wa_messages_fts (SQLite FTS5) doesn't exist
+    post-migration, and the old query silently returned 0 hits."""
+    tsq = _build_tsquery(q)
+    if not tsq:
         return []
-    match = " OR ".join(t for t in terms if len(t) > 1) or terms[0]
     with get_conn() as conn:
         try:
             rows = conn.execute(
-                "SELECT m.msg_id, m.chat_jid, m.text, m.transcript, m.push_name, "
-                "       m.timestamp, c.name AS chat_name "
-                "FROM wa_messages_fts f JOIN wa_messages m ON m.rowid=f.rowid "
-                "LEFT JOIN wa_chats c ON c.jid=m.chat_jid "
-                "WHERE f.text MATCH ? AND m.owner_user_id=? "
+                "SELECT m.id, m.msg_id, m.chat_jid, m.text, m.transcript, "
+                "       m.push_name, m.timestamp, c.name AS chat_name "
+                "FROM wa_messages m "
+                "LEFT JOIN wa_chats c ON c.jid = m.chat_jid "
+                "WHERE m.search_tsv @@ to_tsquery('simple', ?) "
+                "  AND m.owner_user_id = ? "
                 "ORDER BY m.timestamp DESC LIMIT ?",
-                (match, user_id, PER_SOURCE_LIMIT),
+                (tsq, user_id, PER_SOURCE_LIMIT),
             ).fetchall()
-        except Exception:
+        except Exception as exc:
+            log.warning("universal-search whatsapp branch failed: %s", exc)
             return []
     out = []
     for r in rows:
@@ -135,13 +160,15 @@ async def _search_whatsapp(q: str, user_id: str) -> list[dict[str, Any]]:
         chat = r["chat_name"] or (r["chat_jid"].split("@")[0] if r["chat_jid"] else "?")
         out.append({
             "source":      "whatsapp",
-            "id":          r["msg_id"],
+            # Use the new BIGINT id (mig 124) — the React WA app's
+            # deep-link path expects a numeric source_id, same shape
+            # as the suggestion engine uses.
+            "id":          r["id"],
             "title":       chat,
             "subtitle":    r["push_name"] or "",
             "snippet":     text[:200],
             "timestamp":   r["timestamp"],
-            # Vanilla URL — WhatsApp is still a vanilla app for now.
-            "navigate_to": f"/whatsapp?chat={r['chat_jid']}",
+            "navigate_to": f"/r/whatsapp?chat={r['chat_jid']}",
         })
     return out
 
