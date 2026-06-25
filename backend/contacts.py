@@ -357,6 +357,15 @@ def search(
             f"%{digits_only}%" if len(digits_only) >= 3 else None
         )
 
+        # Tokenize on whitespace + comma + semicolon so multi-word
+        # queries handle the "Lastname, Firstname" vs "Firstname Lastname"
+        # mismatch. The agent asked "Stefan Meier" but the contact's
+        # display_name was "Meier, Stefan" — a single LIKE '%stefan
+        # meier%' never matched. Multi-token AND across name-like fields
+        # closes that gap without bloating notes/tags into the match.
+        tokens = [t for t in re.split(r"[\s,;]+", q_lower) if len(t) >= 2]
+        multi_token = len(tokens) >= 2
+
         # All conditions are OR'd; any single match across name, channel,
         # or address pulls the row into the result set. EXISTS keeps
         # the channels/addresses lookups from multiplying rows.
@@ -394,8 +403,43 @@ def search(
                 "          AND REPLACE(REPLACE(REPLACE(REPLACE(c.value,' ',''),'-',''),'(',''),')','') LIKE ?)"
             )
             sub_params.append(digits_like)
-        where.append("(" + " OR ".join(sub_clauses) + ")")
-        params.extend(sub_params)
+
+        if multi_token:
+            # Per-token AND across NAME-LIKE fields only. Each token must
+            # appear somewhere in {display_name, aliases, first_name,
+            # last_name, legal_name, channel value}. Notes / tags /
+            # relation are excluded so we don't false-positive on
+            # "Stefan Meier" against a Schmidt whose notes mention
+            # "Meier was here."
+            #
+            # OR'd with the existing wide-substring clause so a literal
+            # match like "Meier Stefan Hannover" against an address line
+            # still works.
+            token_groups: List[str] = []
+            token_params: List[Any] = []
+            for tok in tokens:
+                tok_like = f"%{tok}%"
+                clauses = [
+                    "LOWER(display_name)                 LIKE ?",
+                    "LOWER(IFNULL(aliases,''))           LIKE ?",
+                    "LOWER(IFNULL(first_name,''))        LIKE ?",
+                    "LOWER(IFNULL(last_name,''))         LIKE ?",
+                    "LOWER(IFNULL(legal_name,''))        LIKE ?",
+                    "EXISTS (SELECT 1 FROM contact_channels c "
+                    "        WHERE c.contact_id = contacts.id "
+                    "          AND LOWER(c.value) LIKE ?)",
+                ]
+                token_groups.append("(" + " OR ".join(clauses) + ")")
+                token_params.extend([tok_like] * 6)
+            where.append(
+                "((" + " OR ".join(sub_clauses) + ")"
+                " OR (" + " AND ".join(token_groups) + "))"
+            )
+            params.extend(sub_params)
+            params.extend(token_params)
+        else:
+            where.append("(" + " OR ".join(sub_clauses) + ")")
+            params.extend(sub_params)
     where_sql = "WHERE " + " AND ".join(where) if where else ""
     # Pinned-first (mig 025) — manually-pinned contacts bubble to the
     # top regardless of recency. Then warmest (last_used_at DESC), then
