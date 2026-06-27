@@ -200,8 +200,16 @@ export function HtmlBody({
       //   status only enables passive same-origin loads (img, link href).
       // allow-popups: link-target=_blank works (the <base target="_blank">
       //   default we set above).
+      // allow-popups-to-escape-sandbox: without this, the new tab a
+      //   click on an email link spawns INHERITS the email body's
+      //   sandbox — including the no-allow-scripts restriction. The
+      //   destination page (paypal, banking, anything modern) then
+      //   logs "Blocked script execution … sandboxed and allow-scripts
+      //   not set". The flag lets the popup escape the sandbox and
+      //   load as a normal top-level browser page; the original email
+      //   body iframe stays just as sandboxed as before.
       // NOT allowed: scripts, forms, top-navigation, modals, downloads.
-      sandbox="allow-popups allow-same-origin"
+      sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
       title="email body"
       srcDoc={fullSrc}
       className={`w-full border-0 ${className}`}
