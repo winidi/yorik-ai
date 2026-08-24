@@ -30,7 +30,7 @@ services:
       # Defaults work out of the box. Override in .env or your shell
       # to point at a host-side llama-swap, a different DB path, etc.
       - HOMEOS_LLM_BASE_URL=${HOMEOS_LLM_BASE_URL:-http://host.docker.internal:8080/v1}
-      - HOMEOS_MODEL=${HOMEOS_MODEL:-qwen3.6-27b-mtp}
+      - HOMEOS_MODEL=${HOMEOS_MODEL:-qwen3.5-9b}
       - YORIK_TZ=${YORIK_TZ:-Europe/Berlin}
     volumes:
       # The user's data dir — DB, photos, paperless originals, voice

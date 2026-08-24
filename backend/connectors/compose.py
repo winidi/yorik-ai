@@ -236,7 +236,7 @@ def _call_llm_for_revise(selected: str, instruction: str,
     """
     from .. import ask as vanna_agent  # local: avoid import cycle at registration
     base_url = getattr(vanna_agent, "LLM_BASE_URL", "http://127.0.0.1:8080/v1")
-    model = getattr(vanna_agent, "LLM_MODEL", "qwen3.6-27b-mtp")
+    model = getattr(vanna_agent, "LLM_MODEL", "qwen3.5-9b")
     import requests
     length = (length or "short").lower().strip()
     if length not in _LENGTHS:
@@ -345,7 +345,7 @@ def _call_llm_for_write_arg(*, target_arg_key: str, arg_label: str,
     """
     from .. import ask as vanna_agent
     base_url = getattr(vanna_agent, "LLM_BASE_URL", "http://127.0.0.1:8080/v1")
-    model = getattr(vanna_agent, "LLM_MODEL", "qwen3.6-27b-mtp")
+    model = getattr(vanna_agent, "LLM_MODEL", "qwen3.5-9b")
     import requests
     length = (length or "medium").lower().strip()
     if length not in _LENGTHS:

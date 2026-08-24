@@ -1774,7 +1774,7 @@ async def _call_llm(prompt: str) -> str:
     """One-shot completion through the same llama-swap endpoint Vanna uses.
     Direct OpenAI call (no tool loop) — drafts don't need tools."""
     base = os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1")
-    model = os.getenv("HOMEOS_MODEL", "qwen3.6-27b-mtp")
+    model = os.getenv("HOMEOS_MODEL", "qwen3.5-9b")
     async with httpx.AsyncClient(timeout=60.0) as c:
         r = await c.post(
             f"{base}/chat/completions",

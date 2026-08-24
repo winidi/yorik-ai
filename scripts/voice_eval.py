@@ -19,7 +19,7 @@ USAGE
   scripts/voice_eval.py                                # all cases, default LLM
   scripts/voice_eval.py --filter reschedule            # only id matches
   scripts/voice_eval.py --tag calendar                 # only those tagged
-  scripts/voice_eval.py --llm-model qwen3.6-27b-mtp    # try a different LLM
+  scripts/voice_eval.py --llm-model qwen3.5-9b    # try a different LLM
                                                          (must already be loaded
                                                          in your llama-swap)
   scripts/voice_eval.py --json out.json --md report.md  # save artifacts

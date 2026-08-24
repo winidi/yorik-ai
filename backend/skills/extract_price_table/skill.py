@@ -80,7 +80,7 @@ async def execute(
     from backend.agent.llm import LlmClient
     import asyncio
     client = LlmClient(
-        model=os.getenv("HOMEOS_MODEL", "qwen3.6-27b-mtp"),
+        model=os.getenv("HOMEOS_MODEL", "qwen3.5-9b"),
         base_url=os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1"),
     )
     prompt = _build_prompt(page_text, url, venue_name)

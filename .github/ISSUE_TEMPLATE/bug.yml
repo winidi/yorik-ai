@@ -71,7 +71,7 @@ body:
     id: model
     attributes:
       label: Which model?
-      placeholder: "qwen2.5:7b / qwen3.6-27b-mtp / etc."
+      placeholder: "qwen3.5-9b / qwen3.5-9b-mtp / etc."
 
   - type: textarea
     id: backend-log

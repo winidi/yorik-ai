@@ -163,7 +163,7 @@ def call_llm_extract(passages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return []
     from .agent.llm import LlmClient
     client = LlmClient(
-        model=os.getenv("HOMEOS_MODEL", "qwen3.6-27b-mtp"),
+        model=os.getenv("HOMEOS_MODEL", "qwen3.5-9b"),
         base_url=os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1"),
     )
     prompt = build_prompt(passages)
