@@ -233,7 +233,8 @@ def require_contact_access(
     """Gate mutation/read on contacts via Phase B's spaces model. Caller
     is allowed if ANY of:
 
-      - role is 'admin' (admin always wins)
+      - role is 'platform_admin' (infrastructure admin always wins;
+        a household admin is bound by spaces like everyone else)
       - caller owns the contact (created_by_user_id)
       - caller is a member of the contact's space at the required level
         (any level for view; write/admin for edit)
@@ -474,14 +475,18 @@ def ensure_calendars_for_user(user_id: str, user_name: Optional[str]) -> None:
     shared = shared_calendar()
     if not shared:
         with conn_ctx() as c:
+            # The first user is platform_admin since migration 062; ids
+            # are UUIDs, so "ORDER BY id" would pick a random admin —
+            # order by creation instead.
             admin_row = c.execute(
-                "SELECT id FROM user_profiles WHERE role = 'admin' "
-                "ORDER BY id LIMIT 1"
+                "SELECT id FROM user_profiles "
+                "WHERE role IN ('platform_admin', 'admin') "
+                "ORDER BY created_at, id LIMIT 1"
             ).fetchone()
         if admin_row:
             create_calendar(
                 name="Shared",
-                owner_user_id=int(admin_row["id"]),
+                owner_user_id=str(admin_row["id"]),
                 color=_SHARED_COLOR,
                 kind="shared",
             )
