@@ -11,8 +11,11 @@ async def execute(
 ) -> dict[str, Any]:
     if not isinstance(contact_id, int) or contact_id <= 0:
         raise ValueError("contact_id must be a positive integer")
-    if not isinstance(with_user_id, int) or with_user_id <= 0:
-        raise ValueError("with_user_id must be a positive integer")
+    # user ids are UUID strings since Phase E; an integer here is the
+    # pre-Phase-E shape and can never match a row.
+    if not isinstance(with_user_id, str) or not with_user_id.strip():
+        raise ValueError("with_user_id must be the user's id (a UUID string)")
+    with_user_id = with_user_id.strip()
 
     from backend import contacts as C
     pre = C.get(contact_id, include_children=False)
