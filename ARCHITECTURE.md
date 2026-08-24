@@ -58,8 +58,8 @@ build for Yorik without breaking the safety story. It's intentionally short.
 | **Connectors** | `backend/connectors/<name>.py` | Yes (Fernet-encrypted via `credential_store`) | Python | Strict — full code review + audit |
 | **Templates**  | `templates/<id>.json` | No | Pure JSON + Jinja for body_html | Schema validation + render preview |
 
-Plus a **dormant fourth concept** — *Layouts* (community-contributed calendar
-JS) — kept around as the legacy `frontend/layouts/` files but never the
+Plus a **retired fourth concept** — *Layouts* (community-contributed calendar
+JS) — the legacy `frontend/` tree was removed in Aug 2026; it was never the
 contribution surface the original docs imagined. The React frontend replaced
 it; that future-marketplace vision shifted to letter-templates instead.
 

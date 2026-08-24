@@ -23,7 +23,7 @@ from typing import Any, Dict, Final, List, Optional
 import requests
 from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .auth import (
@@ -52,7 +52,6 @@ from . import n8n_client
 from .ui_tools import LAYOUT_CATALOGUE
 
 ROOT = Path(__file__).resolve().parent.parent
-FRONTEND_DIR = ROOT / "frontend"
 DB_PATH = os.getenv("HOMEOS_DB_PATH", DEFAULT_DB_PATH)
 
 app = FastAPI(title="HomeOS", version="0.1.0")
@@ -14124,8 +14123,7 @@ async def ask_voice_resume(
 
 
 # React frontend (frontend-react/dist) served at /r/* — same-origin so
-# the session cookie travels and the React app's API calls share
-# auth with the legacy vanilla frontend.
+# the session cookie travels with the React app's API calls.
 _REACT_DIST = Path(__file__).resolve().parent.parent / "frontend-react" / "dist"
 if _REACT_DIST.exists():
     _REACT_INDEX = _REACT_DIST / "index.html"
@@ -14152,39 +14150,27 @@ if _REACT_DIST.exists():
         return FileResponse(_REACT_INDEX, headers={"Cache-Control": "no-cache"})
 
 
-# SPA-aware static serving — MUST be registered last so /api/* routes win.
-# Direct file hits under /frontend/* (app.js, styles.css, layouts/google.js,
-# index.html, …) are served as-is. Unknown paths like /chat, /carpenter-crm,
-# /calendar fall back to index.html so the frontend router can take over;
-# without this, hard-refreshing /chat would 404.
-if FRONTEND_DIR.exists():
-    _INDEX_HTML = FRONTEND_DIR / "index.html"
+# Front door. The React app under /r/* is the only UI; the legacy
+# vanilla frontend was removed. `/` lands on Home, and the old top-level
+# app paths (bookmarks, kiosk shortcuts) are forwarded to their React
+# routes so nothing a household saved stops working.
+_LEGACY_APP_ROUTES = {
+    "home": "home", "chat": "chat", "calendar": "calendar", "tasks": "tasks",
+    "docs": "documents", "documents": "documents", "compose": "compose",
+    "email": "email", "whatsapp": "whatsapp", "contacts": "contacts",
+    "photos": "photos", "briefing": "briefing", "settings": "settings",
+}
 
-    # Frontend assets we serve directly through this catch-all need explicit
-    # no-cache headers, because Brave (and to a lesser extent Chrome) cache
-    # aggressively enough that even Ctrl+Shift+R sometimes serves stale JS
-    # while we're iterating. ETag-based revalidation alone isn't enough —
-    # this forces a fresh fetch every time, at the cost of one round trip.
-    _NO_CACHE_HEADERS = {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0",
-    }
+@app.get("/", include_in_schema=False)
+def front_door():
+    return RedirectResponse("/r/home", status_code=307)
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    def spa_fallback(full_path: str):
-        # Strip any leading slash and resolve safely under FRONTEND_DIR.
-        rel = full_path.lstrip("/") or "index.html"
-        candidate = (FRONTEND_DIR / rel).resolve()
-        try:
-            candidate.relative_to(FRONTEND_DIR.resolve())
-        except ValueError:
-            # Path tried to escape via .. — refuse and fall through to index.
-            candidate = _INDEX_HTML
-        if candidate.is_file():
-            return FileResponse(candidate, headers=_NO_CACHE_HEADERS)
-        # Anything else (client-side route like /chat) → index.html
-        return FileResponse(_INDEX_HTML, headers=_NO_CACHE_HEADERS)
+@app.get("/{legacy_app}", include_in_schema=False)
+def legacy_app_redirect(legacy_app: str):
+    target = _LEGACY_APP_ROUTES.get(legacy_app)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    return RedirectResponse(f"/r/{target}", status_code=307)
 
 
 
