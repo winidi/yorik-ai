@@ -54,7 +54,17 @@ from .ui_tools import LAYOUT_CATALOGUE
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = os.getenv("HOMEOS_DB_PATH", DEFAULT_DB_PATH)
 
-app = FastAPI(title="HomeOS", version="0.1.0")
+# API docs live under /api/ like everything else the backend serves:
+# the auth whitelist already lists /api/openapi.json, the CSP middleware
+# skips /api/*, and the top-level /docs path belongs to the Documents
+# app redirect. Swagger UI itself stays behind login.
+app = FastAPI(
+    title="Yorik",
+    version="0.1.0",
+    openapi_url="/api/openapi.json",
+    docs_url="/api/docs",
+    redoc_url=None,
+)
 
 # CORS — locked down. We DO serve everything same-origin (the React shell
 # lives at /r/* on the same FastAPI host), so cross-origin access isn't
@@ -2127,12 +2137,6 @@ async def add_csp_header(request, call_next):
     response = await call_next(request)
     if request.url.path.startswith("/api/"):
         return response  # API responses are JSON, CSP irrelevant
-    # FastAPI's auto Swagger UI / ReDoc pages load assets from
-    # cdn.jsdelivr.net + fastapi.tiangolo.com. They're dev-tooling pages
-    # (not customer-facing), so leave them un-policed instead of widening
-    # the global CSP for everyone.
-    if request.url.path in ("/docs", "/redoc", "/docs/oauth2-redirect"):
-        return response
     # Paperless's Angular SPA — proxied through /paperless/* — uses inline
     # scripts/styles and its own asset URLs that our CSP would block. It's
     # served same-origin via the Yorik proxy so leaving it un-policed
