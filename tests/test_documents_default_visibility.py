@@ -15,14 +15,14 @@ import pytest
 
 
 def test_migration_seeds_documents_default_visibility(fresh_app):
-    """Migration 032 inserts the row with default 'private'."""
+    """Migration 126 (Postgres) seeds the row with default 'private'."""
     from backend.database import get_conn
     with get_conn() as conn:
         row = conn.execute(
             "SELECT value FROM household_settings WHERE key = ?",
             ("documents_default_visibility",),
         ).fetchone()
-    assert row is not None, "migration 032 did not run"
+    assert row is not None, "migration 126 did not seed household_settings"
     assert row["value"] == "private"
 
 
@@ -37,14 +37,9 @@ def test_household_admin_can_flip_default(fresh_app):
     """The whole point of the setting: a family flips it to 'shared'."""
     from backend.database import get_conn
     from backend.household_settings import set_setting, get_setting
-    # Seed a user_profiles row so the FK on updated_by_user_id holds.
-    with get_conn() as conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO user_profiles "
-            "(id, name, role, voice_id, email) VALUES (1, 'Admin', 'admin', 'admin', 'a@x')"
-        )
-        conn.commit()
-    set_setting("documents_default_visibility", "shared", updated_by_user_id=1)
+    from tests.conftest import seed_user
+    admin = seed_user(name="Admin", role="admin", email="a@x")
+    set_setting("documents_default_visibility", "shared", updated_by_user_id=admin)
     assert get_setting("documents_default_visibility") == "shared"
 
 

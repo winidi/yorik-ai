@@ -132,7 +132,8 @@ def test_query_role_is_ignored_after_login(fresh_app) -> None:
     # the cookie's role is what the server sees.
     r = client.get("/api/auth/me?role=child")
     assert r.status_code == 200
-    assert r.json().get("user", {}).get("role") == "admin"
+    # The first user created by setup is the platform_admin.
+    assert r.json().get("user", {}).get("role") == "platform_admin"
 
 
 # ─── post-rotation guardrail ───────────────────────────────────────────

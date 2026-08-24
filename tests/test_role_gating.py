@@ -185,8 +185,8 @@ def test_gated_read_table_passes_through_non_gated(fresh_app):
     assert _gated_read_table("UPDATE tasks SET done=1 WHERE id=1") is None
     # DDL is handled by _is_ddl
     assert _gated_read_table("CREATE TABLE x (id INT)") is None
-    # SELECT on a non-gated table
-    assert _gated_read_table("SELECT * FROM contacts") is None
+    # contacts is gated since Phase B; user_profiles is not
+    assert _gated_read_table("SELECT * FROM contacts") == "contacts"
     assert _gated_read_table("SELECT * FROM user_profiles") is None
     # SELECT on a table whose name starts with a gated one — exact match only
     assert _gated_read_table("SELECT * FROM events_archive") is None

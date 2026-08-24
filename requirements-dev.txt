@@ -1,0 +1,2 @@
+# Development / CI only. Runtime deps live in backend/requirements.txt.
+pytest>=8.3

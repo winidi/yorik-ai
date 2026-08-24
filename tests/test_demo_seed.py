@@ -12,22 +12,9 @@ from fastapi.testclient import TestClient
 
 
 def _logged_in_client(app, role: str = "admin"):
-    """Mint a real session for a user of the given role."""
-    from backend import auth_sessions
-    from backend.database import DEFAULT_DB_PATH, conn_ctx
-    with conn_ctx(DEFAULT_DB_PATH) as conn:
-        cur = conn.execute(
-            "INSERT INTO user_profiles "
-            "(name, email, role, voice_id, password_hash, language) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (f"{role}-user", f"{role}@example.local", role, f"vid-{role}",
-             auth_sessions.hash_password("pytestpw123"), "en"),
-        )
-        uid = cur.lastrowid
-        conn.commit()
-    sid = auth_sessions.create_session(uid, user_agent="pytest", ip="127.0.0.1")
-    client = TestClient(app)
-    client.cookies.set(auth_sessions.COOKIE_NAME, sid)
+    """Mint a real session for a seeded user (see conftest.login_client)."""
+    from tests.conftest import login_client
+    client, _uid = login_client(app, role=role)
     return client
 
 

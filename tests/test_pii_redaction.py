@@ -21,16 +21,11 @@ import pytest
 def seeded_user(fresh_app):
     """Insert a user with a full name + street and two multi-word
     contacts. Returns the user_id."""
+    from tests.conftest import seed_user
     from backend.database import DEFAULT_DB_PATH, conn_ctx
+    uid = seed_user(name="Hans Becker", email="hans@example.com", role="admin", voice_id="vid",
+                    first_name="Hans", last_name="Becker", address_street="Hauptstrasse 12")
     with conn_ctx(DEFAULT_DB_PATH) as conn:
-        cur = conn.execute(
-            "INSERT INTO user_profiles "
-            "(name, email, role, voice_id, first_name, last_name, address_street) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            ("Hans Becker", "hans@example.com", "admin", "vid",
-             "Hans", "Becker", "Hauptstrasse 12"),
-        )
-        uid = cur.lastrowid
         for display, status in [
             ("Hausverwaltung Müller GmbH", "active"),
             ("Lena Hoffmann",              "active"),
@@ -114,6 +109,6 @@ def test_no_phrases_for_unknown_user_does_not_crash(fresh_app):
     """Calling redact_pii with a non-existent user_id should return the
     query unchanged, no exception."""
     from backend.skills._web_helpers import redact_pii
-    out, removed = redact_pii("anything goes here", 999_999)
+    out, removed = redact_pii("anything goes here", "00000000-0000-4000-8000-000000000000")
     assert out == "anything goes here"
     assert removed == []

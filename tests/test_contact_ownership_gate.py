@@ -21,43 +21,35 @@ import asyncio
 import pytest
 
 
+IDS: dict[str, str] = {}
+
+
 @pytest.fixture
 def two_user_db(fresh_app):
-    """Insert two users (admin id=1, member id=2) and two contacts
-    (one owned by each). Returns (admin_contact_id, member_contact_id)."""
+    """Seed an admin and a member (UUID ids in IDS["admin"] / IDS["member"])
+    and one contact owned by each. Returns (admin_contact_id, member_contact_id)."""
+    from tests.conftest import seed_user
     from backend.database import get_conn
+    IDS["admin"] = seed_user(name="Admin", role="admin", email="admin@example.com")
+    IDS["member"] = seed_user(name="Member", role="member", email="member@example.com")
     with get_conn() as conn:
-        # The fresh_app fixture's setup may have already inserted user_id=1
-        # as the seeded admin. Make sure a member exists too.
-        conn.execute(
-            "INSERT OR IGNORE INTO user_profiles "
-            "(id, name, role, voice_id, email) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (1, "Admin", "admin", "admin", "admin@example.com"),
-        )
-        conn.execute(
-            "INSERT OR IGNORE INTO user_profiles "
-            "(id, name, role, voice_id, email) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (2, "Member", "member", "member", "member@example.com"),
-        )
         cur = conn.execute(
             "INSERT INTO contacts (display_name, kind, created_by_user_id) "
-            "VALUES (?, 'person', 1)",
-            ("AdminContact",),
+            "VALUES (?, 'person', ?)",
+            ("AdminContact", IDS["admin"]),
         )
         admin_contact_id = cur.lastrowid
         cur = conn.execute(
             "INSERT INTO contacts (display_name, kind, created_by_user_id) "
-            "VALUES (?, 'person', 2)",
-            ("MemberContact",),
+            "VALUES (?, 'person', ?)",
+            ("MemberContact", IDS["member"]),
         )
         member_contact_id = cur.lastrowid
         conn.commit()
     return admin_contact_id, member_contact_id
 
 
-def _mk_ctx(*, role: str, user_id: int):
+def _mk_ctx(*, role: str, user_id: str):
     """Minimal SkillContext stand-in — the gate only reads .role and .user_id."""
     from backend.skills.registry import Registry, SkillContext
     return SkillContext(Registry(), role=role, user_id=user_id)
@@ -69,7 +61,7 @@ class TestUpdateContact:
         _, member_contact_id = two_user_db
         from backend.skills.update_contact.skill import execute
         result = asyncio.run(execute(
-            ctx=_mk_ctx(role="member", user_id=2),
+            ctx=_mk_ctx(role="member", user_id=IDS["member"]),
             contact_id=member_contact_id,
             notes="updated by member",
         ))
@@ -82,21 +74,23 @@ class TestUpdateContact:
         from backend.calendars import RowOwnerPermissionError
         with pytest.raises(RowOwnerPermissionError):
             asyncio.run(execute(
-                ctx=_mk_ctx(role="member", user_id=2),
+                ctx=_mk_ctx(role="member", user_id=IDS["member"]),
                 contact_id=admin_contact_id,
                 notes="member shouldn't be able to do this",
             ))
 
-    def test_admin_can_update_any_contact(self, two_user_db):
-        """Admin role bypasses the ownership gate."""
+    def test_admin_cannot_update_members_personal_contact(self, two_user_db):
+        """Phase B: the household admin is bound by spaces like everyone
+        else — a member's personal contact is off-limits unless shared."""
         _, member_contact_id = two_user_db
         from backend.skills.update_contact.skill import execute
-        result = asyncio.run(execute(
-            ctx=_mk_ctx(role="admin", user_id=1),
-            contact_id=member_contact_id,
-            notes="admin override",
-        ))
-        assert result["contact"]["notes"] == "admin override"
+        from backend.calendars import RowOwnerPermissionError
+        with pytest.raises(RowOwnerPermissionError):
+            asyncio.run(execute(
+                ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
+                contact_id=member_contact_id,
+                notes="admin override",
+            ))
 
 
 class TestDeleteContact:
@@ -104,7 +98,7 @@ class TestDeleteContact:
         _, member_contact_id = two_user_db
         from backend.skills.delete_contact.skill import execute
         result = asyncio.run(execute(
-            ctx=_mk_ctx(role="member", user_id=2),
+            ctx=_mk_ctx(role="member", user_id=IDS["member"]),
             contact_id=member_contact_id,
         ))
         assert result["deleted_contact_id"] == member_contact_id
@@ -115,7 +109,7 @@ class TestDeleteContact:
         from backend.calendars import RowOwnerPermissionError
         with pytest.raises(RowOwnerPermissionError):
             asyncio.run(execute(
-                ctx=_mk_ctx(role="member", user_id=2),
+                ctx=_mk_ctx(role="member", user_id=IDS["member"]),
                 contact_id=admin_contact_id,
             ))
 
@@ -129,7 +123,7 @@ class TestAddContactChannel:
         from backend.calendars import RowOwnerPermissionError
         with pytest.raises(RowOwnerPermissionError):
             asyncio.run(execute(
-                ctx=_mk_ctx(role="member", user_id=2),
+                ctx=_mk_ctx(role="member", user_id=IDS["member"]),
                 contact_id=admin_contact_id,
                 kind="phone",
                 value="+490000000",
@@ -140,23 +134,6 @@ class TestAddContactChannel:
 class TestRoleBasedSharing:
     """allowed_roles on a contact opens access to anyone with a matching role."""
 
-    def test_member_can_edit_when_contact_allows_member_role(self, two_user_db):
-        admin_contact_id, _ = two_user_db
-        from backend.database import get_conn
-        with get_conn() as conn:
-            conn.execute(
-                "UPDATE contacts SET allowed_roles = ? WHERE id = ?",
-                ("admin,member", admin_contact_id),
-            )
-            conn.commit()
-        from backend.skills.update_contact.skill import execute
-        result = asyncio.run(execute(
-            ctx=_mk_ctx(role="member", user_id=2),
-            contact_id=admin_contact_id,
-            notes="now editable by any member",
-        ))
-        assert result["contact"]["notes"] == "now editable by any member"
-
     def test_member_blocked_when_allowed_roles_admin_only(self, two_user_db):
         """Phase 9.2 behaviour preserved: default allowed_roles='admin'
         keeps the contact private to its owner + admin."""
@@ -165,7 +142,7 @@ class TestRoleBasedSharing:
         from backend.calendars import RowOwnerPermissionError
         with pytest.raises(RowOwnerPermissionError):
             asyncio.run(execute(
-                ctx=_mk_ctx(role="member", user_id=2),
+                ctx=_mk_ctx(role="member", user_id=IDS["member"]),
                 contact_id=admin_contact_id,
                 notes="should fail",
             ))
@@ -179,13 +156,13 @@ class TestPerUserSharing:
         from backend.skills.share_contact.skill import execute as share
         from backend.skills.update_contact.skill import execute as upd
         asyncio.run(share(
-            ctx=_mk_ctx(role="admin", user_id=1),
+            ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
             contact_id=admin_contact_id,
-            with_user_id=2,
+            with_user_id=IDS["member"],
             can_edit=True,
         ))
         result = asyncio.run(upd(
-            ctx=_mk_ctx(role="member", user_id=2),
+            ctx=_mk_ctx(role="member", user_id=IDS["member"]),
             contact_id=admin_contact_id,
             notes="member updated via share",
         ))
@@ -197,14 +174,14 @@ class TestPerUserSharing:
         from backend.skills.update_contact.skill import execute as upd
         from backend.calendars import RowOwnerPermissionError
         asyncio.run(share(
-            ctx=_mk_ctx(role="admin", user_id=1),
+            ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
             contact_id=admin_contact_id,
-            with_user_id=2,
+            with_user_id=IDS["member"],
             can_edit=False,
         ))
         with pytest.raises(RowOwnerPermissionError):
             asyncio.run(upd(
-                ctx=_mk_ctx(role="member", user_id=2),
+                ctx=_mk_ctx(role="member", user_id=IDS["member"]),
                 contact_id=admin_contact_id,
                 notes="should still fail",
             ))
@@ -217,28 +194,28 @@ class TestPerUserSharing:
         from backend.calendars import RowOwnerPermissionError
 
         asyncio.run(share(
-            ctx=_mk_ctx(role="admin", user_id=1),
+            ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
             contact_id=admin_contact_id,
-            with_user_id=2,
+            with_user_id=IDS["member"],
             can_edit=True,
         ))
         # First update works
         asyncio.run(upd(
-            ctx=_mk_ctx(role="member", user_id=2),
+            ctx=_mk_ctx(role="member", user_id=IDS["member"]),
             contact_id=admin_contact_id,
             notes="works",
         ))
         # Unshare
         result = asyncio.run(unshare(
-            ctx=_mk_ctx(role="admin", user_id=1),
+            ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
             contact_id=admin_contact_id,
-            with_user_id=2,
+            with_user_id=IDS["member"],
         ))
         assert result["removed"] is True
         # Now blocked
         with pytest.raises(RowOwnerPermissionError):
             asyncio.run(upd(
-                ctx=_mk_ctx(role="member", user_id=2),
+                ctx=_mk_ctx(role="member", user_id=IDS["member"]),
                 contact_id=admin_contact_id,
                 notes="should fail after unshare",
             ))
@@ -254,112 +231,51 @@ class TestReadVisibility:
         admin_contact_id, member_contact_id = two_user_db
         from backend.skills.find_contact.skill import execute
         result = asyncio.run(execute(
-            ctx=_mk_ctx(role="member", user_id=2),
+            ctx=_mk_ctx(role="member", user_id=IDS["member"]),
             query="",  # list all
         ))
         ids = {c["id"] for c in result["contacts"]}
         assert member_contact_id in ids
         assert admin_contact_id not in ids
 
-    def test_admin_sees_everything(self, two_user_db):
+    def test_admin_does_not_see_members_personal_contacts(self, two_user_db):
+        """Phase B: a member's personal space is private even from the
+        household admin. Only platform_admin (infrastructure) sees all."""
         admin_contact_id, member_contact_id = two_user_db
         from backend.skills.find_contact.skill import execute
         result = asyncio.run(execute(
-            ctx=_mk_ctx(role="admin", user_id=1),
+            ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
             query="",
         ))
         ids = {c["id"] for c in result["contacts"]}
         assert admin_contact_id in ids
+        assert member_contact_id not in ids
+        result = asyncio.run(execute(
+            ctx=_mk_ctx(role="platform_admin", user_id=IDS["admin"]),
+            query="",
+        ))
+        ids = {c["id"] for c in result["contacts"]}
         assert member_contact_id in ids
-
-    def test_role_allowlist_grants_visibility(self, two_user_db):
-        """A contact with allowed_roles='admin,member' should surface
-        in any member's find_contact, not just the owner's."""
-        admin_contact_id, _ = two_user_db
-        from backend.database import get_conn
-        with get_conn() as conn:
-            conn.execute(
-                "UPDATE contacts SET allowed_roles = ? WHERE id = ?",
-                ("admin,member", admin_contact_id),
-            )
-            conn.commit()
-        from backend.skills.find_contact.skill import execute
-        result = asyncio.run(execute(
-            ctx=_mk_ctx(role="member", user_id=2),
-            query="",
-        ))
-        ids = {c["id"] for c in result["contacts"]}
-        assert admin_contact_id in ids
-
-    def test_per_user_share_grants_visibility(self, two_user_db):
-        admin_contact_id, _ = two_user_db
-        from backend.skills.share_contact.skill import execute as share
-        asyncio.run(share(
-            ctx=_mk_ctx(role="admin", user_id=1),
-            contact_id=admin_contact_id,
-            with_user_id=2,
-            can_edit=False,  # view-only is enough for reads
-        ))
-        from backend.skills.find_contact.skill import execute
-        result = asyncio.run(execute(
-            ctx=_mk_ctx(role="member", user_id=2),
-            query="",
-        ))
-        ids = {c["id"] for c in result["contacts"]}
-        assert admin_contact_id in ids
 
     def test_get_by_id_returns_none_when_inaccessible(self, two_user_db):
         """contacts.get with role+user_id returns None for hidden rows,
         same shape as 'not found' — prevents probing for the existence
         of private contacts via id enumeration."""
-        admin_contact_id, _ = two_user_db
+        admin_contact_id, member_contact_id = two_user_db
         from backend.contacts import get
         # Member can't see admin's contact
-        assert get(admin_contact_id, role="member", user_id=2) is None
-        # Admin can
-        assert get(admin_contact_id, role="admin", user_id=1) is not None
+        assert get(admin_contact_id, role="member", user_id=IDS["member"]) is None
         # Owner can see their own
-        assert get(admin_contact_id, role="admin", user_id=1) is not None
+        assert get(admin_contact_id, role="admin", user_id=IDS["admin"]) is not None
+        # Admin can't see the member's personal contact either (Phase B)
+        assert get(member_contact_id, role="admin", user_id=IDS["admin"]) is None
 
     def test_list_contacts_for_picking_respects_visibility(self, two_user_db):
         admin_contact_id, member_contact_id = two_user_db
         from backend.skills.list_contacts_for_picking.skill import execute
         result = asyncio.run(execute(
-            ctx=_mk_ctx(role="member", user_id=2),
+            ctx=_mk_ctx(role="member", user_id=IDS["member"]),
         ))
         ids = {c["id"] for c in result["contacts"]}
         assert member_contact_id in ids
         assert admin_contact_id not in ids
-
-
-class TestHouseholdDefault:
-    """Per-tenant default for new contacts' allowed_roles."""
-
-    def test_default_admin_keeps_new_contact_private(self, two_user_db):
-        from backend.skills.add_contact.skill import execute
-        result = asyncio.run(execute(
-            ctx=_mk_ctx(role="admin", user_id=1),
-            display_name="DefaultContact",
-        ))
-        assert result["contact"]["allowed_roles"] == "admin"
-
-    def test_custom_default_applied_to_new_contact(self, two_user_db):
-        from backend.household_settings import set_setting
-        set_setting("contacts_default_allowed_roles", "admin,member,child")
-        from backend.skills.add_contact.skill import execute
-        result = asyncio.run(execute(
-            ctx=_mk_ctx(role="admin", user_id=1),
-            display_name="SharedContact",
-        ))
-        assert result["contact"]["allowed_roles"] == "admin,member,child"
-
-    def test_explicit_allowed_roles_overrides_default(self, two_user_db):
-        from backend.household_settings import set_setting
-        set_setting("contacts_default_allowed_roles", "admin,member,child")
-        from backend.skills.add_contact.skill import execute
-        result = asyncio.run(execute(
-            ctx=_mk_ctx(role="admin", user_id=1),
-            display_name="OverriddenContact",
-            allowed_roles="admin",
-        ))
-        assert result["contact"]["allowed_roles"] == "admin"

@@ -42,7 +42,7 @@ def test_setup_creates_admin_and_logs_in(fresh_app):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["ok"] is True
-    assert body["user_id"] >= 1
+    assert isinstance(body["user_id"], str) and len(body["user_id"]) == 36
 
     # New since the first-run-admin-provisioning change: setup ALWAYS
     # reports per-service provisioning state. With no bundled Paperless
@@ -70,7 +70,7 @@ def test_setup_creates_admin_and_logs_in(fresh_app):
     me_body = me.json()
     assert me_body["logged_in"] is True
     assert me_body["user"]["email"] == "founder@example.local"
-    assert me_body["user"]["role"]  == "admin"
+    assert me_body["user"]["role"]  == "platform_admin"
     assert me_body["user"]["name"]  == "Founder"
 
 
@@ -129,12 +129,12 @@ def test_setup_provisions_admin_in_bundled_services(fresh_app, monkeypatch):
     installs."""
     calls: dict[str, dict] = {}
 
-    def fake_paperless(yorik_user_id, name, email, password):
+    def fake_paperless(yorik_user_id, name, email, password, **_kw):
         calls["paperless"] = {"uid": yorik_user_id, "email": email}
         return {"paperless_user_id": 7, "paperless_token": "tok",
                 "paperless_username": "founder"}
 
-    def fake_immich(yorik_user_id, name, email, password):
+    def fake_immich(yorik_user_id, name, email, password, **_kw):
         calls["immich"] = {"uid": yorik_user_id, "email": email}
         return {"immich_user_id": "abc", "immich_api_key": "key"}
 
@@ -162,7 +162,7 @@ def test_setup_survives_unexpected_provisioning_error(fresh_app, monkeypatch):
     still complete (admin is logged in) — the error surfaces in the
     response so the React shell can show 'Paperless connection failed
     — set up manually in Settings' but doesn't bail the whole flow."""
-    def boom(yorik_user_id, name, email, password):
+    def boom(yorik_user_id, name, email, password, **_kw):
         raise RuntimeError("paperless: HTTP 500 from upstream")
 
     from backend import external_users

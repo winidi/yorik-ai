@@ -84,7 +84,7 @@ def test_check_tasks_open_to_all_read_roles():
     skill = reg.get("check_tasks")
     assert skill is not None
     assert "member" in skill.permissions
-    assert "child" in skill.permissions
+    assert "restricted" in skill.permissions
 
 
 def test_compose_draft_open_to_members():

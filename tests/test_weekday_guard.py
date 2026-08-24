@@ -21,25 +21,22 @@ from datetime import date, datetime, timedelta
 import pytest
 
 
-def _mk_ctx(*, role: str, user_id: int):
+def _mk_ctx(*, role: str, user_id: str):
     from backend.skills.registry import Registry, SkillContext
     return SkillContext(Registry(), role=role, user_id=user_id)
+
+
+IDS: dict[str, str] = {}
 
 
 @pytest.fixture
 def seeded_app(fresh_app):
     """fresh_app + a user_profiles row + a personal calendar.
     add_calendar_event needs both to insert into events."""
-    from backend.database import get_conn
+    from tests.conftest import seed_user
     from backend.calendars import ensure_calendars_for_user
-    with get_conn() as conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO user_profiles "
-            "(id, name, role, voice_id, email) "
-            "VALUES (1, 'Admin', 'admin', 'admin', 'a@x')"
-        )
-        conn.commit()
-    ensure_calendars_for_user(1, "Admin")
+    IDS["admin"] = seed_user(name="Admin", role="admin", email="a@x", voice_id="admin")
+    ensure_calendars_for_user(IDS["admin"], "Admin")
     return fresh_app
 
 
@@ -63,7 +60,7 @@ class TestAddCalendarEventRefusesPastDates:
         from backend.skills.add_calendar_event.skill import execute
         with pytest.raises(ValueError) as excinfo:
             asyncio.run(execute(
-                ctx=_mk_ctx(role="admin", user_id=1),
+                ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
                 title="EvalTest-Past",
                 starts_at=_yesterday_iso(),
             ))
@@ -78,7 +75,7 @@ class TestAddCalendarEventRefusesPastDates:
         """Scheduling for today is fine — only past dates refuse."""
         from backend.skills.add_calendar_event.skill import execute
         result = asyncio.run(execute(
-            ctx=_mk_ctx(role="admin", user_id=1),
+            ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
             title="EvalTest-Today",
             starts_at=_today_iso(23),  # late today
         ))
@@ -87,7 +84,7 @@ class TestAddCalendarEventRefusesPastDates:
     def test_tomorrow_accepted(self, seeded_app):
         from backend.skills.add_calendar_event.skill import execute
         result = asyncio.run(execute(
-            ctx=_mk_ctx(role="admin", user_id=1),
+            ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
             title="EvalTest-Tomorrow",
             starts_at=_tomorrow_iso(),
         ))
@@ -99,7 +96,7 @@ class TestVerifiedWeekday:
     def test_result_carries_weekday_in_de_and_en(self, seeded_app):
         from backend.skills.add_calendar_event.skill import execute
         result = asyncio.run(execute(
-            ctx=_mk_ctx(role="admin", user_id=1),
+            ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
             title="EvalTest-Weekday",
             starts_at=_tomorrow_iso(),
         ))
@@ -124,7 +121,7 @@ class TestVerifiedWeekday:
         appear there or the echo is useless."""
         from backend.skills.add_calendar_event.skill import execute
         result = asyncio.run(execute(
-            ctx=_mk_ctx(role="admin", user_id=1),
+            ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
             title="EvalTest-Weekday-Hint",
             starts_at=_tomorrow_iso(),
         ))
@@ -145,7 +142,7 @@ class TestUpdateCalendarEventRefusesPastDates:
 
         # Create an event for tomorrow so we have a real id to target.
         created = asyncio.run(add_event(
-            ctx=_mk_ctx(role="admin", user_id=1),
+            ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
             title="EvalTest-MoveTarget",
             starts_at=_tomorrow_iso(),
         ))
@@ -153,7 +150,7 @@ class TestUpdateCalendarEventRefusesPastDates:
 
         with pytest.raises(ValueError) as excinfo:
             asyncio.run(upd_event(
-                ctx=_mk_ctx(role="admin", user_id=1),
+                ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
                 event_id=event_id,
                 starts_at=_yesterday_iso(),
             ))
