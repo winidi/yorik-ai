@@ -7,7 +7,7 @@
 #   3. Run directly: `bash scripts/install-systemd-service.sh [install|uninstall|status]`
 #
 # What it does (install):
-#   - Renders scripts/yorik.service.template with this user/repo/port
+#   - Renders yorik.service.template (repo root, same file install.sh uses)
 #   - sudo cp to /etc/systemd/system/yorik.service
 #   - sudo systemctl daemon-reload + enable --now yorik
 #   - Verifies it came up; rolls back if not
@@ -20,7 +20,7 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-TEMPLATE="$REPO/scripts/yorik.service.template"
+TEMPLATE="$REPO/yorik.service.template"
 UNIT_PATH="/etc/systemd/system/yorik.service"
 PORT="${HOMEOS_PORT:-8000}"
 RUN_USER="${SUDO_USER:-$USER}"
@@ -40,18 +40,16 @@ _check_systemd() {
 _check_template() {
   [[ -f "$TEMPLATE" ]] \
     || _die "template missing: $TEMPLATE"
-  [[ -x "$REPO/venv/bin/uvicorn" ]] \
-    || _die "venv not built at $REPO/venv — run start.sh first to create it."
+  [[ -x "$REPO/start.sh" ]] \
+    || _die "start.sh missing or not executable at $REPO/start.sh"
 }
 
 _render_unit() {
   # Write to a tmp file, install via sudo. Lets us see the rendered
   # content even on permission errors.
   local out="$1"
-  sed -e "s|__USER__|$RUN_USER|g" \
-      -e "s|__GROUP__|$RUN_GROUP|g" \
-      -e "s|__REPO__|$REPO|g" \
-      -e "s|__PORT__|$PORT|g" \
+  sed -e "s|{{INSTALL_DIR}}|$REPO|g" \
+      -e "s|{{INSTALL_USER}}|$RUN_USER|g" \
       "$TEMPLATE" > "$out"
 }
 
@@ -77,17 +75,17 @@ cmd_install() {
   echo "  …"
   echo "──────────────────────"
   echo "  user:    $RUN_USER"
-  echo "  group:   $RUN_GROUP"
   echo "  repo:    $REPO"
-  echo "  port:    $PORT"
   echo "  unit:    $UNIT_PATH"
   echo
 
   # Stop any running manual uvicorn so it doesn't clash on the port.
+  # SIGTERM and wait: a SIGKILL orphans the TTS child, which keeps the
+  # port and puts the new unit into a restart loop.
   if pgrep -f "uvicorn backend.main" >/dev/null; then
     echo "stopping running manual uvicorn (would clash on port $PORT)…"
-    pkill -KILL -f "uvicorn backend.main" || true
-    sleep 2
+    pkill -TERM -f "uvicorn backend.main" || true
+    for _ in $(seq 1 15); do pgrep -f "uvicorn backend.main" >/dev/null || break; sleep 1; done
   fi
 
   echo "installing (you'll be prompted for sudo)…"
@@ -155,7 +153,7 @@ Usage: $0 [install|uninstall|status]
   uninstall   Stop, disable, and remove yorik.service
   status      Show systemctl status + recent journal lines
 
-Reads HOMEOS_PORT from environment / config.env (default 8000).
+The unit runs start.sh, which reads HOMEOS_PORT from config.env.
 Renders the unit as user '$RUN_USER' running out of '$REPO'.
 EOF
     ;;

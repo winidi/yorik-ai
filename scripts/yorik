@@ -239,9 +239,15 @@ def _upgrade(args: argparse.Namespace) -> int:
     # --reload worker too (which I learned the hard way several times
     # earlier in this session).
     _step("restarting uvicorn")
-    subprocess.run(["pkill", "-KILL", "-f", "uvicorn backend.main"],
+    # SIGTERM, never SIGKILL: a KILL orphans the TTS child, which keeps
+    # port 8000 and turns the next start into an endless restart loop.
+    subprocess.run(["pkill", "-TERM", "-f", "uvicorn backend.main"],
                    capture_output=True, text=True)
-    time.sleep(3)
+    for _ in range(15):
+        if subprocess.run(["pgrep", "-f", "uvicorn backend.main"],
+                          capture_output=True).returncode != 0:
+            break
+        time.sleep(1)
     # Clear pycache to avoid stale bytecode surprises after a code change.
     subprocess.run(["find", "backend", "-name", "__pycache__", "-exec",
                     "rm", "-rf", "{}", "+"],
