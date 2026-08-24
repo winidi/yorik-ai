@@ -251,9 +251,9 @@ def _is_tenant_mode() -> bool:
     Two signals, in priority order:
       1. `YORIK_IS_TENANT=1` — explicit flag set by create-tenant.sh
          in the tenant's manifest.env. The unambiguous declaration.
-      2. `YORIK_DB_NAME` set AND != 'postgres' — legacy inference
-         from the DB name. Kept for tenants created before the
-         explicit flag shipped; new manifests carry the flag.
+      2. `YORIK_DB_NAME` starting with `yorik_tenant_` — inference
+         from the naming convention create-tenant.sh uses. Kept for
+         tenants created before the explicit flag shipped.
 
     The footgun the explicit flag closes: an operator typo writing
     `YORIK_DB_NAME=postgres` (the default cluster DB name) on what
@@ -271,8 +271,12 @@ def _is_tenant_mode() -> bool:
     explicit = os.getenv("YORIK_IS_TENANT", "").strip()
     if explicit in ("1", "true", "yes", "on"):
         return True
-    name = os.getenv("YORIK_DB_NAME")
-    return bool(name) and name != "postgres"
+    # Tenant databases are always created as yorik_tenant_<name> by
+    # create-tenant.sh. The old rule ("anything not called postgres")
+    # turned a self-hoster's renamed database, or a test run on a
+    # throwaway one, into a tenant that could never finish setup.
+    name = os.getenv("YORIK_DB_NAME") or ""
+    return name.startswith("yorik_tenant_")
 
 
 # ─────────────────── Cross-tenant email collision check ───────────────

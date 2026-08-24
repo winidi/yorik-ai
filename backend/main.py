@@ -600,10 +600,13 @@ def auth_setup(body: _SetupBody, request: Request, response: Response):
     # rationale; we duplicate the check here (instead of importing)
     # to keep auth_setup's module-load order independent of the
     # external_users helpers.
+    # The legacy inference was "any database not called postgres is a
+    # tenant" — which locked a self-hoster who named their database
+    # `yorik` (or a test run on a throwaway DB) out of first-run setup.
+    # Tenant databases are always created as yorik_tenant_<name>.
     is_tenant_mode_outer = (
         os.getenv("YORIK_IS_TENANT", "").strip() in ("1", "true", "yes", "on")
-        or (bool(os.getenv("YORIK_DB_NAME"))
-            and os.getenv("YORIK_DB_NAME") != "postgres")
+        or (os.getenv("YORIK_DB_NAME") or "").startswith("yorik_tenant_")
     )
     invite_consumed_payload: Optional[dict[str, Any]] = None
     if is_tenant_mode_outer and not os.getenv("YORIK_ALLOW_UNATTESTED_SETUP"):
@@ -851,10 +854,13 @@ def auth_reset_password_via_invite(body: _ResetViaInviteBody, request: Request):
     reset story; this endpoint is exclusively for tenant Yoriks whose
     auth is the local shim).
     """
+    # The legacy inference was "any database not called postgres is a
+    # tenant" — which locked a self-hoster who named their database
+    # `yorik` (or a test run on a throwaway DB) out of first-run setup.
+    # Tenant databases are always created as yorik_tenant_<name>.
     is_tenant_mode_outer = (
         os.getenv("YORIK_IS_TENANT", "").strip() in ("1", "true", "yes", "on")
-        or (bool(os.getenv("YORIK_DB_NAME"))
-            and os.getenv("YORIK_DB_NAME") != "postgres")
+        or (os.getenv("YORIK_DB_NAME") or "").startswith("yorik_tenant_")
     )
     if not is_tenant_mode_outer:
         raise HTTPException(400, "reset-via-invite is only for tenant Yoriks")
