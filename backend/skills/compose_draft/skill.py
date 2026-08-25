@@ -364,7 +364,7 @@ async def execute(
                     "profile). RETRY compose_draft now with: body='' (empty — let "
                     "the template's own structure render) OR body containing ONLY "
                     "your custom intro sentences, never names/addresses/dates. "
-                    "Pass recipient via contact_id (from find_contact). Pass any "
+                    "Pass recipient via contact_id (from find_person). Pass any "
                     "missing facts via the args dict, not by writing them into body."
                 ),
                 "rejected": True,

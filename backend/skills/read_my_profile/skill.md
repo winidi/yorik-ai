@@ -17,8 +17,7 @@ when_not_to_use: |
   - compose_draft auto-fills sender_name + sender_address from the
     profile server-side, so calling this before compose_draft is wasted
     work. Just call compose_draft.
-  - For another household member's profile, use find_user.
-  - For a contact (third party), use find_person or find_contact.
+  - For another household member's profile or a contact (third party), use find_person.
   - Do not call to "check who's logged in" — the system prompt already
     names the logged-in user on every turn.
 inputs: {}

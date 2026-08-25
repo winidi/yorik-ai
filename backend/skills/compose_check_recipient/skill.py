@@ -138,7 +138,7 @@ async def execute(
     if not contact:
         return {
             "_llm_hint": (
-                f"contact_id={cid} not found. Call find_contact again with a "
+                f"contact_id={cid} not found. Call find_person again with a "
                 "narrower query, or list_contacts_for_picking to scan the "
                 "full address book."
             ),

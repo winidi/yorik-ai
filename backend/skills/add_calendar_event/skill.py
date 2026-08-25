@@ -182,9 +182,9 @@ async def execute(
             raise ValueError(
                 f"attendee_user_ids contains id(s) {bogus} that don't exist "
                 "in user_profiles. Did you pass a contact_id from "
-                "find_contact instead of a user_id from find_user? Those "
-                "are different tables — call find_user(query=<name>) for "
-                "calendar attendees; find_contact only returns contacts "
+                "a contact instead of a household user_id? Those are "
+                "different tables — call find_person(query=<name>) and use "
+                "the user_id it returns for calendar attendees; contact ids "
                 "(address book), whose ids are NOT valid here."
             )
 

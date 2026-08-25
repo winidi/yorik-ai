@@ -51,29 +51,27 @@ from typing import Any, Mapping, Optional
 # idempotent (the same call can legitimately produce different results).
 
 IDEMPOTENT_TOOL_NAMES: frozenset[str] = frozenset({
-    # Our tools
+    # Our tools (the live names — use_skill / list_skills / run_sql /
+    # search_documents-as-a-tool are gone; the sets were blind to the
+    # two tools the model actually calls)
     "show_calendar",
     "list_calendar_layouts",
-    "list_skills",
     "list_connectors",
     "list_apps",
-    "search_documents",
+    "skill_view",
     # Phase 5+: web search / extract / MCP read tools
     "web_search",
     "web_extract",
 })
 
 MUTATING_TOOL_NAMES: frozenset[str] = frozenset({
-    # use_skill itself is mutating when the inner skill is in audit.MUTATION_SKILLS.
-    # The controller can't know that without inspecting args, so list use_skill here
-    # as mutating; the no-progress detection won't fire for it.
-    "use_skill",
+    # invoke_skill is mutating when the inner skill is in
+    # audit.MUTATION_SKILLS. The controller can't know that without
+    # inspecting args, so it is listed as mutating; the no-progress
+    # detection won't fire for it.
+    "invoke_skill",
     "install_connector",
     "trigger_connector",
-    # run_sql: SELECTs are idempotent but the same name can also do mutations.
-    # Treat as mutating for guardrail purposes — the gate already refuses raw
-    # INSERT/UPDATE/DELETE on protected tables.
-    "run_sql",
 })
 
 
