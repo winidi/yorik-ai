@@ -101,6 +101,62 @@ def load_messages(
     return [m for m in msgs if isinstance(m, dict) and m.get("role") != "system"]
 
 
+def context_chars_budget() -> int:
+    """How many characters of prior history fit next to the system
+    prompt, the tool schemas and a reply.
+
+    YORIK_LLM_CTX is the llama.cpp / Ollama context window in tokens
+    (install.sh starts the bundled server with 65536). The system
+    prompt + tool schemas are ~31 KB and a reply needs room too, so
+    ~40 KB is reserved; the rest, at ~3.2 chars per token for
+    German/English prose, is history. Never below 8 KB so a small
+    window still keeps the last exchange."""
+    try:
+        ctx_tokens = int(os.getenv("YORIK_LLM_CTX", "65536"))
+    except ValueError:
+        ctx_tokens = 65536
+    return max(8_000, int(ctx_tokens * 3.2) - 40_000)
+
+
+def _msg_chars(m: Dict[str, Any]) -> int:
+    n = len(str(m.get("content") or ""))
+    for tc in m.get("tool_calls") or []:
+        try:
+            n += len(json.dumps(tc, ensure_ascii=False, default=str))
+        except Exception:  # noqa: BLE001
+            n += 200
+    return n
+
+
+def trim_history(messages: List[Dict[str, Any]], max_chars: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Drop the oldest turns until the history fits ``max_chars``.
+
+    Keeps tool groups intact: a kept slice never starts with a ``tool``
+    result or with an assistant turn whose tool results were cut, so
+    strict chat templates (Qwen's) still see a valid sequence. Nothing
+    is trimmed while the list fits — the on-disk conversation is never
+    touched, only what goes to the model this turn."""
+    budget = context_chars_budget() if max_chars is None else max_chars
+    msgs = [m for m in (messages or []) if isinstance(m, dict) and m.get("role") != "system"]
+    total = sum(_msg_chars(m) for m in msgs)
+    if total <= budget:
+        return msgs
+    start = 0
+    while start < len(msgs) and total > budget:
+        total -= _msg_chars(msgs[start])
+        start += 1
+    # Never begin on a dangling tool result / tool-calling assistant turn.
+    while start < len(msgs) and (
+        msgs[start].get("role") == "tool"
+        or (msgs[start].get("role") == "assistant" and msgs[start].get("tool_calls"))
+    ):
+        start += 1
+    kept = msgs[start:]
+    if start:
+        logger.info("trim_history: dropped %d of %d prior messages to fit %d chars", start, len(msgs), budget)
+    return kept
+
+
 def sanitize_for_llm(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Return a copy of ``messages`` with storage-only extras removed.
 

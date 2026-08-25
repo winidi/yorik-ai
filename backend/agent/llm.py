@@ -103,7 +103,7 @@ class LlmClient:
         model: str,
         base_url: str,
         api_key: str = "not-used",
-        max_retries: int = 3,
+        max_retries: int = 1,
         request_timeout: float = 120.0,
     ) -> None:
         self.model = model
@@ -316,10 +316,20 @@ class LlmClient:
                 payload[k] = v
 
         client = self._ensure_client()
-        # Stream creation can transient-fail too — single attempt for now;
-        # if we need retries on stream init, wrap in the same backoff
-        # pattern as chat().
-        stream = client.chat.completions.create(**payload)
+        # Stream creation gets the same (short) retry as chat(): one
+        # backoff on a transient connection/5xx error, never on timeout.
+        stream = None
+        for attempt in range(1, self.max_retries + 2):
+            try:
+                stream = client.chat.completions.create(**payload)
+                break
+            except Exception as exc:  # noqa: BLE001
+                if not _is_retryable(exc) or attempt > self.max_retries:
+                    raise
+                delay = jittered_backoff(attempt)
+                logger.info("LLM stream open transient failure (attempt %d) — backing off %.1fs: %s",
+                            attempt, delay, _exc_summary(exc))
+                time.sleep(delay)
         for chunk in stream:
             yield chunk
 
@@ -359,9 +369,13 @@ def _is_retryable(exc: BaseException) -> bool:
     # RateLimitError, InternalServerError — all transient. We detect by
     # class name to avoid hard-importing the SDK exception module (which
     # changes shape across versions).
+    # A timeout is NOT retried: llama.cpp with --parallel 1 is busy
+    # or wedged, and retrying a 120 s timeout four times held one
+    # request for nine minutes. Connection refused / 429 / 5xx are.
     name = type(exc).__name__
-    if name in {"APIConnectionError", "APITimeoutError", "RateLimitError",
-                "InternalServerError", "APIError"}:
+    if name == "APITimeoutError":
+        return False
+    if name in {"APIConnectionError", "RateLimitError", "InternalServerError", "APIError"}:
         return True
     # Status-code based fallback for less-typed exceptions
     status = getattr(exc, "status_code", None) or getattr(exc, "code", None)

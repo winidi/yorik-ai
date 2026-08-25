@@ -207,7 +207,7 @@ async def ask(
     audit.reset_turn()
 
     # 3) Build message list ────────────────────────────────────────────
-    history = conversation_io.load_messages(conversation_id, role)
+    history = conversation_io.trim_history(conversation_io.load_messages(conversation_id, role))
     # Per-conversation entity ledger — see entity_ledger.py. Concatenated
     # onto the main system prompt so the LLM resolves "the appointment
     # I just made" / "make it friendlier" against a compact, explicit
@@ -540,10 +540,7 @@ async def ask(
             )
             # Emit a final "stop, change strategy" message instead of
             # leaving the assistant on a partial tool_call turn.
-            final_text = (
-                "(I stopped because a tool was looping. Tell me what you actually want "
-                "and I'll try a different approach.)"
-            )
+            final_text = _user_text("looping", user_language)
             break
     else:
         # Budget exhausted with tool_calls still pending.
@@ -551,10 +548,7 @@ async def ask(
             "iteration budget (%d) exhausted for conversation %s — returning what we have",
             budget.max_total, conversation_id,
         )
-        final_text = (
-            "(I ran out of iterations before finishing. Try splitting the request into "
-            "smaller asks.)"
-        )
+        final_text = _user_text("exhausted", user_language)
 
     # 5) Persist updated conversation ──────────────────────────────────
     # Stash this turn's photos / documents / ui_actions onto the FINAL
@@ -838,7 +832,7 @@ async def ask_stream(
     # 3) Build messages — see the block in ask() for why the ledger is
     # concatenated into the main system prompt instead of sent as a
     # second system message.
-    history = conversation_io.load_messages(conversation_id, role)
+    history = conversation_io.trim_history(conversation_io.load_messages(conversation_id, role))
     from . import entity_ledger as _ledger_mod
     ledger = conversation_io.load_ledger(conversation_id, role)
     ledger_block = _ledger_mod.render_for_llm(ledger)
@@ -1159,16 +1153,10 @@ async def ask_stream(
                 break
 
         if halted:
-            final_text = (
-                "(I stopped because a tool was looping. Tell me what you actually want "
-                "and I'll try a different approach.)"
-            )
+            final_text = _user_text("looping", user_language)
             break
     else:
-        final_text = (
-            "(I ran out of iterations before finishing. Try splitting the request into "
-            "smaller asks.)"
-        )
+        final_text = _user_text("exhausted", user_language)
 
     # 5) Persist + yield final result
     # Mirror the non-streaming path: stash this turn's photos / documents /
@@ -1588,23 +1576,69 @@ def _rows_from_last_sql(sql: Optional[str]) -> Optional[List[Dict[str, Any]]]:
 # ---------------------------------------------------------------------------
 
 
+_USER_TEXTS = {
+    "looping": {
+        "en": "(I stopped because a tool was looping. Tell me what you actually want and I'll try a different approach.)",
+        "de": "(Ich habe abgebrochen, weil ein Werkzeug in einer Schleife hing. Sag mir, was du genau möchtest, dann versuche ich es anders.)",
+    },
+    "exhausted": {
+        "en": "(I ran out of steps before finishing. Try splitting the request into smaller asks.)",
+        "de": "(Mir sind die Schritte ausgegangen, bevor ich fertig war. Teile die Anfrage bitte in kleinere Schritte auf.)",
+    },
+    "llm_unreachable": {
+        "en": "I can't reach the language model right now ({where}). Check that it is running — Settings → LLM — and try again.",
+        "de": "Ich erreiche das Sprachmodell gerade nicht ({where}). Prüfe unter Einstellungen → LLM, ob es läuft, und versuche es dann noch einmal.",
+    },
+    "llm_timeout": {
+        "en": "The language model didn't answer in time ({where}). It may be overloaded — try again in a moment.",
+        "de": "Das Sprachmodell hat nicht rechtzeitig geantwortet ({where}). Es ist vielleicht überlastet — versuche es gleich noch einmal.",
+    },
+    "context_overflow": {
+        "en": "This conversation has grown too long for the model. Start a new chat and I'll pick up from there.",
+        "de": "Diese Unterhaltung ist für das Modell zu lang geworden. Starte einen neuen Chat, dann machen wir dort weiter.",
+    },
+    "llm_error": {
+        "en": "The language model returned an error ({detail}). Try again; if it keeps happening, check Settings → LLM.",
+        "de": "Das Sprachmodell hat einen Fehler gemeldet ({detail}). Versuche es noch einmal; wenn es wieder passiert, prüfe Einstellungen → LLM.",
+    },
+}
+
+
+def _user_text(key: str, language: Optional[str], **fmt: Any) -> str:
+    lang = (language or "en").lower()[:2]
+    table = _USER_TEXTS[key]
+    return (table.get(lang) or table["en"]).format(**fmt)
+
+
+def friendly_llm_error(exc: BaseException, *, language: Optional[str], llm: LlmClient) -> str:
+    """One readable sentence for the user instead of `BadRequestError: …`."""
+    name = type(exc).__name__
+    text = str(exc)
+    where = f"{llm.base_url}, model {llm.model}"
+    if name in ("APIConnectionError", "ConnectError", "ConnectionError") or "Connection refused" in text:
+        return _user_text("llm_unreachable", language, where=where)
+    if name in ("APITimeoutError", "ReadTimeout", "TimeoutError") or "timed out" in text.lower():
+        return _user_text("llm_timeout", language, where=where)
+    if "context" in text.lower() and ("exceed" in text.lower() or "too long" in text.lower() or "n_ctx" in text.lower()):
+        return _user_text("context_overflow", language)
+    return _user_text("llm_error", language, detail=f"{name}: {text[:160]}")
+
+
 def error_response(
     exc: BaseException,
     *,
     conversation_id: Optional[str],
     llm: LlmClient,
+    language: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build the error envelope ``ask_async`` returns when the loop fails.
 
     Same shape callers already handle, so the new loop can be dropped
     into ``/api/ask`` without changing the route.
     """
+    log.warning("agent loop failed: %s: %s", type(exc).__name__, str(exc)[:300])
     return {
-        "response": (
-            f"Agent loop failed: {type(exc).__name__}: {exc}. "
-            f"Check that the LLM endpoint at {llm.base_url} is reachable "
-            f"and serving model '{llm.model}'."
-        ),
+        "response": friendly_llm_error(exc, language=language, llm=llm),
         "sql_used":        None,
         "rows_preview":    None,
         "ui_actions":      [],

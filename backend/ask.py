@@ -1602,6 +1602,7 @@ async def _ask_own_backend(
         return _new_loop.error_response(
             exc, conversation_id=conversation_id,
             llm=_ask_own_backend._llm,  # type: ignore[attr-defined]
+            language=user_language,
         )
 
 

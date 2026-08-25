@@ -7312,8 +7312,14 @@ async def ask_stream(
         except Exception as exc:  # noqa: BLE001
             import logging as _logging
             _logging.getLogger("yorik.ask_stream").exception("ask_stream agent loop failed")
-            await queue.put({"phase": "error",
-                              "error": f"{type(exc).__name__}: {exc}"})
+            try:
+                from .agent.loop import friendly_llm_error as _friendly
+                from . import ask as _ask_mod
+                _msg = _friendly(exc, language=user.get("language"),
+                                 llm=_ask_mod._ask_own_backend._llm)  # type: ignore[attr-defined]
+            except Exception:  # noqa: BLE001
+                _msg = f"{type(exc).__name__}: {exc}"
+            await queue.put({"phase": "error", "error": _msg})
         finally:
             await queue.put(DONE_SENTINEL)
 
@@ -13472,13 +13478,13 @@ async def ask_voice(
         tmp_path = tmp.name
     try:
         from .voice import transcribe_detailed
-        detail = transcribe_detailed(tmp_path)
+        detail = await asyncio.to_thread(transcribe_detailed, tmp_path)
         transcript = detail["text"].strip()
         detected_language = detail["language"]  # 'en', 'de', etc.
         if not transcript:
             raise HTTPException(status_code=400, detail="Empty transcript — please retry")
 
-        identified = voice_id.identify(tmp_path)  # never raises
+        identified = await asyncio.to_thread(voice_id.identify, tmp_path)  # never raises
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001
