@@ -10,15 +10,9 @@ cd "$(dirname "$0")"
 # belongs in the `yorik` CLI, not here.
 for arg in "$@"; do
   case "$arg" in
-    --with-demo)
-      # Opt into seeding demo events / tasks / bills on first boot.
-      # Default is empty so fresh testers see real empty-state UX.
-      # Backend reads this env var inside backend/database.py:seed().
-      export YORIK_SEED_DEMO=1
-      ;;
     --help|-h)
-      echo "Usage: bash start.sh [--with-demo]"
-      echo "  --with-demo   Populate demo events/tasks/bills on first boot (default: skip)."
+      echo "Usage: bash start.sh"
+      echo "  Demo data: click 'Seed demo data' on Home after the first login."
       exit 0
       ;;
   esac
@@ -378,17 +372,14 @@ fi
 # PHASE 5 — Database
 # ─────────────────────────────────────────────────────────────────────
 say "PHASE 5" "database"
-# Postgres-backend installs need the bundled Supabase stack up (with
-# all Yorik migrations applied) before backend.database can connect.
+# The bundled Supabase stack must be up (with all Yorik migrations
+# applied) before backend.database can connect.
 # The bootstrap script is idempotent — on a workstation that's already
 # been brought up by hand, it just records the existing migrations
 # and exits in ~3s.
-if [[ "${YORIK_DB_BACKEND:-postgres}" == "postgres" ]]; then
-  bash scripts/bootstrap-supabase.sh
-fi
-python3 -m backend.database >/dev/null
-ok "${HOMEOS_DB_PATH:-data/family.db} schema + seed verified"
-ok "${HOMEOS_DOCS_DB_PATH:-data/documents.db} (RAG corpus + vector index) verified"
+bash scripts/bootstrap-supabase.sh
+python3 -m backend.database
+ok "database schema current (Postgres in the bundled Supabase stack)"
 
 # ─────────────────────────────────────────────────────────────────────
 # PHASE 6 — Services

@@ -331,7 +331,6 @@ cat > "$TENANT_DIR/manifest.env" <<EOF
 # Run this tenant's Yorik FastAPI by sourcing this file before
 # launching uvicorn (or via systemd EnvironmentFile=).
 
-YORIK_DB_BACKEND=postgres
 YORIK_DB_NAME=$DB_NAME
 
 # Host-side proxy: this tenant doesn't have Immich/Paperless admin
@@ -349,8 +348,6 @@ YORIK_IS_TENANT=1
 # Auto-allocated port (next-free above existing tenants). Override
 # only if you're slotting around a port taken by something else.
 HOMEOS_PORT=$ALLOCATED_PORT
-HOMEOS_DB_PATH=data/tenants/$NAME/.family.db.stub
-HOMEOS_DOCS_DB_PATH=data/tenants/$NAME/.documents.db.stub
 HOMEOS_DOCS_DIR=data/tenants/$NAME/documents
 EOF
 ok "manifest written to $TENANT_DIR/manifest.env"

@@ -14,7 +14,6 @@ import json
 import logging
 import os
 import re
-import sqlite3
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +23,7 @@ import requests
 from fastapi import BackgroundTasks, Body, Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
+from psycopg import errors as pg_errors
 from pydantic import BaseModel, Field
 
 from .auth import (
@@ -32,7 +32,8 @@ from .auth import (
     require_role,
     require_write,
 )
-from .database import DEFAULT_DB_PATH, conn_ctx, init_db, seed
+from . import database as _database
+from .database import DEFAULT_DB_PATH, conn_ctx, init_db
 from . import ask as vanna_agent
 # Aliased to `vanna_agent` so we don't have to touch the ~30 call sites
 # below — the module was named that until the May 2026 rename.
@@ -2288,8 +2289,17 @@ def _startup() -> None:
     from . import storage as _storage
     _storage.assert_storage_ready()
 
+    # Fail with one sentence if the database is not there, instead of a
+    # 30 s PoolTimeout traceback (and, under systemd, a restart loop).
+    _db_ok, _db_where = _database.check_connection()
+    if not _db_ok:
+        msg = (f"Postgres not reachable — {_db_where}. Is the bundled Supabase stack up? "
+               "Run `bash scripts/bootstrap-supabase.sh` (or `bash start.sh`).")
+        logging.getLogger("yorik.startup").error(msg)
+        # Starlette turns a startup exception into "Application startup
+        # failed. Exiting." with a non-zero exit — systemd then retries.
+        raise RuntimeError(msg)
     init_db(DB_PATH)
-    seed(DB_PATH)
     # Phase F-lite host: stamp data/internal_token so tenant Yoriks have
     # a stable secret to authenticate against /api/internal/provision.
     # Only the host generates; tenants read this file via their manifest
@@ -2303,37 +2313,6 @@ def _startup() -> None:
         logging.getLogger("yorik.startup").warning(
             "internal_token bootstrap skipped: %s", exc,
         )
-    # Ensure documents.db schema is current — adds owner_user_id column
-    # to documents on multi-user-wave-2-aware boxes. Idempotent.
-    try:
-        from .database import init_docs_db
-        init_docs_db()
-    except Exception as e:
-        # NB: do NOT add `import logging` here — module-level logging
-        # (imported at file top) is already in scope, and a function-
-        # local rebinding here would shadow it, breaking the bind-probe
-        # error logger at line ~1873 with UnboundLocalError.
-        logging.getLogger("yorik.startup").warning("docs db init skipped: %s", e)
-
-    # Migrate connector credentials from SQLite when the operator flipped
-    # YORIK_DB_BACKEND=postgres after install. install.sh bootstraps the
-    # Immich + Paperless API keys into data/family.db (the default at
-    # install time); without this, the next sign-up's auto-provision
-    # skips with "admin key not configured" even though the keys are
-    # on disk. No-op on SQLite installs, fresh Postgres installs, and
-    # tenant Yoriks. Same Fernet key file is shared so the encrypted
-    # blob copies over verbatim — plaintext never enters memory.
-    try:
-        from . import credential_store as _cs
-        result = _cs.migrate_from_sqlite_if_needed()
-        if result:
-            migrated = sorted(k for k, v in result.items() if v == "migrated")
-            if migrated:
-                logging.getLogger("yorik.startup").info(
-                    "credential_store: auto-migrated from SQLite: %s", ", ".join(migrated),
-                )
-    except Exception as e:
-        logging.getLogger("yorik.startup").warning("credential migration skipped: %s", e)
     # Wave 6b: scan apps/ source dir for community-installed apps and load
     # each. Builtin apps (calendar/chat/docs) registered themselves on
     # backend.apps import. Errors on individual apps are logged + skipped
@@ -2696,7 +2675,7 @@ def health() -> Dict[str, Any]:
         "status": "ok",
         "model": vanna_agent.LLM_MODEL,
         "base_url": vanna_agent.LLM_BASE_URL,
-        "db_path": DB_PATH,
+        "database": _database.describe(),
         "llm_reachable": _llm_reachable(),
         "immich_reachable": immich_up,
         # User-visible Immich URL — the photos iframe consumes this.
@@ -4195,7 +4174,6 @@ async def proxy_immich_asset(
     """
     from . import external_users
     from . import credential_store
-    import sqlite3 as _sqlite
     creds: dict[str, Any] | None = None
     uid = user.get("id") if user else None
     if uid:
@@ -4207,15 +4185,12 @@ async def proxy_immich_asset(
     if not (base_url and api_key):
         # Fall back to the legacy app_settings keys (same pattern as
         # paperless_ingest._paperless_settings).
-        try:
-            with conn_ctx(DB_PATH) as conn:
-                for k, dest in (("immich_base_url", "base_url"), ("immich_api_key", "api_key")):
-                    row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (k,)).fetchone()
-                    if row and row["value"]:
-                        if dest == "base_url" and not base_url: base_url = row["value"].rstrip("/")
-                        elif dest == "api_key" and not api_key: api_key = row["value"]
-        except _sqlite.Error:
-            pass
+        with conn_ctx(DB_PATH) as conn:
+            for k, dest in (("immich_base_url", "base_url"), ("immich_api_key", "api_key")):
+                row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (k,)).fetchone()
+                if row and row["value"]:
+                    if dest == "base_url" and not base_url: base_url = row["value"].rstrip("/")
+                    elif dest == "api_key" and not api_key: api_key = row["value"]
     if not (base_url and api_key):
         raise HTTPException(status_code=503, detail="Immich not configured")
     if not re.match(r"^[A-Za-z0-9._-]+$", asset_id):
@@ -6319,18 +6294,11 @@ def pin_contact(
 ) -> Dict[str, Any]:
     if not _contacts.get(contact_id, include_children=False):
         raise HTTPException(404, "contact not found")
-    try:
-        with conn_ctx(DB_PATH) as conn:
-            conn.execute(
-                "UPDATE contacts SET pinned = ?, updated_at = datetime('now') "
-                "WHERE id = ?",
-                (1 if body.pinned else 0, contact_id),
-            )
-    except sqlite3.OperationalError:
-        # Pre-025 DB — column missing.
-        raise HTTPException(
-            503,
-            "pinned column missing — restart uvicorn to run pending migrations.",
+    with conn_ctx(DB_PATH) as conn:
+        conn.execute(
+            "UPDATE contacts SET pinned = ?, updated_at = datetime('now') "
+            "WHERE id = ?",
+            (1 if body.pinned else 0, contact_id),
         )
     return _contacts.get(contact_id) or {}
 
@@ -6415,33 +6383,30 @@ def contact_timeline(
             for em in email_addrs:
                 like_clauses.append("LOWER(IFNULL(to_addrs,'')) LIKE ?")
                 params.append(f"%{em}%")
-            try:
-                rows = conn.execute(
-                    f"SELECT id, subject, snippet, from_email, from_name, "
-                    f"       to_addrs, date_received, is_sent "
-                    f"FROM email_messages "
-                    f"WHERE owner_user_id = ? AND ("
-                    f"  LOWER(from_email) IN ({placeholders}) OR "
-                    f"  {' OR '.join(like_clauses)}"
-                    f") "
-                    f"ORDER BY date_received DESC LIMIT ?",
-                    [user["id"], *params, int(limit)],
-                ).fetchall()
-                for r in rows:
-                    items.append({
-                        "kind":      "email",
-                        "when":      r["date_received"],
-                        "title":     r["subject"] or "(no subject)",
-                        "sub":       (r["snippet"] or "")[:120],
-                        # React-Router-relative path (no /r basename
-                        # prefix). When opening in a new browser tab
-                        # the frontend must prepend "/r" to get the
-                        # right SPA — see triage email preview anchors.
-                        "link":      f"/email?msg={r['id']}",
-                        "direction": "outgoing" if r["is_sent"] else "incoming",
-                    })
-            except sqlite3.OperationalError:
-                pass
+            rows = conn.execute(
+                f"SELECT id, subject, snippet, from_email, from_name, "
+                f"       to_addrs, date_received, is_sent "
+                f"FROM email_messages "
+                f"WHERE owner_user_id = ? AND ("
+                f"  LOWER(from_email) IN ({placeholders}) OR "
+                f"  {' OR '.join(like_clauses)}"
+                f") "
+                f"ORDER BY date_received DESC LIMIT ?",
+                [user["id"], *params, int(limit)],
+            ).fetchall()
+            for r in rows:
+                items.append({
+                    "kind":      "email",
+                    "when":      r["date_received"],
+                    "title":     r["subject"] or "(no subject)",
+                    "sub":       (r["snippet"] or "")[:120],
+                    # React-Router-relative path (no /r basename
+                    # prefix). When opening in a new browser tab
+                    # the frontend must prepend "/r" to get the
+                    # right SPA — see triage email preview anchors.
+                    "link":      f"/email?msg={r['id']}",
+                    "direction": "outgoing" if r["is_sent"] else "incoming",
+                })
 
         # ── Events — naive LIKE on `person` against display_name + aliases.
         # The `person` field is free text ("Dr. Wiese", "Hans Müller, Tobias"),
@@ -6451,47 +6416,41 @@ def contact_timeline(
         if name_needles:
             ev_clauses = " OR ".join(["LOWER(IFNULL(person,'')) LIKE ?"] * len(name_needles))
             ev_params = [f"%{n.lower()}%" for n in name_needles]
-            try:
-                rows = conn.execute(
-                    f"SELECT id, title, starts_at, location "
-                    f"FROM events "
-                    f"WHERE ({ev_clauses}) "
-                    f"ORDER BY starts_at DESC LIMIT ?",
-                    [*ev_params, int(limit)],
-                ).fetchall()
-                for r in rows:
-                    items.append({
-                        "kind":  "event",
-                        "when":  r["starts_at"],
-                        "title": r["title"] or "(no title)",
-                        "sub":   r["location"] or "",
-                        "link":  f"/calendar?date={(r['starts_at'] or '')[:10]}",
-                    })
-            except sqlite3.OperationalError:
-                pass
+            rows = conn.execute(
+                f"SELECT id, title, starts_at, location "
+                f"FROM events "
+                f"WHERE ({ev_clauses}) "
+                f"ORDER BY starts_at DESC LIMIT ?",
+                [*ev_params, int(limit)],
+            ).fetchall()
+            for r in rows:
+                items.append({
+                    "kind":  "event",
+                    "when":  r["starts_at"],
+                    "title": r["title"] or "(no title)",
+                    "sub":   r["location"] or "",
+                    "link":  f"/calendar?date={(r['starts_at'] or '')[:10]}",
+                })
 
         # ── Compose drafts — LIKE on the free-text recipient field.
         if display:
-            try:
-                rows = conn.execute(
-                    "SELECT id, kind AS draft_kind, subject, recipient, "
-                    "       created_at "
-                    "FROM compose_drafts "
-                    "WHERE user_id = ? "
-                    "AND LOWER(IFNULL(recipient,'')) LIKE ? "
-                    "ORDER BY created_at DESC LIMIT ?",
-                    (user["id"], f"%{display.lower()}%", int(limit)),
-                ).fetchall()
-                for r in rows:
-                    items.append({
-                        "kind":  "draft",
-                        "when":  r["created_at"],
-                        "title": r["subject"] or f"Draft ({r['draft_kind']})",
-                        "sub":   f"to {r['recipient']}" if r['recipient'] else "",
-                        "link":  f"/compose?draft_id={r['id']}",
-                    })
-            except sqlite3.OperationalError:
-                pass
+            rows = conn.execute(
+                "SELECT id, kind AS draft_kind, subject, recipient, "
+                "       created_at "
+                "FROM compose_drafts "
+                "WHERE user_id = ? "
+                "AND LOWER(IFNULL(recipient,'')) LIKE ? "
+                "ORDER BY created_at DESC LIMIT ?",
+                (user["id"], f"%{display.lower()}%", int(limit)),
+            ).fetchall()
+            for r in rows:
+                items.append({
+                    "kind":  "draft",
+                    "when":  r["created_at"],
+                    "title": r["subject"] or f"Draft ({r['draft_kind']})",
+                    "sub":   f"to {r['recipient']}" if r['recipient'] else "",
+                    "link":  f"/compose?draft_id={r['id']}",
+                })
 
     # Merge & sort by `when` DESC. Treat missing dates as oldest.
     items.sort(key=lambda x: (x.get("when") or "0"), reverse=True)
@@ -6589,7 +6548,7 @@ def add_contact_channel_route(
     try:
         _contacts.add_channel(contact_id, kind=body.kind, value=body.value,
                               label=body.label, source="manual")
-    except sqlite3.IntegrityError:
+    except pg_errors.IntegrityError:
         existing = _contacts.find_by_channel(body.kind, body.value)
         owner = existing["display_name"] if existing else "another contact"
         raise HTTPException(409, f"channel already linked to {owner}")
@@ -7849,8 +7808,6 @@ def _ensure_tenant_invites_table() -> None:
     target_email is populated for reset-type invites; the tenant
     Yorik uses it to scope a password-reset to a specific existing
     admin. NULL for initial setup invites (the default)."""
-    if (os.getenv("YORIK_DB_BACKEND") or "sqlite").lower() != "postgres":
-        return
     with conn_ctx(DB_PATH) as conn:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS tenant_invites ("
@@ -7898,7 +7855,7 @@ def create_tenant_endpoint(
     if normalize_role(role) not in ("admin", "platform_admin"):
         raise HTTPException(403, "role required: admin")
     if os.getenv("YORIK_IS_TENANT", "").strip() in ("1", "true", "yes", "on") \
-       or (os.getenv("YORIK_DB_NAME") and os.getenv("YORIK_DB_NAME") != "postgres"):
+       or (os.getenv("YORIK_DB_NAME") or "").startswith("yorik_tenant_"):
         raise HTTPException(
             400,
             "this Yorik is itself a tenant — only the host can create tenants",
@@ -7911,12 +7868,6 @@ def create_tenant_endpoint(
     # FastAPI), but the subsequent INSERT INTO tenant_invites here
     # would hit "no such table" — leaving a half-created tenant on
     # disk with no invite. Refuse loudly instead.
-    if (os.getenv("YORIK_DB_BACKEND") or "sqlite").lower() != "postgres":
-        raise HTTPException(
-            400,
-            "multi-tenant requires YORIK_DB_BACKEND=postgres on the host "
-            "(this install is sqlite-only)",
-        )
     import re as _re
     if not _re.match(r"^[a-z][a-z0-9_]{0,23}$", body.name):
         raise HTTPException(400, "tenant name must be lowercase letters + digits + underscore (≤24 chars)")
@@ -8038,7 +7989,7 @@ def list_tenants_endpoint(
     # "all-tenants" view even though their /api/tenants/POST gets
     # refused (existing check). Match the same gate the POST uses.
     if os.getenv("YORIK_IS_TENANT", "").strip() in ("1", "true", "yes", "on") \
-       or (os.getenv("YORIK_DB_NAME") and os.getenv("YORIK_DB_NAME") != "postgres"):
+       or (os.getenv("YORIK_DB_NAME") or "").startswith("yorik_tenant_"):
         raise HTTPException(
             400,
             "this Yorik is itself a tenant — only the host can list tenants",
@@ -8115,10 +8066,8 @@ def issue_tenant_reset_invite_endpoint(
     if normalize_role(role) not in ("admin", "platform_admin"):
         raise HTTPException(403, "role required: admin")
     if os.getenv("YORIK_IS_TENANT", "").strip() in ("1", "true", "yes", "on") \
-       or (os.getenv("YORIK_DB_NAME") and os.getenv("YORIK_DB_NAME") != "postgres"):
+       or (os.getenv("YORIK_DB_NAME") or "").startswith("yorik_tenant_"):
         raise HTTPException(400, "this Yorik is itself a tenant — only the host can issue resets")
-    if (os.getenv("YORIK_DB_BACKEND") or "sqlite").lower() != "postgres":
-        raise HTTPException(400, "multi-tenant requires YORIK_DB_BACKEND=postgres on the host")
 
     import re as _re
     if not _re.match(r"^[a-z][a-z0-9_]{0,23}$", name):
@@ -8230,7 +8179,7 @@ def drop_tenant_endpoint(
     # them by name through the host endpoint replicated to each
     # tenant's FastAPI surface).
     if os.getenv("YORIK_IS_TENANT", "").strip() in ("1", "true", "yes", "on") \
-       or (os.getenv("YORIK_DB_NAME") and os.getenv("YORIK_DB_NAME") != "postgres"):
+       or (os.getenv("YORIK_DB_NAME") or "").startswith("yorik_tenant_"):
         raise HTTPException(
             400,
             "this Yorik is itself a tenant — only the host can drop tenants",
@@ -9109,42 +9058,15 @@ def list_conversations(
         # back to user_role for legacy rows where user_id IS NULL.
         _owner_where = "WHERE (user_id = ? OR (user_id IS NULL AND user_role = ?))"
         _owner_params = (user_id, role)
-        try:
-            new_rows = conn.execute(
-                "SELECT id, user_role, messages_json AS messages, title, pinned, "
-                "       created_at, updated_at "
-                f"FROM agent_conversations {_owner_where} "
-                "ORDER BY pinned DESC, updated_at DESC LIMIT ?",
-                (*_owner_params, limit),
-            ).fetchall()
-            has_title_col = True
-            has_pinned_col = True
-        except sqlite3.OperationalError:
-            try:
-                new_rows = conn.execute(
-                    "SELECT id, user_role, messages_json AS messages, title, "
-                    "       created_at, updated_at "
-                    f"FROM agent_conversations {_owner_where} "
-                    "ORDER BY updated_at DESC LIMIT ?",
-                    (*_owner_params, limit),
-                ).fetchall()
-                has_title_col = True
-                has_pinned_col = False
-            except sqlite3.OperationalError:
-                try:
-                    new_rows = conn.execute(
-                        "SELECT id, user_role, messages_json AS messages, "
-                        "       created_at, updated_at "
-                        f"FROM agent_conversations {_owner_where} "
-                        "ORDER BY updated_at DESC LIMIT ?",
-                        (*_owner_params, limit),
-                    ).fetchall()
-                    has_title_col = False
-                    has_pinned_col = False
-                except sqlite3.OperationalError:
-                    new_rows = []
-                    has_title_col = False
-                    has_pinned_col = False
+        new_rows = conn.execute(
+            "SELECT id, user_role, messages_json AS messages, title, pinned, "
+            "       created_at, updated_at "
+            f"FROM agent_conversations {_owner_where} "
+            "ORDER BY pinned DESC, updated_at DESC LIMIT ?",
+            (*_owner_params, limit),
+        ).fetchall()
+        has_title_col = True
+        has_pinned_col = True
         for r in new_rows:
             _add(r, "messages", "user_role",
                  title=r["title"] if has_title_col else None,
@@ -9185,28 +9107,15 @@ def get_conversation(conversation_id: str, role: str = Depends(_auth.current_rol
     title: Optional[str] = None
     with conn_ctx(DB_PATH) as conn:
         # NEW table first. Tolerate `title` column missing (pre-021).
-        try:
-            row = conn.execute(
-                "SELECT id, user_role, messages_json AS messages, title, "
-                "       created_at, updated_at "
-                "FROM agent_conversations WHERE id = ?",
-                (conversation_id,),
-            ).fetchone()
-            if row:
-                source = "agent"
-                title = row["title"]
-        except sqlite3.OperationalError:
-            try:
-                row = conn.execute(
-                    "SELECT id, user_role, messages_json AS messages, "
-                    "       created_at, updated_at "
-                    "FROM agent_conversations WHERE id = ?",
-                    (conversation_id,),
-                ).fetchone()
-                if row:
-                    source = "agent"
-            except sqlite3.OperationalError:
-                row = None
+        row = conn.execute(
+            "SELECT id, user_role, messages_json AS messages, title, "
+            "       created_at, updated_at "
+            "FROM agent_conversations WHERE id = ?",
+            (conversation_id,),
+        ).fetchone()
+        if row:
+            source = "agent"
+            title = row["title"]
         # Fall back to legacy if not found in new table.
         if row is None:
             row = conn.execute(
@@ -9328,30 +9237,18 @@ def pin_conversation(
 ) -> Dict[str, Any]:
     normalize_role(role)
     with conn_ctx(DB_PATH) as conn:
-        try:
-            row = conn.execute(
-                "SELECT user_role FROM agent_conversations WHERE id = ?",
-                (conversation_id,),
-            ).fetchone()
-        except sqlite3.OperationalError:
-            raise HTTPException(404, "conversation not found")
+        row = conn.execute(
+            "SELECT user_role FROM agent_conversations WHERE id = ?",
+            (conversation_id,),
+        ).fetchone()
         if not row:
             raise HTTPException(404, "conversation not found")
         if row["user_role"] != role and role not in ("platform_admin", "admin"):
             raise HTTPException(403, "not yours to pin")
-        try:
-            conn.execute(
-                "UPDATE agent_conversations SET pinned = ? WHERE id = ?",
-                (1 if body.pinned else 0, conversation_id),
-            )
-        except sqlite3.OperationalError:
-            # `pinned` column missing — pre-022 DB. Surface a clear
-            # error so the UI doesn't silently believe the pin stuck.
-            raise HTTPException(
-                503,
-                "pin column missing — restart the backend to run pending "
-                "migrations (021/022).",
-            )
+        conn.execute(
+            "UPDATE agent_conversations SET pinned = ? WHERE id = ?",
+            (1 if body.pinned else 0, conversation_id),
+        )
     return {"ok": True, "pinned": body.pinned}
 
 
@@ -9476,57 +9373,51 @@ def chat_mentions(
 
     with conn_ctx(DB_PATH) as conn:
         if "contact" in requested:
-            try:
-                if q:
-                    rows = conn.execute(
-                        "SELECT id, display_name, relation, kind, status "
-                        "FROM contacts "
-                        "WHERE status = 'active' "
-                        "AND (display_name LIKE ? OR aliases LIKE ?) "
-                        "ORDER BY (last_used_at IS NULL), last_used_at DESC, "
-                        "         display_name ASC "
-                        "LIMIT ?",
-                        (like, like, limit),
-                    ).fetchall()
-                else:
-                    rows = conn.execute(
-                        "SELECT id, display_name, relation, kind, status "
-                        "FROM contacts WHERE status = 'active' "
-                        "ORDER BY (last_used_at IS NULL), last_used_at DESC LIMIT ?",
-                        (limit,),
-                    ).fetchall()
-                out["contact"] = [{
-                    "id":    r["id"],
-                    "label": r["display_name"],
-                    "sub":   r["relation"] or r["kind"] or "",
-                } for r in rows]
-            except sqlite3.OperationalError:
-                pass
+            if q:
+                rows = conn.execute(
+                    "SELECT id, display_name, relation, kind, status "
+                    "FROM contacts "
+                    "WHERE status = 'active' "
+                    "AND (display_name LIKE ? OR aliases LIKE ?) "
+                    "ORDER BY (last_used_at IS NULL), last_used_at DESC, "
+                    "         display_name ASC "
+                    "LIMIT ?",
+                    (like, like, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT id, display_name, relation, kind, status "
+                    "FROM contacts WHERE status = 'active' "
+                    "ORDER BY (last_used_at IS NULL), last_used_at DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+            out["contact"] = [{
+                "id":    r["id"],
+                "label": r["display_name"],
+                "sub":   r["relation"] or r["kind"] or "",
+            } for r in rows]
 
         if "event" in requested:
-            try:
-                if q:
-                    rows = conn.execute(
-                        "SELECT id, title, starts_at, location "
-                        "FROM events "
-                        "WHERE title LIKE ? "
-                        "ORDER BY starts_at DESC LIMIT ?",
-                        (like, limit),
-                    ).fetchall()
-                else:
-                    rows = conn.execute(
-                        "SELECT id, title, starts_at, location "
-                        "FROM events "
-                        "ORDER BY starts_at DESC LIMIT ?",
-                        (limit,),
-                    ).fetchall()
-                out["event"] = [{
-                    "id":    r["id"],
-                    "label": r["title"],
-                    "sub":   (r["starts_at"] or "")[:16].replace("T", " "),
-                } for r in rows]
-            except sqlite3.OperationalError:
-                pass
+            if q:
+                rows = conn.execute(
+                    "SELECT id, title, starts_at, location "
+                    "FROM events "
+                    "WHERE title LIKE ? "
+                    "ORDER BY starts_at DESC LIMIT ?",
+                    (like, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT id, title, starts_at, location "
+                    "FROM events "
+                    "ORDER BY starts_at DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+            out["event"] = [{
+                "id":    r["id"],
+                "label": r["title"],
+                "sub":   (r["starts_at"] or "")[:16].replace("T", " "),
+            } for r in rows]
 
         if "doc" in requested:
             # Documents live in a separate DB; query via documents module
@@ -9566,14 +9457,11 @@ async def regenerate_assistant_reply(
     from .agent import conversation_io as _ci
 
     with conn_ctx(DB_PATH) as conn:
-        try:
-            row = conn.execute(
-                "SELECT id, user_role, user_id, messages_json "
-                "FROM agent_conversations WHERE id = ?",
-                (conversation_id,),
-            ).fetchone()
-        except sqlite3.OperationalError:
-            row = None
+        row = conn.execute(
+            "SELECT id, user_role, user_id, messages_json "
+            "FROM agent_conversations WHERE id = ?",
+            (conversation_id,),
+        ).fetchone()
     if not row:
         raise HTTPException(404, "conversation not found")
     if row["user_role"] != role and role not in ("platform_admin", "admin"):
@@ -9663,82 +9551,67 @@ def today_digest(
 
     with conn_ctx(DB_PATH) as conn:
         # Events today
-        try:
-            rows = conn.execute(
-                "SELECT id, title, starts_at, ends_at, all_day, location "
-                "FROM events "
-                "WHERE starts_at >= ? AND starts_at < ? "
-                "ORDER BY starts_at ASC LIMIT 8",
-                (today_iso, tomorrow_iso),
-            ).fetchall()
-            out["events_today"] = [dict(r) for r in rows]
-        except sqlite3.OperationalError:
-            pass
+        rows = conn.execute(
+            "SELECT id, title, starts_at, ends_at, all_day, location "
+            "FROM events "
+            "WHERE starts_at >= ? AND starts_at < ? "
+            "ORDER BY starts_at ASC LIMIT 8",
+            (today_iso, tomorrow_iso),
+        ).fetchall()
+        out["events_today"] = [dict(r) for r in rows]
 
         # Tasks overdue (due_date < today AND not done)
-        try:
-            cnt = conn.execute(
-                "SELECT COUNT(*) AS n FROM tasks "
+        cnt = conn.execute(
+            "SELECT COUNT(*) AS n FROM tasks "
+            "WHERE done = 0 AND due_date IS NOT NULL "
+            "AND due_date < ?",
+            (today_iso,),
+        ).fetchone()
+        out["tasks_overdue_count"] = int(cnt["n"]) if cnt else 0
+        if out["tasks_overdue_count"] > 0:
+            sample = conn.execute(
+                "SELECT id, title, due_date FROM tasks "
                 "WHERE done = 0 AND due_date IS NOT NULL "
-                "AND due_date < ?",
+                "AND due_date < ? "
+                "ORDER BY due_date ASC LIMIT 3",
                 (today_iso,),
-            ).fetchone()
-            out["tasks_overdue_count"] = int(cnt["n"]) if cnt else 0
-            if out["tasks_overdue_count"] > 0:
-                sample = conn.execute(
-                    "SELECT id, title, due_date FROM tasks "
-                    "WHERE done = 0 AND due_date IS NOT NULL "
-                    "AND due_date < ? "
-                    "ORDER BY due_date ASC LIMIT 3",
-                    (today_iso,),
-                ).fetchall()
-                out["tasks_overdue_sample"] = [dict(r) for r in sample]
-        except sqlite3.OperationalError:
-            pass
+            ).fetchall()
+            out["tasks_overdue_sample"] = [dict(r) for r in sample]
 
         # Pending contacts (mostly seeded by email_in / wa_sync; vCard
         # imports land here too when the user picks "Import to Pending")
-        try:
-            cnt = conn.execute(
-                "SELECT COUNT(*) AS n FROM contacts WHERE status = 'pending'",
-            ).fetchone()
-            out["contacts_pending_count"] = int(cnt["n"]) if cnt else 0
-        except sqlite3.OperationalError:
-            pass
+        cnt = conn.execute(
+            "SELECT COUNT(*) AS n FROM contacts WHERE status = 'pending'",
+        ).fetchone()
+        out["contacts_pending_count"] = int(cnt["n"]) if cnt else 0
 
         # Birthdays in the next 7 days. The birthday column is YYYY-MM-DD;
         # match on month+day so it works year-over-year.
-        try:
-            upcoming = []
-            for offset in range(0, 7):
-                d = today + _td(days=offset)
-                mmdd = d.strftime("%m-%d")
-                rows = conn.execute(
-                    "SELECT id, display_name, birthday FROM contacts "
-                    "WHERE status = 'active' AND birthday IS NOT NULL "
-                    "AND substr(birthday, 6, 5) = ? "
-                    "LIMIT 4",
-                    (mmdd,),
-                ).fetchall()
-                for r in rows:
-                    upcoming.append({
-                        "id":           r["id"],
-                        "display_name": r["display_name"],
-                        "birthday":     r["birthday"],
-                        "days_away":    offset,
-                    })
-            out["birthdays_this_week"] = upcoming
-        except sqlite3.OperationalError:
-            pass
+        upcoming = []
+        for offset in range(0, 7):
+            d = today + _td(days=offset)
+            mmdd = d.strftime("%m-%d")
+            rows = conn.execute(
+                "SELECT id, display_name, birthday FROM contacts "
+                "WHERE status = 'active' AND birthday IS NOT NULL "
+                "AND substr(birthday, 6, 5) = ? "
+                "LIMIT 4",
+                (mmdd,),
+            ).fetchall()
+            for r in rows:
+                upcoming.append({
+                    "id":           r["id"],
+                    "display_name": r["display_name"],
+                    "birthday":     r["birthday"],
+                    "days_away":    offset,
+                })
+        out["birthdays_this_week"] = upcoming
 
         # Saved-queries count (an unused-feature nudge for early users)
-        try:
-            cnt = conn.execute(
-                "SELECT COUNT(*) AS n FROM saved_queries",
-            ).fetchone()
-            out["saved_query_count"] = int(cnt["n"]) if cnt else 0
-        except sqlite3.OperationalError:
-            pass
+        cnt = conn.execute(
+            "SELECT COUNT(*) AS n FROM saved_queries",
+        ).fetchone()
+        out["saved_query_count"] = int(cnt["n"]) if cnt else 0
 
     return out
 
@@ -12202,7 +12075,7 @@ def embeddings_status(role: str = Depends(_auth.current_role)) -> Dict[str, Any]
         with get_docs_conn(_docs.DOCS_DB_PATH) as conn:
             r1 = conn.execute("SELECT COUNT(*) AS n FROM paperless_chunks").fetchone()
             chunk_count = int(r1["n"] if r1 else 0)
-            r2 = conn.execute("SELECT COUNT(*) AS n FROM paperless_vec").fetchone()
+            r2 = conn.execute("SELECT COUNT(*) AS n FROM paperless_chunks WHERE embedding IS NOT NULL").fetchone()
             vec_count = int(r2["n"] if r2 else 0)
     except Exception as exc:  # noqa: BLE001
         # Fresh-install / no docs yet: the tables don't exist → COUNT
@@ -13210,7 +13083,7 @@ class SearchDocumentsIn(BaseModel):
 def search_documents_endpoint(body: SearchDocumentsIn, role: str = Depends(_auth.current_role)) -> Dict[str, Any]:
     """Direct document search for the /documents UI's query field.
 
-    Searches BOTH Yorik-native uploads (vec_chunks) AND Paperless
+    Searches BOTH Yorik-native uploads (document_chunks) AND Paperless
     (hybrid: semantic + FTS via RRF — same fusion the LLM paths use).
     Paperless rows are normalized to the DocumentSearchHit shape with
     the negative-id convention so the UI can route preview/download

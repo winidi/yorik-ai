@@ -21,7 +21,7 @@ does, what can go wrong, and how to recover if it does.
   [CONNECTORS.md](CONNECTORS.md)) — Yorik proxies and integrates with
   your own n8n but does not bundle it (Sustainable Use License is not
   OSI-approved open source).
-- An encrypted SQLite database under `data/family.db`
+- A Postgres database inside the bundled Supabase stack (`infra/supabase/docker`), with pgvector for embeddings
 - Optional: a `yorik.service` systemd unit that auto-starts on boot
 
 Total install time: **5–15 minutes** depending on your network speed
@@ -48,11 +48,10 @@ sudo apt update
 sudo apt install -y \
     git curl ca-certificates \
     python3 python3-venv python3-pip \
-    ffmpeg sqlite3
+    ffmpeg
 ```
 
-`ffmpeg` is required for Whisper voice transcription. `sqlite3` is
-optional but useful for poking at the database with `sqlite3 data/family.db`.
+`ffmpeg` is required for Whisper voice transcription.
 
 ### Docker (for the optional bundled services)
 
@@ -123,7 +122,7 @@ that hasn't been done. On the first run it:
 3. Creates the Python venv at `venv/` and installs dependencies
 4. Downloads voice models (Whisper turbo, Supertonic-3 TTS, SpeechBrain
    speaker ID) — **~500 MB total**, one-time
-5. Initialises the SQLite database at `data/family.db`
+5. Brings up the bundled Supabase stack and applies the database migrations
 6. Brings up the optional Docker stack with auto-detected profiles
    (skips any service whose port is already taken on the host)
 7. Starts the FastAPI backend at `http://localhost:8000`
@@ -205,8 +204,8 @@ In the browser:
 
 ## Step 6: Configure backups (do this before you have anything to lose)
 
-Yorik backs up the entire `data/` directory (SQLite + documents +
-voice embeddings + credentials) into an age-encrypted tarball.
+Yorik backs up a `pg_dump` of the database plus the `data/` directory
+(documents, voice embeddings, credentials) into an age-encrypted tarball.
 
 1. Open **Settings → Backup**
 2. Set a **passphrase** (≥8 characters). Write it down somewhere safe
@@ -242,10 +241,9 @@ Should print 8+ green checkmarks. If any fail, see
 
 | Path | What |
 |---|---|
-| `data/family.db` | Main SQLite database (events, tasks, bills, conversations, sessions, …) |
-| `data/documents.db` | Vector index (sqlite-vec) for documents + photos |
+| `infra/supabase/docker/volumes/db/` | The Postgres data directory (events, tasks, contacts, mail, conversations, sessions, embeddings) |
 | `data/documents/` | Original uploaded document files |
-| `data/.credential_key` | Fernet key encrypting external API tokens. **Back this up.** Without it, encrypted creds in `family.db` are useless. |
+| `data/.credential_key` | Fernet key encrypting external API tokens. **Back this up.** Without it, the encrypted credentials in the database are useless. |
 | `data/backups/` | Age-encrypted backup snapshots |
 | `data/immich/`, `data/paperless/` | The bundled services' data (only if you opted in) |
 | `~/.n8n/` | If you BYO n8n: its data (wherever you installed it). Yorik doesn't manage this. |

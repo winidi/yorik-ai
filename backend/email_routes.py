@@ -1600,54 +1600,36 @@ def search_email(q: str = Query(..., min_length=2),
                   limit: int = Query(30, ge=1, le=100),
                   user: dict = Depends(current_user)):
     """Full-text search across subject + sender + snippet + body.
-    Dual-backend: SQLite installs use the email_messages_fts FTS5
-    virtual table; Postgres installs use the search_tsv generated
-    tsvector column (GIN-indexed). Both require ALL terms to match
+    Uses the search_tsv generated tsvector column (GIN-indexed).
+    All terms must match
     (prefix-friendly) so 'müller invoice' doesn't match either alone."""
     raw_terms = [t for t in q.split() if t]
     if not raw_terms:
         return []
-    from .database import _use_postgres
-    is_pg = _use_postgres()
-
     with get_conn() as conn:
         try:
-            if is_pg:
-                # Build a tsquery: strip anything that has special meaning
-                # in tsquery syntax (& | ! ( ) : * \) — we only allow
-                # alphanumerics, underscores, hyphens, German diacritics
-                # and similar word chars. Then join with & and append :*
-                # for prefix matching.
-                import re as _re
-                cleaned = [_re.sub(r"[^\w\-]", "", t, flags=_re.UNICODE) for t in raw_terms]
-                cleaned = [t for t in cleaned if t]
-                if not cleaned:
-                    return []
-                tsq = " & ".join(f"{t}:*" for t in cleaned)
-                rows = conn.execute(
-                    "SELECT m.id, m.account_id, a.email AS account_email, "
-                    "       m.from_email, m.from_name, m.subject, m.snippet, "
-                    "       m.date_received, m.is_unread, m.is_starred, m.has_attachments "
-                    "FROM email_messages m "
-                    "JOIN email_accounts a ON a.id = m.account_id "
-                    "WHERE m.search_tsv @@ to_tsquery('simple', ?) "
-                    "  AND m.owner_user_id = ? "
-                    "ORDER BY m.date_received DESC LIMIT ?",
-                    (tsq, user["id"], limit),
-                ).fetchall()
-            else:
-                match = " ".join(f'"{t.replace(chr(34), "")}"*' for t in raw_terms)
-                rows = conn.execute(
-                    "SELECT m.id, m.account_id, a.email AS account_email, "
-                    "       m.from_email, m.from_name, m.subject, m.snippet, "
-                    "       m.date_received, m.is_unread, m.is_starred, m.has_attachments "
-                    "FROM email_messages_fts f "
-                    "JOIN email_messages m ON m.rowid = f.rowid "
-                    "JOIN email_accounts a ON a.id = m.account_id "
-                    "WHERE f MATCH ? AND m.owner_user_id = ? "
-                    "ORDER BY m.date_received DESC LIMIT ?",
-                    (match, user["id"], limit),
-                ).fetchall()
+            # Build a tsquery: strip anything that has special meaning
+            # in tsquery syntax (& | ! ( ) : * \) — we only allow
+            # alphanumerics, underscores, hyphens, German diacritics
+            # and similar word chars. Then join with & and append :*
+            # for prefix matching.
+            import re as _re
+            cleaned = [_re.sub(r"[^\w\-]", "", t, flags=_re.UNICODE) for t in raw_terms]
+            cleaned = [t for t in cleaned if t]
+            if not cleaned:
+                return []
+            tsq = " & ".join(f"{t}:*" for t in cleaned)
+            rows = conn.execute(
+                "SELECT m.id, m.account_id, a.email AS account_email, "
+                "       m.from_email, m.from_name, m.subject, m.snippet, "
+                "       m.date_received, m.is_unread, m.is_starred, m.has_attachments "
+                "FROM email_messages m "
+                "JOIN email_accounts a ON a.id = m.account_id "
+                "WHERE m.search_tsv @@ to_tsquery('simple', ?) "
+                "  AND m.owner_user_id = ? "
+                "ORDER BY m.date_received DESC LIMIT ?",
+                (tsq, user["id"], limit),
+            ).fetchall()
         except Exception as e:
             raise HTTPException(400, f"search query invalid: {e}")
     return [{

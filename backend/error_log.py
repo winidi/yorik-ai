@@ -1,12 +1,12 @@
 """Persisted error log — every WARNING+ record from the logging
-subsystem also lands in a SQLite table so the user can surface "what's
+subsystem also lands in the error_log table so the user can surface "what's
 been breaking" without grepping log files.
 
 Schema lives in migrations/002_error_log_table.sql so it's tracked +
 versioned like any other schema change.
 
 This module exposes:
-  - SqliteErrorHandler — logging.Handler that inserts into error_log
+  - DbErrorHandler — logging.Handler that inserts into error_log
   - recent(n) — read accessor for the API/UI
   - prune_old(max_rows) — keeps the table from growing unbounded
 
@@ -36,7 +36,7 @@ MAX_ROWS = 1_000
 _lock = threading.Lock()
 
 
-class SqliteErrorHandler(logging.Handler):
+class DbErrorHandler(logging.Handler):
     """logging.Handler that mirrors WARNING+ records to the error_log
     table. Set the level via the standard setLevel(); the
     logging_setup module pins it at WARNING."""
@@ -116,3 +116,6 @@ def summary() -> dict[str, int]:
             "SELECT level, COUNT(*) AS n FROM error_log GROUP BY level"
         ).fetchall()
     return {r["level"]: r["n"] for r in rows}
+
+
+SqliteErrorHandler = DbErrorHandler  # old name, kept for callers

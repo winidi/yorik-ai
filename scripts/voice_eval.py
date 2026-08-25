@@ -31,9 +31,8 @@ JSON for diffing across runs and as a Markdown table for humans.
 
 NOTES
 -----
-- This is a dev tool. Runs against the live DB — don't point it at
-  production. Use a `cp data/family.db data/family.eval.db` and set
-  HOMEOS_DB_PATH first if you care.
+- This is a dev tool. Runs against the live database — don't point it
+  at production.
 - Each case includes a setup_sql that creates the seed row needed; we
   do NOT roll back after the run, so the DB may end in a modified
   state. Idempotent setup_sql (DELETE then INSERT) makes re-runs safe.
@@ -47,7 +46,6 @@ import argparse
 import asyncio
 import json
 import os
-import sqlite3
 import sys
 import time
 from dataclasses import dataclass, field
@@ -59,8 +57,8 @@ import yaml
 
 # Default endpoints; override via flags or env.
 DEFAULT_API_BASE = os.getenv("YORIK_EVAL_API_BASE", "http://localhost:8000")
-DEFAULT_DB_PATH = os.getenv("HOMEOS_DB_PATH",
-                            str(Path(__file__).parent.parent / "data" / "family.db"))
+DEFAULT_DB_PATH = "postgres"  # kept for the --db-path flag; the backend picks the database
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 # ─── data shapes ────────────────────────────────────────────────────
@@ -114,16 +112,16 @@ def _resolve_placeholders(value: Any) -> Any:
 
 
 def _get_session_cookie(db_path: str) -> str:
-    """Pull the most recent live admin session cookie from the DB —
+    """Pull the most recent live admin session cookie from the database —
     saves us implementing a login flow in the eval tool."""
-    conn = sqlite3.connect(db_path)
-    row = conn.execute(
-        "SELECT s.id FROM sessions s "
-        "JOIN user_profiles u ON u.id = s.user_id "
-        "WHERE u.role = 'admin' AND s.expires_at > datetime('now') "
-        "ORDER BY s.last_seen_at DESC LIMIT 1"
-    ).fetchone()
-    conn.close()
+    from backend.database import conn_ctx
+    with conn_ctx() as conn:
+        row = conn.execute(
+            "SELECT s.id FROM sessions s "
+            "JOIN user_profiles u ON u.id = s.user_id "
+            "WHERE u.role IN ('platform_admin', 'admin') AND s.expires_at > datetime('now') "
+            "ORDER BY s.last_seen_at DESC LIMIT 1"
+        ).fetchone()
     if not row:
         raise SystemExit(
             "no active admin session in the DB. Log in once via the browser "
@@ -135,23 +133,18 @@ def _get_session_cookie(db_path: str) -> str:
 def _setup_case(db_path: str, sql: str) -> None:
     if not sql or not sql.strip():
         return
-    conn = sqlite3.connect(db_path)
-    try:
-        conn.executescript(sql)
-        conn.commit()
-    finally:
-        conn.close()
+    from backend.database import conn_ctx
+    with conn_ctx() as conn:
+        for stmt in sql.split(";"):
+            if stmt.strip():
+                conn.execute(stmt)
 
 
 def _run_query(db_path: str, sql: str) -> list[dict]:
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    try:
+    from backend.database import conn_ctx
+    with conn_ctx() as conn:
         rows = conn.execute(sql).fetchall()
-    finally:
-        conn.close()
     return [dict(r) for r in rows]
-
 
 def _assert_expected(expected: dict, db_path: str, response: str,
                      sql_used: Optional[str], ui_actions: list) -> tuple[bool, str]:
@@ -365,7 +358,7 @@ def main() -> int:
     ap.add_argument("--api-base", default=DEFAULT_API_BASE,
                     help="Yorik API base URL")
     ap.add_argument("--db-path", default=DEFAULT_DB_PATH,
-                    help="SQLite path for setup_sql + assertions")
+                    help="ignored — kept for old invocations; the backend picks the database")
     ap.add_argument("--filter", help="Substring match on case id")
     ap.add_argument("--tag", help="Only cases with this tag")
     ap.add_argument("--json", help="Write JSON report to this path")
@@ -385,10 +378,9 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.reset_cache:
-        import sqlite3
-        with sqlite3.connect(args.db_path) as _c:
+        from backend.database import conn_ctx
+        with conn_ctx() as _c:
             n = _c.execute("DELETE FROM saved_queries").rowcount
-            _c.commit()
         print(f"[reset-cache] wiped {n} saved_queries row(s)")
 
     cases_path = Path(args.cases_file)

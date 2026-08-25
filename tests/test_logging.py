@@ -1,5 +1,5 @@
 """Unit tests for backend.logging_setup (SecretsFilter + JsonFormatter)
-and backend.error_log (SQLite handler + read accessors).
+and backend.error_log (DbErrorHandler + read accessors).
 
 Pure unit tests against the logging primitives — no FastAPI app
 needed for the filter/formatter ones. The error_log handler tests
@@ -133,16 +133,16 @@ def test_json_formatter_skips_unserialisable_extras():
     assert parsed["thing"] == "<Weird obj>"
 
 
-# ─── SqliteErrorHandler ───────────────────────────────────────────────
+# ─── DbErrorHandler ───────────────────────────────────────────────
 
-def test_sqlite_handler_persists_warnings(fresh_app):
+def test_db_handler_persists_warnings(fresh_app):
     """A WARNING-level record must end up in the error_log table."""
     # Importing backend.error_log requires the DB schema to exist —
     # fresh_app's fixture sets HOMEOS_DB_PATH + init_db()'s migrations
     # apply 002_error_log_table.sql automatically.
     from backend import error_log as el
 
-    handler = el.SqliteErrorHandler()
+    handler = el.DbErrorHandler()
     handler.setLevel(logging.WARNING)
     rec = _make_record("disk almost full")
     rec.levelname = "WARNING"
@@ -153,10 +153,10 @@ def test_sqlite_handler_persists_warnings(fresh_app):
     assert any("disk almost full" in r["message"] for r in rows)
 
 
-def test_sqlite_handler_records_traceback(fresh_app):
+def test_db_handler_records_traceback(fresh_app):
     from backend import error_log as el
 
-    handler = el.SqliteErrorHandler()
+    handler = el.DbErrorHandler()
     handler.setLevel(logging.WARNING)
     try:
         raise RuntimeError("oh no")
@@ -174,18 +174,17 @@ def test_sqlite_handler_records_traceback(fresh_app):
     assert "RuntimeError: oh no" in (matching[0]["traceback"] or "")
 
 
-def test_sqlite_handler_swallows_db_errors():
+def test_db_handler_swallows_db_errors():
     """If the DB is unreachable mid-write, the handler must NOT
     propagate — a failing log handler should never crash the caller."""
     from backend import error_log as el
 
-    handler = el.SqliteErrorHandler()
+    handler = el.DbErrorHandler()
     handler.setLevel(logging.WARNING)
     # Monkey-patch get_conn to raise; emit should still return cleanly.
     import backend.error_log
     original = backend.error_log.get_conn
-    def boom(*a, **kw): raise sqlite3.OperationalError("db is gone")
-    import sqlite3
+    def boom(*a, **kw): raise RuntimeError("db is gone")
     backend.error_log.get_conn = boom
     try:
         rec = _make_record("test")
@@ -201,7 +200,7 @@ def test_error_log_recent_filters_by_level(fresh_app):
     """recent(level='ERROR') must only return ERROR rows, not WARNING."""
     from backend import error_log as el
 
-    handler = el.SqliteErrorHandler()
+    handler = el.DbErrorHandler()
     handler.setLevel(logging.WARNING)
 
     rec_w = _make_record("a warning")

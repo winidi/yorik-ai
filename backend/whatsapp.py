@@ -445,7 +445,7 @@ async def _handle_event(evt: dict[str, Any]) -> None:
         if p.get("mediaKind"):
             from . import whatsapp_media
             asyncio.create_task(whatsapp_media.process_media(p, owner_user_id=owner_user_id))
-        # Semantic indexing: embed text messages into wa_vec so the
+        # Semantic indexing: embed text messages into wa_chunks so the
         # draft generator can do meaning-based cross-chat retrieval.
         # Voice notes get re-indexed later once their transcript lands
         # (whatsapp_media calls back into the indexer after Whisper).
@@ -1615,7 +1615,7 @@ def _cross_chat_hints(current_jid: str, query_text: str, owner_user_id: str = DE
 
 
 def _semantic_hints(current_jid: str, query_text: str, k: int = 3) -> list[dict[str, Any]]:
-    """Vector-search wa_vec for top-K semantic matches outside the current
+    """Vector-search wa_chunks for top-K semantic matches outside the current
     chat. Falls back to empty list if the embedder is down."""
     if not query_text or len(query_text.strip()) < 4:
         return []

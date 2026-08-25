@@ -1,10 +1,10 @@
-"""Paperless → sqlite-vec ingestion pipeline.
+"""Paperless → pgvector ingestion pipeline.
 
 Listens for Paperless's POST_CONSUME_SCRIPT webhook (one call per
 finished document), fetches the OCR'd text + metadata via Paperless's
 REST API, chunks + embeds it with the same Ollama-based embedder as the
 legacy local-docs pipeline (nomic-embed-text, 768-dim), and upserts into
-the `paperless_chunks` + `paperless_vec` tables in `documents.db`.
+`docs.paperless_chunks` (text + pgvector embedding per chunk).
 
 The result is a vector index that mirrors Paperless's text content. The
 LLM gets a `paperless.search_semantic` op that queries this index and
@@ -28,15 +28,14 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
-import sqlite_vec
 
-from .database import DEFAULT_DOCS_DB_PATH, get_docs_conn, init_docs_db
+from .database import DEFAULT_DOCS_DB_PATH, get_docs_conn
 from .documents import chunk_text, embed, EmbeddingError
 
 
 def _l2_normalize(vec: List[float]) -> List[float]:
     """Project a vector onto the unit hypersphere. Two effects:
-      1. sqlite-vec's L2 distance becomes monotonically equivalent to
+      1. pgvector's L2 distance becomes monotonically equivalent to
          cosine distance (cos = 1 - L2²/2 when both vectors are unit-norm).
       2. distances are bounded in [0, 2] instead of unbounded, so the
          similarity score we surface to users is a meaningful percentage.
@@ -49,16 +48,6 @@ log = logging.getLogger("homeos.paperless_ingest")
 
 DOCS_DB_PATH = os.getenv("HOMEOS_DOCS_DB_PATH", DEFAULT_DOCS_DB_PATH)
 PAPERLESS_TIMEOUT = 10
-
-
-def _pg_backend() -> bool:
-    """True iff Yorik is running against Postgres. The ingest, mirror
-    accounting, and prune paths branch on this — Postgres writes the
-    embedding directly into docs.paperless_chunks.embedding (a
-    vector(384) column with an ivfflat index, declared in the Phase D
-    bootstrap), instead of going through the SQLite paperless_vec
-    virtual table that doesn't exist on the Postgres side."""
-    return (os.getenv("YORIK_DB_BACKEND") or "sqlite").lower() == "postgres"
 
 
 def _qvec_literal(vec: List[float]) -> str:
@@ -151,24 +140,12 @@ def _delete_existing_chunks(conn, paperless_doc_id: int) -> None:
     """Remove any prior chunks for this doc. Called before re-ingest so
     updates in Paperless replace cleanly.
 
-    Postgres: a single DELETE on docs.paperless_chunks suffices because
-    the embedding is a column on that table.
-    SQLite: also wipe the paperless_vec virtual table rows tied to those
-    chunk ids — sqlite-vec is a separate table.
+    One DELETE — the embedding is a column on docs.paperless_chunks.
     """
-    if _pg_backend():
-        conn.execute(
-            "DELETE FROM paperless_chunks WHERE paperless_doc_id = %s",
-            (paperless_doc_id,),
-        )
-        return
-    rows = conn.execute(
-        "SELECT id FROM paperless_chunks WHERE paperless_doc_id = ?", (paperless_doc_id,)
-    ).fetchall()
-    chunk_ids = [r["id"] for r in rows]
-    for cid in chunk_ids:
-        conn.execute("DELETE FROM paperless_vec WHERE rowid = ?", (cid,))
-    conn.execute("DELETE FROM paperless_chunks WHERE paperless_doc_id = ?", (paperless_doc_id,))
+    conn.execute(
+        "DELETE FROM paperless_chunks WHERE paperless_doc_id = %s",
+        (paperless_doc_id,),
+    )
 
 
 def _chunk_preamble(doc: Dict[str, Any]) -> str:
@@ -213,40 +190,12 @@ def ingest_one(paperless_doc_id: int) -> Dict[str, Any]:
     if not chunks:
         return {"ok": False, "id": paperless_doc_id, "error": "chunker_returned_nothing"}
 
-    if _pg_backend():
-        # Postgres path: write directly into docs.paperless_chunks with
-        # the embedding column. The pool's connection-level
-        # `search_path=docs,public` (see database_pg._ensure_pool) means
-        # unqualified `paperless_chunks` resolves to docs.paperless_chunks.
-        from .database_pg import conn_ctx_pg
-        with conn_ctx_pg("docs") as conn:
-            _delete_existing_chunks(conn, paperless_doc_id)
-            n_ok = 0
-            n_fail = 0
-            for idx, (body, char_start, char_end) in enumerate(chunks):
-                try:
-                    vec = _l2_normalize(embed(preamble + body))
-                except EmbeddingError as exc:
-                    log.warning("paperless_ingest: embed failed for doc %s chunk %s: %s",
-                                paperless_doc_id, idx, exc)
-                    n_fail += 1
-                    continue
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "INSERT INTO paperless_chunks "
-                        "(paperless_doc_id, chunk_index, text, "
-                        " char_start, char_end, embedding) "
-                        "VALUES (%s, %s, %s, %s, %s, %s::vector)",
-                        (paperless_doc_id, idx, body,
-                         char_start, char_end, _qvec_literal(vec)),
-                    )
-                n_ok += 1
-        return {"ok": True, "id": paperless_doc_id, "chunks": n_ok,
-                "embed_failures": n_fail, "title": doc.get("title", "")}
-
-    init_docs_db(DOCS_DB_PATH)  # idempotent — ensures vec0 tables exist
-    conn = get_docs_conn(DOCS_DB_PATH)
-    try:
+    # Postgres path: write directly into docs.paperless_chunks with
+    # the embedding column. The pool's connection-level
+    # `search_path=docs,public` (see database_pg._ensure_pool) means
+    # unqualified `paperless_chunks` resolves to docs.paperless_chunks.
+    from .database_pg import conn_ctx_pg
+    with conn_ctx_pg("docs") as conn:
         _delete_existing_chunks(conn, paperless_doc_id)
         n_ok = 0
         n_fail = 0
@@ -258,23 +207,19 @@ def ingest_one(paperless_doc_id: int) -> Dict[str, Any]:
                             paperless_doc_id, idx, exc)
                 n_fail += 1
                 continue
-            cur = conn.execute(
-                "INSERT INTO paperless_chunks "
-                "(paperless_doc_id, chunk_index, text, char_start, char_end) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (paperless_doc_id, idx, body, char_start, char_end),
-            )
-            chunk_id = cur.lastrowid
-            conn.execute(
-                "INSERT INTO paperless_vec (rowid, embedding) VALUES (?, ?)",
-                (chunk_id, sqlite_vec.serialize_float32(vec)),
-            )
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO paperless_chunks "
+                    "(paperless_doc_id, chunk_index, text, "
+                    " char_start, char_end, embedding) "
+                    "VALUES (%s, %s, %s, %s, %s, %s::vector)",
+                    (paperless_doc_id, idx, body,
+                     char_start, char_end, _qvec_literal(vec)),
+                )
             n_ok += 1
-        conn.commit()
-    finally:
-        conn.close()
-    return {"ok": True, "id": paperless_doc_id, "chunks": n_ok, "embed_failures": n_fail,
-            "title": doc.get("title", "")}
+    return {"ok": True, "id": paperless_doc_id, "chunks": n_ok,
+            "embed_failures": n_fail, "title": doc.get("title", "")}
+
 
 
 def reindex_all() -> Dict[str, Any]:
@@ -299,26 +244,15 @@ def reindex_all() -> Dict[str, Any]:
 def _mirrored_ids() -> set[int]:
     """Set of paperless_doc_id values currently present in the local
     chunk mirror. Empty set if the table doesn't exist yet."""
-    if _pg_backend():
-        from .database_pg import conn_ctx_pg
-        try:
-            with conn_ctx_pg("docs") as conn, conn.cursor() as cur:
-                cur.execute(
-                    "SELECT DISTINCT paperless_doc_id FROM paperless_chunks"
-                )
-                rows = cur.fetchall()
-            return {int(r[0]) for r in rows}
-        except Exception:  # noqa: BLE001
-            return set()
-    from backend.documents import DOCS_DB_PATH
-    from backend.database import get_docs_conn
+    from .database_pg import conn_ctx_pg
     try:
-        with get_docs_conn(DOCS_DB_PATH) as conn:
-            rows = conn.execute(
+        with conn_ctx_pg("docs") as conn, conn.cursor() as cur:
+            cur.execute(
                 "SELECT DISTINCT paperless_doc_id FROM paperless_chunks"
-            ).fetchall()
-        return {int(r["paperless_doc_id"]) for r in rows}
-    except Exception:  # noqa: BLE001 — table may not exist on first boot
+            )
+            rows = cur.fetchall()
+        return {int(r[0]) for r in rows}
+    except Exception:  # noqa: BLE001
         return set()
 
 
@@ -341,7 +275,7 @@ def reconcile_once() -> Dict[str, Any]:
 
     Pruning rule: ids that disappeared from Paperless's live listing
     (deleted, trashed, or otherwise unreachable from the user's token)
-    get their chunks + vectors wiped from paperless_chunks/paperless_vec.
+    get their chunks (and embeddings) wiped from paperless_chunks.
     Without this, semantic search keeps returning hits that resolve to
     a 404 in the UI — confusing and a privacy leak (chunk text outlives
     the source doc). The wider Yorik `documents` table is also swept
@@ -364,7 +298,7 @@ def reconcile_once() -> Dict[str, Any]:
     missing = sorted((live - mirrored) - _no_text_skiplist)
     stale = sorted(mirrored - live)
 
-    # Prune stale paperless_chunks/paperless_vec first — fast, no network.
+    # Prune stale paperless_chunks first — fast, no network.
     # Also drop the id from the per-process no-text skiplist so a re-add
     # of the same paperless_doc_id later re-ingests cleanly.
     pruned = 0
@@ -573,96 +507,50 @@ def search(query: str, k: int = 8,
         log.warning("paperless search: embed failed: %s", exc)
         return []
 
-    import os as _os
-    _pg_backend = (_os.getenv("YORIK_DB_BACKEND") or "sqlite").lower() == "postgres"
-
-    init_docs_db(DOCS_DB_PATH)
     conn = get_docs_conn(DOCS_DB_PATH)
     try:
-        if _pg_backend:
-            # IVFFLAT defaults probes=1 — drops hits silently until the
-            # index has thousands of vectors. Bump per-statement so small
-            # corpora work; index switches to HNSW post-launch.
-            try:
-                conn.execute("SET LOCAL ivfflat.probes = 100")
-            except Exception:  # noqa: BLE001
-                pass
-            # pgvector path. `<=>` is cosine distance for vectors that
-            # were L2-normalised before storage (which we do — see
-            # _l2_normalize at ingest time). `embedding IS NOT NULL`
-            # skips rows where the backfill hasn't reached yet.
-            qvec_str = "[" + ",".join(repr(float(x)) for x in qvec) + "]"
-            if visible_space_ids:
-                # NULL space_id rows are legacy chunks ingested before
-                # Phase C (no space tag on the Paperless doc). The
-                # historical contract was 'visible to the household' —
-                # post-Phase-C we keep that compatibility by including
-                # NULL alongside the caller's visible spaces, otherwise
-                # chat doc-search returns empty for the entire pre-
-                # Phase-C corpus.
-                placeholders = ",".join("%s" for _ in visible_space_ids)
-                sql = (
-                    "SELECT pc.id, pc.paperless_doc_id, pc.chunk_index, pc.text, "
-                    "       (pc.embedding <=> %s::vector) AS distance "
-                    "FROM paperless_chunks pc "
-                    f"WHERE pc.embedding IS NOT NULL "
-                    f"  AND (pc.space_id IN ({placeholders}) OR pc.space_id IS NULL) "
-                    "ORDER BY pc.embedding <=> %s::vector "
-                    "LIMIT %s"
-                )
-                params = (qvec_str, *visible_space_ids, qvec_str, int(k))
-            else:
-                sql = (
-                    "SELECT pc.id, pc.paperless_doc_id, pc.chunk_index, pc.text, "
-                    "       (pc.embedding <=> %s::vector) AS distance "
-                    "FROM paperless_chunks pc "
-                    "WHERE pc.embedding IS NOT NULL "
-                    "ORDER BY pc.embedding <=> %s::vector "
-                    "LIMIT %s"
-                )
-                params = (qvec_str, qvec_str, int(k))
-            rows = conn.execute(sql, params).fetchall()
-        elif visible_space_ids:
-            # SQLite + sqlite_vec path. vec0 requires the LIMIT (or
-            # `k = ?`) to be evaluated on the virtual table itself, not
-            # on a JOIN result. Subquery pattern: ANN-search first, then
-            # hydrate from paperless_chunks. Over-fetch from ANN by 5x
-            # so the post-JOIN space filter can drop hits outside the
-            # caller's visible spaces and still hand back k results.
-            ann_limit = max(int(k) * 5, int(k) + 16)
-            placeholders = ",".join("?" * len(visible_space_ids))
-            rows = conn.execute(f"""
-                SELECT pc.id, pc.paperless_doc_id, pc.chunk_index, pc.text, v.distance
-                FROM (
-                    SELECT rowid, distance
-                    FROM paperless_vec
-                    WHERE embedding MATCH ?
-                    ORDER BY distance
-                    LIMIT ?
-                ) v
-                JOIN paperless_chunks pc ON pc.id = v.rowid
-                WHERE pc.space_id IN ({placeholders})
-                ORDER BY v.distance
-                LIMIT ?
-            """, (
-                sqlite_vec.serialize_float32(qvec),
-                ann_limit,
-                *visible_space_ids,
-                int(k),
-            )).fetchall()
+        # IVFFLAT defaults probes=1 — drops hits silently until the
+        # index has thousands of vectors. Bump per-statement so small
+        # corpora work; index switches to HNSW post-launch.
+        try:
+            conn.execute("SET LOCAL ivfflat.probes = 100")
+        except Exception:  # noqa: BLE001
+            pass
+        # pgvector path. `<=>` is cosine distance for vectors that
+        # were L2-normalised before storage (which we do — see
+        # _l2_normalize at ingest time). `embedding IS NOT NULL`
+        # skips rows where the backfill hasn't reached yet.
+        qvec_str = "[" + ",".join(repr(float(x)) for x in qvec) + "]"
+        if visible_space_ids:
+            # NULL space_id rows are legacy chunks ingested before
+            # Phase C (no space tag on the Paperless doc). The
+            # historical contract was 'visible to the household' —
+            # post-Phase-C we keep that compatibility by including
+            # NULL alongside the caller's visible spaces, otherwise
+            # chat doc-search returns empty for the entire pre-
+            # Phase-C corpus.
+            placeholders = ",".join("%s" for _ in visible_space_ids)
+            sql = (
+                "SELECT pc.id, pc.paperless_doc_id, pc.chunk_index, pc.text, "
+                "       (pc.embedding <=> %s::vector) AS distance "
+                "FROM paperless_chunks pc "
+                f"WHERE pc.embedding IS NOT NULL "
+                f"  AND (pc.space_id IN ({placeholders}) OR pc.space_id IS NULL) "
+                "ORDER BY pc.embedding <=> %s::vector "
+                "LIMIT %s"
+            )
+            params = (qvec_str, *visible_space_ids, qvec_str, int(k))
         else:
-            rows = conn.execute("""
-                SELECT pc.id, pc.paperless_doc_id, pc.chunk_index, pc.text, v.distance
-                FROM (
-                    SELECT rowid, distance
-                    FROM paperless_vec
-                    WHERE embedding MATCH ?
-                    ORDER BY distance
-                    LIMIT ?
-                ) v
-                JOIN paperless_chunks pc ON pc.id = v.rowid
-                ORDER BY v.distance
-            """, (sqlite_vec.serialize_float32(qvec), int(k))).fetchall()
+            sql = (
+                "SELECT pc.id, pc.paperless_doc_id, pc.chunk_index, pc.text, "
+                "       (pc.embedding <=> %s::vector) AS distance "
+                "FROM paperless_chunks pc "
+                "WHERE pc.embedding IS NOT NULL "
+                "ORDER BY pc.embedding <=> %s::vector "
+                "LIMIT %s"
+            )
+            params = (qvec_str, qvec_str, int(k))
+        rows = conn.execute(sql, params).fetchall()
     finally:
         conn.close()
 
@@ -727,24 +615,16 @@ def _vec_index_count() -> int:
     table. 0 means the bundled embedder hasn't ingested anything yet
     (or a recent dim-change wiped the table) — useful diagnostic when
     semantic returns nothing on a clean install."""
-    if _pg_backend():
-        try:
-            from .database_pg import conn_ctx_pg
-            with conn_ctx_pg("docs") as conn, conn.cursor() as cur:
-                cur.execute(
-                    "SELECT COUNT(*) FROM paperless_chunks "
-                    "WHERE embedding IS NOT NULL"
-                )
-                row = cur.fetchone()
-            return int(row[0] if row else 0)
-        except Exception:  # noqa: BLE001
-            return 0
     try:
-        from .database import get_docs_conn
-        with get_docs_conn(DOCS_DB_PATH) as conn:
-            row = conn.execute("SELECT COUNT(*) AS n FROM paperless_vec").fetchone()
-        return int(row["n"] if row else 0)
-    except Exception:  # noqa: BLE001 — table may not exist yet
+        from .database_pg import conn_ctx_pg
+        with conn_ctx_pg("docs") as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM paperless_chunks "
+                "WHERE embedding IS NOT NULL"
+            )
+            row = cur.fetchone()
+        return int(row[0] if row else 0)
+    except Exception:  # noqa: BLE001
         return 0
 
 
@@ -855,7 +735,6 @@ def search_hybrid(query: str, k: int = 8,
         try:
             doc_ids = [h.get("paperless_doc_id") for h in fts_hits if h.get("paperless_doc_id") is not None]
             if doc_ids:
-                init_docs_db(DOCS_DB_PATH)
                 vc = get_docs_conn(DOCS_DB_PATH)
                 try:
                     placeholders_vs = ",".join("?" * len(visible_space_ids))

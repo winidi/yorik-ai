@@ -207,9 +207,8 @@ render an ugly or wrong PDF. No code execution.
 | Tool | What it does |
 |---|---|
 | `use_skill(name, args)`     | Dispatch any registered skill |
-| `run_sql(sql)`              | Role-gated SELECT (+ writes to specific allowlisted tables) |
 | `trigger_connector(name, params)` | Direct connector invocation (rarely used; prefer skills) |
-| `search_documents(query)`   | Semantic search over Paperless via sqlite-vec |
+| `search_documents(query)`   | Semantic search over Paperless via pgvector |
 | `show_calendar(view, anchor, highlight)` | UI control |
 | `web_search(query, limit)`  | Web search via active provider (ddgs / brave / searxng) |
 | `web_extract(urls)`         | Page-text extraction (trafilatura) with UNTRUSTED markers |
@@ -248,9 +247,9 @@ by voice + some background paths.
 1. **CSP** on the dashboard locks the browser down: same-origin only for
    `connect-src` + `script-src`. A malicious app injected into the React
    shell cannot phone home.
-2. **Role-gated SQL**: `RoleGatedSqliteRunner` blocks LLM-generated SQL
-   from touching tables outside the requesting role's allowlist
-   (admin / member / child / employee / viewer).
+2. **No LLM-generated SQL**: every read and write goes through a named,
+   role-gated skill; the registry rejects calls outside the role's
+   permissions (platform_admin / admin / member / restricted).
 3. **Confirm-mutations**: write skills (add_calendar_event, delete_*,
    add_bill, etc.) stage a `pending_action` that the user must confirm.
    ON by default during alpha; user toggle in Settings → Profile.

@@ -620,18 +620,12 @@ def seed_calendar() -> None:
         return
     print(f"  → inserting {len(events)} events into the events table")
     try:
-        import sqlite3
-        from backend.database import DEFAULT_DB_PATH
+        from backend.database import conn_ctx
     except Exception as exc:  # noqa: BLE001
         print(f"  ✗ backend import failed: {exc}")
         return
-    db = os.environ.get("HOMEOS_DB_PATH") or str(DEFAULT_DB_PATH)
-    # Resolve relative path against repo root the same way backend does
-    if not os.path.isabs(db):
-        db = str(ROOT / db)
     inserted = skipped = 0
-    with sqlite3.connect(db) as conn:
-        conn.row_factory = sqlite3.Row
+    with conn_ctx() as conn:
         for ev in events:
             # Dedup: same title + starts_at = same event. Cheap UNIQUE-ish.
             existing = conn.execute(
@@ -783,20 +777,16 @@ def seed_whatsapp() -> None:
         return
     print(f"  → inserting {len(chats)} chats + their messages directly into wa_chats / wa_messages")
     try:
-        import sqlite3
-        from backend.database import DEFAULT_DB_PATH
+        from backend.database import conn_ctx
+        from psycopg import errors as pg_errors
     except Exception as exc:  # noqa: BLE001
         print(f"  ✗ backend import failed: {exc}")
         return
-    db = os.environ.get("HOMEOS_DB_PATH") or str(DEFAULT_DB_PATH)
-    if not os.path.isabs(db):
-        db = str(ROOT / db)
 
     n_chats = 0
     n_msgs = 0
     n_dupes = 0
-    with sqlite3.connect(db) as conn:
-        conn.row_factory = sqlite3.Row
+    with conn_ctx() as conn:
         for ch in chats:
             jid = ch["jid"]
             # Upsert chat (don't clobber if it exists from prior seeding)
@@ -806,7 +796,8 @@ def seed_whatsapp() -> None:
             if not existing:
                 conn.execute(
                     "INSERT INTO wa_chats (jid, name, is_group, last_message_ts, "
-                    " last_message_text, owner_user_id) VALUES (?, ?, ?, ?, ?, 1)",
+                    " last_message_text, owner_user_id) VALUES (?, ?, ?, ?, ?, "
+                    " (SELECT id FROM user_profiles WHERE role IN ('platform_admin','admin') ORDER BY created_at LIMIT 1))",
                     (jid, ch["name"], int(ch.get("is_group") or 0),
                      int(ch.get("last_ts") or 0), ch.get("last_text") or ""),
                 )
@@ -821,7 +812,7 @@ def seed_whatsapp() -> None:
                          m.get("push_name"), int(m["timestamp"]), m["text"]),
                     )
                     n_msgs += 1
-                except sqlite3.IntegrityError:
+                except pg_errors.IntegrityError:
                     # (chat_jid, msg_id) is UNIQUE — already seeded
                     n_dupes += 1
         conn.commit()

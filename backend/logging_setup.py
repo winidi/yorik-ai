@@ -11,7 +11,7 @@ Goals (in priority order):
      password=/Bearer-style values BEFORE the record hits any
      handler. Defense in depth; the codebase shouldn't be logging
      those anyway.
-  4. **Persist errors** — WARNING+ records also land in a SQLite
+  4. **Persist errors** — WARNING+ records also land in a database
      `error_log` table so Settings → Health can show a "what's been
      breaking" list without grepping /tmp or journald.
 
@@ -222,17 +222,17 @@ def setup_logging() -> None:
             # file (read-only FS, perm issue). Stderr still works.
             root.warning("logging_setup: file handler disabled (%s)", exc)
 
-    # SQLite error_log handler — only WARNING+, fire-and-forget so a
+    # error_log handler — only WARNING+, fire-and-forget so a
     # DB blip doesn't propagate into the log path.
     try:
         from . import error_log as _error_log
-        sqlite_handler = _error_log.SqliteErrorHandler()
+        sqlite_handler = _error_log.DbErrorHandler()
         sqlite_handler.setLevel(logging.WARNING)
         sqlite_handler.addFilter(secrets)
         sqlite_handler.addFilter(corr)
         root.addHandler(sqlite_handler)
     except Exception as exc:
-        root.warning("logging_setup: SQLite error_log handler disabled (%s)", exc)
+        root.warning("logging_setup: error_log handler disabled (%s)", exc)
 
     # Quiet the noisier libraries — uvicorn's access logs in particular
     # are useful but at INFO level they drown signal.

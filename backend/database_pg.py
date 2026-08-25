@@ -1,9 +1,6 @@
 """Postgres connection helper for Phase D — Supabase migration.
 
-Mirrors `backend/database.py`'s `conn_ctx()` shape so call sites can
-switch backends by flipping `YORIK_DB_BACKEND=postgres` once the
-schema + data are in place. The dispatcher in `database.py` itself
-will route to this module when the env var is set.
+`backend/database.py` routes every connection through the pools here.
 
 Two pools are kept (one per logical DB) so we preserve the historic
 `family.db` / `documents.db` separation without forcing every call

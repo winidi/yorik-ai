@@ -185,7 +185,10 @@ def fresh_app(monkeypatch: pytest.MonkeyPatch, pg_template: dict[str, str]) -> I
         admin.execute(f'CREATE DATABASE "{dbname}" TEMPLATE "{TEMPLATE_DB}"')
 
     tmp = tempfile.TemporaryDirectory()
-    monkeypatch.setenv("YORIK_DB_BACKEND", "postgres")
+    # Startup probes port 8000 and os._exit()s if another Yorik holds it;
+    # a test process must never do that.
+    monkeypatch.setenv("YORIK_SKIP_BIND_PROBE", "1")
+    monkeypatch.setenv("HOMEOS_PORT", "0")
     monkeypatch.setenv("YORIK_DB_HOST", pg_template["host"])
     monkeypatch.setenv("YORIK_DB_PORT", pg_template["port"])
     monkeypatch.setenv("YORIK_DB_USER", "postgres")
@@ -259,3 +262,26 @@ def login_client(app, *, role: str = "admin", name: str | None = None,
     client = TestClient(app)
     client.cookies.set(auth_sessions.COOKIE_NAME, sid)
     return client, uid
+
+
+@pytest.fixture
+def pg_scratch_conn(pg_template: dict[str, str]) -> Iterator[psycopg.Connection]:
+    """An EMPTY database (no Yorik schema at all) plus an admin psycopg
+    connection to it — for the migration-runner tests, which bring
+    their own throwaway migration files."""
+    global _counter
+    _counter += 1
+    dbname = f"{TEST_DB_PREFIX}scratch_{os.getpid()}_{_counter}"
+    with _admin_conn(pg_template) as admin:
+        admin.execute(f'CREATE DATABASE "{dbname}"')
+    conn = psycopg.connect(
+        host=pg_template["host"], port=pg_template["port"], dbname=dbname,
+        user="supabase_admin", password=pg_template["password"],
+        connect_timeout=5, autocommit=False,
+    )
+    try:
+        yield conn
+    finally:
+        conn.close()
+        with _admin_conn(pg_template) as admin:
+            admin.execute(f'DROP DATABASE IF EXISTS "{dbname}" WITH (FORCE)')

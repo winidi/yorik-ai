@@ -26,7 +26,6 @@ import asyncio
 import json
 import os
 import re
-import sqlite3
 import threading
 import uuid
 from contextvars import ContextVar
@@ -62,7 +61,7 @@ from .agent.vanna_shim import (
 
 from .auth import build_user_resolver, filter_query_by_role
 from .conversation_store import SqliteConversationStore
-from .database import DEFAULT_DB_PATH, conn_ctx, init_db, seed
+from .database import DEFAULT_DB_PATH, conn_ctx
 from .ui_tools import (
     InstallConnectorTool,
     LAYOUT_CATALOGUE,
@@ -222,9 +221,6 @@ class SqlCapturingAuditLogger(AuditLogger):
 # Build the agent — once per process.
 # ---------------------------------------------------------------------------
 
-# Make sure the DB exists so SqliteRunner can open it.
-init_db(DB_PATH)
-seed(DB_PATH)
 
 def _boot_api_key() -> str:
     """Read the persisted api_key (if any) at module init. Falls back to
@@ -1700,7 +1696,7 @@ async def ask_async(message: str, role: str = "admin", conversation_id: Optional
         try:
             rows = _execute_cached_sql(cached["sql_query"])
             cached_failed = None
-        except sqlite3.Error as exc:
+        except Exception as exc:  # noqa: BLE001
             rows = None
             cached_failed = str(exc)
         if cached_failed is None:

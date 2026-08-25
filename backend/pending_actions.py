@@ -9,7 +9,7 @@ The decision is logged per (skill, llm_model, language) so we can build
 a per-model success-rate dashboard — the killer beta feature for picking
 which LLM is reliable enough for tool use.
 
-Storage: a single `pending_actions` SQLite table with a 1-hour TTL.
+Storage: a single `pending_actions` table with a 1-hour TTL.
 Stale rows are pruned lazily on each stage() call (no cron needed at
 home-scale; tens of pending rows max).
 
@@ -34,75 +34,12 @@ TTL_SECONDS = 3600           # 1h — pending rows older than this are dropped
 PURGE_KEEP_DECISIONS_DAYS = 90  # quality telemetry retention
 
 
-def init_schema() -> None:
-    """Create the two tables we need. Idempotent — called from database.init_db.
-
-    The pending_actions table grew rollback columns mid-beta; add them
-    via ALTER TABLE if missing (CREATE TABLE IF NOT EXISTS won't add
-    columns to an existing table).
-    """
-    with get_conn() as conn:
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS pending_actions (
-                id              TEXT PRIMARY KEY,
-                user_id         INTEGER NOT NULL,
-                skill           TEXT NOT NULL,
-                params_json     TEXT NOT NULL,
-                preview_json    TEXT NOT NULL,
-                rollback_kind   TEXT NOT NULL DEFAULT '',
-                rollback_args_json TEXT NOT NULL DEFAULT '{}',
-                llm_model       TEXT NOT NULL DEFAULT '',
-                language        TEXT NOT NULL DEFAULT 'en',
-                created_at      TEXT NOT NULL DEFAULT (datetime('now'))
-            );
-            CREATE INDEX IF NOT EXISTS ix_pending_actions_user
-                ON pending_actions (user_id, created_at);
-
-            CREATE TABLE IF NOT EXISTS skill_decisions (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                skill           TEXT NOT NULL,
-                llm_model       TEXT NOT NULL DEFAULT '',
-                language        TEXT NOT NULL DEFAULT 'en',
-                decision        TEXT NOT NULL CHECK (decision IN ('confirmed','cancelled','test','auto')),
-                user_id         INTEGER NOT NULL,
-                params_json     TEXT NOT NULL DEFAULT '{}',
-                ts              TEXT NOT NULL DEFAULT (datetime('now'))
-            );
-            CREATE INDEX IF NOT EXISTS ix_skill_decisions_skill_model
-                ON skill_decisions (skill, llm_model, decision);
-            CREATE INDEX IF NOT EXISTS ix_skill_decisions_ts
-                ON skill_decisions (ts);
-        """)
-        # Migrate older pending_actions tables that lack the rollback columns.
-        cols = {r[1] for r in conn.execute("PRAGMA table_info(pending_actions)").fetchall()}
-        if "rollback_kind" not in cols:
-            conn.execute("ALTER TABLE pending_actions ADD COLUMN rollback_kind TEXT NOT NULL DEFAULT ''")
-        if "rollback_args_json" not in cols:
-            conn.execute("ALTER TABLE pending_actions ADD COLUMN rollback_args_json TEXT NOT NULL DEFAULT '{}'")
-
-
 def _purge_stale() -> None:
-    """Drop pending_actions older than TTL_SECONDS. Cheap — called on every stage().
-
-    Both SQLite and Postgres backends are in the wild; the two have
-    incompatible time arithmetic:
-      - SQLite: `datetime('now', '-3600 seconds')`
-      - Postgres: `now() - interval '3600 seconds'`
-    An earlier fix moved everything to Postgres syntax, which broke
-    fresh SQLite installs with `near "'3600 seconds'": syntax error`
-    on every add_event / add_task / any skill that called stage().
-    Branch on the backend so both paths work.
-    """
-    import os as _os
-    if (_os.getenv("YORIK_DB_BACKEND") or "sqlite").lower() == "postgres":
-        time_expr = (
-            "to_char(now() - interval '" + str(int(TTL_SECONDS)) + " seconds', "
-            "'YYYY-MM-DD HH24:MI:SS')"
-        )
-    else:
-        time_expr = (
-            "datetime('now', '-" + str(int(TTL_SECONDS)) + " seconds')"
-        )
+    """Drop pending_actions older than TTL_SECONDS. Cheap — called on every stage()."""
+    time_expr = (
+        "to_char(now() - interval '" + str(int(TTL_SECONDS)) + " seconds', "
+        "'YYYY-MM-DD HH24:MI:SS')"
+    )
     with get_conn() as conn:
         conn.execute(
             "DELETE FROM pending_actions "

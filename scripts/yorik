@@ -360,10 +360,9 @@ def _db(args: argparse.Namespace) -> int:
     every backend startup automatically; these subcommands are for
     ops/inspection from outside a running server."""
     from backend import migrations as mig
-    from backend.database import conn_ctx, DEFAULT_DB_PATH
-    import os as _os
-    db_path = _os.getenv("HOMEOS_DB_PATH", DEFAULT_DB_PATH)
-    with conn_ctx(db_path) as conn:
+    from backend.database import conn_ctx, describe
+    db_path = describe()
+    with conn_ctx() as conn:
         all_mig = mig.discover()
         applied = mig.applied_versions(conn)
         if args.action == "status":

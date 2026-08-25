@@ -38,7 +38,6 @@ wrap rejections in HTTP exceptions or skill errors as appropriate.
 """
 from __future__ import annotations
 
-import sqlite3
 from typing import Any, Iterable, Literal, Optional
 
 from .database import conn_ctx

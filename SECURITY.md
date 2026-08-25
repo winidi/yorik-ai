@@ -52,7 +52,7 @@ For users running Yorik in production-ish environments:
 - **Don't expose the bare backend port (`:8000`) to the internet.** Put a reverse proxy with TLS in front, or use Tailscale.
 - **Use the Docker bundled services on loopback only** (the default).
 - **Rotate your `data/.credential_key` if you ever back up to off-site cloud storage.**
-- **Run `bash scripts/backup-restore-drill.sh` quarterly** — proves your backups actually restore.
+- **Run `yorik backup-verify <snapshot>` quarterly** — proves your backups actually restore.
 - **Keep `data/family.db` on encrypted disk** (LUKS / FileVault / BitLocker).
 
 ## Past disclosures

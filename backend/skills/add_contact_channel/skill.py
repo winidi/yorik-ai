@@ -1,6 +1,6 @@
 """add_contact_channel skill — attach an email/phone/whatsapp/etc. to a contact."""
 from __future__ import annotations
-import sqlite3
+from psycopg import errors as pg_errors
 from typing import Any, Optional
 
 
@@ -33,7 +33,7 @@ async def execute(
         channel_id = C.add_channel(
             contact_id, kind=kind, value=value, label=label, source="manual",
         )
-    except sqlite3.IntegrityError:
+    except pg_errors.IntegrityError:
         # UNIQUE(kind, value) violation — surface which contact already owns it.
         existing = C.find_by_channel(kind, value)
         owner = existing["display_name"] if existing else "(unknown)"

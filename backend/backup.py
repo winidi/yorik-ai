@@ -1,7 +1,7 @@
 """Yorik backup — age-encrypted snapshots to a configurable target.
 
 Three priorities baked in:
-  1. **No Yorik downtime**: SQLite gets snapshotted via VACUUM INTO
+  1. **No Yorik downtime**: Postgres is dumped with pg_dump inside the db container
      (consistent point-in-time copy taken while the live DB stays
      writable), so the application keeps running. The slow steps —
      compression + encryption + writing to the external drive —
@@ -32,7 +32,6 @@ import json
 import logging
 import os
 import shutil
-import sqlite3
 import tarfile
 import tempfile
 import time
@@ -41,7 +40,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from . import credential_store
-from .database import get_conn, DEFAULT_DB_PATH, DEFAULT_DOCS_DB_PATH
+from .database import get_conn
 
 log = logging.getLogger("yorik.backup")
 
@@ -172,21 +171,6 @@ def _looks_external(path: str) -> bool:
 
 # ───────────────────────── snapshot + bundle ────────────────────────
 
-def _snapshot_sqlite(src: Path, dst: Path) -> None:
-    """Consistent snapshot via VACUUM INTO. Source DB remains writable
-    throughout. dst must NOT exist (VACUUM INTO refuses to overwrite)."""
-    if dst.exists():
-        dst.unlink()
-    conn = sqlite3.connect(str(src))
-    try:
-        # Quote the destination — paths with special chars would otherwise
-        # break the SQL. We control the path, so simple escape is fine.
-        safe = str(dst).replace("'", "''")
-        conn.execute(f"VACUUM INTO '{safe}'")
-    finally:
-        conn.close()
-
-
 def _bundle(opts: dict[str, Any], staging: Path) -> tuple[Path, list[str]]:
     """Build the staging directory: snapshot DBs + copy small dirs +
     optionally copy heavy media dirs. Returns (tar_archive_path,
@@ -203,68 +187,60 @@ def _bundle(opts: dict[str, Any], staging: Path) -> tuple[Path, list[str]]:
     #
     # SQLite-era installs keep working unchanged via the original
     # VACUUM INTO snapshot path.
-    if _use_postgres_backend():
-        pg_main = _dump_yorik_postgres(staging / "yorik_postgres.sql.gz",
-                                       which="main")
-        if pg_main:
-            includes.append("yorik_postgres_main")
-        pg_docs = _dump_yorik_postgres(staging / "yorik_postgres_docs.sql.gz",
-                                       which="docs")
-        if pg_docs:
-            includes.append("yorik_postgres_docs")
+    pg_main = _dump_yorik_postgres(staging / "yorik_postgres.sql.gz",
+                                   which="main")
+    if pg_main:
+        includes.append("yorik_postgres_main")
+    pg_docs = _dump_yorik_postgres(staging / "yorik_postgres_docs.sql.gz",
+                                   which="docs")
+    if pg_docs:
+        includes.append("yorik_postgres_docs")
 
-        # Phase F-lite: each tenant has its own Postgres database
-        # `yorik_tenant_<name>` and its own manifest under
-        # data/tenants/<name>/. Bundle both so a restore can recreate
-        # the tenant DBs + their port assignments. Tenant manifests
-        # are tiny (~1 KB each) and the dumps are typically small
-        # too (no media — that lives in shared Immich/Paperless,
-        # already covered by the host include_photos / include_paperless
-        # flags). Includes get `tenant_<name>_postgres` so the
-        # manifest signature reports per-tenant inclusion granularly.
-        tenants = _enumerate_tenants()
-        if tenants:
-            tenants_stage = staging / "tenants"
-            tenants_stage.mkdir()
-            for t in tenants:
-                t_stage = tenants_stage / t
-                t_stage.mkdir()
-                src_manifest = (Path(__file__).resolve().parent.parent
-                                / "data" / "tenants" / t / "manifest.env")
+    # Phase F-lite: each tenant has its own Postgres database
+    # `yorik_tenant_<name>` and its own manifest under
+    # data/tenants/<name>/. Bundle both so a restore can recreate
+    # the tenant DBs + their port assignments. Tenant manifests
+    # are tiny (~1 KB each) and the dumps are typically small
+    # too (no media — that lives in shared Immich/Paperless,
+    # already covered by the host include_photos / include_paperless
+    # flags). Includes get `tenant_<name>_postgres` so the
+    # manifest signature reports per-tenant inclusion granularly.
+    tenants = _enumerate_tenants()
+    if tenants:
+        tenants_stage = staging / "tenants"
+        tenants_stage.mkdir()
+        for t in tenants:
+            t_stage = tenants_stage / t
+            t_stage.mkdir()
+            src_manifest = (Path(__file__).resolve().parent.parent
+                            / "data" / "tenants" / t / "manifest.env")
+            if src_manifest.exists():
+                shutil.copy2(src_manifest, t_stage / "manifest.env")
+            # Per-tenant bearer token. The host's
+            # tenant_bearer_tokens table comes back via the main
+            # Yorik Postgres dump, so the registered token row
+            # restores; this file ships the matching local copy
+            # the tenant uvicorn presents in `Authorization:
+            # Bearer ...`. Without it the restored tenant can't
+            # talk to /api/internal/* and falls into a permanent
+            # 401 loop. Backup is encrypted with the operator's
+            # passphrase so shipping the bearer is acceptable —
+            # same encryption posture as the credential_key.
+            src_bearer = (Path(__file__).resolve().parent.parent
+                          / "data" / "tenants" / t / "internal_token")
+            if src_bearer.exists():
+                shutil.copy2(src_bearer, t_stage / "internal_token")
+            ok = _dump_tenant_postgres(t, t_stage / "postgres.sql.gz")
+            if ok:
+                includes.append(f"tenant_{t}_postgres")
+            else:
+                # Manifest still ships even if the dump failed —
+                # operator can re-create the tenant DB shell at
+                # restore time and the manifest tells them which
+                # name + port + flags to feed create-tenant.sh.
+                log.warning("backup: tenant %s had no dump; manifest-only", t)
                 if src_manifest.exists():
-                    shutil.copy2(src_manifest, t_stage / "manifest.env")
-                # Per-tenant bearer token. The host's
-                # tenant_bearer_tokens table comes back via the main
-                # Yorik Postgres dump, so the registered token row
-                # restores; this file ships the matching local copy
-                # the tenant uvicorn presents in `Authorization:
-                # Bearer ...`. Without it the restored tenant can't
-                # talk to /api/internal/* and falls into a permanent
-                # 401 loop. Backup is encrypted with the operator's
-                # passphrase so shipping the bearer is acceptable —
-                # same encryption posture as the credential_key.
-                src_bearer = (Path(__file__).resolve().parent.parent
-                              / "data" / "tenants" / t / "internal_token")
-                if src_bearer.exists():
-                    shutil.copy2(src_bearer, t_stage / "internal_token")
-                ok = _dump_tenant_postgres(t, t_stage / "postgres.sql.gz")
-                if ok:
-                    includes.append(f"tenant_{t}_postgres")
-                else:
-                    # Manifest still ships even if the dump failed —
-                    # operator can re-create the tenant DB shell at
-                    # restore time and the manifest tells them which
-                    # name + port + flags to feed create-tenant.sh.
-                    log.warning("backup: tenant %s had no dump; manifest-only", t)
-                    if src_manifest.exists():
-                        includes.append(f"tenant_{t}_manifest_only")
-    else:
-        if Path(DEFAULT_DB_PATH).exists():
-            _snapshot_sqlite(Path(DEFAULT_DB_PATH), staging / "family.db")
-            includes.append("family_db")
-        if Path(DEFAULT_DOCS_DB_PATH).exists():
-            _snapshot_sqlite(Path(DEFAULT_DOCS_DB_PATH), staging / "documents.db")
-            includes.append("documents_db")
+                    includes.append(f"tenant_{t}_manifest_only")
 
     # 2. Credential key — the single most-sensitive file, but also the
     #    one without which the encrypted API tokens become useless.
@@ -348,12 +324,6 @@ def _bundle(opts: dict[str, Any], staging: Path) -> tuple[Path, list[str]]:
 
 
 # ───────────────────────── encryption ───────────────────────────────
-
-def _use_postgres_backend() -> bool:
-    """Mirror backend.database._use_postgres without depending on it
-    (the backup module runs in a thread; avoid circular imports)."""
-    return (os.getenv("YORIK_DB_BACKEND") or "sqlite").lower() == "postgres"
-
 
 def _dump_yorik_postgres(dst: Path, *, which: str = "main") -> bool:
     """pg_dump the Yorik Supabase Postgres into `dst` (gzip-compressed).
@@ -628,24 +598,15 @@ def _git_commit_short() -> str:
 
 
 def _schema_signature() -> str:
-    """Hex-encoded short hash of all table CREATE statements in the
-    live family.db. Two boxes on the same schema get the same
-    signature; a divergent restore can be detected without needing
-    proper migrations versioning yet."""
+    """Short signature of the live schema: the highest applied migration
+    version. Two boxes on the same migration set get the same value, so
+    a restore onto a divergent schema can be flagged."""
     try:
-        import hashlib
-        import sqlite3 as _sqlite
-        conn = _sqlite.connect(str(Path(DEFAULT_DB_PATH)))
-        try:
-            rows = conn.execute(
-                "SELECT sql FROM sqlite_master WHERE type IN ('table','index') "
-                "AND name NOT LIKE 'sqlite_%' ORDER BY name"
-            ).fetchall()
-            blob = "\n".join((r[0] or "") for r in rows).encode("utf-8")
-            return hashlib.sha256(blob).hexdigest()[:12]
-        finally:
-            conn.close()
-    except Exception:
+        with get_conn() as conn:
+            row = conn.execute("SELECT MAX(version) AS v FROM schema_migrations").fetchone()
+        v = row["v"] if row else None
+        return f"pg-m{int(v)}" if v is not None else "pg-m0"
+    except Exception:  # noqa: BLE001
         return ""
 
 
@@ -663,8 +624,6 @@ def verify_snapshot(snapshot_path: Path, passphrase: str) -> dict[str, Any]:
       3. tar extraction succeeds
       4. MANIFEST.json present + parseable
       5. Each `includes` entry declared in MANIFEST actually exists on disk
-      6. SQLite DBs open + PRAGMA integrity_check passes
-      7. SQLite DBs have a non-trivial row count in at least one table
          (catches accidentally-empty snapshots from a broken VACUUM INTO)
       8. credential_key file (if listed) is non-empty
 
@@ -676,7 +635,6 @@ def verify_snapshot(snapshot_path: Path, passphrase: str) -> dict[str, Any]:
         "extracted_to": str | None,   # left in place if cleanup=False, else None
       }
     """
-    import sqlite3 as _sqlite
     import tarfile as _tarfile
     import tempfile as _tempfile
 
@@ -737,8 +695,6 @@ def verify_snapshot(snapshot_path: Path, passphrase: str) -> dict[str, Any]:
 
     # 5. Each declared include exists
     INCLUDE_TO_PATH = {
-        "family_db":           "family.db",
-        "documents_db":        "documents.db",
         "credential_key":      ".credential_key",
         "documents":           "documents",
         "briefings":           "briefings",
@@ -776,44 +732,6 @@ def verify_snapshot(snapshot_path: Path, passphrase: str) -> dict[str, Any]:
     else:
         _check("declared_includes_present", True,
                f"all {len(manifest.get('includes') or [])} present")
-
-    # 6+7. SQLite integrity + non-trivial content
-    for db_name, label in [("family.db", "family_db"), ("documents.db", "documents_db")]:
-        db_path = extracted / db_name
-        if not db_path.exists():
-            if label in (manifest.get("includes") or []):
-                _check(f"sqlite_{label}", False, "declared but file missing")
-            continue
-        try:
-            conn = _sqlite.connect(str(db_path))
-            try:
-                pragma = conn.execute("PRAGMA integrity_check").fetchone()[0]
-                if pragma != "ok":
-                    _check(f"sqlite_{label}_integrity", False, f"PRAGMA: {pragma}")
-                else:
-                    _check(f"sqlite_{label}_integrity", True, "PRAGMA integrity_check ok")
-                # Non-trivial content: at least one user table with rows
-                tables = [r[0] for r in conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' "
-                    "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%_fts_%'"
-                ).fetchall()]
-                total_rows = 0
-                tables_with_rows = 0
-                for t in tables:
-                    try:
-                        n = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
-                        total_rows += n
-                        if n > 0:
-                            tables_with_rows += 1
-                    except _sqlite.OperationalError:
-                        pass  # virtual tables etc.
-                _check(f"sqlite_{label}_content", total_rows > 0,
-                       f"{total_rows} rows across {tables_with_rows}/{len(tables)} tables")
-            finally:
-                conn.close()
-        except Exception as exc:
-            _check(f"sqlite_{label}_integrity", False,
-                   f"{type(exc).__name__}: {exc}")
 
     # 8. Credential key non-empty
     key_path = extracted / ".credential_key"

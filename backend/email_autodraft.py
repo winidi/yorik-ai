@@ -151,8 +151,7 @@ def _document_snippet_from_url(url: str, max_chars: int = 400) -> str:
     attachments don't go through here.
     """
     import re as _re
-    import sqlite3
-    from .database import DEFAULT_DOCS_DB_PATH
+    from .database import get_docs_conn
 
     src: Optional[str] = None
     doc_id: Optional[int] = None
@@ -169,8 +168,7 @@ def _document_snippet_from_url(url: str, max_chars: int = 400) -> str:
         return ""
 
     try:
-        with sqlite3.connect(DEFAULT_DOCS_DB_PATH, timeout=5) as conn:
-            conn.row_factory = sqlite3.Row
+        with get_docs_conn() as conn:
             if src == "paperless":
                 rows = conn.execute(
                     "SELECT text FROM paperless_chunks "

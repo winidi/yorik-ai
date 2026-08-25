@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import sqlite3
+from psycopg import errors as pg_errors
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -119,7 +119,7 @@ REGIONAL_PRESETS: Dict[str, Dict[str, Any]] = {
 
 # ─── Series CRUD ────────────────────────────────────────────────────────────
 
-def _row(r: sqlite3.Row | None) -> Optional[Dict[str, Any]]:
+def _row(r) -> Optional[Dict[str, Any]]:
     if r is None:
         return None
     d = dict(r)
@@ -395,7 +395,7 @@ def consume(
                 (series_id, number, formatted, year, s["kind"],
                  consumed_by_user_id, title, paperless_doc_id, pdf_hash, notes),
             )
-        except sqlite3.IntegrityError as exc:
+        except pg_errors.IntegrityError as exc:
             raise RuntimeError(
                 f"failed to allocate number {number} for series {series_id} year {year}: {exc}. "
                 f"Concurrent consume on the same series? Retry."

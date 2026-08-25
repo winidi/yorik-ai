@@ -2,7 +2,7 @@
 # Bring up the bundled Supabase stack + apply migrations_pg/*.sql.
 #
 # Idempotent. Called by start.sh (and install.sh) when
-# YORIK_DB_BACKEND=postgres. Safe to re-run: brings up missing
+# Yorik's database. Safe to re-run: brings up missing
 # containers, leaves running ones alone; applies only migrations not
 # already recorded in schema_migrations.
 #

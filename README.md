@@ -39,7 +39,7 @@ https://github.com/user-attachments/assets/cff3dbc7-9411-4144-ba67-3ffef706771c
 **Chat finds your photos** — "what's my last picture taken?" returns the actual photo inline, served through Yorik's proxy from your local Immich library. Same pattern for `find_photo(of_person="Anna")` or CLIP-content queries like "photos from the beach".
 ![Chat — find a photo](docs/screenshots/chat-photos.png)
 
-Click **Seed demo data** on Home after install to reproduce this state. For a fuller dataset (~22 contacts, ~23 events, ~12 tasks): `python scripts/seed-demo-data.py` with the venv active.
+Click **Seed demo data** on Home after install to reproduce this state.
 
 ## Install
 
@@ -71,7 +71,7 @@ Yorik is a client to any OpenAI-compatible local LLM (Ollama, LM Studio, llama.c
 ## What works / what's rough
 
 **Works:**
-- Chat with role-gated SQL access (admin / member / child / employee / viewer)
+- Chat through role-gated skills (platform_admin / admin / member / restricted) — the LLM never writes SQL
 - Calendar, tasks, bills with role-based filtering
 - Documents via Paperless (full-text + semantic search)
 - Photos via Immich (timeline, semantic search, face recognition)
@@ -94,9 +94,9 @@ Yorik is a client to any OpenAI-compatible local LLM (Ollama, LM Studio, llama.c
 
 ## Architecture
 
-Python FastAPI backend on `:8000`, React 19 frontend, SQLite for everything personal (`data/family.db`), sqlite-vec for the vector index (`data/documents.db`). An in-tree agent loop wraps the LLM with a role-gated SQL runner and ~60 in-tree skills it can call as tools. Docker Compose orchestrates the optional bundled Immich + Paperless + WhatsApp bridge; each is BYO-aware.
+Python FastAPI backend on `:8000`, React 19 frontend, Postgres for everything personal (the bundled Supabase stack — one database, schemas `public` and `docs`), pgvector for document and message embeddings. An in-tree agent loop wraps the LLM with ~60 role-gated skills it can call as tools. Docker Compose orchestrates the optional bundled Immich + Paperless + WhatsApp bridge; each is BYO-aware.
 
-Deeper: [ARCHITECTURE.md](ARCHITECTURE.md). Security stance: [THREAT_MODEL.md](THREAT_MODEL.md). End-to-end manual test: [SMOKE-CHECKLIST.md](SMOKE-CHECKLIST.md).
+Deeper: [ARCHITECTURE.md](ARCHITECTURE.md). Security stance: [THREAT_MODEL.md](THREAT_MODEL.md).
 
 ## German E-invoicing
 
@@ -132,7 +132,6 @@ Yorik is the glue, not the engines.
 - [docs/CONNECTORS.md](docs/CONNECTORS.md) — n8n + external services
 - [ARCHITECTURE.md](ARCHITECTURE.md) — internals
 - [THREAT_MODEL.md](THREAT_MODEL.md) — security architecture
-- [SMOKE-CHECKLIST.md](SMOKE-CHECKLIST.md) — manual test surface
 - [backend/APP_SDK_README.md](backend/APP_SDK_README.md) — building third-party apps
 - [SECURITY.md](SECURITY.md) — vulnerability disclosure
 

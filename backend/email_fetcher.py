@@ -33,7 +33,6 @@ import json
 import logging
 import os
 import socket
-import sqlite3
 import ssl
 from datetime import datetime, timezone
 from email.utils import parseaddr, parsedate_to_datetime, getaddresses
@@ -562,35 +561,18 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
         #                                    created to surface on
         #                                    this tick)
         #
-        # Schema-tolerant: pre-043 / pre-044 DBs fall through silently.
         if message_id:
-            try:
-                tomb = conn.execute(
-                    "SELECT 1 FROM email_deleted_message_ids "
-                    "WHERE account_id=? AND message_id=? "
-                    "  AND (suppress_folder_id IS NULL "
-                    "       OR suppress_folder_id = ?)",
-                    (cfg["id"], message_id, folder_id),
-                ).fetchone()
-                if tomb:
-                    log.debug("tombstoned message %s on account %s folder %s — skipping insert",
-                              message_id[:60], cfg["id"], folder_id)
-                    return
-            except sqlite3.OperationalError:
-                # pre-043: table missing. pre-044: suppress_folder_id
-                # column missing — fall back to the global check.
-                try:
-                    tomb = conn.execute(
-                        "SELECT 1 FROM email_deleted_message_ids "
-                        "WHERE account_id=? AND message_id=?",
-                        (cfg["id"], message_id),
-                    ).fetchone()
-                    if tomb:
-                        log.debug("tombstoned (pre-044 fallback) message %s on account %s — skipping insert",
-                                  message_id[:60], cfg["id"])
-                        return
-                except sqlite3.OperationalError:
-                    pass  # pre-043: no table at all
+            tomb = conn.execute(
+                "SELECT 1 FROM email_deleted_message_ids "
+                "WHERE account_id=? AND message_id=? "
+                "  AND (suppress_folder_id IS NULL "
+                "       OR suppress_folder_id = ?)",
+                (cfg["id"], message_id, folder_id),
+            ).fetchone()
+            if tomb:
+                log.debug("tombstoned message %s on account %s folder %s — skipping insert",
+                          message_id[:60], cfg["id"], folder_id)
+                return
         try:
             # Is this row landing in the IMAP Sent folder? The /messages
             # endpoint splits inbox vs sent on the `is_sent` column, not

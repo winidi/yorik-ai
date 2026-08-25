@@ -42,18 +42,17 @@ your disk** under `data/`. Specifically:
 
 | Data | Where on disk | Encrypted at rest? |
 |---|---|---|
-| Calendar/tasks/bills/messages | `data/family.db` (SQLite) | No (the disk encrypts via LUKS if you set that up) |
+| Calendar/tasks/bills/messages | Postgres in the bundled Supabase stack (`infra/supabase/docker/volumes/db/`) | No (the disk encrypts via LUKS if you set that up) |
 | Documents (PDFs, scans) | `data/documents/<id>/<filename>` | No |
-| Document vector index | `data/documents.db` (sqlite-vec) | No |
+| Document + message embeddings | same database, schema `docs` (pgvector) | No |
 | Photos | `data/immich/library/` (if you use bundled Immich) | No |
-| Connector tokens (Paperless, Immich, IMAP password) | `data/family.db` `connector_credentials` table | **Yes** (Fernet, key at `data/.credential_key`) |
+| Connector tokens (Paperless, Immich, IMAP password) | `connector_credentials` table in the database | **Yes** (Fernet, key at `data/.credential_key`) |
 | Voice recordings | NOT stored — Whisper transcribes in-memory, audio bytes are discarded | n/a |
 | Backups | `data/backups/*.tar.gz.age` | **Yes** (age-encrypted with your passphrase) |
 
 **Recommended**: enable full-disk encryption at the OS layer (LUKS on
 Linux, FileVault on Mac). Yorik's per-record encryption protects the
-sensitive credential blobs, but the bulk of your data is plain SQLite
-files. A stolen unencrypted disk means stolen data.
+sensitive credential blobs, but the bulk of your data is a plain Postgres data directory. A stolen unencrypted disk means stolen data.
 
 ## When data DOES leave your box
 
@@ -148,9 +147,9 @@ Practically:
 | Right | How to exercise |
 |---|---|
 | **Access** — get a copy of all your data | `tar -czf my-yorik-data.tar.gz data/` |
-| **Portability** — machine-readable export | Same — SQLite is a stable, open format. `sqlite3 data/family.db .dump` for SQL text. |
+| **Portability** — machine-readable export | `pg_dump` from the `supabase-db` container gives you plain SQL text (Settings → Backup does this for you). |
 | **Erasure** — delete everything | `rm -rf data/` then run `yorik service uninstall` if you installed the systemd unit. Total annihilation. |
-| **Rectification** — fix wrong data | Edit it in the relevant app, or with `sqlite3 data/family.db` for power users. |
+| **Rectification** — fix wrong data | Edit it in the relevant app, or with `psql` against the `supabase-db` container for power users. |
 | **Withdrawal of consent** for processing by third parties | Settings → LLM → switch off the cloud endpoint; Settings → Connectors → disconnect email. |
 
 If you store data about other people (family members in user_profiles,

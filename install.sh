@@ -181,12 +181,9 @@ if (( DISK_FREE_GB < DISK_NEED_GB )); then
 fi
 ok "${DISK_FREE_GB} GB free at ${TARGET_PARENT_DIR}"
 
-# Decide planned backend (Postgres/Supabase by default; SQLite if the
-# operator pre-set it in config.env before install). The backend
-# choice drives which ports we need free.
-PLANNED_BACKEND=$(grep -E "^YORIK_DB_BACKEND=" config.env 2>/dev/null \
-                  | head -1 | cut -d= -f2- | tr -d '[:space:]' \
-                  || echo postgres)
+# Yorik's database is the Postgres in the bundled Supabase stack;
+# its ports are part of the pre-flight below.
+PLANNED_BACKEND=postgres
 
 # Port pre-flight. Every port Yorik's bundled stack needs to bind
 # gets checked here. Failing now beats producing a half-up Supabase
@@ -906,26 +903,6 @@ if ! curl -fsS http://localhost:8000/api/health >/dev/null 2>&1; then
         "check: sudo journalctl -u yorik -n 100"
 fi
 ok "Yorik is healthy"
-
-# Optional cold-install smoke; non-fatal. Skipped on Postgres-backend
-# installs because the smoke is specifically the SQLite happy-path
-# (against an isolated tmp SQLite DB) — Postgres installs are verified
-# by the live /api/health probe above + by the actual app start. The
-# smoke against SQLite when the operator is on Postgres surfaces
-# legacy-path bugs the operator will never hit, scaring them for
-# nothing.
-SMOKE_BACKEND=$(grep -E "^YORIK_DB_BACKEND=" config.env 2>/dev/null \
-                | head -1 | cut -d= -f2- | tr -d '[:space:]' || echo postgres)
-if [[ "$SMOKE_BACKEND" != "postgres" ]] && [[ -x scripts/cold-install-check.sh ]]; then
-  info "running cold-install smoke (non-fatal)"
-  if ! bash scripts/cold-install-check.sh >/tmp/yorik-coldcheck.log 2>&1; then
-    warn "smoke checks failed — see /tmp/yorik-coldcheck.log (Yorik is still running)"
-  else
-    ok "smoke checks passed"
-  fi
-elif [[ "$SMOKE_BACKEND" == "postgres" ]]; then
-  info "skipping cold-install smoke (Postgres backend — sqlite smoke not applicable)"
-fi
 
 # ─── optional systemd autostart ───────────────────────────────────────
 phase "Autostart at boot (systemd)"

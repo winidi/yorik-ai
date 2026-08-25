@@ -3,10 +3,10 @@
 Pipeline:
     upload → extract_text → chunk → embed (bundled sentence-transformers,
     or external /v1/embeddings if HOMEOS_EMBED_BASE_URL is set) →
-    persist chunk text in document_chunks + vector in vec_chunks (sqlite-vec)
+    persist chunk text + pgvector embedding in docs.document_chunks
 
 Search:
-    query → embed → sqlite-vec ANN → join chunks + documents → role filter →
+    query → embed → pgvector ANN → join chunks + documents → role filter →
     top-k results, ready for the LLM to cite. Higher-level
     `paperless_ingest.search_hybrid()` fuses these with FTS via RRF.
 
@@ -14,7 +14,7 @@ All document data lives in data/documents.db (NOT family.db) on purpose.
 Heavy reindex jobs never touch the operational DB. The vector index can
 be wiped + rebuilt without affecting personal data.
 
-License of every dep:  sqlite-vec MIT, pypdf BSD-3, python-docx MIT,
+License of every dep:  pgvector PostgreSQL, pypdf BSD-3, python-docx MIT,
 sentence-transformers Apache 2.0. Safe for commercial use.
 """
 
@@ -24,15 +24,13 @@ import json
 import logging
 import os
 import re
-import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import requests
-import sqlite_vec
 
-from .database import DEFAULT_DOCS_DB_PATH, get_docs_conn, init_docs_db
+from .database import DEFAULT_DOCS_DB_PATH, get_docs_conn
 
 log = logging.getLogger("homeos.documents")
 
@@ -329,7 +327,6 @@ ollama_reachable = embedder_reachable
 
 def _ensure_storage() -> None:
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
-    init_docs_db(DOCS_DB_PATH)
 
 
 def add_document(
@@ -425,50 +422,27 @@ def get_document(doc_id: int) -> Optional[Dict[str, Any]]:
 
 def delete_document(doc_id: int) -> bool:
     """Remove the document row, its chunks, its vectors, and the file on disk."""
-    if (os.getenv("YORIK_DB_BACKEND") or "sqlite").lower() == "postgres":
-        # Postgres: no separate vec_chunks table — embedding is a column
-        # on document_chunks. FK ON DELETE CASCADE handles the chunks.
-        from .database_pg import conn_ctx_pg
-        with conn_ctx_pg("docs") as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT path FROM documents WHERE id = %s", (doc_id,))
-                row = cur.fetchone()
-                if not row:
-                    return False
-                doc_path = row[0] if not isinstance(row, dict) else row.get("path")
-                cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
-        try:
-            p = Path(doc_path) if doc_path else None
-            if p and p.exists():
-                p.unlink()
-            if p and p.parent.exists() and p.parent.parent == DOCS_DIR and not any(p.parent.iterdir()):
-                p.parent.rmdir()
-        except OSError as exc:
-            log.warning("cleanup failed for doc %s: %s", doc_id, exc)
-        return True
-
-    with get_docs_conn(DOCS_DB_PATH) as conn:
-        row = conn.execute("SELECT path FROM documents WHERE id = ?", (doc_id,)).fetchone()
-        if not row:
-            return False
-        # Delete chunk vectors first (vec table doesn't cascade)
-        chunk_ids = [r["id"] for r in conn.execute("SELECT id FROM document_chunks WHERE doc_id = ?", (doc_id,))]
-        if chunk_ids:
-            placeholders = ",".join("?" * len(chunk_ids))
-            conn.execute(f"DELETE FROM vec_chunks WHERE rowid IN ({placeholders})", chunk_ids)
-        # ON DELETE CASCADE wipes document_chunks
-        conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
-        conn.commit()
-    # Best-effort file cleanup — never fatal.
+    # The embedding is a column on document_chunks;
+    # on document_chunks. FK ON DELETE CASCADE handles the chunks.
+    from .database_pg import conn_ctx_pg
+    with conn_ctx_pg("docs") as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT path FROM documents WHERE id = %s", (doc_id,))
+            row = cur.fetchone()
+            if not row:
+                return False
+            doc_path = row[0] if not isinstance(row, dict) else row.get("path")
+            cur.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
     try:
-        p = Path(row["path"])
-        if p.exists():
+        p = Path(doc_path) if doc_path else None
+        if p and p.exists():
             p.unlink()
-        if p.parent.exists() and p.parent.parent == DOCS_DIR and not any(p.parent.iterdir()):
+        if p and p.parent.exists() and p.parent.parent == DOCS_DIR and not any(p.parent.iterdir()):
             p.parent.rmdir()
     except OSError as exc:
         log.warning("cleanup failed for doc %s: %s", doc_id, exc)
     return True
+
 
 
 def index_document(doc_id: int) -> Dict[str, Any]:
@@ -500,79 +474,44 @@ def index_document(doc_id: int) -> Dict[str, Any]:
         return {"ok": True, "chunk_count": 0, "embed_failed_count": 0, "note": "no extractable text"}
 
     failed = 0
-    if (os.getenv("YORIK_DB_BACKEND") or "sqlite").lower() == "postgres":
-        # Postgres path: pgvector column on docs.document_chunks. No
-        # separate vec_chunks virtual table. Mirrors paperless_ingest's
-        # _pg_backend branch.
-        import math as _m
-        from .database_pg import conn_ctx_pg
-        def _l2(vec):
-            n = _m.sqrt(sum(x * x for x in vec)) or 1.0
-            return [x / n for x in vec]
-        def _qvec(vec):
-            return "[" + ",".join(repr(float(x)) for x in vec) + "]"
-        with conn_ctx_pg("docs") as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM document_chunks WHERE doc_id = %s", (doc_id,))
-                for i, (body, start, end) in enumerate(chunks):
-                    # Postgres TEXT rejects NUL (0x00) bytes; PDFs that
-                    # came out of OCR sometimes carry them. SQLite is
-                    # lenient — strip here so the Postgres path matches.
-                    body = body.replace("\x00", "")
-                    try:
-                        vec = _l2(embed(body))
-                    except EmbeddingError as exc:
-                        log.warning("embed failed for doc=%s chunk=%s: %s", doc_id, i, exc)
-                        failed += 1
-                        cur.execute(
-                            "INSERT INTO document_chunks (doc_id, chunk_index, text, char_start, char_end) "
-                            "VALUES (%s, %s, %s, %s, %s)",
-                            (doc_id, i, body, start, end),
-                        )
-                        continue
+    # pgvector column on docs.document_chunks; mirrors paperless_ingest.
+    import math as _m
+    from .database_pg import conn_ctx_pg
+    def _l2(vec):
+        n = _m.sqrt(sum(x * x for x in vec)) or 1.0
+        return [x / n for x in vec]
+    def _qvec(vec):
+        return "[" + ",".join(repr(float(x)) for x in vec) + "]"
+    with conn_ctx_pg("docs") as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM document_chunks WHERE doc_id = %s", (doc_id,))
+            for i, (body, start, end) in enumerate(chunks):
+                # Postgres TEXT rejects NUL (0x00) bytes; PDFs that
+                # came out of OCR sometimes carry them. SQLite is
+                # lenient — strip here so the Postgres path matches.
+                body = body.replace("\x00", "")
+                try:
+                    vec = _l2(embed(body))
+                except EmbeddingError as exc:
+                    log.warning("embed failed for doc=%s chunk=%s: %s", doc_id, i, exc)
+                    failed += 1
                     cur.execute(
-                        "INSERT INTO document_chunks (doc_id, chunk_index, text, char_start, char_end, embedding) "
-                        "VALUES (%s, %s, %s, %s, %s, %s::vector)",
-                        (doc_id, i, body, start, end, _qvec(vec)),
+                        "INSERT INTO document_chunks (doc_id, chunk_index, text, char_start, char_end) "
+                        "VALUES (%s, %s, %s, %s, %s)",
+                        (doc_id, i, body, start, end),
                     )
+                    continue
                 cur.execute(
-                    "UPDATE documents SET chunk_count = %s, indexed_at = to_char(now(), 'YYYY-MM-DD HH24:MI:SS') WHERE id = %s",
-                    (len(chunks) - failed, doc_id),
+                    "INSERT INTO document_chunks (doc_id, chunk_index, text, char_start, char_end, embedding) "
+                    "VALUES (%s, %s, %s, %s, %s, %s::vector)",
+                    (doc_id, i, body, start, end, _qvec(vec)),
                 )
-        return {"ok": True, "chunk_count": len(chunks) - failed, "embed_failed_count": failed}
-
-    with get_docs_conn(DOCS_DB_PATH) as conn:
-        # Wipe existing chunks + vectors for this doc.
-        old_ids = [r["id"] for r in conn.execute("SELECT id FROM document_chunks WHERE doc_id = ?", (doc_id,))]
-        if old_ids:
-            ph = ",".join("?" * len(old_ids))
-            conn.execute(f"DELETE FROM vec_chunks WHERE rowid IN ({ph})", old_ids)
-            conn.execute("DELETE FROM document_chunks WHERE doc_id = ?", (doc_id,))
-        # Insert chunks + their embeddings.
-        for i, (body, start, end) in enumerate(chunks):
-            cur = conn.execute(
-                "INSERT INTO document_chunks (doc_id, chunk_index, text, char_start, char_end) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (doc_id, i, body, start, end),
+            cur.execute(
+                "UPDATE documents SET chunk_count = %s, indexed_at = to_char(now(), 'YYYY-MM-DD HH24:MI:SS') WHERE id = %s",
+                (len(chunks) - failed, doc_id),
             )
-            chunk_id = cur.lastrowid
-            try:
-                vec = embed(body)
-            except EmbeddingError as exc:
-                log.warning("embed failed for doc=%s chunk=%s: %s", doc_id, i, exc)
-                failed += 1
-                continue
-            conn.execute(
-                "INSERT INTO vec_chunks(rowid, embedding) VALUES (?, ?)",
-                (chunk_id, sqlite_vec.serialize_float32(vec)),
-            )
-        conn.execute(
-            "UPDATE documents SET chunk_count = ?, indexed_at = datetime('now') WHERE id = ?",
-            (len(chunks) - failed, doc_id),
-        )
-        conn.commit()
-
     return {"ok": True, "chunk_count": len(chunks) - failed, "embed_failed_count": failed}
+
 
 
 # ─── search ────────────────────────────────────────────────────────────────
@@ -593,62 +532,37 @@ def search(query: str, k: int = 5, role: Optional[str] = None) -> List[Dict[str,
 
     # Over-fetch slightly so the role filter has room to drop hits.
     over_k = max(k * 3, k + 3)
-    if (os.getenv("YORIK_DB_BACKEND") or "sqlite").lower() == "postgres":
-        # Postgres: pgvector cosine distance on docs.document_chunks.embedding.
-        import math as _m
-        n = _m.sqrt(sum(x * x for x in qvec)) or 1.0
-        qvec_norm = [x / n for x in qvec]
-        qlit = "[" + ",".join(repr(float(x)) for x in qvec_norm) + "]"
-        from .database_pg import conn_ctx_pg
-        with conn_ctx_pg("docs") as conn:
-            with conn.cursor() as cur:
-                # IVFFLAT defaults probes=1 which silently drops most rows
-                # until the index has thousands of vectors. On a fresh
-                # install with one chunk, ORDER BY returns nothing even
-                # though WHERE embedding IS NOT NULL matches it. Bump
-                # probes to the full cluster count so small corpora work.
-                cur.execute("SET LOCAL ivfflat.probes = 100")
-                cur.execute(
-                    "SELECT dc.id AS chunk_id, "
-                    "       (dc.embedding <=> %s::vector) AS distance, "
-                    "       dc.doc_id, dc.chunk_index, dc.text AS chunk_text, "
-                    "       dc.char_start, dc.char_end, "
-                    "       d.title AS doc_title, d.mime_type AS doc_mime, "
-                    "       d.allowed_roles AS doc_allowed_roles "
-                    "FROM document_chunks dc "
-                    "JOIN documents d ON d.id = dc.doc_id "
-                    "WHERE dc.embedding IS NOT NULL "
-                    "ORDER BY dc.embedding <=> %s::vector "
-                    "LIMIT %s",
-                    (qlit, qlit, over_k),
-                )
-                # Pool's row_factory already returns HybridRow (dict-like
-                # via row['col'] and tuple-like via row[0]). Don't re-wrap.
-                rows = list(cur.fetchall())
-    else:
-        qblob = sqlite_vec.serialize_float32(qvec)
-        with get_docs_conn(DOCS_DB_PATH) as conn:
-            rows = conn.execute(
-                """
-                SELECT
-                  vc.rowid          AS chunk_id,
-                  vc.distance       AS distance,
-                  dc.doc_id         AS doc_id,
-                  dc.chunk_index    AS chunk_index,
-                  dc.text           AS chunk_text,
-                  dc.char_start     AS char_start,
-                  dc.char_end       AS char_end,
-                  d.title           AS doc_title,
-                  d.mime_type       AS doc_mime,
-                  d.allowed_roles   AS doc_allowed_roles
-                FROM vec_chunks vc
-                JOIN document_chunks dc ON dc.id = vc.rowid
-                JOIN documents d        ON d.id  = dc.doc_id
-                WHERE vc.embedding MATCH ? AND k = ?
-                ORDER BY vc.distance
-                """,
-                (qblob, over_k),
-            ).fetchall()
+    # Postgres: pgvector cosine distance on docs.document_chunks.embedding.
+    import math as _m
+    n = _m.sqrt(sum(x * x for x in qvec)) or 1.0
+    qvec_norm = [x / n for x in qvec]
+    qlit = "[" + ",".join(repr(float(x)) for x in qvec_norm) + "]"
+    from .database_pg import conn_ctx_pg
+    with conn_ctx_pg("docs") as conn:
+        with conn.cursor() as cur:
+            # IVFFLAT defaults probes=1 which silently drops most rows
+            # until the index has thousands of vectors. On a fresh
+            # install with one chunk, ORDER BY returns nothing even
+            # though WHERE embedding IS NOT NULL matches it. Bump
+            # probes to the full cluster count so small corpora work.
+            cur.execute("SET LOCAL ivfflat.probes = 100")
+            cur.execute(
+                "SELECT dc.id AS chunk_id, "
+                "       (dc.embedding <=> %s::vector) AS distance, "
+                "       dc.doc_id, dc.chunk_index, dc.text AS chunk_text, "
+                "       dc.char_start, dc.char_end, "
+                "       d.title AS doc_title, d.mime_type AS doc_mime, "
+                "       d.allowed_roles AS doc_allowed_roles "
+                "FROM document_chunks dc "
+                "JOIN documents d ON d.id = dc.doc_id "
+                "WHERE dc.embedding IS NOT NULL "
+                "ORDER BY dc.embedding <=> %s::vector "
+                "LIMIT %s",
+                (qlit, qlit, over_k),
+            )
+            # Pool's row_factory already returns HybridRow (dict-like
+            # via row['col'] and tuple-like via row[0]). Don't re-wrap.
+            rows = list(cur.fetchall())
 
     out: List[Dict[str, Any]] = []
     for r in rows:

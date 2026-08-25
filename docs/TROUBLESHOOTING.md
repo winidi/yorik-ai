@@ -170,7 +170,7 @@ The fixes that go into this file usually come from real bug reports.
 >
 > **Diagnose**: this is expected — travel time is computed asynchronously by the maps connector after the event row commits. Check the worker chip on the home screen, or:
 > ```bash
-> sqlite3 data/family.db "SELECT id, title, location, travel_seconds, travel_computed_at FROM events ORDER BY id DESC LIMIT 5;"
+> docker exec -it supabase-db psql -U postgres -c "SELECT id, title, location, travel_time_s, travel_computed_at FROM events ORDER BY id DESC LIMIT 5;"
 > ```
 > A row with `location` set but `travel_seconds` NULL and `travel_computed_at` NULL has not been picked up yet.
 >
@@ -389,7 +389,7 @@ The fixes that go into this file usually come from real bug reports.
 > - `decrypt`: wrong passphrase. Try again — passphrases are case-sensitive.
 > - `extract`: snapshot file is corrupt. Pull a different snapshot via `yorik backup-list`.
 > - `manifest` missing: snapshot wasn't built by Yorik or pre-dates v0.1.0-alpha.
-> - `sqlite_*_integrity` failed: the snapshot ran while a write was in flight. Re-take the backup; SQLite's `VACUUM INTO` should usually handle this.
+> - `pg_dump_*` failed: the dump inside the snapshot is truncated or empty. Re-take the backup with the Supabase stack running.
 
 ### Lost the backup passphrase
 

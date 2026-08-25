@@ -14,8 +14,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sqlite3
 from typing import Any, Dict, List, Optional
+
+from psycopg import errors as pg_errors
 
 from ..database import DEFAULT_DB_PATH, conn_ctx
 
@@ -197,14 +198,11 @@ def load_ledger(conversation_id: str, user_role: str) -> Dict[str, Any]:
     """
     if not conversation_id:
         return {}
-    try:
-        with conn_ctx(DB_PATH) as conn:
-            row = conn.execute(
-                "SELECT user_role, ledger_json FROM agent_conversations WHERE id = ?",
-                (conversation_id,),
-            ).fetchone()
-    except sqlite3.OperationalError:
-        return {}
+    with conn_ctx(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT user_role, ledger_json FROM agent_conversations WHERE id = ?",
+            (conversation_id,),
+        ).fetchone()
     if not row or row["user_role"] != user_role:
         return {}
     try:
@@ -221,14 +219,11 @@ def save_ledger(conversation_id: str, ledger: Dict[str, Any]) -> None:
     if not conversation_id:
         return
     blob = json.dumps(ledger or {}, ensure_ascii=False)
-    try:
-        with conn_ctx(DB_PATH) as conn:
-            conn.execute(
-                "UPDATE agent_conversations SET ledger_json = ? WHERE id = ?",
-                (blob, conversation_id),
-            )
-    except sqlite3.OperationalError:
-        return  # migration 035 not yet applied — silent no-op
+    with conn_ctx(DB_PATH) as conn:
+        conn.execute(
+            "UPDATE agent_conversations SET ledger_json = ? WHERE id = ?",
+            (blob, conversation_id),
+        )
 
 
 def save_message_trace(
@@ -256,7 +251,7 @@ def save_message_trace(
                 "VALUES (?, ?, ?)",
                 (conversation_id, message_idx, blob),
             )
-    except sqlite3.IntegrityError as exc:
+    except pg_errors.IntegrityError as exc:
         # FK violation (conv not yet committed) — silently skip; the
         # trace just won't be there on reload, which is fine for dev tooling.
         logger.debug("trace save skipped for %s/#%d: %s", conversation_id, message_idx, exc)
@@ -320,14 +315,11 @@ def load_stash(conversation_id: str, user_role: str) -> List[Dict[str, Any]]:
     wrong-role accesses, or DBs pre-migration-041."""
     if not conversation_id:
         return []
-    try:
-        with conn_ctx(DB_PATH) as conn:
-            row = conn.execute(
-                "SELECT user_role, attachment_stash FROM agent_conversations WHERE id = ?",
-                (conversation_id,),
-            ).fetchone()
-    except sqlite3.OperationalError:
-        return []
+    with conn_ctx(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT user_role, attachment_stash FROM agent_conversations WHERE id = ?",
+            (conversation_id,),
+        ).fetchone()
     if not row or row["user_role"] != user_role:
         return []
     try:
@@ -349,29 +341,26 @@ def save_stash(
         return
     capped = list(stash or [])[:STASH_MAX_ITEMS]
     blob = json.dumps(capped, ensure_ascii=False)
-    try:
-        with conn_ctx(DB_PATH) as conn:
-            row = conn.execute(
-                "SELECT user_role FROM agent_conversations WHERE id = ?",
-                (conversation_id,),
-            ).fetchone()
-            if not row:
-                # No conversation row yet — first turn hasn't been
-                # saved. Caller (POST /stash) treats this as a 404.
-                logger.debug("save_stash: conversation %s not found", conversation_id)
-                return
-            if row["user_role"] != user_role:
-                logger.warning(
-                    "refused stash write on conversation %s (owner=%r, by=%r)",
-                    conversation_id, row["user_role"], user_role,
-                )
-                return
-            conn.execute(
-                "UPDATE agent_conversations SET attachment_stash = ? WHERE id = ?",
-                (blob, conversation_id),
+    with conn_ctx(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT user_role FROM agent_conversations WHERE id = ?",
+            (conversation_id,),
+        ).fetchone()
+        if not row:
+            # No conversation row yet — first turn hasn't been
+            # saved. Caller (POST /stash) treats this as a 404.
+            logger.debug("save_stash: conversation %s not found", conversation_id)
+            return
+        if row["user_role"] != user_role:
+            logger.warning(
+                "refused stash write on conversation %s (owner=%r, by=%r)",
+                conversation_id, row["user_role"], user_role,
             )
-    except sqlite3.OperationalError:
-        return  # migration 041 not yet applied
+            return
+        conn.execute(
+            "UPDATE agent_conversations SET attachment_stash = ? WHERE id = ?",
+            (blob, conversation_id),
+        )
 
 
 __all__ = [
