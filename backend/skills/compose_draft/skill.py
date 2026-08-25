@@ -494,94 +494,10 @@ async def execute(
             # card just won't have the pre-filled address.
             contact_obj = None
 
-    # Load template up-front so we know which arg keys it actually uses.
-    # Polyglot fan-out (vermieter_*, locatore_*, sprzedawca_*, …) gets
-    # filtered against this so the args panel only shows relevant fields.
-    full_template: Optional[dict[str, Any]] = None
-    if template_id:
-        try:
-            from backend.compose import templates as _tpl_mod
-            full_template = _tpl_mod.get(template_id)
-            # Label-to-id fallback: the LLM regularly confuses template
-            # `name` ("Brief (allgemein)") with `id` ("generic-letter")
-            # after reading the alternates list.
-            if full_template is None:
-                _target = template_id.strip().lower()
-                for _t in _tpl_mod.load_all():
-                    _d = _t if isinstance(_t, dict) else (
-                        _tpl_mod.public_dict(_t) if hasattr(_tpl_mod, "public_dict") else None
-                    )
-                    if not _d:
-                        continue
-                    if (_d.get("name") or "").strip().lower() == _target:
-                        full_template = _d
-                        template_id = _d.get("id") or template_id
-                        break
-        except Exception:
-            full_template = None
-    # Hallucinated-id error path: the LLM passed a non-empty template_id
-    # that doesn't match any template. Refuse loudly instead of silently
-    # falling through to generic-letter — that silent swap caused the
-    # chat-audit's compose_check_recipient loop where the skill ran
-    # against generic-letter while the LLM thought it was on a different
-    # template, and the readiness check kept disagreeing.
-    if full_template is None and (template_id or "").strip():
-        return {
-            "ok":        False,
-            "error":     f"template not found: {template_id!r}",
-            "_llm_hint": (
-                f"UNKNOWN_TEMPLATE_ID: {template_id!r} is not a known "
-                "template id. Call list_compose_templates to see real "
-                "ids, then pick_compose_template with the 3 best fits — "
-                "the user picks via the chat card."
-            ),
-        }
-    if full_template is None:
-        # No template_id and the LLM didn't infer one — fall back to
-        # the bundled generic letter so we always have something to
-        # render. Prefer the English default (the only generic letter
-        # in the bundled-default install since 2026-06); fall through
-        # to the German id when that's what the operator installed
-        # from marketplace; finally accept None and let the caller
-        # surface a clear "no templates installed" error.
-        try:
-            from backend.compose import templates as _tpl_mod
-            for _fallback_id in ("generic-letter-en", "generic-letter"):
-                try:
-                    full_template = _tpl_mod.get(_fallback_id)
-                except _tpl_mod.TemplateError:
-                    continue
-                if full_template is not None:
-                    template_id = _fallback_id
-                    break
-        except Exception:
-            pass
-
-    # Override kind from the template when it declares one. The LLM
-    # regularly sets kind="letter" because the user said "Brief" but
-    # then picks template_id="generic-email" — chat then rendered the
-    # card labeled "Brief" while the template was actually email. The
-    # template knows what it is; we read it directly. Falls back to the
-    # LLM-supplied kind for older templates that don't declare one.
-    if full_template:
-        template_kind = (full_template.get("kind") or "").strip().lower()
-        if template_kind in _VALID_KINDS:
-            kind = template_kind
-
-    used_keys = _template_arg_keys(full_template) if full_template else set()
-
-    # Seed args dict with the LLM-supplied generic args (the new `args`
-    # parameter). The LLM uses this to set structured slots like
-    # beendigung_zum / mietvertrag_vom / kuendigung_zum directly,
-    # instead of stuffing dates into prose body_text where the template
-    # can't pick them up.
-    args_in = dict(args or {})
-
-    # If this is an UPDATE to an existing draft, load its args FIRST
-    # so we preserve prior fields the user/LLM filled earlier. The LLM
-    # only needs to send the keys it's CHANGING — everything else stays.
-    # Same for recipient / subject / template_id / kind so a one-field
-    # tweak ("ändere Datum auf 31.12") doesn't reset the whole letter.
+    # Resolve the existing draft FIRST so its template wins over the
+    # generic fallback below. Before this moved, a refine call that
+    # passed only existing_draft_id was judged against generic-letter-en
+    # (the fallback ran first) and rejected for that template's fields.
     existing_args: dict[str, Any] = {}
 
     # ── Recent-draft auto-resume ──
@@ -682,6 +598,95 @@ async def execute(
         except Exception:
             existing_args = {}
             existing_draft_id = None
+
+    # Load template up-front so we know which arg keys it actually uses.
+    # Polyglot fan-out (vermieter_*, locatore_*, sprzedawca_*, …) gets
+    # filtered against this so the args panel only shows relevant fields.
+    full_template: Optional[dict[str, Any]] = None
+    if template_id:
+        try:
+            from backend.compose import templates as _tpl_mod
+            full_template = _tpl_mod.get(template_id)
+            # Label-to-id fallback: the LLM regularly confuses template
+            # `name` ("Brief (allgemein)") with `id` ("generic-letter")
+            # after reading the alternates list.
+            if full_template is None:
+                _target = template_id.strip().lower()
+                for _t in _tpl_mod.load_all():
+                    _d = _t if isinstance(_t, dict) else (
+                        _tpl_mod.public_dict(_t) if hasattr(_tpl_mod, "public_dict") else None
+                    )
+                    if not _d:
+                        continue
+                    if (_d.get("name") or "").strip().lower() == _target:
+                        full_template = _d
+                        template_id = _d.get("id") or template_id
+                        break
+        except Exception:
+            full_template = None
+    # Hallucinated-id error path: the LLM passed a non-empty template_id
+    # that doesn't match any template. Refuse loudly instead of silently
+    # falling through to generic-letter — that silent swap caused the
+    # chat-audit's compose_check_recipient loop where the skill ran
+    # against generic-letter while the LLM thought it was on a different
+    # template, and the readiness check kept disagreeing.
+    if full_template is None and (template_id or "").strip():
+        return {
+            "ok":        False,
+            "error":     f"template not found: {template_id!r}",
+            "_llm_hint": (
+                f"UNKNOWN_TEMPLATE_ID: {template_id!r} is not a known "
+                "template id. Call list_compose_templates to see real "
+                "ids, then pick_compose_template with the 3 best fits — "
+                "the user picks via the chat card."
+            ),
+        }
+    if full_template is None:
+        # No template_id and the LLM didn't infer one — fall back to
+        # the bundled generic letter so we always have something to
+        # render. Prefer the English default (the only generic letter
+        # in the bundled-default install since 2026-06); fall through
+        # to the German id when that's what the operator installed
+        # from marketplace; finally accept None and let the caller
+        # surface a clear "no templates installed" error.
+        try:
+            from backend.compose import templates as _tpl_mod
+            for _fallback_id in ("generic-letter-en", "generic-letter"):
+                try:
+                    full_template = _tpl_mod.get(_fallback_id)
+                except _tpl_mod.TemplateError:
+                    continue
+                if full_template is not None:
+                    template_id = _fallback_id
+                    break
+        except Exception:
+            pass
+
+    # Override kind from the template when it declares one. The LLM
+    # regularly sets kind="letter" because the user said "Brief" but
+    # then picks template_id="generic-email" — chat then rendered the
+    # card labeled "Brief" while the template was actually email. The
+    # template knows what it is; we read it directly. Falls back to the
+    # LLM-supplied kind for older templates that don't declare one.
+    if full_template:
+        template_kind = (full_template.get("kind") or "").strip().lower()
+        if template_kind in _VALID_KINDS:
+            kind = template_kind
+
+    used_keys = _template_arg_keys(full_template) if full_template else set()
+
+    # Seed args dict with the LLM-supplied generic args (the new `args`
+    # parameter). The LLM uses this to set structured slots like
+    # beendigung_zum / mietvertrag_vom / kuendigung_zum directly,
+    # instead of stuffing dates into prose body_text where the template
+    # can't pick them up.
+    args_in = dict(args or {})
+
+    # If this is an UPDATE to an existing draft, load its args FIRST
+    # so we preserve prior fields the user/LLM filled earlier. The LLM
+    # only needs to send the keys it's CHANGING — everything else stays.
+    # Same for recipient / subject / template_id / kind so a one-field
+    # tweak ("ändere Datum auf 31.12") doesn't reset the whole letter.
 
     args = {"recipient": recipient or "", "subject": subject or ""}
     # Apply existing args FIRST (the prior draft state), then LLM-supplied
