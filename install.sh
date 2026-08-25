@@ -94,6 +94,9 @@ for arg in "$@"; do
     *) fatal "unknown flag: $arg" "see --help" ;;
   esac
 done
+# Kept for the docker-group re-exec below (`exec sg docker -c …`).
+SELF="$(readlink -f "$0")"
+INSTALL_ARGS="$(printf '%q ' "$@")"
 
 # ─── pre-flight checks ────────────────────────────────────────────────
 phase "Pre-flight checks"
@@ -171,13 +174,13 @@ TARGET_PARENT_DIR="$(dirname "$TARGET_PARENT")"
 [[ -d "$TARGET_PARENT_DIR" ]] || TARGET_PARENT_DIR="$HOME"
 DISK_FREE_KB=$(df -k "$TARGET_PARENT_DIR" | awk 'NR==2 {print $4}')
 DISK_FREE_GB=$(( DISK_FREE_KB / 1024 / 1024 ))
-DISK_NEED_GB=30
+DISK_NEED_GB=50
 if [[ -f "./start.sh" && -f "./config.env.example" ]]; then
   DISK_NEED_GB=5
 fi
 if (( DISK_FREE_GB < DISK_NEED_GB )); then
   fatal "${DISK_FREE_GB} GB free at ${TARGET_PARENT_DIR} — Yorik needs ≥ ${DISK_NEED_GB} GB" \
-        "model alone is ~6 GB, Postgres + voice models + photos grow fast"
+        "venv ~6 GB + model ~7 GB + Docker images ~20 GB (Supabase, Immich, Paperless, llama.cpp) before any photos"
 fi
 ok "${DISK_FREE_GB} GB free at ${TARGET_PARENT_DIR}"
 
@@ -218,8 +221,8 @@ _port_holder() {
 REQUIRED_PORTS=("8000:Yorik FastAPI")
 if [[ "$PLANNED_BACKEND" == "postgres" ]]; then
   REQUIRED_PORTS+=(
-    "5432:Supavisor session pooler"
-    "6543:Supavisor transaction pooler"
+    "5434:Supavisor session pooler (Yorik binding)"
+    "6544:Supavisor transaction pooler (Yorik binding)"
     "8453:Supabase Kong HTTPS"
     "2283:Immich web UI"
     "8010:Paperless web UI"
@@ -464,10 +467,15 @@ if [[ -z "$DECIDED_LLM" ]]; then
     if [[ -n "$DETECTED_LLM_URL" ]]; then
       DECIDED_LLM="existing"
     else
-      DECIDED_LLM="none"
       [[ -n "$_embedder_only_url" ]] && \
         warn "found LLM at $_embedder_only_url (model: $_embedder_only_model) but it failed the chat probe — skipping"
-      info "no chat-capable LLM auto-detected — configure one later via Settings → LLM"
+      if has_nvidia_gpu; then
+        DECIDED_LLM="cuda"
+        info "no chat-capable LLM detected — installing llama.cpp (CUDA) + Qwen 3.5 9B"
+      else
+        DECIDED_LLM="ollama"
+        info "no chat-capable LLM detected, no NVIDIA GPU — installing Ollama + Qwen 3.5 9B (CPU)"
+      fi
     fi
   else
     # Interactive prompt. Show what we found (or didn't), give the
@@ -492,8 +500,8 @@ if [[ -z "$DECIDED_LLM" ]]; then
     if has_nvidia_gpu; then
       printf "    [l] Local — install one here (CUDA + Qwen 3.5 9B, ~6 GB)\n"
     else
-      printf "    [l] Local — no NVIDIA GPU; we'll skip the recommended Qwen and you\n"
-      printf "        wire up your own endpoint later in Settings\n"
+      printf "    [l] Local — install Ollama + Qwen 3.5 9B here (no NVIDIA GPU: runs on CPU,\n"
+      printf "        ~5–10 s per reply, vision works)\n"
     fi
     printf "    [s] Skip — set it up later in Settings → LLM\n"
     if [[ -n "$DETECTED_LLM_URL" ]]; then
@@ -517,8 +525,8 @@ if [[ -z "$DECIDED_LLM" ]]; then
           fi ;;
         l)
           if has_nvidia_gpu; then DECIDED_LLM="cuda"
-          else DECIDED_LLM="none"
-            info "no NVIDIA GPU — skipping local LLM install; configure later via Settings → LLM"
+          else DECIDED_LLM="ollama"
+            info "no NVIDIA GPU — installing Ollama + Qwen 3.5 9B (CPU)"
           fi
           break ;;
         s) DECIDED_LLM="none"; break ;;
@@ -618,7 +626,6 @@ ok "git curl python3 ffmpeg sqlite3 jq"
 # ─── Docker ───────────────────────────────────────────────────────────
 phase "Docker"
 
-DOCKER_PREFIX=""
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
   skip "Docker $(docker version --format '{{.Server.Version}}' 2>/dev/null || echo present)"
 else
@@ -656,9 +663,19 @@ fi
 if docker ps >/dev/null 2>&1; then
   :
 elif sg docker -c "docker ps" >/dev/null 2>&1; then
-  DOCKER_PREFIX='sg docker -c '
-  info "docker group not yet active — wrapping docker calls in 'sg docker -c'"
-  warn "after install: log out + back in (or 'newgrp docker') so future shells work without the wrapper"
+  # The docker group was just added to this user, but the running
+  # shell doesn't have it yet. Re-run the whole installer under `sg
+  # docker` so every child (start.sh, bootstrap-supabase.sh, docker
+  # compose) inherits the group. Phases 1–4 are idempotent, so the
+  # second pass skips what is already done.
+  if [[ "${YORIK_DOCKER_REEXEC:-0}" == "1" ]]; then
+    fatal "docker group still not active after re-exec" \
+          "log out + back in (or 'newgrp docker'), then re-run install.sh"
+  fi
+  info "docker group not yet active — re-running the installer with it enabled"
+  warn "after install: log out + back in (or 'newgrp docker') so future shells can use docker"
+  export YORIK_DOCKER_REEXEC=1
+  exec sg docker -c "bash '$SELF' $INSTALL_ARGS"
 else
   fatal "Docker is installed but can't be invoked" \
         "log out + back in (or 'newgrp docker'), then re-run install.sh"
@@ -699,11 +716,7 @@ case "$DECIDED_LLM" in
     mkdir -p "$MODEL_DIR"
 
     say "pulling llama.cpp:server-cuda Docker image (~3 GB, one-time)"
-    if [[ -n "$DOCKER_PREFIX" ]]; then
-      eval "$DOCKER_PREFIX 'docker pull ghcr.io/ggml-org/llama.cpp:server-cuda'" >/dev/null
-    else
-      docker pull ghcr.io/ggml-org/llama.cpp:server-cuda >/dev/null
-    fi
+    docker pull ghcr.io/ggml-org/llama.cpp:server-cuda >/dev/null
     ok "image pulled"
 
     # Q5_K_M intentionally — Q4_K_M's embedded jinja chat template

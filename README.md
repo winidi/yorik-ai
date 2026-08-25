@@ -43,7 +43,7 @@ Click **Seed demo data** on Home after install to reproduce this state.
 
 ## Install
 
-Fresh Ubuntu 24.04+ / Debian 12+ / Fedora 39+, ≥8 GB RAM (16 recommended), ≥30 GB free disk. Works inside WSL2 Ubuntu 24 with the same script (with a couple of WSL caveats it'll print). macOS uses a separate path — see [docs/INSTALL.md](docs/INSTALL.md).
+Fresh Ubuntu 24.04+ / Debian 12+ / Fedora 39+, ≥8 GB RAM (16 recommended), ≥50 GB free disk. Works inside WSL2 Ubuntu 24 with the same script (with a couple of WSL caveats it'll print). macOS uses a separate path — see [docs/INSTALL.md](docs/INSTALL.md).
 
 ```bash
 git clone https://github.com/winidi/yorik-ai && cd yorik-ai
