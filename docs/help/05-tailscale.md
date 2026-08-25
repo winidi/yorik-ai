@@ -86,7 +86,7 @@ The Immich app expects to talk to Immich on port 2283. Over Tailscale: set the s
 
 ## What Tailscale does NOT do for you
 
-- **Encrypted backup**: if you want family.db backed up off-machine, that's the Yorik backup connector (Settings → Backup). Tailscale only handles connectivity.
+- **Encrypted backup**: if you want your data backed up off-machine, that's the Yorik backup connector (Settings → Backup). Tailscale only handles connectivity.
 - **Wake on LAN**: if your Yorik machine sleeps, Tailscale can't wake it. Disable sleep on the host (or use a NAS / always-on box).
 - **Internet for the host**: Tailscale assumes your Yorik machine has its own internet. It's not a tunnel-out service.
 

@@ -117,7 +117,6 @@ user.
 - [ ] Pre-edit `config.env` (these matter at first start)
   ```bash
   # Critical for multi-tenant:
-  YORIK_DB_BACKEND=postgres
   YORIK_TENANT_ROOT=yourdomain.com
   # Recommended:
   YORIK_TRUSTED_ORIGINS=https://yourdomain.com

@@ -43,7 +43,7 @@ GoBD (Grundsätze zur ordnungsmäßigen Führung und Aufbewahrung von Büchern, 
 - ✅ **Complete** — every issued invoice has a number, no gaps in the series (or audit-logged justification for gaps).
 - ✅ **Timely** — invoices recorded with creation + send timestamps.
 - ✅ **Verifiable** — every audit entry references a user_id and a session.
-- ✅ **Retrievable for 10 years** — `data/family.db` + `data/documents/` is the corpus. Back it up.
+- ✅ **Retrievable for 10 years** — the database (Settings → Backup dumps it) + `data/documents/` is the corpus. Back it up.
 
 ### 3. ZUGFeRD 2.x / XRechnung 3.x XML
 

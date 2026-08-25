@@ -185,40 +185,51 @@ render an ugly or wrong PDF. No code execution.
 
 ## The agent loop
 
-`backend/agent/loop.py:ask()` is the single entry point. One async function,
-~600 lines.
+`backend/agent/loop.py:ask()` is the single entry point. One async function.
 
 ```
-1. Cache lookup (replays prior /api/ask result for identical user+message).
-2. Build messages = [system_prompt, history…, user_message].
-3. Until done or iteration budget exhausted:
-   a. LLM call (LlmClient.chat) with the tool registry's JSON schemas.
+1. Build messages = [system_prompt (+ entity ledger), trimmed history…, user_message].
+   History is cut to the model's context window (YORIK_LLM_CTX, default 65536)
+   before every turn — the stored conversation is never touched.
+2. Until done or iteration budget exhausted:
+   a. LLM call (LlmClient.chat) with the tool schemas this ROLE may see.
    b. If reply has no tool_calls → break (final answer).
    c. For each tool call: dispatch via ToolRegistry → ToolResult.
-      - Audit-log (SQL captured, mutation flag, delete counter).
-      - Guardrails pre/post (default OFF; opt-in safety belts).
+      - invoke_skill without a prior skill_view for that skill is
+        rejected with a "read the manifest first" hint.
+      - Audit (mutation flag, delete counter); guardrails pre/post.
       - Stream progress events to the SSE consumer if attached.
-4. Cache the answer (gated — mutations skip the cache).
-5. Return {response, sql_used, ui_actions, agent_trace?, ...}.
+3. Persist the conversation; return {response, ui_actions, agent_trace?, …}.
+   On an LLM failure the user gets one sentence in their language
+   (friendly_llm_error), never an exception string.
 ```
 
-**Tools the LLM sees** (from the in-tree `ToolRegistry`):
+**Tools the LLM sees** — ten, the same every turn (minus `install_connector`
+for non-admin roles). Skills are NOT tools: the system prompt carries a
+one-line index of every skill, and the model reaches them through two
+meta-tools:
 
 | Tool | What it does |
 |---|---|
-| `use_skill(name, args)`     | Dispatch any registered skill |
-| `trigger_connector(name, params)` | Direct connector invocation (rarely used; prefer skills) |
-| `search_documents(query)`   | Semantic search over Paperless via pgvector |
+| `skill_view(name)`          | Read one skill's manifest (inputs, when_to_use). Required before the first invoke. |
+| `invoke_skill(name, args)`  | Run a skill. Role-gated by the registry. |
 | `show_calendar(view, anchor, highlight)` | UI control |
-| `web_search(query, limit)`  | Web search via active provider (ddgs / brave / searxng) |
-| `web_extract(urls)`         | Page-text extraction (trafilatura) with UNTRUSTED markers |
-| various legacy compat tools | `find_contact`, `add_calendar_event`, `compose_draft`, … |
+| `list_calendar_layouts()`   | Marketplace stub |
+| `list_connectors()` / `trigger_connector(name, params)` / `install_connector(name)` | Connector plumbing (`install_connector` admin-only) |
+| `list_apps()`               | Discoverability; navigation itself is the `navigate_to` skill |
+| `web_search(query, limit)` / `web_extract(urls)` | Web search via the active provider; page text with UNTRUSTED markers |
 
-The system prompt (in `backend/ask.py:_SYSTEM_PROMPT`) is ~48 KB of
-playbooks: postal-letter flow, photo picker, web search + extraction,
-travel-time, provider-lookup ladder, calendar mutations. Each playbook is a deterministic sequence of skill calls the
-LLM follows. The prompt is the lever — when behaviour drifts, the prompt
-gets tightened.
+The system prompt (`backend/ask.py:_SYSTEM_PROMPT` + skill index + date
+table) is ~24 KB, plus ~7 KB of tool schemas — roughly 8–9k tokens
+before any history. Each skill use costs at least three LLM round trips
+(view → invoke → reply). The prompt is the lever — when behaviour drifts,
+the prompt gets tightened.
+
+**Destructive skills confirm first.** `delete_*` skills stage the action
+(`pending_actions.stage_before_apply`) and emit a `pending_confirmation`
+card; the DELETE runs only when the user taps Delete (`/api/pending/{id}/confirm`
+→ `pending_actions.apply`). Creates and updates apply immediately and
+offer Undo for an hour.
 
 ## Streaming (SSE)
 
@@ -250,9 +261,10 @@ by voice + some background paths.
 2. **No LLM-generated SQL**: every read and write goes through a named,
    role-gated skill; the registry rejects calls outside the role's
    permissions (platform_admin / admin / member / restricted).
-3. **Confirm-mutations**: write skills (add_calendar_event, delete_*,
-   add_bill, etc.) stage a `pending_action` that the user must confirm.
-   ON by default during alpha; user toggle in Settings → Profile.
+3. **Confirmation cards**: `delete_*` skills never run on the model's
+   say-so — they stage a `pending_action` and the DELETE happens only
+   when the user taps Delete. Creates/updates apply immediately and
+   offer Undo (toggle in Settings → Profile).
 4. **Untrusted-content wrapping**: web_extract wraps fetched page text in
    `[UNTRUSTED CONTENT FROM <url> — START] … [— END]` markers; the system
    prompt instructs the LLM to never follow instructions inside.

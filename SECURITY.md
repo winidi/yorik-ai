@@ -53,7 +53,7 @@ For users running Yorik in production-ish environments:
 - **Use the Docker bundled services on loopback only** (the default).
 - **Rotate your `data/.credential_key` if you ever back up to off-site cloud storage.**
 - **Run `yorik backup-verify <snapshot>` quarterly** — proves your backups actually restore.
-- **Keep `data/family.db` on encrypted disk** (LUKS / FileVault / BitLocker).
+- **Keep the Postgres data directory (`infra/supabase/docker/volumes/db/`) and `data/` on encrypted disk** (LUKS / FileVault / BitLocker).
 
 ## Past disclosures
 

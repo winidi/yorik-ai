@@ -79,8 +79,8 @@ async def execute(ctx, n: int = 1, sides: int = 6) -> dict:
 
 That's a working skill. After backend restart:
 
-- The LLM sees it via `list_skills`
-- The user says *"würfel mal mit 2d20"* → LLM calls `use_skill(name="dice_roll", args={n: 2, sides: 20})`
+- The LLM sees it as one line in the skill index inside the system prompt
+- The user says *"würfel mal mit 2d20"* → LLM calls `skill_view("dice_roll")`, then `invoke_skill(name="dice_roll", args={n: 2, sides: 20})`
 - The result lands back in chat as part of the LLM's answer
 
 ## skill.md frontmatter — every field
@@ -89,10 +89,10 @@ That's a working skill. After backend restart:
 |---|---|---|---|
 | `name` | string | yes | Unique skill ID. Lowercase, underscores. The LLM uses this. |
 | `description` | string | yes | One-sentence "what does this do". The LLM reads this to choose between skills. |
-| `when_to_use` | multi-line string | yes | Bullet list of trigger phrases / scenarios. **THIS IS THE MOST IMPORTANT FIELD** — it's what makes the LLM pick your skill over `run_sql`. Be specific and concrete. |
+| `when_to_use` | multi-line string | yes | Bullet list of trigger phrases / scenarios. **THIS IS THE MOST IMPORTANT FIELD** — it's what makes the LLM pick your skill over the others in the index. Be specific and concrete. |
 | `inputs` | object | yes | Each input has `type`, `required`, `description`, optional `default`. Map keys become the kwargs of `execute()`. |
 | `outputs` | object | no | Descriptive only — the LLM uses it to interpret the response. |
-| `permissions` | array | no | List of roles allowed to invoke (`["admin"]`, `["admin", "member"]`, `["*"]` = anyone). Default: `["admin", "member"]`. |
+| `permissions` | array | no | List of roles allowed to invoke (`["admin"]`, `["admin", "member"]`, `["*"]` = anyone). Default: `["admin"]` — declare `[admin, member, restricted]` explicitly for anything a household member should be able to call. |
 | `side_effects` | string | no | Human-readable summary: `"none"`, `"writes events table"`, `"sends an email"`. |
 | `cost` | string | no | `"free"`, `"1 LLM call"`, `"1 Immich API call"`. Helps choose between heavy + light skills. |
 | `tags` | array | no | Searchable labels. |
@@ -110,9 +110,8 @@ async def execute(ctx, *named_inputs) -> dict[str, Any]:
 ### `ctx` — what's in it
 
 ```python
-ctx.user_id        # int — the calling user's id (defaults to 1 if anonymous)
-ctx.role           # str — "admin" / "member" / "child" / etc.
-ctx.language       # str — the user's profile language ("en", "de", ...)
+ctx.user_id        # str — the calling user's UUID
+ctx.role           # str — "platform_admin" / "admin" / "member" / "restricted"
 ctx.call_skill(name, **args)   # invoke another skill, for composition
 ```
 
@@ -421,7 +420,7 @@ browse `backend/skills/` for the full list. Each has a `skill.md` at
 | `delete_calendar_event` | Delete ONE event by id. ≤1 per request. |
 | `check_calendar` | Read events in a window (default = next 7 days). |
 | `add_task`, `update_task`, `delete_task`, `check_tasks` | The task counterparts. |
-| `add_bill`, `update_bill`, `delete_bill`, `check_bills` | Recurring expense tracking. |
+| `add_bill`, `update_bill`, `delete_bill`, `check_bills` | Recurring expense tracking — currently disabled (`_`-prefixed folders), not in the index. |
 
 ### Compose flow
 
