@@ -276,7 +276,8 @@ def _upgrade(args: argparse.Namespace) -> int:
         port = os.getenv("HOMEOS_PORT", "8000")
         with open(log_path, "w") as logf:
             proc = subprocess.Popen(
-                [str(venv_uvicorn), "backend.main:app", "--host", bind, "--port", port],
+                [str(venv_uvicorn), "backend.main:app", "--host", bind, "--port", port,
+                 "--proxy-headers", "--forwarded-allow-ips", "127.0.0.1"],
                 cwd=_repo, stdout=logf, stderr=subprocess.STDOUT,
                 start_new_session=True,
             )

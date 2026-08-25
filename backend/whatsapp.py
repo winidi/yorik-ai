@@ -41,6 +41,14 @@ log = logging.getLogger("yorik.whatsapp")
 
 BRIDGE_URL = os.getenv("YORIK_WA_BRIDGE_URL", "http://127.0.0.1:3015")
 BRIDGE_WS  = os.getenv("YORIK_WA_BRIDGE_WS",  "ws://127.0.0.1:3015/events")
+# Shared secret the bridge checks on every request (start.sh generates
+# it; docker-compose passes it to the container as BRIDGE_TOKEN). Empty
+# means an unauthenticated BYO bridge — the bridge itself warns then.
+BRIDGE_TOKEN = os.getenv("YORIK_WA_BRIDGE_TOKEN", "").strip()
+
+
+def _bridge_headers() -> dict[str, str]:
+    return {"Authorization": f"Bearer {BRIDGE_TOKEN}"} if BRIDGE_TOKEN else {}
 
 # Fallback owner used by legacy single-tenant paths where no logged-in
 # user is available (e.g. /clear without auth context, the legacy WS
@@ -319,7 +327,8 @@ async def _ws_subscriber() -> None:
     while True:
         try:
             log.info("connecting to bridge WS at %s", BRIDGE_WS)
-            async with websockets.connect(BRIDGE_WS, ping_interval=30) as ws:
+            async with websockets.connect(BRIDGE_WS, ping_interval=30,
+                                          additional_headers=_bridge_headers()) as ws:
                 backoff = 1.0
                 last_was_connected = True
                 workers.heartbeat("whatsapp_subscriber", "ok",
@@ -556,7 +565,7 @@ async def status(
     offer a 'Pair your phone' button."""
     uid = user["id"]
     try:
-        async with httpx.AsyncClient(timeout=3.0) as c:
+        async with httpx.AsyncClient(timeout=3.0, headers=_bridge_headers()) as c:
             # Eagerly start the session if it isn't running yet — auto-
             # creates the empty auth dir on the bridge so the next QR
             # request has a session to attach to.
@@ -791,7 +800,7 @@ async def get_media(
     """
     uid = user["id"]
     try:
-        async with httpx.AsyncClient(timeout=30.0) as c:
+        async with httpx.AsyncClient(timeout=30.0, headers=_bridge_headers()) as c:
             r = await c.get(_bridge_url(f"/media/{msg_id}", uid))
             if r.status_code == 404:
                 raise HTTPException(404, "media not found — may have expired on WhatsApp's servers")
@@ -813,7 +822,7 @@ async def qr(
     """Return the pairing QR for the logged-in user (204 if already paired)."""
     uid = user["id"]
     try:
-        async with httpx.AsyncClient(timeout=5.0) as c:
+        async with httpx.AsyncClient(timeout=5.0, headers=_bridge_headers()) as c:
             # Make sure the user's session is started so a QR can be generated.
             try:
                 await c.post(_bridge_url("/start", uid))
@@ -1147,7 +1156,7 @@ async def avatar(jid: str,
         # request through the legacy admin's session via the bridge's
         # compat shim, which silently 404s for everyone once that
         # session no longer has Baileys auth (e.g. after a re-pair).
-        async with httpx.AsyncClient(timeout=10.0) as c:
+        async with httpx.AsyncClient(timeout=10.0, headers=_bridge_headers()) as c:
             r = await c.get(_bridge_url(f"/profile-picture/{jid}", user["id"]))
     except Exception:
         # Bridge unreachable or timeout — degrade gracefully to "no picture"
@@ -1203,7 +1212,7 @@ async def disconnect(body: _DisconnectBody, user: dict[str, Any] = Depends(_auth
     bridge_result: dict[str, Any] = {}
     bridge_error: Optional[str] = None
     try:
-        async with httpx.AsyncClient(timeout=15.0) as c:
+        async with httpx.AsyncClient(timeout=15.0, headers=_bridge_headers()) as c:
             r = await c.post(_bridge_url("/disconnect", uid))
             try:
                 bridge_result = r.json()
@@ -1240,7 +1249,7 @@ async def fetch_more_history(
     messaging-history.set events."""
     uid = user["id"]
     try:
-        async with httpx.AsyncClient(timeout=15.0) as c:
+        async with httpx.AsyncClient(timeout=15.0, headers=_bridge_headers()) as c:
             r = await c.post(_bridge_url(f"/chats/{jid}/fetch-history", uid), json={"count": count})
             if r.status_code != 200:
                 raise HTTPException(r.status_code, r.text)
@@ -1258,7 +1267,7 @@ async def sync_from_bridge(
     if the WS subscriber missed the historical sync burst."""
     uid = user["id"]
     try:
-        async with httpx.AsyncClient(timeout=10.0) as c:
+        async with httpx.AsyncClient(timeout=10.0, headers=_bridge_headers()) as c:
             chats_r = await c.get(_bridge_url("/chats", uid))
             chats_r.raise_for_status()
             chats = chats_r.json()
@@ -1278,7 +1287,7 @@ async def sync_from_bridge(
             owner_user_id=uid,
         )
         try:
-            async with httpx.AsyncClient(timeout=10.0) as c:
+            async with httpx.AsyncClient(timeout=10.0, headers=_bridge_headers()) as c:
                 mr = await c.get(_bridge_url(f"/chats/{jid}/messages?limit=200", uid))
                 if mr.status_code != 200:
                     continue
@@ -1417,7 +1426,7 @@ async def send_message(
         raise HTTPException(400, "empty text")
     uid = user["id"]
     try:
-        async with httpx.AsyncClient(timeout=15.0) as c:
+        async with httpx.AsyncClient(timeout=15.0, headers=_bridge_headers()) as c:
             r = await c.post(_bridge_url(f"/chats/{jid}/send", uid), json={"text": body.text})
             if r.status_code != 200:
                 raise HTTPException(r.status_code, r.text)
@@ -1825,7 +1834,7 @@ async def browser_ws(ws: WebSocket) -> None:
     # Send initial state for THIS user's session so the client knows
     # what's up immediately without a separate /status fetch.
     try:
-        async with httpx.AsyncClient(timeout=2.0) as c:
+        async with httpx.AsyncClient(timeout=2.0, headers=_bridge_headers()) as c:
             r = await c.get(_bridge_url("/status", uid))
             initial = r.json() if r.status_code == 200 else {"connected": False}
     except Exception:

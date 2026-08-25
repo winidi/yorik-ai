@@ -71,6 +71,12 @@ const SESSIONS_DIR = join(DATA_DIR, "sessions");
 // sessions tree under this id on first boot. Defaults to the admin id
 // in a fresh install (typically 1).
 const LEGACY_ADMIN_USER_ID = String(process.env.LEGACY_ADMIN_USER_ID || "1");
+// Shared secret with the Yorik backend. Every HTTP request and the WS
+// upgrade must carry `Authorization: Bearer <token>`. Without a token
+// the bridge accepts anything — only acceptable for a bridge that is
+// bound to loopback on a single-user dev box.
+const BRIDGE_TOKEN = (process.env.BRIDGE_TOKEN || "").trim();
+const authorized = (req) => !BRIDGE_TOKEN || (req.headers["authorization"] || "") === `Bearer ${BRIDGE_TOKEN}`;
 
 const baseLogger = pino({ level: process.env.LOG_LEVEL || "warn" });
 
@@ -480,6 +486,10 @@ function serializeChat(c) {
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
+app.use((req, res, next) => {
+  if (authorized(req)) return next();
+  res.status(401).json({ error: "unauthorized", hint: "set BRIDGE_TOKEN / YORIK_WA_BRIDGE_TOKEN" });
+});
 
 // Backward-compat shim: rewrite legacy routes (no /users/:id prefix) so
 // they target the legacy admin user. Lets the existing Python adapter
@@ -1034,7 +1044,7 @@ app.post("/users/:userId/disconnect", async (req, res) => {
 // ─────────────────────────── WS events ─────────────────────────────────
 
 const server = createServer(app);
-const wss = new WebSocketServer({ server, path: "/events" });
+const wss = new WebSocketServer({ server, path: "/events", verifyClient: (info) => authorized(info.req) });
 wss.on("connection", (ws) => {
   wsClients.add(ws);
   // Hello payload describes every active session so the subscriber can
@@ -1050,6 +1060,7 @@ wss.on("connection", (ws) => {
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`[bridge] http+ws listening on :${PORT}`);
+  if (!BRIDGE_TOKEN) console.warn("[bridge] BRIDGE_TOKEN is unset — accepting unauthenticated requests");
   console.log(`[bridge] data root: ${DATA_DIR}`);
   console.log(`[bridge] legacy admin user id: ${LEGACY_ADMIN_USER_ID}`);
   discoverAndAutoStart();

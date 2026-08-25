@@ -229,7 +229,8 @@ async def _download_from_bridge(msg_id: str) -> bytes:
     """Pull the original binary via the bridge's cached protobuf. Will
     fail if the bridge has evicted the message from its 1000-item LRU
     (it's a soft cache, not durable storage)."""
-    async with httpx.AsyncClient(timeout=120.0) as c:
+    from .whatsapp import _bridge_headers
+    async with httpx.AsyncClient(timeout=120.0, headers=_bridge_headers()) as c:
         r = await c.get(f"{BRIDGE_URL}/media/{msg_id}")
         if r.status_code == 404 and "msg_not_cached" in (r.text or ""):
             # Bridge LRU evicted this one — caller treats it as a

@@ -266,10 +266,14 @@ services:
     build: ./whatsapp-bridge
     restart: unless-stopped
     profiles: ["bundled-whatsapp"]
+    # Loopback only: the bridge can send WhatsApp messages as the
+    # household, so it is reachable from Yorik on this host and nothing
+    # else. The token below gates every request on top of that.
     ports:
-      - "3015:3015"
+      - "127.0.0.1:3015:3015"
     environment:
       - BRIDGE_PORT=3015
+      - BRIDGE_TOKEN=${YORIK_WA_BRIDGE_TOKEN:-}
       - BRIDGE_AUTH_DIR=/data/baileys-auth
       - LOG_LEVEL=warn
     volumes:
