@@ -186,6 +186,19 @@ class ToolRegistry:
     def all(self) -> List[Tool]:
         return list(self._tools.values())
 
+    # Tools that change what the box can reach; not for household
+    # members. The registry keeps this here (not in the tool classes) so
+    # the per-turn ACL is one lookup in the loop.
+    ADMIN_ONLY_TOOLS: frozenset = frozenset({"install_connector"})
+    ADMIN_ROLES: frozenset = frozenset({"platform_admin", "admin"})
+
+    def names_for_role(self, role: Optional[str]) -> List[str]:
+        """Tool names this role may see and call."""
+        r = (role or "").lower().strip()
+        if r in self.ADMIN_ROLES:
+            return self.names()
+        return [n for n in self.names() if n not in self.ADMIN_ONLY_TOOLS]
+
     def schemas(self, names: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Return the OpenAI ``tools`` array for this turn.
 

@@ -254,6 +254,14 @@ class InstallConnectorTool(Tool[InstallConnectorArgs]):
 
     async def execute(self, context: ToolContext, args: InstallConnectorArgs) -> ToolResult:
         from . import credential_store  # sibling module; deferred to avoid cycle
+        # The registry hides this tool from non-admin roles; enforce it
+        # here too so a forged tool call cannot open the credentials form.
+        if (getattr(context, "role", "") or "").lower() not in ("platform_admin", "admin"):
+            return ToolResult(
+                success=False,
+                result_for_llm="Only an admin can add or reconfigure connectors. Ask an admin of this household.",
+                error="forbidden",
+            )
         spec = connectors.get(args.name)
         if not spec:
             return ToolResult(

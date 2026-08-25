@@ -226,7 +226,7 @@ async def ask(
     messages: List[Dict[str, Any]] = [system_message(sys_content)]
     messages.extend(history)
     messages.append(user_message(_enrich_template_picked(message, user.language)))
-    tools_schema = registry.schemas()
+    tools_schema = registry.schemas(names=registry.names_for_role(role))
 
     # 4) Iteration-budget loop ─────────────────────────────────────────
     budget = IterationBudget(max_iterations or MAX_ITERATIONS)
@@ -848,7 +848,7 @@ async def ask_stream(
     messages: List[Dict[str, Any]] = [system_message(sys_content)]
     messages.extend(history)
     messages.append(user_message(_enrich_template_picked(message, user.language)))
-    tools_schema = registry.schemas()
+    tools_schema = registry.schemas(names=registry.names_for_role(role))
 
     # 4) Iteration loop
     budget = IterationBudget(max_iterations or MAX_ITERATIONS)
