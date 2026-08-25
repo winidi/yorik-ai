@@ -61,7 +61,7 @@ import {
   fetchLatestBaileysVersion,
   downloadMediaMessage,
 } from "@whiskeysockets/baileys";
-import { existsSync, mkdirSync, readdirSync, renameSync, statSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "fs";
 import { join } from "path";
 
 const PORT = process.env.BRIDGE_PORT ? Number(process.env.BRIDGE_PORT) : 3001;
@@ -176,11 +176,23 @@ async function startSession(userId) {
   ensureSessionDirs(userId);
   const dir = authDir(userId);
   const { state: authState, saveCreds } = await useMultiFileAuthState(dir);
-  const { version } = await fetchLatestBaileysVersion();
-  session.logger.info(`connecting with Baileys ${version.join(".")}`);
+  // fetchLatestBaileysVersion() hits the internet. At boot before DNS
+  // is up, or on an offline box, it threw and the session never
+  // started — the user saw "disconnected" and re-scanned the QR for
+  // nothing. Fall back to the library's baked-in version instead.
+  let version = null;
+  try {
+    ({ version } = await Promise.race([
+      fetchLatestBaileysVersion(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout after 8s")), 8000)),
+    ]));
+    session.logger.info(`connecting with Baileys ${version.join(".")}`);
+  } catch (e) {
+    session.logger.warn(`fetchLatestBaileysVersion failed (${e?.message || e}) — using the library default`);
+  }
 
   const sock = makeWASocket({
-    version,
+    ...(version ? { version } : {}),
     auth: authState,
     // Per-session child logger — avoids shared-stream / typing collisions
     // when multiple sessions log simultaneously.
@@ -253,6 +265,7 @@ async function startSession(userId) {
     }
     if (connection === "open") {
       session.connected = true;
+      session.reconnectAttempts = 0;
       session.lastQr = null;
       session.me = {
         id: sock.user?.id || null,
@@ -266,15 +279,34 @@ async function startSession(userId) {
       const loggedOut = code === DisconnectReason.loggedOut;
       session.logger.info(`connection closed (code=${code}, loggedOut=${loggedOut})`);
       broadcast(userId, "disconnected", { code, loggedOut });
-      if (!loggedOut && !session.reconnecting) {
-        // Per-session reconnect — issue #2052 reports auto-reconnect is
-        // unreliable under multi-session load, so we implement it here.
+      if (loggedOut) {
+        // The phone unlinked this device: the stored credentials are
+        // dead and every reconnect would fail the same way. Wipe them
+        // and start a fresh session so a new QR is issued and the
+        // WhatsApp app shows the pairing screen instead of a permanent
+        // "disconnected".
+        session.logger.warn("logged out by the phone — wiping credentials, issuing a new QR");
+        try { rmSync(dir, { recursive: true, force: true }); } catch (e) { session.logger.warn({ err: String(e) }, "auth wipe failed"); }
+        session.sock = null;
+        session.reconnectAttempts = 0;
+        broadcast(userId, "qr", { available: false, needsPair: true });
+        setTimeout(async () => {
+          try { await startSession(userId); }
+          catch (e) { session.logger.error({ err: e }, "restart after logout failed"); }
+        }, 2000);
+      } else if (!session.reconnecting) {
+        // Per-session reconnect with backoff (2 s → 60 s). A bad
+        // session / restartRequired close used to retry every 2 s
+        // forever and flood the log.
         session.reconnecting = true;
+        session.reconnectAttempts = (session.reconnectAttempts || 0) + 1;
+        const delay = Math.min(2000 * 2 ** (session.reconnectAttempts - 1), 60_000);
+        session.logger.info(`reconnecting in ${delay} ms (attempt ${session.reconnectAttempts})`);
         setTimeout(async () => {
           session.reconnecting = false;
           try { await startSession(userId); }
           catch (e) { session.logger.error({err: e}, "reconnect failed"); }
-        }, 2000);
+        }, delay);
       }
     }
   });
@@ -406,11 +438,17 @@ function discoverAndAutoStart() {
     return readdirSync(auth).length > 0;
   });
   console.log(`[bridge] discovered ${userIds.length} session(s) on disk: [${userIds.join(", ")}]`);
-  for (const userId of userIds) {
-    startSession(userId).catch((e) => {
-      console.error(`[bridge] auto-start failed for user ${userId}:`, e);
-    });
-  }
+  for (const userId of userIds) autoStartWithRetry(userId, 0);
+}
+
+// Auto-start with retries: network / DNS is often not ready in the first
+// seconds after a reboot. Five attempts, 10 s apart, before giving up
+// (the user can still trigger /users/:id/start from the app).
+function autoStartWithRetry(userId, attempt) {
+  startSession(userId).catch((e) => {
+    console.error(`[bridge] auto-start failed for user ${userId} (attempt ${attempt + 1}):`, e?.message || e);
+    if (attempt < 4) setTimeout(() => autoStartWithRetry(userId, attempt + 1), 10_000);
+  });
 }
 
 // ───────────────────────── serializers (unchanged) ─────────────────────
