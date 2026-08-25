@@ -235,45 +235,59 @@ def _upgrade(args: argparse.Namespace) -> int:
     elif not needs_npm_install:
         print("\n  · no frontend changes — skipping npm")
 
-    # ── Restart uvicorn. Killing the parent process group catches the
-    # --reload worker too (which I learned the hard way several times
-    # earlier in this session).
-    _step("restarting uvicorn")
-    # SIGTERM, never SIGKILL: a KILL orphans the TTS child, which keeps
-    # port 8000 and turns the next start into an endless restart loop.
-    subprocess.run(["pkill", "-TERM", "-f", "uvicorn backend.main"],
-                   capture_output=True, text=True)
-    for _ in range(15):
-        if subprocess.run(["pgrep", "-f", "uvicorn backend.main"],
-                          capture_output=True).returncode != 0:
-            break
-        time.sleep(1)
-    # Clear pycache to avoid stale bytecode surprises after a code change.
-    subprocess.run(["find", "backend", "-name", "__pycache__", "-exec",
-                    "rm", "-rf", "{}", "+"],
-                   cwd=_repo, capture_output=True, text=True)
+    # ── Database migrations. New files in migrations_pg/ may touch the
+    # docs schema, which only supabase_admin can alter; the bootstrap
+    # applies them with that role and is idempotent.
+    _step("applying database migrations")
+    r = _run(["bash", "scripts/bootstrap-supabase.sh"])
+    if r.returncode != 0:
+        return _fail(f"bootstrap-supabase.sh failed:\n{r.stdout[-1500:]}\n{r.stderr[-1500:]}")
+    print("  ✓ migrations applied")
 
+    # ── Restart. Under systemd let the unit do it (start.sh brings the
+    # whole stack up). Otherwise SIGTERM the manual uvicorn — never
+    # SIGKILL: a KILL orphans the TTS child, which keeps port 8000 and
+    # turns the next start into an endless restart loop.
+    _step("restarting Yorik")
     log_path = "/tmp/homeos-api.log"
     pid_path = "/tmp/homeos-api.pid"
-    venv_uvicorn = _repo / "venv" / "bin" / "uvicorn"
-    if not venv_uvicorn.is_file():
-        return _fail(f"venv uvicorn not found at {venv_uvicorn}")
+    unit_active = subprocess.run(["systemctl", "is-active", "--quiet", "yorik"],
+                                 capture_output=True).returncode == 0
+    if unit_active:
+        r = _run(["sudo", "systemctl", "restart", "yorik"])
+        if r.returncode != 0:
+            return _fail(f"systemctl restart yorik failed:\n{r.stderr[-1500:]}")
+        print("  ✓ systemctl restart yorik")
+    else:
+        subprocess.run(["pkill", "-TERM", "-f", "uvicorn backend.main"],
+                       capture_output=True, text=True)
+        for _ in range(15):
+            if subprocess.run(["pgrep", "-f", "uvicorn backend.main"],
+                              capture_output=True).returncode != 0:
+                break
+            time.sleep(1)
+        subprocess.run(["find", "backend", "-name", "__pycache__", "-exec",
+                        "rm", "-rf", "{}", "+"],
+                       cwd=_repo, capture_output=True, text=True)
+        venv_uvicorn = _repo / "venv" / "bin" / "uvicorn"
+        if not venv_uvicorn.is_file():
+            return _fail(f"venv uvicorn not found at {venv_uvicorn}")
+        bind = os.getenv("YORIK_BIND", "0.0.0.0")
+        port = os.getenv("HOMEOS_PORT", "8000")
+        with open(log_path, "w") as logf:
+            proc = subprocess.Popen(
+                [str(venv_uvicorn), "backend.main:app", "--host", bind, "--port", port],
+                cwd=_repo, stdout=logf, stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        with open(pid_path, "w") as pf:
+            pf.write(str(proc.pid))
+        print(f"  ✓ launched uvicorn (pid {proc.pid}, log: {log_path})")
 
-    # Start fresh. nohup + redirect so it survives this CLI exit.
-    with open(log_path, "w") as logf:
-        proc = subprocess.Popen(
-            [str(venv_uvicorn), "backend.main:app",
-             "--host", "0.0.0.0", "--port", "8000", "--reload"],
-            cwd=_repo, stdout=logf, stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-    with open(pid_path, "w") as pf:
-        pf.write(str(proc.pid))
-    print(f"  ✓ launched uvicorn (pid {proc.pid}, log: {log_path})")
-
-    # ── Wait for /api/health to respond. Up to 30s.
+    # ── Wait for /api/health. Under systemd start.sh brings the whole
+    # stack up first, so allow a few minutes.
     _step("waiting for /api/health")
-    deadline = time.time() + 30
+    deadline = time.time() + (240 if unit_active else 60)
     while time.time() < deadline:
         try:
             with urlopen("http://localhost:8000/api/health", timeout=2) as resp:
@@ -285,7 +299,7 @@ def _upgrade(args: argparse.Namespace) -> int:
             pass
         time.sleep(1)
     else:
-        print("  ⚠ /api/health didn't respond within 30s — check the log",
+        print("  ⚠ /api/health didn't respond in time — check the log",
               file=sys.stderr)
         return _fail(f"upgrade landed code but the server isn't responding. "
                      f"Check {log_path} and run `yorik status` once you've fixed it.")
