@@ -8,8 +8,31 @@ on:
 
 jobs:
   backend:
-    name: Backend tests
+    name: Backend tests (Postgres + pgvector)
     runs-on: ubuntu-22.04
+    services:
+      postgres:
+        # Same major + pgvector as the bundled Supabase stack. The
+        # test fixtures build the auth shim + apply migrations_pg/
+        # themselves (see tests/conftest.py), so a plain pgvector
+        # image is enough.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: supabase_admin
+          POSTGRES_PASSWORD: yorik-ci
+          POSTGRES_DB: postgres
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U supabase_admin -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      YORIK_DB_HOST: 127.0.0.1
+      YORIK_DB_PORT: "5435"
+      YORIK_DB_PASSWORD: yorik-ci
+      YORIK_DB_NAME: postgres
     steps:
       - uses: actions/checkout@v4
 
@@ -19,13 +42,22 @@ jobs:
           cache: 'pip'
 
       - name: Install system deps
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg postgresql-client
 
-      - name: Install Python deps
+      - name: Create the roles the schema expects
+        # The bundled stack ships these; a bare Postgres does not.
+        run: |
+          psql "postgresql://supabase_admin:yorik-ci@127.0.0.1:5435/postgres" -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE postgres LOGIN SUPERUSER PASSWORD 'yorik-ci';" \
+            -c "CREATE ROLE anon NOLOGIN;" \
+            -c "CREATE ROLE authenticated NOLOGIN;" \
+            -c "CREATE ROLE service_role NOLOGIN;" \
+            -c "CREATE ROLE authenticator LOGIN NOINHERIT;"
+
+      - name: Install Python deps (CPU torch)
         run: |
           python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
-          pip install pytest
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -r backend/requirements.txt -r requirements-dev.txt
 
       - name: Run pytest
         run: pytest tests/ -q
