@@ -587,11 +587,11 @@ def search(query: str, k: int = 8,
     results: List[Dict[str, Any]] = []
     for row in rows:
         meta = docs_meta.get(row["paperless_doc_id"], {})
-        # Both query and stored vectors are L2-normalized, so the vec0
-        # L2 distance d is related to cosine similarity by cos = 1 - d²/2,
-        # bounded in [0, 1] (1 = identical, 0 = orthogonal).
+        # `<=>` is pgvector's cosine distance (0 = identical, 1 =
+        # orthogonal); both sides are L2-normalised at ingest and query
+        # time, so similarity is simply 1 - distance.
         d = float(row["distance"])
-        cos = max(0.0, min(1.0, 1.0 - (d * d) / 2.0))
+        cos = max(0.0, min(1.0, 1.0 - d))
         results.append({
             "chunk_id": row["id"],
             "paperless_doc_id": row["paperless_doc_id"],
