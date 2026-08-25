@@ -86,7 +86,7 @@ export function SwipeNav() {
   // without distance/ratio checks — native already ran those.
   useEffect(() => {
     (window as Window & { __yorikNativeSwipe?: (direction: string) => void }).__yorikNativeSwipe = (direction: string) => {
-      console.log("[swipe] NATIVE", direction);
+      if (import.meta.env.DEV) console.log("[swipe] NATIVE", direction);
       const currentAppId = appIdFromPath(loc.pathname);
       const i = currentAppId ? DOCK_ORDER.indexOf(currentAppId) : -1;
       // Content-follows-finger: finger LEFT exposes the next app, finger RIGHT the previous.
@@ -118,7 +118,7 @@ export function SwipeNav() {
       if (!target) { console.log("[swipe] fire NO-OP at edge", { currentAppId, dir: dx < 0 ? "left" : "right" }); return; }
       const route = REACT_ROUTES[target];
       if (!route) return;
-      console.log("[swipe] NAVIGATE", JSON.stringify({ from: currentAppId, to: target, route }));
+      if (import.meta.env.DEV) console.log("[swipe] NAVIGATE", JSON.stringify({ from: currentAppId, to: target, route }));
       navigate(route);
     };
 
@@ -127,7 +127,7 @@ export function SwipeNav() {
       const tgt = e.target as HTMLElement | null;
       // Hard reject: anything explicitly marked don't-swipe.
       if (tgt?.closest?.("[data-no-swipe]")) {
-        console.log("[swipe] down REJECT no-swipe");
+        if (import.meta.env.DEV) console.log("[swipe] down REJECT no-swipe");
         return;
       }
       // Soft reject for inputs / contenteditable: ONLY reject if the
@@ -138,22 +138,22 @@ export function SwipeNav() {
       // threshold means accidental swipe-while-typing is unlikely.
       const editable = tgt?.closest?.("input, textarea, [contenteditable=true], [contenteditable='']");
       if (editable && document.activeElement === editable) {
-        console.log("[swipe] down REJECT editable focused");
+        if (import.meta.env.DEV) console.log("[swipe] down REJECT editable focused");
         return;
       }
       if (e.clientX < EDGE_DEAD_ZONE_PX || e.clientX > window.innerWidth - EDGE_DEAD_ZONE_PX) {
-        console.log("[swipe] down REJECT edge", JSON.stringify({ x: e.clientX, vw: window.innerWidth }));
+        if (import.meta.env.DEV) console.log("[swipe] down REJECT edge", JSON.stringify({ x: e.clientX, vw: window.innerWidth }));
         return;
       }
       if (isInsideHorizontalScroller(tgt)) {
-        console.log("[swipe] down REJECT h-scroller", tgt?.tagName);
+        if (import.meta.env.DEV) console.log("[swipe] down REJECT h-scroller", tgt?.tagName);
         return;
       }
       stateRef.current = {
         x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId,
         committed: false, consumed: false, captureEl: null,
       };
-      console.log("[swipe] down ACCEPT", JSON.stringify({ x: e.clientX, y: e.clientY, pt: e.pointerType }));
+      if (import.meta.env.DEV) console.log("[swipe] down ACCEPT", JSON.stringify({ x: e.clientX, y: e.clientY, pt: e.pointerType }));
     };
 
     const onMove = (e: PointerEvent) => {
@@ -167,7 +167,7 @@ export function SwipeNav() {
       // Pre-commit: if the gesture is dominantly vertical, release —
       // the user is scrolling. Drop state so onUp can't fire either.
       if (!s.committed && ady > MAX_VERTICAL_DRIFT_PX && ady > adx) {
-        console.log("[swipe] move ABANDON (vertical)", JSON.stringify({ adx, ady }));
+        if (import.meta.env.DEV) console.log("[swipe] move ABANDON (vertical)", JSON.stringify({ adx, ady }));
         stateRef.current = null;
         return;
       }
@@ -180,7 +180,7 @@ export function SwipeNav() {
           captureTarget.setPointerCapture?.(e.pointerId);
           s.captureEl = captureTarget;
         } catch { /* setPointerCapture can throw if target detached */ }
-        console.log("[swipe] move COMMIT", JSON.stringify({ adx, ady }));
+        if (import.meta.env.DEV) console.log("[swipe] move COMMIT", JSON.stringify({ adx, ady }));
       }
 
       if (s.committed) {
@@ -208,7 +208,7 @@ export function SwipeNav() {
       const ady = Math.abs(dy);
       const dur = Date.now() - s.t;
       const minDist = Math.max(MIN_DIST_PX, window.innerWidth * MIN_DIST_FRAC);
-      console.log("[swipe] up", JSON.stringify({ dx, dy, dur, minDist, committed: s.committed }));
+      if (import.meta.env.DEV) console.log("[swipe] up", JSON.stringify({ dx, dy, dur, minDist, committed: s.committed }));
       if (dur > MAX_DUR_MS) return;
       if (ady > MAX_VERTICAL_DRIFT_PX) return;
       if (adx < minDist) return;
@@ -223,7 +223,7 @@ export function SwipeNav() {
       // the gesture — fine, we already navigated or will via onUp.
       // If we hadn't committed yet, the WebView aborted before we
       // could claim the gesture; drop state quietly.
-      console.log("[swipe] cancel", JSON.stringify({ committed: s.committed, consumed: s.consumed }));
+      if (import.meta.env.DEV) console.log("[swipe] cancel", JSON.stringify({ committed: s.committed, consumed: s.consumed }));
       stateRef.current = null;
     };
 

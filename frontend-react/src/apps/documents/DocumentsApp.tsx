@@ -30,6 +30,7 @@ import {
   mobileAsideLeft, mobileAsideRight,
 } from "@/components/MobileShell";
 import type { YorikDocument, DocumentSearchHit, DocVisibility, SearchResponse, SearchLegStatus } from "./types";
+import { toast } from "@/components/Toast";
 
 // Facet types — match the backend's /api/documents/facets response.
 type FacetKind = "tag" | "correspondent" | "document_type" | "year";
@@ -227,7 +228,7 @@ export function DocumentsApp() {
   // ─── upload ────────────────────────────────────────────────────────────
   const uploadFiles = useCallback(async (files: FileList | File[]) => {
     if ((role !== "admin" && role !== "platform_admin")) {
-      alert("Only admins can upload documents.");
+      toast("Only admins can upload documents.");
       return;
     }
     setUploading(true);
@@ -252,7 +253,7 @@ export function DocumentsApp() {
       }
       await listApi.refetch();
     } catch (err: any) {
-      alert("Upload failed: " + err.message);
+      toast("Upload failed: " + err.message);
     } finally {
       setUploading(false);
     }
@@ -275,27 +276,27 @@ export function DocumentsApp() {
         error?: string;
       }>("/api/documents/sync-paperless");
       if (r.error) {
-        alert("Paperless sync error: " + r.error);
+        toast("Paperless sync error: " + r.error);
       } else if ((r.checked ?? 0) === 0) {
         // Paperless returned zero documents — almost always a token /
         // auth issue, NOT "Paperless is empty". Distinguish from the
         // legitimate "everything in sync" case below.
-        alert(
+        toast(
           "Paperless returned 0 documents. If you have documents in Paperless, " +
           "this is usually a missing/wrong API token. Open Settings → Connectors " +
           "→ Paperless and paste a token from Paperless's Settings → API Tokens page."
         );
       } else if ((r.ingested ?? 0) === 0 && (r.missing ?? 0) === 0) {
-        alert(`Already in sync — Paperless has ${r.checked} document(s), all mirrored locally.`);
+        toast(`Already in sync — Paperless has ${r.checked} document(s), all mirrored locally.`);
       } else {
-        alert(
+        toast(
           `Synced ${r.ingested ?? 0} new document(s) from Paperless ` +
           `(${r.checked} checked${r.failed ? `, ${r.failed} failed` : ""}).`
         );
       }
       await listApi.refetch();
     } catch (err: any) {
-      alert("Paperless sync failed: " + (err?.message || "unknown"));
+      toast("Paperless sync failed: " + (err?.message || "unknown"));
     } finally {
       setSyncing(false);
     }
@@ -831,7 +832,7 @@ function VisibilityChip({
       onChanged();
       setOpen(false);
     } catch (e: any) {
-      alert(`Visibility change failed: ${e.message || e}`);
+      toast(`Visibility change failed: ${e.message || e}`);
     } finally { setBusy(false); }
   }
 
@@ -1903,7 +1904,7 @@ function MetadataPane({
       await api.post(`/api/documents/${doc.id}/reindex?role=${encodeURIComponent(role)}`);
       onReindexed();
     } catch (e: any) {
-      alert("Reindex failed: " + e.message);
+      toast("Reindex failed: " + e.message);
     } finally {
       setReindexing(false);
     }

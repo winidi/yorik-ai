@@ -12,6 +12,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { Bell, Check, CheckCheck, Loader2, ShieldAlert, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { toast } from "@/components/Toast";
 
 interface Notification {
   id: number;
@@ -88,7 +89,7 @@ export function NotificationBell() {
       setList(l => l ? l.filter(x => x.id !== n.id) : l);
       setUnread(c => Math.max(0, c - 1));
     } catch (e: any) {
-      alert(`Couldn't accept: ${e?.message || e}`);
+      toast(`Couldn't accept: ${e?.message || e}`);
     } finally {
       setBusyId(null);
     }
@@ -112,9 +113,9 @@ export function NotificationBell() {
       // Lightweight inline feedback — no toast system in the bell yet.
       const blocks = r.blocked.map(b => b.value).join(" + ");
       const junkBit = r.moved_to_junk ? ", in Junk verschoben" : "";
-      console.log(`[spam] blocked ${blocks}${junkBit}`);
+      if (import.meta.env.DEV) console.log(`[spam] blocked ${blocks}${junkBit}`);
     } catch (e: any) {
-      alert(`Couldn't mark as spam: ${e?.message || e}`);
+      toast(`Couldn't mark as spam: ${e?.message || e}`);
     } finally {
       setBusyId(null);
     }

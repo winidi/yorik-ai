@@ -17,6 +17,7 @@ import { createPortal } from "react-dom";
 import { Calendar, FileText, CheckSquare, Mail, ArrowRight, Loader2, X, Check, ExternalLink, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { toast } from "@/components/Toast";
 
 interface DigestEvent {
   id: number;
@@ -294,7 +295,7 @@ export function MorningBriefingCard() {
               setOpenBill(null);
               await refresh();
             } catch (e: any) {
-              alert("Failed to mark paid: " + (e?.message || e));
+              toast("Failed to mark paid: " + (e?.message || e));
             }
           }}
           onOpenEmail={openBill.email_message_id

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { toast } from "@/components/Toast";
 
 interface BackupConfig {
   target_path: string;
@@ -122,11 +123,11 @@ export function BackupPicker({
 
   async function save() {
     if (passphrase && passphrase.length < 8) {
-      alert("Passphrase must be at least 8 characters.");
+      toast("Passphrase must be at least 8 characters.");
       return;
     }
     if (!effectiveTarget) {
-      alert("Pick a backup target.");
+      toast("Pick a backup target.");
       return;
     }
     setBusy("saving");
@@ -142,23 +143,23 @@ export function BackupPicker({
       setPassphrase("");
       await refresh();
     } catch (e: any) {
-      alert(`Save failed: ${e?.message || e}`);
+      toast(`Save failed: ${e?.message || e}`);
     } finally { setBusy(null); }
   }
 
   async function runNow() {
     if (!status?.config.passphrase_set && !passphrase) {
-      alert("Set a passphrase first.");
+      toast("Set a passphrase first.");
       return;
     }
     setBusy("running");
     try {
       const r = await api.post<{ ok: boolean; size_bytes?: number; error?: string }>("/api/backup/run", {});
-      if (r.ok) alert(`✓ Backup done — ${fmtBytes(r.size_bytes)}`);
-      else      alert(`Backup failed: ${r.error}`);
+      if (r.ok) toast(`✓ Backup done — ${fmtBytes(r.size_bytes)}`);
+      else      toast(`Backup failed: ${r.error}`);
       await refresh();
     } catch (e: any) {
-      alert(`Run failed: ${e?.message || e}`);
+      toast(`Run failed: ${e?.message || e}`);
     } finally { setBusy(null); }
   }
 

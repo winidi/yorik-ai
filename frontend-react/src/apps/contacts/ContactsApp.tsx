@@ -38,6 +38,7 @@ import type {
   ContactTimeline, ContactTimelineItem,
 } from "./types";
 import { useApi } from "@/lib/useApi";
+import { toast } from "@/components/Toast";
 
 type Tab = "active" | "pending" | "spam";
 
@@ -197,7 +198,7 @@ export function ContactsApp() {
       setContacts(prev => prev.map(x => x.id === c.id ? { ...x, pinned: !c.pinned } : x));
       void refresh();
     } catch (err: any) {
-      alert(`Pin failed: ${err?.message || err}`);
+      toast(`Pin failed: ${err?.message || err}`);
     }
   }, [refresh]);
 
@@ -386,7 +387,7 @@ export function ContactsApp() {
                         if (selectedId === c.id) setSelectedId(null);
                         await refresh();
                       } catch (err: any) {
-                        alert(`Delete failed: ${err?.message || err}`);
+                        toast(`Delete failed: ${err?.message || err}`);
                       }
                     } : undefined}
                   />
@@ -965,7 +966,7 @@ function YorikAssistRow({ contact }: { contact: Contact }) {
       await api.patch(`/api/contacts/${contact.id}`, { yorik_assist_enabled: next });
     } catch (e: any) {
       setEnabled(!next);
-      alert(e?.message || "Failed to save");
+      toast(e?.message || "Failed to save");
     } finally {
       setSaving(false);
     }
@@ -1357,7 +1358,7 @@ function YorikAssistBulkButton({
       );
       await onDone();
     } catch (e: any) {
-      alert("Couldn't update: " + (e?.message || e));
+      toast("Couldn't update: " + (e?.message || e));
     } finally {
       setBusy(false);
     }
@@ -1419,7 +1420,7 @@ function EnrichButton() {
       await api.post("/api/contacts/enrich", {});
       refresh();
     } catch (e: any) {
-      alert("Couldn't queue enrichment: " + (e?.message || e));
+      toast("Couldn't queue enrichment: " + (e?.message || e));
     } finally {
       setBusy(false);
     }
@@ -1431,7 +1432,7 @@ function EnrichButton() {
       await api.post("/api/contacts/enrich-cancel", {});
       refresh();
     } catch (e: any) {
-      alert("Couldn't stop: " + (e?.message || e));
+      toast("Couldn't stop: " + (e?.message || e));
     } finally {
       setBusy(false);
     }
@@ -1700,7 +1701,7 @@ function GroupByEmployerButton({ onDone }: { onDone: () => Promise<void> | void 
       setSelectedGroups(new Set(r.groups.map(g => g.domain)));
       setState("review");
     } catch (e: any) {
-      alert("Failed to build plan: " + (e?.message || e));
+      toast("Failed to build plan: " + (e?.message || e));
       setState("closed");
     }
   }
@@ -1734,7 +1735,7 @@ function GroupByEmployerButton({ onDone }: { onDone: () => Promise<void> | void 
         dry_run: false,
         plan: { groups: filteredGroups },
       });
-      alert(
+      toast(
         `Applied ${r.groups_applied} groups.\n` +
         `${r.businesses_created} new business contacts created.\n` +
         `${r.businesses_reused} existing reused.\n` +
@@ -1744,7 +1745,7 @@ function GroupByEmployerButton({ onDone }: { onDone: () => Promise<void> | void 
       await onDone();
       close();
     } catch (e: any) {
-      alert("Apply failed: " + (e?.message || e));
+      toast("Apply failed: " + (e?.message || e));
       setState("review");
     }
   }
@@ -2010,7 +2011,7 @@ function CrosslinkMailboxButton({ onDone }: { onDone: () => Promise<void> | void
         await onDone();
       }
     } catch (err: any) {
-      alert(`Cross-link failed: ${err?.message || err}`);
+      toast(`Cross-link failed: ${err?.message || err}`);
       setState("idle");
     }
   }
@@ -2525,7 +2526,7 @@ function TriageModal({ onClose, onApplied }: {
       console.error("triage: fetch failed", err);
       setItems([]);
       setTotal(0);
-      alert("Couldn't load triage list: " + (err?.message || err));
+      toast("Couldn't load triage list: " + (err?.message || err));
     } finally {
       setLoading(false);
     }
@@ -2610,7 +2611,7 @@ function TriageModal({ onClose, onApplied }: {
         `${r.archived} archived, ${r.spam} spam.`,
       );
     } catch (err: any) {
-      alert("Apply failed: " + (err?.message || err));
+      toast("Apply failed: " + (err?.message || err));
     } finally {
       setApplying(false);
     }
@@ -3254,7 +3255,7 @@ function AutoClassifyButton({ onDone, externalKick, onComplete }: {
       // we poll — otherwise the button briefly shows "Idle" again.
       setTimeout(refreshStatus, 250);
     } catch (e: any) {
-      alert("Couldn't start auto-classify: " + (e?.message || e));
+      toast("Couldn't start auto-classify: " + (e?.message || e));
     } finally {
       setStarting(false);
     }
@@ -3332,17 +3333,17 @@ function ReclassifyArchivedButton({
         // Browsers swallow confirms after async; alert is the
         // load-bearing UX feedback that "yes, it's running now,
         // watch the progress bar on the Auto-classify button."
-        alert(
+        toast(
           `Moved ${moved} contact${moved === 1 ? "" : "s"} back to Pending. ` +
           `Yorik is re-classifying them now — watch the Auto-classify button for progress.`,
         );
       } else if (moved > 0) {
-        alert(`Moved ${moved} contact${moved === 1 ? "" : "s"} back to Pending.`);
+        toast(`Moved ${moved} contact${moved === 1 ? "" : "s"} back to Pending.`);
       } else {
-        alert("Nothing to move.");
+        toast("Nothing to move.");
       }
     } catch (e: any) {
-      alert("Re-classify failed: " + (e?.message || e));
+      toast("Re-classify failed: " + (e?.message || e));
     } finally {
       setBusy(false);
     }
@@ -3517,7 +3518,7 @@ function DedupeButton({
       setPlan(r);
       setState("review");
     } catch (err: any) {
-      alert(`Plan failed: ${err?.message || err}`);
+      toast(`Plan failed: ${err?.message || err}`);
       setState("closed");
     }
   }
@@ -3573,7 +3574,7 @@ function DedupeButton({
       const dismissedLine = r.dismissed_contacts
         ? `\n${r.dismissed_contacts} contact${r.dismissed_contacts === 1 ? "" : "s"} dismissed as spam.`
         : "";
-      alert(
+      toast(
         `Applied ${r.applied_groups} merges` +
         (synth.length ? ` (${synth.length} manual)` : "") + `.\n` +
         `${r.deleted_contacts} contacts removed · ` +
@@ -3586,7 +3587,7 @@ function DedupeButton({
       setState("closed");
       await onDone();
     } catch (err: any) {
-      alert(`Apply failed: ${err?.message || err}`);
+      toast(`Apply failed: ${err?.message || err}`);
     } finally {
       setApplying(false);
     }
@@ -4299,7 +4300,7 @@ function DedupeReviewModal({
 // ─── ExtractConfirmModal — replacement for the browser confirm() ──────
 // Yorik-styled card-on-backdrop dialog. Same explanation copy the old
 // confirm() carried, plus an inline error slot for any /run failure
-// (network blip, 503, etc.) so we never resort to the system alert()
+// (network blip, 503, etc.) so we never resort to the system toast()
 // which doesn't match anything else in the UI. Cancel is disabled
 // while the request is in flight to prevent leaving a half-started
 // scan behind.
@@ -4741,7 +4742,7 @@ function ContactEditor({
         : await api.patch<Contact>(`/api/contacts/${contact!.id}`, body);
       onSaved(saved);
     } catch (e: any) {
-      alert(`Save failed: ${e?.message || e}`);
+      toast(`Save failed: ${e?.message || e}`);
     } finally {
       setSaving(false);
     }
@@ -4755,7 +4756,7 @@ function ContactEditor({
       onSaved(c);
       onStatusChange?.();
     } catch (e: any) {
-      alert(`Promote failed: ${e?.message || e}`);
+      toast(`Promote failed: ${e?.message || e}`);
     } finally { setBusyAction(null); }
   }
 
@@ -4768,7 +4769,7 @@ function ContactEditor({
       onSaved(c);
       onStatusChange?.();
     } catch (e: any) {
-      alert(`Mark spam failed: ${e?.message || e}`);
+      toast(`Mark spam failed: ${e?.message || e}`);
     } finally { setBusyAction(null); }
   }
 
@@ -4780,7 +4781,7 @@ function ContactEditor({
       await api.delete(`/api/contacts/${contact.id}`);
       onDeleted();
     } catch (e: any) {
-      alert(`Delete failed: ${e?.message || e}`);
+      toast(`Delete failed: ${e?.message || e}`);
     } finally { setBusyAction(null); }
   }
 
@@ -5434,7 +5435,7 @@ function ChannelsPanel({
       const msg = e instanceof ApiError && e.status === 409
         ? `That ${kind} is already on another contact: ${e.message}`
         : `Add channel failed: ${e?.message || e}`;
-      alert(msg);
+      toast(msg);
     } finally { setAdding(false); }
   }
 
@@ -5447,7 +5448,7 @@ function ChannelsPanel({
       onContactReload(c);
       onChanged();
     } catch (e: any) {
-      alert(`Remove failed: ${e?.message || e}`);
+      toast(`Remove failed: ${e?.message || e}`);
     }
   }
 
@@ -5699,7 +5700,7 @@ function AddressesPanel({
       onContactReload(c);
       onChanged();
     } catch (e: any) {
-      alert(`Add address failed: ${e?.message || e}`);
+      toast(`Add address failed: ${e?.message || e}`);
     } finally { setAdding(false); }
   }
 
@@ -5711,7 +5712,7 @@ function AddressesPanel({
       onContactReload(c);
       onChanged();
     } catch (e: any) {
-      alert(`Remove failed: ${e?.message || e}`);
+      toast(`Remove failed: ${e?.message || e}`);
     }
   }
 
@@ -5891,7 +5892,7 @@ function AddressScrapePanel({
       const r = await api.post<typeof data>(`/api/contacts/${contactId}/scrape-addresses`);
       setData(r);
     } catch (e: any) {
-      alert(`Scrape failed: ${e.message || e}`);
+      toast(`Scrape failed: ${e.message || e}`);
     } finally { setScraping(false); }
   }
 

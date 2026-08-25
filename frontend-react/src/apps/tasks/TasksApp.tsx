@@ -36,6 +36,7 @@ import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { Dock } from "@/components/Dock";
 import type { Task } from "../calendar/types";
+import { toast } from "@/components/Toast";
 
 const ROLE = "admin";
 
@@ -242,7 +243,7 @@ export function TasksApp() {
     try {
       await api.patch(`/api/tasks/${t.id}?role=${ROLE}`, { done: t.done ? 0 : 1 });
       tasksApi.refetch();
-    } catch (e: any) { alert(`Failed: ${e?.message || e}`); }
+    } catch (e: any) { toast(`Failed: ${e?.message || e}`); }
   }, [tasksApi]);
 
   // Create a subtask under `parent`. Mirrors the structured-field shape
@@ -263,7 +264,7 @@ export function TasksApp() {
       });
       tasksApi.refetch();
     } catch (e: any) {
-      alert(`Failed to add subtask: ${e?.message || e}`);
+      toast(`Failed to add subtask: ${e?.message || e}`);
       throw e;
     }
   }, [tasksApi]);
@@ -273,7 +274,7 @@ export function TasksApp() {
     try {
       await api.delete(`/api/tasks/${t.id}?role=${ROLE}`);
       tasksApi.refetch();
-    } catch (e: any) { alert(`Failed: ${e?.message || e}`); }
+    } catch (e: any) { toast(`Failed: ${e?.message || e}`); }
   }, [tasksApi]);
 
   // Snooze — patch due_date forward by the given ISO date. Used by
@@ -282,7 +283,7 @@ export function TasksApp() {
     try {
       await api.patch(`/api/tasks/${t.id}?role=${ROLE}`, { due_date: newDue });
       tasksApi.refetch();
-    } catch (e: any) { alert(`Snooze failed: ${e?.message || e}`); }
+    } catch (e: any) { toast(`Snooze failed: ${e?.message || e}`); }
   }, [tasksApi]);
 
   // Long-press start / stop on the active-timer. Backend enforces the
@@ -293,7 +294,7 @@ export function TasksApp() {
       const endpoint = t.started_at ? "stop" : "start";
       await api.post(`/api/tasks/${t.id}/${endpoint}?role=${ROLE}`);
       tasksApi.refetch();
-    } catch (e: any) { alert(`Timer failed: ${e?.message || e}`); }
+    } catch (e: any) { toast(`Timer failed: ${e?.message || e}`); }
   }, [tasksApi]);
 
   const addTask = useCallback(async () => {
@@ -353,7 +354,7 @@ export function TasksApp() {
 
       setInputText("");
       tasksApi.refetch();
-    } catch (e: any) { alert(`Failed: ${e?.message || e}`); }
+    } catch (e: any) { toast(`Failed: ${e?.message || e}`); }
     finally { setAdding(false); }
   }, [inputText, tasksApi, setDefaultAction]);
 
@@ -366,7 +367,7 @@ export function TasksApp() {
       const r = await api.post<AskResponse>("/api/tasks/ask", { query: q });
       setMagicResult(r);
     } catch (e: any) {
-      alert(`Magic search failed: ${e?.message || e}`);
+      toast(`Magic search failed: ${e?.message || e}`);
     } finally { setMagicLoading(false); }
   }, [inputText, setDefaultAction]);
 
@@ -409,10 +410,10 @@ export function TasksApp() {
       // Clear the highlight after the flash animation finishes.
       setTimeout(() => setRecentlyUpdated(new Set()), 2200);
       if (r.rejected > 0) {
-        alert(`Applied ${r.applied}, rejected ${r.rejected}.`);
+        toast(`Applied ${r.applied}, rejected ${r.rejected}.`);
       }
     } catch (e: any) {
-      alert(`Apply failed: ${e?.message || e}`);
+      toast(`Apply failed: ${e?.message || e}`);
     } finally {
       setApplying(false);
     }
@@ -430,7 +431,7 @@ export function TasksApp() {
       const r = await api.post<AskResponse>("/api/tasks/ask", { query: q });
       setMagicResult(r);
     } catch (e: any) {
-      alert(`Magic failed: ${e?.message || e}`);
+      toast(`Magic failed: ${e?.message || e}`);
     } finally { setMagicLoading(false); }
   }, [setDefaultAction]);
 
@@ -1583,7 +1584,7 @@ function TaskInlineEditor({
       });
       onSaved();
     } catch (e: any) {
-      alert(`Failed: ${e?.message || e}`);
+      toast(`Failed: ${e?.message || e}`);
     } finally { setSaving(false); }
   }
 

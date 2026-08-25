@@ -30,6 +30,7 @@ import { VoiceListeningOverlay } from "./components/VoiceListeningOverlay";
 import { NavigationBridge } from "./components/NavigationBridge";
 import { SwipeNav } from "./components/SwipeNav";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { Toaster } from "@/components/Toast";
 import { DocBucketProvider } from "./apps/documents/DocBucketContext";
 import { DocBucketPill } from "./components/DocBucketPill";
 
@@ -172,6 +173,8 @@ function KioskIdleWatch() {
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter basename="/r">
+      <Toaster />
+      <ErrorBoundary>
       <AuthGate>
         <DocBucketProvider>
         <ErrorBoundary>
@@ -191,24 +194,25 @@ createRoot(document.getElementById("root")!).render(
           <SwipeNav />
           <Routes>
             <Route path="/" element={<Navigate to="/home" replace />} />
-            <Route path="/home" element={<HomeApp />} />
-            <Route path="/email" element={<EmailApp />} />
-            <Route path="/whatsapp" element={<WhatsAppApp />} />
-            <Route path="/calendar" element={<CalendarApp />} />
-            <Route path="/chat" element={<ChatApp />} />
-            <Route path="/documents" element={<DocumentsApp />} />
-            <Route path="/compose" element={<ComposeApp />} />
-            <Route path="/photos" element={<PhotosApp />} />
-            <Route path="/tasks" element={<TasksApp />} />
-            <Route path="/contacts" element={<ContactsApp />} />
-            <Route path="/settings" element={<SettingsApp />} />
-            <Route path="/briefing" element={<BriefingApp />} />
-            <Route path="/ambient" element={<AmbientApp />} />
-            <Route path="/community-app/:appId" element={<CommunityApp />} />
+            <Route path="/home" element={<ErrorBoundary><HomeApp /></ErrorBoundary>} />
+            <Route path="/email" element={<ErrorBoundary><EmailApp /></ErrorBoundary>} />
+            <Route path="/whatsapp" element={<ErrorBoundary><WhatsAppApp /></ErrorBoundary>} />
+            <Route path="/calendar" element={<ErrorBoundary><CalendarApp /></ErrorBoundary>} />
+            <Route path="/chat" element={<ErrorBoundary><ChatApp /></ErrorBoundary>} />
+            <Route path="/documents" element={<ErrorBoundary><DocumentsApp /></ErrorBoundary>} />
+            <Route path="/compose" element={<ErrorBoundary><ComposeApp /></ErrorBoundary>} />
+            <Route path="/photos" element={<ErrorBoundary><PhotosApp /></ErrorBoundary>} />
+            <Route path="/tasks" element={<ErrorBoundary><TasksApp /></ErrorBoundary>} />
+            <Route path="/contacts" element={<ErrorBoundary><ContactsApp /></ErrorBoundary>} />
+            <Route path="/settings" element={<ErrorBoundary><SettingsApp /></ErrorBoundary>} />
+            <Route path="/briefing" element={<ErrorBoundary><BriefingApp /></ErrorBoundary>} />
+            <Route path="/ambient" element={<ErrorBoundary><AmbientApp /></ErrorBoundary>} />
+            <Route path="/community-app/:appId" element={<ErrorBoundary><CommunityApp /></ErrorBoundary>} />
           </Routes>
         </ErrorBoundary>
         </DocBucketProvider>
       </AuthGate>
+      </ErrorBoundary>
     </BrowserRouter>
   </StrictMode>,
 );

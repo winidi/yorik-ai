@@ -19,7 +19,7 @@ import {
   Pin, PinOff, Mic, Pencil, Square, Bug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { api, notifySessionExpired } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { Dock } from "@/components/Dock";
 import { PendingActionChip } from "@/components/PendingActionChip";
@@ -697,6 +697,15 @@ function Thread({
   }, [voiceState, handleVoiceStopped]);
 
   // Cleanup on unmount — stop any in-flight recording + release stream.
+  // Text streamed so far, readable from the abort handler. State alone
+  // is captured by the send() closure at call time, so Stop used to
+  // read the empty initial value and throw the partial answer away.
+  const streamedRef = useRef("");
+
+  // Leaving the chat mid-answer: abort the fetch so no state updates
+  // land on an unmounted tree.
+  useEffect(() => () => { streamAbortRef.current?.abort(); }, []);
+
   useEffect(() => {
     return () => {
       if (voiceTickRef.current) window.clearInterval(voiceTickRef.current);
@@ -715,6 +724,7 @@ function Thread({
     setSending(true);
     setProgress("Yorik is thinking…");
     setStreamingText("");
+    streamedRef.current = "";
     setText("");
 
     // Optimistically append the user turn so the bubble shows immediately.
@@ -780,6 +790,14 @@ function Thread({
 
     const ac = new AbortController();
     streamAbortRef.current = ac;
+    // Stall watchdog: if the server sends nothing for STALL_MS the LLM
+    // is stuck (llama.cpp wedged, tool hanging). Abort with a reason so
+    // the catch block can say so instead of spinning forever.
+    const STALL_MS = 120_000;
+    let lastEventAt = Date.now();
+    const watchdog = window.setInterval(() => {
+      if (Date.now() - lastEventAt > STALL_MS) ac.abort("stalled");
+    }, 5_000);
     try {
       const resp = await fetch("/api/ask/stream", {
         method:  "POST",
@@ -790,6 +808,12 @@ function Thread({
         }),
         signal:  ac.signal,
       });
+      if (resp.status === 401) {
+        // Expired session, not an offline LLM: hand over to the login
+        // screen instead of painting the "offline" banner.
+        notifySessionExpired("/api/ask/stream");
+        throw new Error("session expired — please log in again");
+      }
       if (!resp.ok || !resp.body) {
         throw new Error(`HTTP ${resp.status}`);
       }
@@ -800,6 +824,7 @@ function Thread({
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        lastEventAt = Date.now();
         buffer += decoder.decode(value, { stream: true });
         // SSE events are separated by blank lines. Each event has
         // `data: <json>` lines; we only emit one data line per event.
@@ -823,6 +848,7 @@ function Thread({
             // visible output; the bubble itself signals "alive".
             const delta = String(evt.text || "");
             if (delta) {
+              streamedRef.current += delta;
               setStreamingText(prev => prev + delta);
               setProgress(null);
             }
@@ -858,12 +884,18 @@ function Thread({
       // User-triggered abort isn't a failure — just stop quietly and
       // keep whatever text already streamed in as a partial bubble so
       // the work isn't lost.
-      if (err?.name === "AbortError") {
-        const partial = streamingText;
+      if (err?.name === "AbortError" || ac.signal.aborted) {
+        const partial = streamedRef.current;
+        const stalled = ac.signal.reason === "stalled";
         if (partial && partial.trim()) {
           setLocalMessages(prev => [...prev, {
             role: "assistant",
-            content: partial + "\n\n_(stopped)_",
+            content: partial + (stalled ? "\n\n_(no response for 2 minutes — stopped)_" : "\n\n_(stopped)_"),
+          }]);
+        } else if (stalled) {
+          setLocalMessages(prev => [...prev, {
+            role: "assistant",
+            content: "_Yorik didn't respond for 2 minutes — the language model may be stuck. Try again; if it keeps happening, check Settings → LLM._",
           }]);
         }
       } else {
@@ -874,6 +906,7 @@ function Thread({
         }]);
       }
     } finally {
+      window.clearInterval(watchdog);
       streamAbortRef.current = null;
       setSending(false);
       setProgress(null);
@@ -885,7 +918,7 @@ function Thread({
       // was a no-op when the textarea was still in the previous state.
       requestAnimationFrame(() => composerRef.current?.focus());
     }
-  }, [text, sending, role, conversationId, onConversationCreated, onTurnAppended, streamingText]);
+  }, [text, sending, role, conversationId, onConversationCreated, onTurnAppended]);
 
   function stopGeneration() {
     streamAbortRef.current?.abort();

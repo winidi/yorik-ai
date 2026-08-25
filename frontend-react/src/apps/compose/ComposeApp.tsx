@@ -14,7 +14,7 @@
  *
  * Anti-frustration choices:
  *  - Save / Send / Export are disabled until the editor has actual content.
- *  - Errors land in a non-modal toast at the bottom, never an alert().
+ *  - Errors land in a non-modal toast at the bottom, never an toast().
  *  - Re-rendering the template after the user has edited prompts first —
  *    we never silently nuke their work.
  */
@@ -69,6 +69,7 @@ import type {
   ComposeReviseResponse, NumberingMatch,
 } from "./types";
 import { SeriesManager } from "./SeriesManager";
+import { toast } from "@/components/Toast";
 
 type ToastKind = "info" | "success" | "error";
 interface Toast { id: number; kind: ToastKind; text: string }
@@ -1558,9 +1559,9 @@ function Toolbar({ editor }: { editor: Editor | null }) {
     if (f) {
       const ok = new Set(["image/png","image/jpeg","image/gif","image/webp","image/svg+xml"]);
       if (!ok.has(f.type)) {
-        alert("Please use a PNG, JPEG, GIF, WebP or SVG image.");
+        toast("Please use a PNG, JPEG, GIF, WebP or SVG image.");
       } else if (f.size > 5 * 1024 * 1024) {
-        alert(`Image is too large (${Math.round(f.size/1024)} KB). Max 5 MB.`);
+        toast(`Image is too large (${Math.round(f.size/1024)} KB). Max 5 MB.`);
       } else {
         const reader = new FileReader();
         reader.onload = () => {

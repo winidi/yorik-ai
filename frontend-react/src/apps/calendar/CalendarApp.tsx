@@ -40,6 +40,7 @@ import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { Dock } from "@/components/Dock";
 import { useAuth } from "@/components/AuthGate";
+import { toast } from "@/components/Toast";
 import {
   CATEGORY_PALETTE, CATEGORY_ORDER, swatchFor,
   type EventCategory,
@@ -191,7 +192,7 @@ export function CalendarApp() {
     function applyShowCalendar(detail: any) {
       if (!detail || detail.type !== "show_calendar") return;
       // eslint-disable-next-line no-console
-      console.log("[calendar] show_calendar action:", detail);
+      if (import.meta.env.DEV) console.log("[calendar] show_calendar action:", detail);
       if (detail.anchor_date) {
         try {
           const d = new Date(detail.anchor_date);
@@ -238,7 +239,7 @@ export function CalendarApp() {
       const drained = drainUiActions(["show_calendar"]);
       if (drained.length > 0) {
         // eslint-disable-next-line no-console
-        console.log("[calendar] drained queued actions:", drained.length, drained);
+        if (import.meta.env.DEV) console.log("[calendar] drained queued actions:", drained.length, drained);
         for (const action of drained) {
           applyShowCalendar(action);
         }
@@ -1482,7 +1483,7 @@ function EventDialog({
       });
       await refreshAttendees();
     } catch (e: any) {
-      alert(`RSVP failed: ${e.message || e}`);
+      toast(`RSVP failed: ${e.message || e}`);
     }
   }
   const defaultTimeStr = defaultStartMin != null
@@ -3624,7 +3625,7 @@ function MoveLegacyEventsButton({ onMoved }: { onMoved: () => void }) {
       setDone(r);
       onMoved();
     } catch (e: any) {
-      alert(`Move failed: ${e.message || e}`);
+      toast(`Move failed: ${e.message || e}`);
     } finally { setBusy(false); }
   }
   if (done) {
@@ -3730,7 +3731,7 @@ async function onCreateCalendarPrompt(onRefresh: () => void): Promise<void> {
     });
     onRefresh();
   } catch (e: any) {
-    alert(`Create failed: ${e.message || e}`);
+    toast(`Create failed: ${e.message || e}`);
   }
 }
 
@@ -3917,7 +3918,7 @@ function ShareCalendarModal({
       sharesApi.refetch();
       onChanged();
     } catch (e: any) {
-      alert(`Share failed: ${e.message || e}`);
+      toast(`Share failed: ${e.message || e}`);
     } finally { setSaving(false); }
   }
 
@@ -3929,7 +3930,7 @@ function ShareCalendarModal({
       sharesApi.refetch();
       onChanged();
     } catch (e: any) {
-      alert(`Update failed: ${e.message || e}`);
+      toast(`Update failed: ${e.message || e}`);
     }
   }
 
@@ -3940,7 +3941,7 @@ function ShareCalendarModal({
       sharesApi.refetch();
       onChanged();
     } catch (e: any) {
-      alert(`Remove failed: ${e.message || e}`);
+      toast(`Remove failed: ${e.message || e}`);
     }
   }
 

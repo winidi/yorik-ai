@@ -182,7 +182,7 @@ export function VoiceFab() {
   // contention with the active streaming request. Inlining is instant.
   function enqueueAudioFromB64(b64: string, mime: string, tag: string) {
     // eslint-disable-next-line no-console
-    console.log(`[voice] enqueue ${tag} inline_bytes=${b64.length} queue_len=${audioQueueRef.current.length}`);
+    if (import.meta.env.DEV) console.log(`[voice] enqueue ${tag} inline_bytes=${b64.length} queue_len=${audioQueueRef.current.length}`);
     try {
       const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
       const blob = new Blob([bytes], { type: mime });
@@ -203,7 +203,7 @@ export function VoiceFab() {
   function enqueueAudio(url: string) {
     const tag = url.split("/").pop() || "audio";
     // eslint-disable-next-line no-console
-    console.log(`[voice] enqueue ${tag} url=${url} queue_len=${audioQueueRef.current.length}`);
+    if (import.meta.env.DEV) console.log(`[voice] enqueue ${tag} url=${url} queue_len=${audioQueueRef.current.length}`);
     fetch(url, { credentials: "include" })
       .then(r => r.blob())
       .then(blob => {
@@ -285,11 +285,11 @@ export function VoiceFab() {
     setMode(m => (m === "thinking" || m === "transcribing" ? "speaking" : m));
     const tag = (audio as any)._yorikTag || "audio";
     // eslint-disable-next-line no-console
-    console.log(`[voice] playing ${tag}`);
+    if (import.meta.env.DEV) console.log(`[voice] playing ${tag}`);
     await new Promise<void>(resolve => {
       audio.onended = () => {
         // eslint-disable-next-line no-console
-        console.log(`[voice] ended ${tag}`);
+        if (import.meta.env.DEV) console.log(`[voice] ended ${tag}`);
         // Free the blob URL to avoid memory leak.
         try { URL.revokeObjectURL(audio.src); } catch {}
         resolve();
@@ -448,7 +448,7 @@ export function VoiceFab() {
               lastVoiceAt = now;
               if (!speechStarted) {
                 speechStarted = true;
-                console.log("[VAD] speech started at", elapsed, "ms");
+                if (import.meta.env.DEV) console.log("[VAD] speech started at", elapsed, "ms");
               }
               // Mark that the user actually spoke this turn — used by
               // continuous-mode's ghost timer to distinguish "stopped
@@ -460,7 +460,7 @@ export function VoiceFab() {
             // 25s — user walked away or the mic is muted).
             if (!speechStarted) {
               if (elapsed > MAX_PRE_SPEECH_MS) {
-                console.log("[VAD] no speech in", MAX_PRE_SPEECH_MS, "ms — closing mic");
+                if (import.meta.env.DEV) console.log("[VAD] no speech in", MAX_PRE_SPEECH_MS, "ms — closing mic");
                 if (vadIntervalRef.current) {
                   clearInterval(vadIntervalRef.current);
                   vadIntervalRef.current = null;
@@ -712,8 +712,7 @@ export function VoiceFab() {
           try { evt = JSON.parse(line); } catch { continue; }
           const elapsedMs = Math.round(performance.now() - streamStart);
           // eslint-disable-next-line no-console
-          console.log(`[voice] +${elapsedMs}ms event=${evt.type}`, evt.text ? `text=${(evt.text || "").slice(0, 40)}` : "");
-
+          if (import.meta.env.DEV) console.log(`[voice] +${elapsedMs}ms event=${evt.type}`, evt.text ? `text=${(evt.text || "").slice(0, 40)}` : "");
           switch (evt.type) {
             case "transcript":
               transcript = (evt.text || "").trim();

@@ -27,6 +27,7 @@ import { Dock } from "@/components/Dock";
 import { PersonHover } from "@/components/PersonCard";
 import { SharedPhotoBanner } from "@/components/SharedPhotoBanner";
 import { SuggestionPanel } from "@/apps/email/SuggestionPanel";
+import { toast } from "@/components/Toast";
 import {
   useTriPane, MobileTopBar, MobileBackdrop,
   mobileAsideLeft, mobileAsideRight,
@@ -175,8 +176,8 @@ export function WhatsAppApp() {
               try {
                 const r = await api.post<{ chats: number; messages_ingested: number }>("/api/whatsapp/sync");
                 refreshAll();
-                if (r.messages_ingested) alert(`Synced ${r.messages_ingested} new messages.`);
-              } catch (e: any) { alert("Sync failed: " + e.message); }
+                if (r.messages_ingested) toast(`Synced ${r.messages_ingested} new messages.`);
+              } catch (e: any) { toast("Sync failed: " + e.message); }
             }} />
             <SilkBtn icon={RefreshCw} title="Reload" loading={chatsApi.loading} onClick={refreshAll} />
           </div>
@@ -502,7 +503,7 @@ function Thread({ jid, chat, onSent }:
       await msgsApi.refetch();
       onSent();
     } catch (e: any) {
-      alert("Send failed: " + e.message);
+      toast("Send failed: " + e.message);
     } finally {
       setSending(false);
     }
@@ -1295,11 +1296,11 @@ function ImportDialog({ onClose, onImported }:
       });
       if (!r.ok) throw new Error(await r.text());
       const data = await r.json();
-      alert(`Imported ${data.messages_inserted} messages from "${file.name}".`);
+      toast(`Imported ${data.messages_inserted} messages from "${file.name}".`);
       onImported();
       onClose();
     } catch (e: any) {
-      alert("Import failed: " + e.message);
+      toast("Import failed: " + e.message);
     } finally { setUploading(false); }
   }
 

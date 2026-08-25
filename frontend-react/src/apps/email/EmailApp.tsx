@@ -32,6 +32,7 @@ import { HtmlBody } from "./HtmlBody";
 import { SuggestionPanel } from "./SuggestionPanel";
 import { Dock } from "@/components/Dock";
 import { PersonHover } from "@/components/PersonCard";
+import { toast } from "@/components/Toast";
 
 type SemanticFolder = "inbox" | "sent" | "all";
 
@@ -781,7 +782,7 @@ export function EmailApp() {
               }
               listApi.refetch();
             } catch (e: any) {
-              alert(`Action failed: ${e?.message || e}`);
+              toast(`Action failed: ${e?.message || e}`);
             }
           }}
         />
@@ -2136,7 +2137,7 @@ function Reader({
               try {
                 await api.patch(`/api/email/messages/${messageRow.id}`, { is_starred: !messageRow.is_starred });
                 onActionDone(false);
-              } catch (e: any) { alert("Star failed: " + e.message); }
+              } catch (e: any) { toast("Star failed: " + e.message); }
             }} />
           <ToolbarBtn
             icon={AlertCircle}
@@ -2145,7 +2146,7 @@ function Reader({
               try {
                 await api.patch(`/api/email/messages/${messageRow.id}`, { is_unread: !messageRow.is_unread });
                 onActionDone(false);
-              } catch (e: any) { alert("Failed: " + e.message); }
+              } catch (e: any) { toast("Failed: " + e.message); }
             }} />
           <ToolbarBtn
             icon={Reply}
@@ -2156,7 +2157,7 @@ function Reader({
                 await api.patch(`/api/email/messages/${messageRow.id}`,
                   { needs_reply: !m.needs_reply });
                 onActionDone(false);
-              } catch (e: any) { alert("Failed: " + e.message); }
+              } catch (e: any) { toast("Failed: " + e.message); }
             }} />
           <ToolbarBtn
             icon={Archive}
@@ -2165,7 +2166,7 @@ function Reader({
               try {
                 await api.post(`/api/email/messages/${messageRow.id}/archive`);
                 onActionDone(true);
-              } catch (e: any) { alert("Archive failed: " + e.message); }
+              } catch (e: any) { toast("Archive failed: " + e.message); }
             }} />
           <ToolbarBtn
             icon={Trash2}
@@ -2174,7 +2175,7 @@ function Reader({
               try {
                 await api.delete(`/api/email/messages/${messageRow.id}`);
                 onActionDone(true);
-              } catch (e: any) { alert("Delete failed: " + e.message); }
+              } catch (e: any) { toast("Delete failed: " + e.message); }
             }} />
           {/* Unsubscribe — appears only when the message carries a
               List-Unsubscribe header. Tiered behaviour:
@@ -2204,10 +2205,10 @@ function Reader({
                     window.open(r.target, "_blank", "noopener,noreferrer");
                   }
                   // Soft confirmation — no toast system here yet.
-                  console.log("[unsubscribe]", r);
+                  if (import.meta.env.DEV) console.log("[unsubscribe]", r);
                   onActionDone(true);
                 } catch (e: any) {
-                  alert("Abmeldung fehlgeschlagen: " + e.message);
+                  toast("Abmeldung fehlgeschlagen: " + e.message);
                 }
               }} />
           )}
@@ -2778,7 +2779,7 @@ function AskYorikButton({ message, detail, onReply }: {
       }>(`/api/email/messages/${message.id}/drafts`);
       const first = r.variants?.[0];
       if (!first) {
-        alert("Yorik konnte keinen Entwurf erstellen — schau dir den AI-Entwurfs-Bereich unter der Mail an.");
+        toast("Yorik konnte keinen Entwurf erstellen — schau dir den AI-Entwurfs-Bereich unter der Mail an.");
         return;
       }
       const to = detail.is_sent
@@ -2797,7 +2798,7 @@ function AskYorikButton({ message, detail, onReply }: {
           : detail.references_ids,
       });
     } catch (e: any) {
-      alert("Antwort-Entwurf fehlgeschlagen: " + (e?.message || e));
+      toast("Antwort-Entwurf fehlgeschlagen: " + (e?.message || e));
     } finally {
       setReplyBusy(false);
     }

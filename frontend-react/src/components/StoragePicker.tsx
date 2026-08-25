@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { toast } from "@/components/Toast";
 
 interface SubtreeStatus {
   subtree: string;
@@ -95,9 +96,9 @@ export function StoragePicker({
     try {
       await api.post("/api/storage/move", { target_root: targetPath });
       await refresh();
-      alert(`✓ Moved. Documents + photos now live on ${targetPath}.`);
+      toast(`✓ Moved. Documents + photos now live on ${targetPath}.`);
     } catch (e: any) {
-      alert(`Move failed: ${e?.message || e}`);
+      toast(`Move failed: ${e?.message || e}`);
     } finally { setBusy(null); }
   }
 
@@ -110,9 +111,9 @@ export function StoragePicker({
     try {
       await api.post("/api/storage/restore");
       await refresh();
-      alert("✓ Restored to internal storage.");
+      toast("✓ Restored to internal storage.");
     } catch (e: any) {
-      alert(`Restore failed: ${e?.message || e}`);
+      toast(`Restore failed: ${e?.message || e}`);
     } finally { setBusy(null); }
   }
 

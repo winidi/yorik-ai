@@ -54,6 +54,12 @@ export function registerSessionExpiredHandler(fn: SessionExpiredHandler | null) 
   _sessionExpiredHandler = fn;
 }
 
+/** For code that streams with a raw fetch() (chat, voice) and so never
+ *  goes through request(): report a 401 the same way. */
+export function notifySessionExpired(path: string) {
+  try { _sessionExpiredHandler?.(path); } catch { /* noop */ }
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(API_BASE + path, {
     credentials: "include",
