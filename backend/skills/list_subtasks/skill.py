@@ -29,6 +29,21 @@ async def execute(
     if not include_done:
         where.append("done = 0")
 
+    # Scope to what the caller may see (Phase B spaces model). Without
+    # this a restricted/child role could enumerate any household
+    # member's rows by title. platform_admin sees everything.
+    role = (getattr(ctx, "role", None) or "").lower()
+    uid = getattr(ctx, "user_id", None)
+    if role != "platform_admin" and uid:
+        from backend import spaces as _sp
+        visible = _sp.user_visible_space_ids(uid, role)
+        if visible:
+            where.append(f"(space_id IN ({','.join('?' * len(visible))}) OR created_by_user_id = ?)")
+            params.extend([*visible, uid])
+        else:
+            where.append("created_by_user_id = ?")
+            params.append(uid)
+
     sql = (
         "SELECT id, title, due_date, done "
         "FROM tasks WHERE " + " AND ".join(where) + " "

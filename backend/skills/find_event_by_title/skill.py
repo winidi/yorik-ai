@@ -34,13 +34,29 @@ async def execute(
     # Token-AND matching — see find_task_by_title for the rationale.
     tokens = [t for t in q.split() if t]
     where_extra = " AND ".join("lower(title) LIKE ?" for _ in tokens)
+    params: list[Any] = [start, end, *(f"%{t.lower()}%" for t in tokens)]
+
+    # Scope to the caller's visible calendars — the same filter the
+    # calendar UI and check_calendar apply. Without it a restricted role
+    # could enumerate any household member's events by title.
+    vis_sql = ""
+    role = (getattr(ctx, "role", None) or "").lower()
+    uid = getattr(ctx, "user_id", None)
+    if uid:
+        from backend.calendars import visible_event_filter
+        vis_clause, vis_params = visible_event_filter(uid, role)
+        if vis_clause:
+            vis_sql = " AND (" + vis_clause + ")"
+            params.extend(vis_params)
+    params.append(limit)
+
     sql = (
-        "SELECT id, title, starts_at, ends_at, all_day "
+        "SELECT events.id, events.title, events.starts_at, events.ends_at, events.all_day "
         "FROM events "
-        "WHERE starts_at >= ? AND starts_at <= ? AND " + where_extra + " "
-        "ORDER BY starts_at ASC LIMIT ?"
+        "WHERE events.starts_at >= ? AND events.starts_at <= ? AND " + where_extra
+        + vis_sql + " "
+        "ORDER BY events.starts_at ASC LIMIT ?"
     )
-    params = [start, end, *(f"%{t.lower()}%" for t in tokens), limit]
 
     with get_conn() as conn:
         rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
