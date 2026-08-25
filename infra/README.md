@@ -1,79 +1,53 @@
 # Yorik infrastructure layout
 
-Yorik bundles its data-layer dependencies as Docker Compose stacks rooted here. Each subdirectory is either a sparse-cloned upstream project or a Yorik-authored compose file. Nothing in `infra/` ships with the Yorik wheel — these are operator-side prerequisites every install needs running before the FastAPI backend starts.
+Yorik bundles its data layer as Docker Compose stacks rooted here. Nothing
+under `infra/supabase/` is committed — `scripts/bootstrap-supabase.sh`
+fetches it on first start.
 
-## `supabase/` — local self-hosted Supabase (Phase D)
+## `supabase/` — the bundled Supabase stack
 
-**Source**: sparse clone of <https://github.com/supabase/supabase>, only the `docker/` subdir. Not committed (see `.gitignore`); fresh clone instructions below.
+**Source**: `supabase/supabase`, `docker/` directory only, pinned to the
+commit in `scripts/bootstrap-supabase.sh` (`SUPABASE_REF`). Bump the pin
+deliberately and re-run the test suite; the migrations in `migrations_pg/`
+are written against that stack.
 
-### Why local-self-hosted?
+**Why self-hosted**: Yorik's stance is "your household data stays on your
+hardware". Postgres + pgvector hold everything personal; GoTrue, PostgREST,
+Realtime and Storage are the platform layer for Yorik apps, in-house chat
+and (later) box-to-box — all on the same machine.
 
-Yorik's data-sovereignty stance is "your household data stays on your hardware." That rules out Supabase Cloud as a default. Self-hosting Supabase on the same box as Yorik means Postgres + GoTrue auth + PostgREST + Studio all run alongside the FastAPI service, on the same Tailscale-private network. We get Postgres-grade durability, pgvector for embeddings, and the Studio UI for ad-hoc DB inspection — without sending a single row off the box.
+### Ports on the host
 
-### Port allocation on workstation
+| Service                      | Upstream default | Yorik            | Why                                   |
+|------------------------------|------------------|------------------|---------------------------------------|
+| Kong (Supabase HTTP API)     | 8000             | **8400**         | 8000 is Yorik itself                  |
+| Kong HTTPS                   | 8443             | **8453**         |                                       |
+| Postgres direct (`supabase-db`) | not published | **127.0.0.1:5435** | the app's psycopg pool connects here |
+| Supavisor session pooler     | 5432             | **127.0.0.1:5434** | a local PostgreSQL on 5432 is common |
+| Supavisor transaction pooler | 6543             | **127.0.0.1:6544** |                                       |
 
-| Service          | Default port | Yorik override | Reason                                  |
-|------------------|--------------|----------------|-----------------------------------------|
-| Kong (HTTP API)  | 8000         | **8400**       | 8000 is the FastAPI/uvicorn port        |
-| Studio (via Kong)| 3000         | (8400/Kong)    | reachable via Kong; no direct expose    |
-| Postgres direct  | 5432         | **5433**       | 5432 is held by `database-postgres-1`   |
-| Analytics        | 4000         | 4000           | free                                    |
-| SMTP             | 2500         | 2500           | free                                    |
-| Pooler (Supavisor)| 6543        | 6543           | free                                    |
-
-The Yorik backend will connect to Postgres at `localhost:5433` with the credentials in `infra/supabase/docker/.env`.
-
-### Fresh-install runbook
-
-```sh
-cd infra
-git clone --depth 1 --filter=blob:none --sparse https://github.com/supabase/supabase.git
-cd supabase
-git sparse-checkout set docker
-cd docker
-cp .env.example .env
-chmod 600 .env
-sh utils/generate-keys.sh --update-env
-
-# Apply the Yorik port overrides + COMPOSE_FILE override:
-sed -i 's/^POSTGRES_PORT=.*/POSTGRES_PORT=5432/' .env   # internal listen — leave 5432
-sed -i 's/^KONG_HTTP_PORT=.*/KONG_HTTP_PORT=8400/' .env  # 8000 is uvicorn
-sed -i 's/^KONG_HTTPS_PORT=.*/KONG_HTTPS_PORT=8453/' .env # 8443 may also conflict
-sed -i 's|^SUPABASE_PUBLIC_URL=.*|SUPABASE_PUBLIC_URL=http://localhost:8400|' .env
-sed -i 's|^API_EXTERNAL_URL=.*|API_EXTERNAL_URL=http://localhost:8400|' .env
-sed -i 's|^COMPOSE_FILE=.*|COMPOSE_FILE=docker-compose.yml:docker-compose.yorik.yml|' .env
-
-# Write the Yorik DB-exposure override:
-cat > docker-compose.yorik.yml <<'EOF'
-services:
-  db:
-    ports:
-      - "127.0.0.1:5435:5432"
-EOF
-
-docker compose up -d
-```
-
-The override expose-on-5435 step is what lets Yorik's psycopg pool talk directly to Postgres without going through Supavisor's tenant-aware pooler. Without it, only Kong (REST) on 8400 reaches the DB.
-
-### Operations
-
-| Action                           | Command                                |
-|----------------------------------|----------------------------------------|
-| Start                            | `cd infra/supabase/docker && docker compose up -d`     |
-| Stop (preserves volumes)         | `cd infra/supabase/docker && docker compose stop`      |
-| Tear down (DESTROYS volumes!)    | `cd infra/supabase/docker && docker compose down -v`   |
-| Tail logs                        | `sh run.sh logs`                       |
-| Reset to factory                 | `sh reset.sh` (deletes volumes!)       |
+The host bindings come from `infra/supabase-overlay/docker-compose.yorik.yml`
+(copied in by the bootstrap); Kong's ports are stamped into
+`infra/supabase/docker/.env` on first install. `POSTGRES_PORT` in that
+`.env` stays `5432` — it is also what the stack's own services dial.
 
 ### Credentials
 
-All secrets live in `infra/supabase/docker/.env` — `chmod 600`, never committed. Bring them into the Yorik backend via the systemd unit's `EnvironmentFile=` directive. The keys Yorik actually consumes:
+`infra/supabase/docker/.env` (`chmod 600`, never committed). The backend
+reads `POSTGRES_PASSWORD` from it when `YORIK_DB_PASSWORD` is empty in
+`config.env`. `JWT_SECRET`, `ANON_KEY` and `SERVICE_ROLE_KEY` are used by
+the GoTrue identity provisioning and the Realtime/PostgREST layer.
 
-- `POSTGRES_PASSWORD` — used by Yorik's `YORIK_DB_URL=postgres://supabase_admin:$POSTGRES_PASSWORD@localhost:5433/postgres`
-- `JWT_SECRET` — only relevant if/when Yorik adopts Supabase Auth (Section 5 of Phase D plan; not active yet)
-- `SERVICE_ROLE_KEY` — admin-equivalent for Supabase REST APIs; only used by migration / backfill scripts that need to bypass RLS
+### Operations
+
+| Action                        | Command                                                  |
+|-------------------------------|----------------------------------------------------------|
+| Bring up + apply migrations   | `bash scripts/bootstrap-supabase.sh` (idempotent)        |
+| Stop (keeps volumes)          | `cd infra/supabase/docker && docker compose -f docker-compose.yml -f docker-compose.yorik.yml stop` |
+| Tear down (DESTROYS volumes)  | `… docker compose -f docker-compose.yml -f docker-compose.yorik.yml down -v` |
+| Migrations that need `supabase_admin` (the `docs` schema) | run through the bootstrap, not the app's `postgres` role |
 
 ### Disk footprint
 
-Idle Supabase: ~2 GB Docker images, ~200 MB volumes after first start. Grows with your data + WAL retention. The dev box should have **at least 5 GB free** before first start; healthy household usage tops out around 10 GB after a few months of Paperless + Immich metadata accumulation.
+Idle stack: ~12 GB of images, ~200 MB of volumes after first start. Grows
+with your data and WAL retention.

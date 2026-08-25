@@ -37,16 +37,27 @@ SUPABASE_DIR="infra/supabase/docker"
 # time bootstrap runs. The Yorik-specific compose override lives at
 # infra/supabase-overlay/docker-compose.yorik.yml (git-tracked) and
 # gets copied in alongside.
+# Pinned: upstream's compose file changes without notice, and a fresh
+# install must get the exact stack the migrations were written against.
+# Bump deliberately (and re-test) — override with YORIK_SUPABASE_REF.
+SUPABASE_REF="${YORIK_SUPABASE_REF:-15ef851e6785031ccdda188d08de0f4e7c499f77}"   # supabase/supabase, 2026-06-17
 if [[ ! -d "$SUPABASE_DIR" ]]; then
-  say "first-install: cloning supabase/supabase --depth 1 (this takes ~30s, downloads ~500MB)"
-  if ! git clone --depth 1 https://github.com/supabase/supabase.git \
-       infra/supabase >/dev/null 2>&1; then
-    fatal "supabase clone failed — check network, then re-run start.sh"
+  say "first-install: fetching supabase/supabase@${SUPABASE_REF:0:8} (docker/ only, a few MB)"
+  if ! ( mkdir -p infra/supabase && cd infra/supabase \
+         && git init -q \
+         && git remote add origin https://github.com/supabase/supabase.git \
+         && git sparse-checkout init --cone >/dev/null 2>&1 \
+         && git sparse-checkout set docker >/dev/null 2>&1 \
+         && git fetch -q --depth 1 origin "$SUPABASE_REF" \
+         && git checkout -q FETCH_HEAD ); then
+    rm -rf infra/supabase
+    fatal "supabase fetch failed — check network, then re-run start.sh"
   fi
-  ok "supabase cloned"
+  ok "supabase docker/ at ${SUPABASE_REF:0:8}"
 fi
 
-# Yorik-specific compose override (publishes Postgres on host :5435).
+# Yorik-specific compose override (Postgres on host :5435, Supavisor
+# on Yorik-owned loopback ports).
 # Tracked at infra/supabase-overlay/; copy into the supabase dir on
 # every bootstrap so a re-cloned supabase doesn't lose it.
 YORIK_OVERLAY="infra/supabase-overlay/docker-compose.yorik.yml"
@@ -68,10 +79,10 @@ if [[ ! -f "$SUPABASE_DIR/.env" ]]; then
   fi
   # Override Kong's default 8000 to 8400 so Yorik can bind 8000 (the
   # host's normal FastAPI port). Same shift for HTTPS (8443→8453).
-  # POSTGRES_PORT (and Supavisor's 5432/6543 host bindings) stay at
-  # the upstream defaults; install.sh pre-flight has already
-  # verified every required port is free, so a clash fails loudly
-  # before we get here instead of after a half-up stack.
+  # POSTGRES_PORT stays 5432 — it is also the port the stack's own
+  # services dial internally. Host bindings that could collide with a
+  # local PostgreSQL (Supavisor's 5432/6543) are moved by the overlay
+  # to 127.0.0.1:5434/6544; supabase-db itself is on 127.0.0.1:5435.
   sed -i \
       -e 's/^KONG_HTTP_PORT=8000$/KONG_HTTP_PORT=8400/' \
       -e 's/^KONG_HTTPS_PORT=8443$/KONG_HTTPS_PORT=8453/' \

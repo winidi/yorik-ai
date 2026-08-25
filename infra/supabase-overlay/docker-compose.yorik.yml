@@ -1,7 +1,16 @@
-# Yorik override: expose supabase-db directly on host port 5434 so the
-# FastAPI backend can connect with psycopg pool. Supavisor's pooler on
-# 5433/6543 stays available for other tooling.
+# Yorik override for the bundled Supabase stack (copied next to the
+# upstream docker-compose.yml by scripts/bootstrap-supabase.sh).
+#
+#  - supabase-db reachable from the host on 127.0.0.1:5435 — the app's
+#    psycopg pool connects here directly, not through Supavisor.
+#  - Supavisor's pooler host ports moved off 5432/6543 (a PostgreSQL on
+#    the host is common) and bound to loopback. Nothing in Yorik uses
+#    them; they stay for local tooling.
 services:
   db:
     ports:
       - "127.0.0.1:5435:5432"
+  supavisor:
+    ports: !override
+      - "127.0.0.1:5434:5432"
+      - "127.0.0.1:6544:6543"
