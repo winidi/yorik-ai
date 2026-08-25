@@ -64,7 +64,6 @@ fints==5.0.0
 
 # RAG / document search. Vector index lives in data/documents.db (separate
 # from family.db on purpose — heavy reindex jobs never lock the calendar).
-sqlite-vec==0.1.9
 pypdf==6.11.0
 python-docx==1.2.0
 
