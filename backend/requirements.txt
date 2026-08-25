@@ -77,6 +77,13 @@ python-docx==1.2.0
 # sentence-transformers on top. No torch pin here — we let the
 # speechbrain-compatible version win to avoid a resolver fight.
 sentence-transformers==3.3.1
+# Pins for the torch stack so a fresh install resolves the same wheels
+# the maintainer tests with. transformers 5.x is on PyPI and
+# sentence-transformers 3.3.1 needs <5; without the pin the resolver
+# silently picks whatever newest version still fits.
+torch==2.12.1
+torchaudio==2.11.0
+transformers==4.57.6
 
 # Wave 6b — community app platform. sqlparse for strict schema validation
 # of community-supplied SQL (whitelist of CREATE TABLE/INDEX/VIEW; blocks

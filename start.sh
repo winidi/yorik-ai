@@ -264,7 +264,14 @@ if [[ -f "$REQ_HASH_FILE" ]] && [[ "$(cat "$REQ_HASH_FILE")" == "$NEW_HASH" ]]; 
 else
   say "PHASE 3" "pip install -r backend/requirements.txt"
   pip install --quiet --upgrade pip
-  pip install --quiet -r backend/requirements.txt
+  # Without an NVIDIA GPU the CUDA torch wheels (~2.7 GB of nvidia-*
+  # libraries) are dead weight; PyTorch's CPU index ships the same
+  # versions.
+  PIP_EXTRA=()
+  if ! (command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L 2>/dev/null | grep -q GPU); then
+    PIP_EXTRA=(--extra-index-url https://download.pytorch.org/whl/cpu)
+  fi
+  pip install --quiet "${PIP_EXTRA[@]}" -r backend/requirements.txt
   echo "$NEW_HASH" > "$REQ_HASH_FILE"
   ok "python deps installed"
 fi
