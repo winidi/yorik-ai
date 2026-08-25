@@ -727,16 +727,19 @@ case "$DECIDED_LLM" in
     # merged_system handling for two back-to-back system messages.
     # 7 GB instead of 5 GB; the unsloth team's recommended quant for
     # Yorik's pattern.
-    GGUF_URL="https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q5_K_M.gguf"
+    # The MTP build of Qwen 3.5 9B: same weights plus multi-token-prediction
+    # heads, which let llama.cpp draft several tokens per step. Measured on
+    # an RTX 5090 (2026-08-25): tool-call output 219 tok/s vs 57 without
+    # MTP; vision (mmproj) works alongside it.
+    GGUF_URL="https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/main/Qwen3.5-9B-UD-Q5_K_XL.gguf"
     # The repo's mmproj file is `mmproj-F16.gguf`, not the model-prefixed
     # name we use locally. Saving it locally with the model prefix is
     # fine (just the filename downstream cares about).
-    MMPROJ_URL="https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/mmproj-F16.gguf"
-
-    if [[ ! -f "$MODEL_DIR/Qwen3.5-9B-Q5_K_M.gguf" ]]; then
+    MMPROJ_URL="https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/main/mmproj-F16.gguf"
+    if [[ ! -f "$MODEL_DIR/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf" ]]; then
       say "downloading Qwen3.5-9B Q5_K_M (~7 GB) — this is the long step"
-      curl -fL --progress-bar -o "$MODEL_DIR/Qwen3.5-9B-Q5_K_M.gguf.partial" "$GGUF_URL"
-      mv "$MODEL_DIR/Qwen3.5-9B-Q5_K_M.gguf.partial" "$MODEL_DIR/Qwen3.5-9B-Q5_K_M.gguf"
+      curl -fL --progress-bar -o "$MODEL_DIR/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf.partial" "$GGUF_URL"
+      mv "$MODEL_DIR/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf.partial" "$MODEL_DIR/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf"
     else
       skip "model file already present"
     fi
@@ -763,14 +766,16 @@ ExecStart=/usr/bin/docker run --rm --name yorik-llamacpp \\
   --gpus all -p 127.0.0.1:8080:8080 \\
   -v $MODEL_DIR:/models \\
   ghcr.io/ggml-org/llama.cpp:server-cuda \\
-  -m /models/Qwen3.5-9B-Q5_K_M.gguf \\
+  -m /models/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf \\
   --mmproj /models/mmproj-Qwen3.5-9B-F16.gguf \\
   --alias qwen3.5-9b \\
   --host 0.0.0.0 --port 8080 \\
   --ctx-size 65536 --n-gpu-layers -1 --parallel 1 \\
   --jinja -fa on \\
   --cache-type-k q4_0 --cache-type-v q4_0 \\
+  --spec-type draft-mtp --spec-draft-n-max 6 \\
   --chat-template-kwargs '{"enable_thinking": false}' \\
+  --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0 \\
   --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.0
 
 [Install]

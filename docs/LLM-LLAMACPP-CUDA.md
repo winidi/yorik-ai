@@ -62,17 +62,18 @@ GPU is reachable from inside containers.
 
 ## 2. Download the model
 
-The model is **Qwen3.5-9B**, Q5_K_M quantization, GGUF format, **with
+The model is **Qwen3.5-9B** from `unsloth/Qwen3.5-9B-MTP-GGUF` (UD-Q5_K_XL), GGUF format, **with
 MTP heads baked in** (needed for the speculative-decoding speedup).
 Without MTP heads the `--spec-type draft-mtp` flag below has nothing
 to draft from and the launch will fail.
 
 ```bash
 mkdir -p ~/models && cd ~/models
-wget https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q5_K_M.gguf
+wget https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/main/Qwen3.5-9B-UD-Q5_K_XL.gguf
+wget https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/main/mmproj-F16.gguf
 ```
 
-File should be ~6.5 GB. Verify with `ls -lh Qwen3.5-9B-Q5_K_M.gguf`.
+File should be ~6.5 GB. Verify with `ls -lh Qwen3.5-9B-UD-Q5_K_XL.gguf`.
 
 ## 3. Create the compose file
 
@@ -91,10 +92,11 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - /home/YOURNAME/models/Qwen3.5-9B-Q5_K_M.gguf:/models/Qwen3.5-9B-Q5_K_M.gguf:ro
+      - /home/YOURNAME/models/Qwen3.5-9B-UD-Q5_K_XL.gguf:/models/Qwen3.5-9B-UD-Q5_K_XL.gguf:ro
+      - /home/YOURNAME/models/mmproj-F16.gguf:/models/mmproj-F16.gguf:ro
     command:
       - "--model"
-      - "/models/Qwen3.5-9B-Q5_K_M.gguf"
+      - "/models/Qwen3.5-9B-UD-Q5_K_XL.gguf"
       - "--alias"
       - "qwen3.5-9b"
       - "--host"
@@ -114,6 +116,8 @@ services:
       - "q4_0"
       - "--cache-type-v"
       - "q4_0"
+      - "--mmproj"
+      - "/models/mmproj-F16.gguf"
       - "--spec-type"
       - "draft-mtp"
       - "--spec-draft-n-max"

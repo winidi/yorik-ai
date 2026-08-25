@@ -53,7 +53,7 @@ bash install.sh              # one-shot: deps + Docker + LLM + Yorik
 The installer pre-checks RAM/disk/ports/network, installs system packages, sets up Docker, and picks an LLM strategy automatically:
 
 - **Existing LLM running on `:8080` / `:11434` / `:1234` / `:8081` / `:5000`** → uses it.
-- **NVIDIA GPU detected** → installs `ghcr.io/ggml-org/llama.cpp:server-cuda` + the unsloth Qwen3.5-9B Q4_K_M GGUF + vision projector. Best fidelity; matches the maintainer's setup.
+- **NVIDIA GPU detected** → installs `ghcr.io/ggml-org/llama.cpp:server-cuda` + the unsloth Qwen3.5-9B **MTP** GGUF (UD-Q5_K_XL) + vision projector, with multi-token-prediction speculative decoding (≈200 tok/s on tool calls on an RTX 5090). Matches the maintainer's setup.
 - **No GPU** → installs Ollama + `robit/qwen3.5-9b-r7-research-vision:q4km` (vision works, slightly distilled text behavior).
 
 Override the LLM choice: `bash install.sh --llm=ollama` / `--llm=cuda` / `--llm=existing` / `--no-llm`. Skip all prompts: `--yes`.
