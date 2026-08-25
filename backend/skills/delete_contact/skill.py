@@ -1,4 +1,8 @@
-"""delete_contact skill — hard delete; gated by the per-turn delete throttle."""
+"""delete_contact skill — stage ONE contact for deletion (confirm-before-apply).
+
+Nothing is deleted when this returns; contacts.delete() runs when the
+user taps "Delete" on the pending_confirmation card.
+"""
 from __future__ import annotations
 from typing import Any
 
@@ -7,14 +11,12 @@ async def execute(ctx, contact_id: int) -> dict[str, Any]:
     if not isinstance(contact_id, int) or contact_id <= 0:
         raise ValueError("contact_id must be a positive integer")
 
-    # Per-turn destructive throttle — same pattern as delete_calendar_event,
-    # delete_task, delete_bill. Prevents one ambiguous "delete X" from
-    # cascading into multiple deletes in a single LLM turn.
+    # Per-turn destructive throttle — one staged delete per request.
     from backend.ask import _deletes_this_turn, DELETE_TURN_LIMIT
     n_so_far = _deletes_this_turn.get()
     if n_so_far >= DELETE_TURN_LIMIT:
         raise ValueError(
-            "REFUSED: another item was already deleted in this turn. "
+            "REFUSED: a delete was already staged in this turn. "
             "To prevent accidental bulk-deletion, only ONE row may be "
             "deleted per request. STOP, list the remaining contacts to "
             "the user with their ids and names, and wait for explicit "
@@ -23,36 +25,41 @@ async def execute(ctx, contact_id: int) -> dict[str, Any]:
     _deletes_this_turn.set(n_so_far + 1)
 
     from backend import contacts as C
-    # Ownership gate — same pattern as delete_calendar_event / delete_task.
-    # A member can only delete contacts they themselves created.
     pre = C.get(contact_id)
     if not pre:
         raise ValueError(f"contact {contact_id} not found")
+    # Ownership gate — a member can only delete contacts they may edit.
     from backend.calendars import require_contact_access
     require_contact_access(
         getattr(ctx, "role", None),
         getattr(ctx, "user_id", None),
         pre,
     )
-    snapshot = C.delete(contact_id)  # raises ValueError if not found
-
-    from backend.ui_tools import _append
-    _append({"type": "refresh_data", "table": "contacts",
-             "reason": f"deleted contact: {snapshot['display_name']}"})
 
     from backend import pending_actions as pa
-    pa.confirm_then_apply(
+    pending_id = pa.stage_before_apply(
         skill="delete_contact",
         ctx=ctx,
-        rollback_kind="restore_contact",
-        rollback_args={"snapshot": snapshot},
+        apply_kind="delete_contact",
+        apply_args={"contact_id": contact_id},
+        params={"contact_id": contact_id},
         preview={
             "action":       "delete",
             "contact_id":   contact_id,
-            "display_name": snapshot.get("display_name"),
-            "channels":     len(snapshot.get("channels") or []),
-            "addresses":    len(snapshot.get("addresses") or []),
+            "display_name": pre.get("display_name"),
+            "channels":     len(pre.get("channels") or []),
+            "addresses":    len(pre.get("addresses") or []),
         },
     )
 
-    return {"deleted_contact_id": contact_id, "contact": snapshot}
+    name = pre.get("display_name") or f"contact {contact_id}"
+    return {
+        "pending":    True,
+        "pending_id": pending_id,
+        "contact":    {"id": contact_id, "display_name": pre.get("display_name")},
+        "_llm_hint": (
+            f"shown_to_user: a confirmation card for deleting '{name}' is on screen. "
+            "NOTHING is deleted yet — it happens only when the user taps Delete on the card. "
+            "Tell the user the card is waiting for their confirmation; do not claim the contact is deleted."
+        ),
+    }

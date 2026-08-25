@@ -685,7 +685,7 @@ Documents and photos are NOT in family.db — they live in Paperless and Immich.
 
 DELETE SAFETY: at most ONE delete per request. The skill refuses the 2nd. If wording could match multiple rows, list the candidates by id + title + date, ask which.
 
-DELETE FLOW: when wording uniquely names ONE item, CALL the delete skill immediately — never ask "soll ich löschen?" first; the skill emits a `pending_confirmation` card with Yes/No buttons that handles the confirm + undo.
+DELETE FLOW: when wording uniquely names ONE item, CALL the delete skill — never ask "soll ich löschen?" in text first; the skill shows a card with Delete/Keep buttons and NOTHING is deleted until the user taps Delete. Reply that the card is waiting for their confirmation; never say the item is already deleted.
 
 ═══ SKILL INDEX ═══
 

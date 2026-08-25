@@ -2300,6 +2300,20 @@ def _startup() -> None:
         # failed. Exiting." with a non-zero exit — systemd then retries.
         raise RuntimeError(msg)
     init_db(DB_PATH)
+    # Loud, early warning when the credential key is gone but encrypted
+    # rows exist (restored data/ without dotfiles, wrong key path…).
+    # Everything else keeps working; connectors just show "not configured".
+    try:
+        from . import credential_store as _cs
+        _key = _cs.check_key()
+        if not _key["ok"]:
+            logging.getLogger("yorik.startup").error(
+                "credential key missing at %s but %d encrypted credential(s) exist — "
+                "restore data/.credential_key from a backup or re-enter the credentials "
+                "in Settings → Connectors.", _key["path"], _key["credentials"],
+            )
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger("yorik.startup").warning("credential key check skipped: %s", exc)
     # Phase F-lite host: stamp data/internal_token so tenant Yoriks have
     # a stable secret to authenticate against /api/internal/provision.
     # Only the host generates; tenants read this file via their manifest
@@ -2676,6 +2690,7 @@ def health() -> Dict[str, Any]:
         "model": vanna_agent.LLM_MODEL,
         "base_url": vanna_agent.LLM_BASE_URL,
         "database": _database.describe(),
+        "credential_key": "ok" if __import__("backend.credential_store", fromlist=["check_key"]).check_key()["ok"] else "missing",
         "llm_reachable": _llm_reachable(),
         "immich_reachable": immich_up,
         # User-visible Immich URL — the photos iframe consumes this.
@@ -10672,20 +10687,39 @@ async def pending_confirm(
     pending_id: str,
     user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
-    """Confirm path: skill already applied its action when staged. We just
-    drop the pending row and log telemetry. No further DB write."""
+    """Confirm path. Two kinds of pending row:
+
+    - apply-then-undo (creates/updates): the skill already applied its
+      change; confirming just drops the row and logs telemetry.
+    - confirm-before-apply (deletes): nothing has happened yet; this is
+      the moment the delete actually runs (pending_actions.apply).
+    """
     row = _pa.get(pending_id)
     if not row:
         raise HTTPException(status_code=404, detail="pending action not found or expired")
     if not _user_owns_pending(user, row):
         raise HTTPException(status_code=403, detail="not your pending action")
+    applied: Dict[str, Any] = {}
+    ui_actions: list[Any] = []
+    if _pa.is_deferred(row):
+        from .ui_tools import reset_ui_actions, get_ui_actions
+        reset_ui_actions()
+        try:
+            applied = _pa.apply(pending_id)
+        except Exception as exc:  # noqa: BLE001
+            logging.getLogger("homeos.pending").warning(
+                "apply failed for %s: %s", pending_id, exc,
+            )
+            _pa.drop(pending_id)
+            raise HTTPException(status_code=500, detail=f"couldn't apply the action: {exc}")
+        ui_actions = get_ui_actions()
     _pa.drop(pending_id)
     _pa.record_decision(
         skill=row["skill"], decision="confirmed",
         user_id=row["user_id"], llm_model=row["llm_model"],
         language=row["language"], params=row["params"],
     )
-    return {"ok": True, "confirmed": True, "ui_actions": []}
+    return {"ok": True, "confirmed": True, "applied": applied, "ui_actions": ui_actions}
 
 
 @app.post("/api/pending/{pending_id}/cancel")

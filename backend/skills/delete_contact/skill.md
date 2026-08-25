@@ -10,11 +10,14 @@ inputs:
     type: integer
     required: true
 outputs:
-  deleted_contact_id:
-    type: integer
+  pending:
+    type: boolean
+    description: Always true — the delete is staged, not executed. It runs only when the user taps Delete on the card.
+  pending_id:
+    type: string
   contact:
     type: object
-    description: Full pre-delete snapshot (channels + addresses) so the undo machinery can re-create.
+    description: id + display_name of the contact that WOULD be deleted.
 permissions: [admin, member]
 side_effects: deletes 1 contact row + its channels + addresses
 tags: [contacts, mutation, destructive]
@@ -22,6 +25,7 @@ tags: [contacts, mutation, destructive]
 
 # delete_contact
 
-Hard delete. Channels + addresses are removed in the same transaction.
-The pending_actions rollback (kind='restore_contact') re-creates everything
-from a full snapshot, so cancel/test gets the contact back atomically.
+Hard delete once confirmed: channels + addresses go in the same
+transaction. Confirm-before-apply — the skill stages the delete and shows
+a card; nothing is removed until the user taps Delete. Reply that the card
+is waiting, never that the contact is gone.

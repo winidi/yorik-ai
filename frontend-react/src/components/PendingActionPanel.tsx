@@ -74,9 +74,14 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
     }
   }, [action.pending_id, onResolved]);
 
+  // Deletes are staged, not applied (preview.mode === "confirm_before"):
+  // "Delete" runs it, "Keep" discards it, and there is no "Just
+  // testing" because nothing has happened yet.
+  const deferred = action.preview?.mode === "confirm_before";
+
   // Resolution stamp (collapsed state after a click).
   if (resolved) {
-    return <ResolvedStamp kind={resolved} compact={compact} />;
+    return <ResolvedStamp kind={resolved} compact={compact} deferred={deferred} />;
   }
 
   return (
@@ -87,7 +92,7 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
       <div className={cn("px-3 pt-2.5 pb-2", compact ? "pb-1.5" : "")}>
         <div className="flex items-center gap-1.5 mb-1.5">
           <AlertCircle className="w-3.5 h-3.5 text-violet-500" />
-          <span className="text-xs font-semibold">Does this look right?</span>
+          <span className="text-xs font-semibold">{deferred ? "Delete this?" : "Does this look right?"}</span>
           <span className="text-[9px] text-muted-foreground font-mono ml-auto">
             {action.skill}{action.llm_model && ` · ${action.llm_model}`}
           </span>
@@ -100,8 +105,11 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
           </div>
         )}
       </div>
-      <div className="px-3 pb-2.5 pt-1.5 border-t border-border bg-muted/20 grid grid-cols-3 gap-1.5">
-        <button
+      <div className={cn(
+        "px-3 pb-2.5 pt-1.5 border-t border-border bg-muted/20 grid gap-1.5",
+        deferred ? "grid-cols-2" : "grid-cols-3",
+      )}>
+        {!deferred && <button
           onClick={() => resolve("test")}
           disabled={busy !== null}
           className={cn(
@@ -115,7 +123,7 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
             ? <Loader2 className="w-3 h-3 animate-spin" />
             : <FlaskConical className="w-3 h-3 text-amber-500" />}
           Just testing
-        </button>
+        </button>}
         <button
           onClick={() => resolve("cancelled")}
           disabled={busy !== null}
@@ -125,13 +133,14 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
             busy === "cancelled" && "opacity-60 cursor-wait",
           )}
         >
-          {busy === "cancelled" ? "…" : "Cancel"}
+          {busy === "cancelled" ? "…" : deferred ? "Keep" : "Cancel"}
         </button>
         <button
           onClick={() => resolve("confirmed")}
           disabled={busy !== null}
           className={cn(
-            "text-[11px] px-2 py-1.5 rounded-md bg-violet-500 hover:bg-violet-600 text-white font-medium",
+            "text-[11px] px-2 py-1.5 rounded-md text-white font-medium",
+            deferred ? "bg-rose-600 hover:bg-rose-700" : "bg-violet-500 hover:bg-violet-600",
             "transition inline-flex items-center justify-center gap-1 shadow-sm",
             busy === "confirmed" && "opacity-80 cursor-wait",
           )}
@@ -139,17 +148,17 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
           {busy === "confirmed"
             ? <Loader2 className="w-3 h-3 animate-spin" />
             : <CheckCircle2 className="w-3 h-3" />}
-          Looks good
+          {deferred ? "Delete" : "Looks good"}
         </button>
       </div>
     </div>
   );
 }
 
-function ResolvedStamp({ kind, compact }: { kind: Resolution; compact?: boolean }) {
+function ResolvedStamp({ kind, compact, deferred }: { kind: Resolution; compact?: boolean; deferred?: boolean }) {
   const data = {
-    confirmed: { icon: CheckCircle2, color: "text-emerald-600", label: "Confirmed" },
-    cancelled: { icon: X,            color: "text-muted-foreground", label: "Cancelled — reverted" },
+    confirmed: { icon: CheckCircle2, color: "text-emerald-600", label: deferred ? "Deleted" : "Confirmed" },
+    cancelled: { icon: X,            color: "text-muted-foreground", label: deferred ? "Kept — nothing deleted" : "Cancelled — reverted" },
     test:      { icon: FlaskConical, color: "text-amber-600", label: "Tested — reverted" },
   }[kind];
   const Icon = data.icon;

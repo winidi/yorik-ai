@@ -204,6 +204,11 @@ def rollback(pending_id: str) -> Dict[str, Any]:
     kind = row.get("rollback_kind") or ""
     args = row.get("rollback_args") or {}
 
+    if kind.startswith(APPLY_PREFIX):
+        # Confirm-before-apply row: nothing happened yet, so cancelling
+        # is just discarding the card.
+        return {"discarded": kind[len(APPLY_PREFIX):]}
+
     if kind == "delete_event":
         # Reverses add_calendar_event by deleting the inserted row.
         event_id = args.get("event_id")
@@ -635,3 +640,119 @@ def confirm_then_apply(
         rollback_kind=rollback_kind, rollback_args=rollback_args,
         params=params,
     )
+
+
+# ─── confirm-BEFORE-apply (destructive skills) ───────────────────────
+#
+# Deletes never run on the LLM's say-so. The skill stages what it would
+# delete, the card shows it, and only the user's tap on "Delete" runs the
+# statement (apply()). Cancel discards the row; nothing to roll back.
+# Creates and updates keep the apply-then-undo flow above — a wrong
+# insert is cheap to undo, a wrong delete is not.
+
+APPLY_PREFIX = "apply:"
+
+
+def is_deferred(row: Dict[str, Any]) -> bool:
+    return (row.get("rollback_kind") or "").startswith(APPLY_PREFIX)
+
+
+def stage_before_apply(
+    *, skill: str, ctx: Any, preview: Dict[str, Any],
+    apply_kind: str, apply_args: Dict[str, Any],
+    params: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Stage a destructive action WITHOUT applying it. Emits the same
+    `pending_confirmation` UI action the undo flow uses; the preview
+    carries `mode: confirm_before` so the card renders Delete / Keep
+    instead of ✓ done / Undo. Returns the pending_id."""
+    from . import ask as vanna_agent
+    from .ui_tools import _append
+
+    preview = dict(preview or {})
+    preview["mode"] = "confirm_before"
+    pending_id = stage(
+        skill=skill,
+        params=params or {},
+        preview=preview,
+        user_id=getattr(ctx, "user_id", 1),
+        llm_model=vanna_agent.LLM_MODEL,
+        language=getattr(ctx, "language", "en"),
+        rollback_kind=APPLY_PREFIX + apply_kind,
+        rollback_args=apply_args,
+    )
+    _append({
+        "type":       "pending_confirmation",
+        "pending_id": pending_id,
+        "skill":      skill,
+        "preview":    preview,
+    })
+    return pending_id
+
+
+def apply(pending_id: str) -> Dict[str, Any]:
+    """Run the deferred action staged under `pending_id`. Called by the
+    confirm route only after the ownership check."""
+    row = get(pending_id)
+    if not row:
+        raise KeyError(f"pending action {pending_id} not found or expired")
+    if not is_deferred(row):
+        return {"applied": None}
+    kind = (row.get("rollback_kind") or "")[len(APPLY_PREFIX):]
+    args = row.get("rollback_args") or {}
+    from .database import get_conn as _get_conn
+    from .ui_tools import _append
+
+    if kind == "delete_event":
+        event_id = int(args["event_id"])
+        linked_ids = [int(x) for x in (args.get("linked_ids") or [])]
+        with _get_conn() as conn:
+            before = conn.execute(
+                "SELECT id, title, starts_at FROM events WHERE id=?", (event_id,),
+            ).fetchone()
+            cur = conn.execute("DELETE FROM events WHERE id=?", (event_id,))
+            deleted = cur.rowcount
+            if linked_ids:
+                conn.execute(
+                    f"DELETE FROM events WHERE id IN ({','.join('?' * len(linked_ids))})",
+                    linked_ids,
+                )
+            conn.commit()
+        _append({
+            "type":        "show_calendar",
+            "view":        "month",
+            "anchor_date": ((before["starts_at"] if before else "") or "")[:10],
+            "reason":      f"deleted event: {before['title'] if before else event_id}",
+        })
+        return {"applied": kind, "event_id": event_id, "deleted": deleted,
+                "cascaded": len(linked_ids)}
+
+    if kind == "delete_task":
+        task_id = int(args["task_id"])
+        with _get_conn() as conn:
+            cur = conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+            deleted = cur.rowcount
+            conn.commit()
+        _append({"type": "refresh_data", "table": "tasks",
+                 "reason": f"deleted task: {args.get('title') or task_id}"})
+        return {"applied": kind, "task_id": task_id, "deleted": deleted}
+
+    if kind == "delete_contact":
+        from . import contacts as C
+        contact_id = int(args["contact_id"])
+        snapshot = C.delete(contact_id)
+        _append({"type": "refresh_data", "table": "contacts",
+                 "reason": f"deleted contact: {snapshot.get('display_name')}"})
+        return {"applied": kind, "contact_id": contact_id}
+
+    if kind == "delete_compose_draft":
+        draft_id = int(args["draft_id"])
+        with _get_conn() as conn:
+            cur = conn.execute("DELETE FROM compose_drafts WHERE id=?", (draft_id,))
+            deleted = cur.rowcount
+            conn.commit()
+        _append({"type": "refresh_data", "table": "compose_drafts",
+                 "reason": f"deleted draft: {args.get('subject') or draft_id}"})
+        return {"applied": kind, "draft_id": draft_id, "deleted": deleted}
+
+    raise ValueError(f"unknown deferred action kind: {kind!r}")

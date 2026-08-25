@@ -97,11 +97,18 @@ class TestDeleteContact:
     def test_member_can_delete_own_contact(self, two_user_db):
         _, member_contact_id = two_user_db
         from backend.skills.delete_contact.skill import execute
+        from backend import pending_actions as pa
+        from backend.contacts import get
         result = asyncio.run(execute(
             ctx=_mk_ctx(role="member", user_id=IDS["member"]),
             contact_id=member_contact_id,
         ))
-        assert result["deleted_contact_id"] == member_contact_id
+        # Staged, not applied: the contact is still there until confirmed.
+        assert result["pending"] is True
+        assert get(member_contact_id, role="member", user_id=IDS["member"]) is not None
+        applied = pa.apply(result["pending_id"])
+        assert applied["applied"] == "delete_contact"
+        assert get(member_contact_id, role="member", user_id=IDS["member"]) is None
 
     def test_member_cannot_delete_other_users_contact(self, two_user_db):
         admin_contact_id, _ = two_user_db

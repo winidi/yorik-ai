@@ -17,26 +17,25 @@ inputs:
     required: true
     description: The integer id of the compose draft to delete. Required — no fuzzy lookup by subject or recipient is performed.
 outputs:
-  deleted_draft_id:
-    type: integer
-    description: The id of the row that was deleted.
+  pending:
+    type: boolean
+    description: Always true — the delete is staged, not executed. It runs only when the user taps Delete on the card.
+  pending_id:
+    type: string
   draft:
     type: object
-    description: Snapshot of the deleted row (subject, recipient, kind, template_id, body_html, args_json) — surfaced so the LLM can quote what was removed.
+    description: id, subject, recipient, kind of the draft that WOULD be deleted — quote the subject so the user can check the card.
 side_effects: |
-  - Removes ONE row from compose_drafts.
-  - Cascade-removes any rows in compose_draft_versions (ON DELETE CASCADE in the schema). Version history is NOT restored on rollback; the body content IS.
-  - Emits a `refresh_data` UI action so the chat / compose surface refetches.
-  - Stages a rollback (`restore_compose_draft`) via pending_actions so the chat's confirm card can revert.
-cost: One DELETE in sqlite.
+  - Stages ONE compose_drafts row for deletion and shows a confirmation card. Nothing is removed until the user taps Delete.
+  - On Delete: removes the row; compose_draft_versions rows go with it (ON DELETE CASCADE). Not reversible.
+  - Emits a `refresh_data` UI action after the delete so the chat / compose surface refetches.
+cost: One DELETE in Postgres, after confirmation.
 permissions: [admin, member]
 tags: [compose, draft, delete]
 ---
 
 # delete_compose_draft
 
-Hard delete of one compose draft row, gated by the per-turn delete throttle (same `_deletes_this_turn` counter as delete_calendar_event / delete_contact). Apply-then-confirm: the row is removed immediately so the user sees the draft disappear; the rollback handler can re-insert it with the same id if the user cancels.
+Hard delete of one compose draft row, gated by the per-turn delete throttle (same `_deletes_this_turn` counter as delete_calendar_event / delete_contact). Confirm-before-apply: the skill stages the delete and shows a card; the row is removed only when the user taps Delete, and the version history goes with it.
 
-The version history (compose_draft_versions) is cascade-deleted by the schema and is NOT recreated on rollback. The user gets the most recent body back; refine/restore history is gone. Acceptable for an undo — the audit found no user expecting version history to survive a delete.
-
-Reply with ONE short sentence ("Der Entwurf wurde gelöscht — die Karte unten zeigt Rückgängig.") — the pending_confirmation card carries the rest.
+Reply with ONE short sentence ("Die Karte unten wartet auf deine Bestätigung, bevor der Entwurf gelöscht wird.") — the pending_confirmation card carries the rest.

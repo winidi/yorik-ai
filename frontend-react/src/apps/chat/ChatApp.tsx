@@ -23,6 +23,7 @@ import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { Dock } from "@/components/Dock";
 import { PendingActionChip } from "@/components/PendingActionChip";
+import { PendingActionPanel } from "@/components/PendingActionPanel";
 import { emitUiAction } from "@/lib/uiActions";
 import { NeedsInputCard, type NeedsInputAction } from "@/apps/compose/NeedsInputCard";
 import { PhotoPickerCard, type PhotoPickerAction } from "@/apps/compose/PhotoPickerCard";
@@ -1660,17 +1661,19 @@ function MessageBubble({
             with 3 buttons; resolves the action via /api/pending/{id}/*. */}
         {!isUser && message.ui_actions && message.ui_actions
           .filter(a => a.type === "pending_confirmation")
-          .map((a: any) => (
-            <PendingActionChip
-              key={a.pending_id}
-              action={{
-                pending_id: a.pending_id,
-                skill:      a.skill,
-                preview:    a.preview,
-                llm_model:  a.llm_model,
-              }}
-            />
-          ))}
+          .map((a: any) => {
+            const action = {
+              pending_id: a.pending_id,
+              skill:      a.skill,
+              preview:    a.preview,
+              llm_model:  a.llm_model,
+            };
+            // Deletes are staged, not applied: they need a real
+            // Delete / Keep decision, not a "done · Undo" chip.
+            return a.preview?.mode === "confirm_before"
+              ? <PendingActionPanel key={a.pending_id} action={action} />
+              : <PendingActionChip key={a.pending_id} action={action} />;
+          })}
         {/* Compose-draft cards — the LLM called compose_draft skill;
             this is the magical inline experience: TipTap editor in
             chat, refine via LLM with one input field, recipient picker
