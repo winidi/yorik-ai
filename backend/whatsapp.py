@@ -47,6 +47,29 @@ BRIDGE_WS  = os.getenv("YORIK_WA_BRIDGE_WS",  "ws://127.0.0.1:3015/events")
 BRIDGE_TOKEN = os.getenv("YORIK_WA_BRIDGE_TOKEN", "").strip()
 
 
+# Background work spawned per inbound message. Keeping references
+# stops the event loop from garbage-collecting a running task and
+# lets exceptions surface in the log instead of vanishing.
+_bg_tasks: set = set()
+
+
+def _spawn(coro) -> "asyncio.Task":
+    task = asyncio.create_task(coro)
+    _bg_tasks.add(task)
+
+    def _done(t: "asyncio.Task") -> None:
+        _bg_tasks.discard(t)
+        try:
+            exc = t.exception()
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            return
+        if exc:
+            log.warning("whatsapp background task failed: %s: %s", type(exc).__name__, exc)
+
+    task.add_done_callback(_done)
+    return task
+
+
 def _bridge_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {BRIDGE_TOKEN}"} if BRIDGE_TOKEN else {}
 
@@ -453,14 +476,14 @@ async def _handle_event(evt: dict[str, Any]) -> None:
         # gate evaluates against the right user's history.
         if p.get("mediaKind"):
             from . import whatsapp_media
-            asyncio.create_task(whatsapp_media.process_media(p, owner_user_id=owner_user_id))
+            _spawn(whatsapp_media.process_media(p, owner_user_id=owner_user_id))
         # Semantic indexing: embed text messages into wa_chunks so the
         # draft generator can do meaning-based cross-chat retrieval.
         # Voice notes get re-indexed later once their transcript lands
         # (whatsapp_media calls back into the indexer after Whisper).
         if p.get("text"):
             from . import whatsapp_semantic as _sem
-            asyncio.create_task(asyncio.to_thread(
+            _spawn(asyncio.to_thread(
                 _sem.index_message,
                 msg_id=p.get("id"), chat_jid=p.get("jid"),
                 text=p.get("text"), ts=int(p.get("timestamp") or 0),

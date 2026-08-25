@@ -112,6 +112,21 @@ async def reload_account(account_id: int) -> None:
 
 
 async def _supervisor() -> None:
+    """Keeps the account supervisor alive for the life of the process.
+    A crash inside (DB hiccup at boot, a bad account row) used to end
+    email fetching until the next restart; now it logs and retries."""
+    while True:
+        try:
+            await _supervisor_once()
+            return
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            log.warning("email supervisor crashed: %s — restarting in 30 s", exc)
+            await asyncio.sleep(30)
+
+
+async def _supervisor_once() -> None:
     """Spawns one _account_loop per enabled account at startup, then
     sleeps. Account add/remove is event-driven via reload_account."""
     from . import workers

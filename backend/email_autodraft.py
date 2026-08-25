@@ -16,7 +16,7 @@ import asyncio
 import json
 import logging
 import uuid
-from typing import Optional
+from typing import Optional, Any
 
 from .database import get_conn
 
@@ -49,6 +49,8 @@ def schedule_for_message(owner_user_id: str, message_id: int, account_id: int) -
     if prev and not prev.done():
         prev.cancel()
 
+    holder: dict[str, Any] = {}
+
     async def _coro():
         try:
             await asyncio.sleep(DEBOUNCE_S)
@@ -57,12 +59,18 @@ def schedule_for_message(owner_user_id: str, message_id: int, account_id: int) -
             return
         except Exception as e:
             log.warning("email autodraft for msg %d failed: %s", message_id, e)
+        finally:
+            # Forget ourselves — but only if a newer schedule for the
+            # same message hasn't replaced the entry. Without this the
+            # map kept one Future per inbound mail for the process
+            # lifetime.
+            if _pending.get(message_id) is holder.get("fut"):
+                _pending.pop(message_id, None)
 
     try:
         # Schedule from any thread back to the main loop.
         fut = asyncio.run_coroutine_threadsafe(_coro(), loop)
-        # Store as a Task-ish — we don't actually need to await it,
-        # just need a handle to cancel.
+        holder["fut"] = fut
         _pending[message_id] = fut  # type: ignore[assignment]
     except Exception as e:
         log.debug("schedule failed: %s", e)

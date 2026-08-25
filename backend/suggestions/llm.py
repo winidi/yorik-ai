@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import asyncio
 import os
 import re
 from typing import Any
@@ -199,13 +200,25 @@ async def call_llm_with_status(*, source_row: dict, source_kind: str,
         log.warning("LLM client unavailable: %s", exc)
         return [], False
 
-    client = LlmClient(
-        model=os.getenv("HOMEOS_MODEL", "qwen3.5-9b"),
-        base_url=os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1"),
-    )
+    # Reuse the chat loop's client (it follows the Settings → LLM
+    # endpoint); fall back to env only before the first chat turn.
+    client = None
+    try:
+        from .. import ask as _ask
+        client = getattr(_ask._ask_own_backend, "_llm", None)
+    except Exception:  # noqa: BLE001
+        client = None
+    if client is None:
+        client = LlmClient(
+            model=os.getenv("HOMEOS_MODEL", "qwen3.5-9b"),
+            base_url=os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1"),
+        )
     sys_msg, user_msg = _build_prompt(source_row, source_kind, contact, evidence)
     try:
-        resp = client.chat(
+        # chat() is synchronous — run it in a thread so an inbound mail
+        # never freezes the API for the length of an LLM call.
+        resp = await asyncio.to_thread(
+            client.chat,
             messages=[
                 {"role": "system", "content": sys_msg},
                 {"role": "user",   "content": user_msg},

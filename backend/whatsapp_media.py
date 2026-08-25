@@ -99,7 +99,20 @@ def set_status_imports_enabled(enabled: bool) -> None:
         conn.commit()
 
 
+# At most this many media items (Whisper transcriptions, Immich /
+# Paperless uploads) in flight at once. A history sync can deliver
+# hundreds of messages in seconds; without a bound each spawned N
+# concurrent Whisper runs on a CPU box.
+_MEDIA_SEM = asyncio.Semaphore(int(os.getenv("YORIK_WA_MEDIA_CONCURRENCY", "2")))
+
+
 async def process_media(msg: dict[str, Any], owner_user_id: str = 1, *, force: bool = False) -> None:
+    """Bounded wrapper — see _MEDIA_SEM."""
+    async with _MEDIA_SEM:
+        await _process_media_locked(msg, owner_user_id, force=force)
+
+
+async def _process_media_locked(msg: dict[str, Any], owner_user_id: str = 1, *, force: bool = False) -> None:
     """Entry point — called from the WS subscriber for each ingested
     message that has a mediaKind. Spawned via asyncio.create_task so
     the subscriber doesn't block.
