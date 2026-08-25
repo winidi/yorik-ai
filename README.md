@@ -87,10 +87,11 @@ Yorik is a client to any OpenAI-compatible local LLM (Ollama, LM Studio, llama.c
 **Rough — your bug reports help:**
 - First-run on <8 GB RAM is painful; recommend ≥16 GB
 - Voice latency depends on your LLM (a 7–9B model on CPU = ~5–10 s reply)
-- WhatsApp bridge occasionally needs manual re-pair after restart
 - XRechnung PDF/A-3 isn't fully validated against all 2026 schema variants
-- Mobile / responsive layout is desktop-first; a few apps don't reflow on phones yet
-- Error messages are sometimes "stack trace, good luck" — UX cleanup is ongoing
+- Phone and tablet are the primary surface, but the layout was built desktop-first; expect rough edges
+- Multi-family hosting on one box (workspaces) is scaffolded, not finished
+
+Is your install healthy? `bash scripts/smoke-check.sh` walks health, login, a task, a chat-staged delete, the WhatsApp bridge and your newest backup in under a minute.
 
 ## Architecture
 

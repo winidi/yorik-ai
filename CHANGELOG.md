@@ -5,7 +5,56 @@ All notable changes to Yorik are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] — robustness pass (August 2026)
+
+No new features. This is the "works on a stranger's box" pass after the
+first two alpha months, done with the code audit of 2026-08-24 as the
+worklist.
+
+### Changed / fixed
+
+- **One database.** Postgres (the bundled Supabase stack) is the only
+  backend; the SQLite path, its 64-file migration series and the
+  SQLite-only tooling are gone. Startup probes the database and fails
+  with one sentence instead of a 30 s pool timeout. `/api/health`
+  reports `database` and `credential_key`.
+- **One front door.** `/` lands on the React app; the legacy vanilla
+  frontend is removed. Old top-level app paths redirect.
+- **Installer.** Survives a fresh box where it installs Docker itself
+  (re-exec under `sg docker`); Supabase pinned to a commit and fetched
+  as `docker/` only; Supavisor moved to 127.0.0.1:5434/6544 so a local
+  PostgreSQL no longer breaks pre-flight; torch stack pinned, CPU
+  wheels without a GPU; 50 GB disk floor; no-GPU boxes get Ollama +
+  Qwen 3.5 9B as the README always said. One systemd unit template.
+  `yorik upgrade` runs the migrations through the bootstrap and
+  restarts via systemd (SIGTERM, never SIGKILL).
+- **Deletes ask first.** `delete_*` skills stage the delete and show a
+  Delete / Keep card; nothing is removed until the user taps Delete.
+  Creates and updates keep apply-then-undo.
+- **Roles.** Title lookups (events, tasks, subtasks) are scoped to what
+  the caller may see; `install_connector` is admin-only for real.
+- **WhatsApp.** Bridge on loopback behind a shared token; survives boot
+  without network, re-pairs with a fresh QR after the phone unlinks,
+  reconnects with backoff. Semantic search works on Postgres (pgvector).
+- **Doesn't fall over.** Chat history trimmed to the model's context
+  (`YORIK_LLM_CTX`); LLM failures reach the user as one readable
+  sentence in their language; timeouts are not retried; voice and
+  suggestion LLM calls off the event loop; bounded media processing;
+  email supervisor restarts.
+- **Chat UI.** Expired session → login screen (not "LLM offline");
+  Stop keeps the streamed text; 2-minute stall watchdog; toast instead
+  of 87 `alert()`s; an error in one app no longer takes the dock down.
+- **Tests + CI.** The suite runs on a throwaway Postgres (locally and in
+  GitHub Actions); `scripts/smoke-check.sh` walks a live install.
+
+### Removed
+
+- SQLite backend, `migrations/`, `scripts/seed-demo-*.py`,
+  `cold-install-check.sh`, `backup-restore-drill.sh` (a Postgres-safe
+  restore drill is on the list), the unfinished container-image path
+  (parked under `docs/experimental/docker/`).
+
+## [0.1.0-alpha] — June 2026
 
 This release is the alpha-launch set: the agent stops generating SQL,
 community apps get a real sandbox with a marketplace UI, and the
