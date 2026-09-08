@@ -1,6 +1,11 @@
 # Yorik
 
-**Yorik aspires to be your butler — times 10.** A self-hosted personal OS that handles your calendar, photos, documents, email, WhatsApp, and (for German users) e-invoicing through one chat-driven interface. Voice-aware. Runs on your own machine. No cloud, no subscription, no telemetry.
+**Yorik is the home server your AI agent uses.** It keeps the household's calendar, tasks, contacts, photos, documents, email, WhatsApp and (for German users) letters and e-invoicing in one place, with permissions per family member, and hands all of it to any agent that speaks MCP: Hermes, Claude Code, your own scripts. A built-in assistant, voice input and a phone-first UI are included for the people in the house who never touch an agent. Runs on your own machine. No cloud, no subscription, no telemetry.
+
+Two ways to use it:
+
+- **With your agent (recommended).** Connect Hermes or another MCP client to `http://<yorik>:8000/mcp` with a personal token. The agent gets one tool per Yorik skill, Yorik keeps the data, the rights and the confirmations. See [docs/MCP.md](docs/MCP.md).
+- **On its own.** Yorik's built-in assistant runs on a local model (Qwen 3.5 9B by default). It works, and it is the less polished of the two paths.
 
 > ### ⚠️ Early rolling alpha. Expect bugs.
 >
@@ -133,6 +138,7 @@ Yorik is the glue, not the engines.
 - [docs/CONNECTORS.md](docs/CONNECTORS.md) — n8n + external services
 - [docs/MCP.md](docs/MCP.md) — Yorik as an MCP server for outside agents (Hermes, Claude Code)
 - [docs/SPEECH.md](docs/SPEECH.md) — Yorik as the household's speech server (OpenAI-shaped STT/TTS for Dictate, Hermes, scripts)
+- [docs/WINDOWS.md](docs/WINDOWS.md) — running Yorik on Windows via WSL2, and Windows as a client
 - [ARCHITECTURE.md](ARCHITECTURE.md) — internals
 - [THREAT_MODEL.md](THREAT_MODEL.md) — security architecture
 - [backend/APP_SDK_README.md](backend/APP_SDK_README.md) — building third-party apps
