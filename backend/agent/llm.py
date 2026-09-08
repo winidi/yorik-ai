@@ -90,6 +90,13 @@ def _is_openrouter_base_url(base_url: Optional[str]) -> bool:
     return "openrouter.ai" in (base_url or "").lower()
 
 
+def _thinking_kwargs_enabled() -> bool:
+    """Backends like ninfer reject `chat_template_kwargs` with HTTP 400
+    (thinking is a server-side flag there, e.g. `--no-thinking`). Set
+    YORIK_LLM_THINKING_KWARGS=off to skip the injection for those."""
+    return os.getenv("YORIK_LLM_THINKING_KWARGS", "inject").lower() != "off"
+
+
 class LlmClient:
     """Thin async-friendly wrapper around openai.OpenAI for Yorik.
 
@@ -176,14 +183,17 @@ class LlmClient:
         #     answers on longer prompts. No-op on other backends.
         # extra_body merges with whatever the caller passed; idempotent.
         existing_extra = (extra or {}).get("extra_body") or {}
-        extra_body = {
-            **existing_extra,
-            "chat_template_kwargs": {
-                **(existing_extra.get("chat_template_kwargs") or {}),
-                "enable_thinking": False,
-            },
-            "reasoning_effort": existing_extra.get("reasoning_effort", "none"),
-        }
+        if _thinking_kwargs_enabled():
+            extra_body = {
+                **existing_extra,
+                "chat_template_kwargs": {
+                    **(existing_extra.get("chat_template_kwargs") or {}),
+                    "enable_thinking": False,
+                },
+                "reasoning_effort": existing_extra.get("reasoning_effort", "none"),
+            }
+        else:
+            extra_body = dict(existing_extra)
         # OpenRouter-only: steer routing to tool-capable downstreams.
         # No-op for every other base_url. setdefault preserves any
         # caller-supplied provider override (tests, advanced configs).
@@ -297,16 +307,19 @@ class LlmClient:
             payload["temperature"] = temperature
 
         existing_extra = (extra or {}).get("extra_body") or {}
-        extra_body = {
-            **existing_extra,
-            "chat_template_kwargs": {
-                **(existing_extra.get("chat_template_kwargs") or {}),
-                "enable_thinking": False,
-            },
-            # Mirror chat() — also disable Ollama's thinking on the
-            # OpenAI-compat endpoint. See chat() comment for why.
-            "reasoning_effort": existing_extra.get("reasoning_effort", "none"),
-        }
+        if _thinking_kwargs_enabled():
+            extra_body = {
+                **existing_extra,
+                "chat_template_kwargs": {
+                    **(existing_extra.get("chat_template_kwargs") or {}),
+                    "enable_thinking": False,
+                },
+                # Mirror chat() — also disable Ollama's thinking on the
+                # OpenAI-compat endpoint. See chat() comment for why.
+                "reasoning_effort": existing_extra.get("reasoning_effort", "none"),
+            }
+        else:
+            extra_body = dict(existing_extra)
         # Mirror chat(): OpenRouter-only provider preferences.
         if _is_openrouter_base_url(self.base_url):
             extra_body.setdefault("provider", dict(_OPENROUTER_PROVIDER_PREFS))

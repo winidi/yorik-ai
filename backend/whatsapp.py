@@ -28,6 +28,8 @@ import re
 import time
 import zipfile
 from datetime import datetime, timedelta
+
+from backend.agent import llm as _agent_llm
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -1816,8 +1818,14 @@ async def _call_llm(prompt: str) -> str:
                 "temperature": 0.4,
                 "max_tokens": 400,
                 # Same Qwen3 thinking-mode kill as everywhere else in Yorik.
-                "chat_template_kwargs": {"enable_thinking": False},
-                "reasoning_effort": "none",
+                **(
+                    {
+                        "chat_template_kwargs": {"enable_thinking": False},
+                        "reasoning_effort": "none",
+                    }
+                    if _agent_llm._thinking_kwargs_enabled()
+                    else {}
+                ),
             },
             headers={"Authorization": "Bearer not-used"},
         )

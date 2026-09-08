@@ -102,6 +102,9 @@ class QwenLlmService(OpenAILlmService):
         original_create = client.chat.completions.create
 
         def patched_create(**payload: Any):
+            from backend.agent.llm import _thinking_kwargs_enabled
+            if not _thinking_kwargs_enabled():
+                return original_create(**payload)
             extra = payload.get("extra_body") or {}
             # Disable thinking via two parallel mechanisms — see
             # backend/agent/llm.py for the same pattern + rationale.
