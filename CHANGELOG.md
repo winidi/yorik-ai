@@ -21,6 +21,23 @@ worklist.
   Personal API tokens (Settings → You → API tokens, shown once, hashed
   at rest) are the only credential; a token acts as its owner and can
   also call `/api/*`. See [docs/MCP.md](docs/MCP.md).
+- **Parakeet speech-to-text.** NVIDIA parakeet-tdt-0.6b (int8 ONNX via
+  sherpa-onnx) replaces Whisper as the default engine: CPU only, about
+  100 ms per utterance, no torch. German fine-tune or multilingual
+  variant, picked by household language, downloaded once by `start.sh`
+  or from Settings → Speech-to-text. Whisper is an optional extra.
+- **Torch-free backend.** Speaker identification moved from SpeechBrain
+  ECAPA to sherpa-onnx WeSpeaker CAM++ (29 MB; enrolled voices need a
+  re-enrol), the bundled embedder runs the MiniLM ONNX export through
+  onnxruntime (same vectors as before, no re-ingest). torch, torchaudio,
+  transformers, sentence-transformers, speechbrain and openai-whisper
+  left `requirements.txt`: the venv shrinks from 5.7 GB to 1.1 GB and
+  the backend from ~2 GB to well under 1 GB resident.
+- **Speech server.** `POST /v1/audio/transcriptions` and
+  `POST /v1/audio/speech` speak OpenAI's audio API shape with a personal
+  API token, so Dictate, Hermes and scripts use Yorik's Parakeet and
+  Supertonic instead of their own copies. Formats: wav, pcm (24 kHz),
+  mp3, opus, flac. See [docs/SPEECH.md](docs/SPEECH.md).
 
 ### Changed / fixed
 

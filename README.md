@@ -79,7 +79,7 @@ Yorik is a client to any OpenAI-compatible local LLM (Ollama, LM Studio, llama.c
 - WhatsApp via Baileys bridge (pair your phone once)
 - Compose: TipTap editor + AI templates + PDF render
 - German invoice numbering with GoBD audit trail
-- Voice: Whisper STT + Supertonic-3 TTS + SpeechBrain speaker ID
+- Voice: Parakeet STT + WeSpeaker speaker ID (both CPU, via sherpa-onnx) + Supertonic-3 TTS
 - Multi-user, cookie sessions, country/locale picker
 - BYO Immich/Paperless/WhatsApp (auto-detected, skipped if you already run them)
 - Encrypted backups via age
@@ -120,7 +120,7 @@ Yorik stands on giants:
 - [Immich](https://immich.app) — photo library
 - [Paperless-ngx](https://docs.paperless-ngx.com) — document management
 - [Ollama](https://ollama.com) / [llama.cpp](https://github.com/ggml-org/llama.cpp) — local LLM serving
-- [Whisper](https://github.com/openai/whisper) — STT
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) + [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) / [parakeet-primeline](https://huggingface.co/flozen1981/parakeet-primeline-onnx) — STT
 - [Supertonic-3](https://huggingface.co/supertonic-team) — multilingual TTS
 - [trafilatura](https://trafilatura.readthedocs.io/) — main-text web extraction
 
@@ -132,6 +132,7 @@ Yorik is the glue, not the engines.
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — common failures
 - [docs/CONNECTORS.md](docs/CONNECTORS.md) — n8n + external services
 - [docs/MCP.md](docs/MCP.md) — Yorik as an MCP server for outside agents (Hermes, Claude Code)
+- [docs/SPEECH.md](docs/SPEECH.md) — Yorik as the household's speech server (OpenAI-shaped STT/TTS for Dictate, Hermes, scripts)
 - [ARCHITECTURE.md](ARCHITECTURE.md) — internals
 - [THREAT_MODEL.md](THREAT_MODEL.md) — security architecture
 - [backend/APP_SDK_README.md](backend/APP_SDK_README.md) — building third-party apps

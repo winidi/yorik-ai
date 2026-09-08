@@ -33,7 +33,7 @@ and whether you already have Docker installed.
 |---|---|---|---|
 | RAM | 8 GB | **16 GB** | LLM (4–8 GB) + Immich ML (2 GB) + Paperless (1 GB) + Yorik (0.5 GB) |
 | Disk | 30 GB free | 100 GB+ | Photo library + document scans grow fast |
-| CPU | x86_64 (any modern) | 6+ cores | Whisper STT + Immich face detection benefit |
+| CPU | x86_64 (any modern) | 4+ cores | Parakeet STT runs on 4 CPU threads; Immich face detection benefits from more |
 | GPU | none required | NVIDIA with CUDA | Immich face detection + larger LLM inference |
 | OS | Ubuntu 22.04 / 24.04, Debian 12 | Same | Other distros work but you'll handle Docker setup yourself |
 
@@ -51,7 +51,7 @@ sudo apt install -y \
     ffmpeg
 ```
 
-`ffmpeg` is required for Whisper voice transcription.
+`ffmpeg` is required for voice transcription (it converts the browser's audio for Parakeet).
 
 ### Docker (for the optional bundled services)
 
@@ -120,8 +120,9 @@ that hasn't been done. On the first run it:
 1. Detects your timezone + locale for the bundled Docker services
 2. Probes your LLM endpoint
 3. Creates the Python venv at `venv/` and installs dependencies
-4. Downloads voice models (Whisper turbo, Supertonic-3 TTS, SpeechBrain
-   speaker ID) — **~500 MB total**, one-time
+4. Downloads the on-device models (Parakeet STT, Supertonic-3 TTS,
+   speaker encoder, MiniLM embedder) — **~1.5 GB total**, one-time.
+   Everything runs on the CPU through onnxruntime; there is no torch.
 5. Brings up the bundled Supabase stack and applies the database migrations
 6. Brings up the optional Docker stack with auto-detected profiles
    (skips any service whose port is already taken on the host)

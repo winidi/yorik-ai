@@ -132,14 +132,15 @@ def _wav_bytes(samples: np.ndarray, sample_rate: int) -> bytes:
     return buf.getvalue()
 
 
-def synthesize(text: str, language: str = "en") -> Optional[bytes]:
-    """Return WAV bytes for `text` in the given language, or None on any failure."""
+def synthesize(text: str, language: str = "en", voice: Optional[str] = None) -> Optional[bytes]:
+    """Return WAV bytes for `text` in the given language, or None on any failure.
+    `voice` (M1..M5 / F1..F5) overrides the per-language default."""
     if not text or not text.strip():
         return None
     engine = _get_engine()
     if engine is None:
         return None
-    voice_name = _voice_for_lang(language or DEFAULT_LANGUAGE)
+    voice_name = (voice or "").strip().upper() or _voice_for_lang(language or DEFAULT_LANGUAGE)
     style = _get_style(voice_name)
     if style is None:
         return None

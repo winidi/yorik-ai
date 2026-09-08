@@ -283,20 +283,16 @@ if [[ -f "$REQ_HASH_FILE" ]] && [[ "$(cat "$REQ_HASH_FILE")" == "$NEW_HASH" ]]; 
 else
   say "PHASE 3" "pip install -r backend/requirements.txt"
   pip install --quiet --upgrade pip
-  # Without an NVIDIA GPU the CUDA torch wheels (~2.7 GB of nvidia-*
-  # libraries) are dead weight; PyTorch's CPU index ships the same
-  # versions.
-  PIP_EXTRA=()
-  if ! (command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L 2>/dev/null | grep -q GPU); then
-    PIP_EXTRA=(--extra-index-url https://download.pytorch.org/whl/cpu)
-  fi
-  pip install --quiet "${PIP_EXTRA[@]}" -r backend/requirements.txt
+  # The backend is torch-free since September 2026 (STT, TTS, speaker
+  # id and the embedder all run on onnxruntime), so a plain install
+  # is the same on GPU and no-GPU boxes.
+  pip install --quiet -r backend/requirements.txt
   echo "$NEW_HASH" > "$REQ_HASH_FILE"
   ok "python deps installed"
 fi
 
 # ─────────────────────────────────────────────────────────────────────
-# PHASE 4 — Model files (Whisper, Supertonic TTS, SpeechBrain ECAPA)
+# PHASE 4 — Model files (Parakeet STT, Supertonic TTS, speaker encoder, embedder)
 # ─────────────────────────────────────────────────────────────────────
 say "PHASE 4" "model files"
 
@@ -326,14 +322,30 @@ fi
 
 mkdir -p data "${HOMEOS_VOICES_DIR:-data/voices}"
 
-# Whisper — downloads on first import; cache lives at ~/.cache/whisper
-WHISPER_NAME="${HOMEOS_WHISPER_MODEL:-base}"
-if python3 -c "import os, whisper, sys; p = os.path.join(os.path.expanduser('~'), '.cache/whisper', '${WHISPER_NAME}.pt'); sys.exit(0 if os.path.exists(p) else 1)" 2>/dev/null; then
-  skip "whisper $WHISPER_NAME already cached"
+# Speech-to-text. Parakeet (sherpa-onnx, CPU) is the default engine; the
+# variant follows the household language (de → German fine-tune, else
+# multilingual). ~600 MB one-time into ${HOMEOS_STT_MODEL_DIR:-data/stt}.
+# Whisper is only fetched when config.env explicitly selects it.
+STT_BACKEND_CFG="${HOMEOS_STT_BACKEND:-parakeet}"
+if [[ "$STT_BACKEND_CFG" == "whisper" ]]; then
+  WHISPER_NAME="${HOMEOS_WHISPER_MODEL:-base}"
+  if python3 -c "import os, whisper, sys; p = os.path.join(os.path.expanduser('~'), '.cache/whisper', '${WHISPER_NAME}.pt'); sys.exit(0 if os.path.exists(p) else 1)" 2>/dev/null; then
+    skip "whisper $WHISPER_NAME already cached"
+  else
+    say "PHASE 4" "downloading whisper $WHISPER_NAME"
+    python3 -c "import whisper; whisper.load_model('${WHISPER_NAME}')"
+    ok "whisper $WHISPER_NAME downloaded"
+  fi
 else
-  say "PHASE 4" "downloading whisper $WHISPER_NAME"
-  python3 -c "import whisper; whisper.load_model('${WHISPER_NAME}')"
-  ok "whisper $WHISPER_NAME downloaded"
+  if python3 -c "import sys; from backend import stt_parakeet as p; sys.exit(0 if p.installed() else 1)" 2>/dev/null; then
+    skip "parakeet STT model present"
+  else
+    say "PHASE 4" "downloading parakeet STT model (one-time, ~600 MB)"
+    HF_HUB_DISABLE_PROGRESS_BARS=1 \
+    python3 -c "from backend import stt_parakeet as p; p.download(p.current_variant())" \
+      || warn "parakeet download failed — retry from Settings → Speech-to-text or by re-running start.sh"
+    python3 -c "import sys; from backend import stt_parakeet as p; sys.exit(0 if p.installed() else 1)" 2>/dev/null && ok "parakeet STT ready"
+  fi
 fi
 
 # Supertonic 3 — single ONNX model handles 31 languages including German.
@@ -374,20 +386,25 @@ python3 -c "from backend import voice_acks; voice_acks.warmup()" 2>/dev/null \
   && ok "voice acknowledgements ready" \
   || warn "voice ack warmup failed — voice will still work, just no instant feedback"
 
-# Speaker identification — SpeechBrain ECAPA-TDNN. Replaces Resemblyzer
-# because ECAPA holds up at 1-2 second utterances (real voice commands).
+# Speaker identification — sherpa-onnx speaker encoder (~29 MB ONNX).
 # Model is stored INSIDE the project at HOMEOS_SPEAKER_MODEL_DIR (default
 # data/speaker_model) so the shipped box doesn't depend on ~/.cache survival.
-SPK_DIR="${HOMEOS_SPEAKER_MODEL_DIR:-data/speaker_model}"
-if [[ -f "$SPK_DIR/embedding_model.ckpt" ]] || [[ -f "$SPK_DIR/hyperparams.yaml" ]]; then
-  skip "speechbrain ECAPA model present at $SPK_DIR"
+if python3 -c "import sys; from backend import voice_id as v; sys.exit(0 if v.installed() else 1)" 2>/dev/null; then
+  skip "speaker model present"
 else
-  say "PHASE 4" "downloading SpeechBrain ECAPA model to $SPK_DIR"
-  python3 -c "
-from speechbrain.inference.speaker import EncoderClassifier
-EncoderClassifier.from_hparams(source='speechbrain/spkrec-ecapa-voxceleb', savedir='$SPK_DIR')
-" 2>/dev/null && ok "speechbrain ECAPA ready" \
-  || warn "speechbrain init failed — voice-profile features will be unavailable"
+  say "PHASE 4" "downloading speaker model (one-time, ~30 MB)"
+  python3 -c "from backend import voice_id as v; v.download()" 2>/dev/null && ok "speaker model ready" \
+  || warn "speaker model download failed — voice-profile features will be unavailable"
+fi
+
+# Embedder — MiniLM ONNX export (~470 MB), used for document + chat search.
+if python3 -c "import sys; from backend.embedders import local as e; sys.exit(0 if e.installed() else 1)" 2>/dev/null; then
+  skip "embedder model present"
+else
+  say "PHASE 4" "downloading embedder model (one-time, ~470 MB)"
+  HF_HUB_DISABLE_PROGRESS_BARS=1 \
+  python3 -c "from backend.embedders import local as e; e.download()" 2>/dev/null && ok "embedder ready" \
+  || warn "embedder download failed — semantic search will fetch it on first use"
 fi
 
 # NOTE: the embedder is no longer started here. It's served by whichever

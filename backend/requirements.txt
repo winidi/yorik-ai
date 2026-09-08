@@ -28,8 +28,15 @@ ddgs==9.14.4
 # changes.
 pyyaml==6.0.3
 
-# Voice — Whisper STT (PHASE 4 of start.sh downloads the model weights)
-openai-whisper==20250625
+# Voice — speech-to-text. Parakeet (NVIDIA parakeet-tdt-0.6b, int8 ONNX)
+# through sherpa-onnx is the default: CPU-only, ~100 ms per utterance,
+# no torch. Model files come from HuggingFace / the sherpa-onnx release
+# page on first use (start.sh PHASE 4 or Settings → Speech-to-text).
+sherpa-onnx==1.13.7
+huggingface_hub==0.36.2
+onnxruntime==1.27.0
+# Whisper is an optional extra: `pip install openai-whisper` makes it
+# selectable again in Settings → Speech-to-text (pulls torch, ~2 GB).
 sounddevice==0.5.1
 scipy==1.15.1
 numpy==2.2.1
@@ -43,16 +50,12 @@ numpy==2.2.1
 # "No module named 'pandas'").
 pandas==2.2.3
 
-# Voice profiles: TTS (Supertonic) + speaker identification (SpeechBrain ECAPA).
-# Each has a one-time model download triggered by start.sh PHASE 4.
-# Supertonic 3 is an ONNX-Runtime on-device TTS with 31 languages incl. de.
-# (Replaced piper-tts==1.4.2 in 2026-05.)
+# Voice profiles: TTS (Supertonic) + speaker identification (sherpa-onnx
+# WeSpeaker CAM++, see voice_id.py). One-time model downloads in start.sh
+# PHASE 4. Supertonic 3 is an ONNX-Runtime on-device TTS with 31 languages
+# incl. de. (Replaced piper-tts==1.4.2 in 2026-05; SpeechBrain ECAPA
+# replaced by sherpa-onnx in 2026-09.)
 supertonic==1.2.3
-# SpeechBrain 1.0.2/1.0.3 reference torchaudio.list_audio_backends which is
-# removed in torchaudio ≥2.10. 1.1.0 fixes it. Keep this pin in sync with
-# whatever torchaudio Vanna pulls in.
-speechbrain==1.1.0
-
 # Encrypted credential storage for connectors that need API keys / passwords
 # (email-imap, twilio, etc). Fernet under the hood. Key auto-managed at
 # data/.credential_key on first install.
@@ -62,28 +65,16 @@ cryptography==48.0.0
 # Optional: connector falls back gracefully if not installed.
 fints==5.0.0
 
-# RAG / document search. Vector index lives in data/documents.db (separate
-# from family.db on purpose — heavy reindex jobs never lock the calendar).
+# RAG / document search. Vector index lives in Postgres (pgvector).
 pypdf==6.11.0
 python-docx==1.2.0
 
-# Bundled local embedder — sentence-transformers runs in-process so
-# semantic search works out of the box without any external embeddings
-# endpoint. Default model paraphrase-multilingual-MiniLM-L12-v2 is
-# ~120 MB, 384-dim, multilingual (German + English + 48 more).
-# Power users can still point HOMEOS_EMBED_BASE_URL at a faster GPU
-# embedder — see backend/documents.py and config.env.example.
-# speechbrain (above) already pulls torch transitively; we add
-# sentence-transformers on top. No torch pin here — we let the
-# speechbrain-compatible version win to avoid a resolver fight.
-sentence-transformers==3.3.1
-# Pins for the torch stack so a fresh install resolves the same wheels
-# the maintainer tests with. transformers 5.x is on PyPI and
-# sentence-transformers 3.3.1 needs <5; without the pin the resolver
-# silently picks whatever newest version still fits.
-torch==2.12.1
-torchaudio==2.11.0
-transformers==4.57.6
+# Bundled local embedder — MiniLM ONNX export through onnxruntime + the
+# Rust tokenizers package (see backend/embedders/local.py), so semantic
+# search works out of the box without any external embeddings endpoint
+# and without torch. Power users can still point HOMEOS_EMBED_BASE_URL
+# at a GPU embedder — see backend/documents.py and config.env.example.
+tokenizers==0.22.2
 
 # Wave 6b — community app platform. sqlparse for strict schema validation
 # of community-supplied SQL (whitelist of CREATE TABLE/INDEX/VIEW; blocks

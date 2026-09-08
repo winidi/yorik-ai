@@ -104,6 +104,8 @@ from . import api_tokens as _api_tokens
 app.include_router(_api_tokens.router)
 from . import mcp_server as _mcp_server
 app.include_router(_mcp_server.router)
+from . import openai_audio as _openai_audio
+app.include_router(_openai_audio.router)
 
 # Spaces / workspace ACL management (Phase B.5).
 from . import space_routes as _space_routes
@@ -2427,6 +2429,19 @@ def _startup() -> None:
         try:
             from . import voice as _voice
             import logging as _log
+            if _voice.STT_BACKEND == "parakeet":
+                from . import stt_parakeet as _pk
+                if _pk.installed():
+                    _pk.warm_up()
+                    _log.getLogger("homeos.voice").info(
+                        "Parakeet '%s' pre-loaded at boot", _pk.current_variant(),
+                    )
+                else:
+                    _log.getLogger("homeos.voice").warning(
+                        "STT backend=parakeet but model '%s' is not downloaded — "
+                        "Settings → Speech-to-text → Download", _pk.current_variant(),
+                    )
+                return
             if _voice.STT_BACKEND != "whisper":
                 _log.getLogger("homeos.voice").info(
                     "STT backend=%s — skipping Whisper preload (kept as fallback)",
@@ -10861,8 +10876,35 @@ def voice_config_get(
         "stt_url":          _voice.STT_URL,
         "stt_api_key_set":  bool(_voice.STT_API_KEY),  # never return the key itself
         "stt_model_name":   _voice.STT_MODEL_NAME,
-        "backends":         _voice.STT_BACKEND_CATALOGUE,
+        "backends":         _voice.backend_catalogue(),
+        "whisper_available": _voice._whisper_available(),
+        "parakeet":         _parakeet_status(),
     }
+
+
+def _parakeet_status() -> Dict[str, Any]:
+    from . import stt_parakeet as _pk
+    return {
+        "model":    _pk.current_variant(),
+        "variants": _pk.catalogue(),
+        "download": _pk.download_status(),
+    }
+
+
+@app.post("/api/voice/parakeet/download")
+def voice_parakeet_download(
+    body: Dict[str, Any] = Body(default={}),
+    user: dict[str, Any] = Depends(_auth.require_admin),
+) -> Dict[str, Any]:
+    """Fetch one Parakeet model in the background (~600 MB, one-time).
+    Poll GET /api/voice/config → parakeet.download for progress."""
+    from . import stt_parakeet as _pk
+    variant = (body.get("model") or _pk.current_variant()).strip().lower()
+    if variant not in _pk.VALID_VARIANTS:
+        raise HTTPException(status_code=400, detail=f"unknown Parakeet model {variant!r}")
+    if _pk.installed(variant):
+        return {"ok": True, "installed": True, "download": _pk.download_status()}
+    return {"ok": True, "installed": False, "download": _pk.start_download(variant)}
 
 
 @app.patch("/api/voice/config")
@@ -10889,6 +10931,19 @@ def voice_config_patch(
             )
         _voice.set_model(new_model)
         persist_keys.append(("HOMEOS_WHISPER_MODEL", new_model))
+
+    # 1b) Parakeet variant swap (de / multi). Takes effect on the next
+    # voice request; a missing model is reported, not downloaded here.
+    new_variant = (body.get("parakeet_model") or "").strip().lower()
+    if new_variant:
+        from . import stt_parakeet as _pk
+        if new_variant not in _pk.VALID_VARIANTS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"unknown Parakeet model {new_variant!r}; valid: {sorted(_pk.VALID_VARIANTS)}",
+            )
+        _pk.set_variant(new_variant)
+        persist_keys.append(("HOMEOS_PARAKEET_MODEL", new_variant))
 
     # 2) Cloud-backend swap. Any of {stt_backend, stt_url,
     # stt_api_key, stt_model_name} may be present; missing fields
@@ -10957,6 +11012,7 @@ def voice_config_patch(
         "stt_url":         _voice.STT_URL,
         "stt_api_key_set": bool(_voice.STT_API_KEY),
         "stt_model_name":  _voice.STT_MODEL_NAME,
+        "parakeet":        _parakeet_status(),
     }
 
 
@@ -10986,6 +11042,17 @@ def voice_test_connection(
     if backend == "whisper":
         # No connection to test — Whisper is in-process.
         return {"ok": True, "note": "Local Whisper has no remote endpoint to test."}
+    if backend == "parakeet":
+        from . import stt_parakeet as _pk
+        if not _pk.installed():
+            return {"ok": False, "error": f"Parakeet model '{_pk.current_variant()}' is not downloaded yet."}
+        try:
+            import time as _time
+            t0 = _time.monotonic()
+            _pk.warm_up()
+            return {"ok": True, "note": f"Parakeet '{_pk.current_variant()}' loaded in {_time.monotonic() - t0:.1f} s."}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
     # Build a 0.5s silent 16 kHz mono WAV. Cheap (~16 KB), real
     # enough to exercise the full multipart-upload code path.

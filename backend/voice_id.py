@@ -1,19 +1,23 @@
-"""Speaker identification via SpeechBrain ECAPA-TDNN.
+"""Speaker identification via sherpa-onnx (WeSpeaker CAM++), CPU only.
 
-Why ECAPA: real voice commands are 1–3 seconds. Resemblyzer is built for
-≥3-second segments and its similarity scores get noisy below that. ECAPA
-(VoxCeleb-trained) is the standard short-utterance speaker encoder and
-emits 192-dim d-vectors that compare cleanly with cosine similarity.
+Why a speaker encoder at all: the kiosk and the voice FAB identify who is
+talking so the request runs as that household member. Real voice commands
+are 1–3 seconds; CAM++ trained on VoxCeleb holds up at that length and
+emits 512-dim vectors that compare cleanly with cosine similarity.
+
+Why sherpa-onnx: it replaced SpeechBrain ECAPA in September 2026 when the
+backend went torch-free. Same job, a 29 MB ONNX file instead of a 4 GB
+torch stack. Embeddings from the old encoder (192 floats) don't match the
+new ones; enrolled profiles are ignored with a log line until the person
+re-enrolls in Settings → Voice.
 
 Design choices:
-- Lazy singleton: the encoder model is ~80 MB and 3-5s to import. We load it
-  on first call so uvicorn --reload doesn't pay that cost.
+- Lazy singleton: the extractor loads on first use (~0.3 s).
 - All failure modes (no model, no enrolled embeddings, audio too short,
-  torch error) return None from `identify()`. The caller falls back to the
-  role query param. Per the Graceful Fallback rule, the voice endpoint
-  MUST keep working before anyone enrolls.
+  runtime error) return None from `identify()`. The caller falls back to
+  the role query param. The voice endpoint MUST keep working before
+  anyone enrolls.
 - Embeddings stored as a JSON list of floats in user_profiles.voice_embedding.
-  192 floats × ~12 chars ≈ 2.4 KB per profile — fine in SQLite.
 """
 
 from __future__ import annotations
@@ -22,80 +26,114 @@ import json
 import logging
 import math
 import os
+import subprocess
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import numpy as np
 
 from .database import DEFAULT_DB_PATH, conn_ctx
 
 log = logging.getLogger("homeos.voice_id")
 
 MODEL_DIR = os.getenv("HOMEOS_SPEAKER_MODEL_DIR", "data/speaker_model")
-MATCH_THRESHOLD = float(os.getenv("HOMEOS_VOICE_MATCH_THRESHOLD", "0.65"))
+MODEL_FILE = os.getenv("HOMEOS_SPEAKER_MODEL_FILE", "wespeaker_en_voxceleb_CAM++_LM.onnx")
+MODEL_URL = (
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/"
+    + MODEL_FILE
+)
+# CAM++ cosine scores: same speaker typically 0.6–0.8, different speakers
+# below 0.3 on clean audio. Tune per install via config.env.
+MATCH_THRESHOLD = float(os.getenv("HOMEOS_VOICE_MATCH_THRESHOLD", "0.55"))
 MIN_ENROLL_SECONDS = float(os.getenv("HOMEOS_VOICE_ENROLL_MIN_SECONDS", "2"))
-ECAPA_SOURCE = "speechbrain/spkrec-ecapa-voxceleb"
 DB_PATH = os.getenv("HOMEOS_DB_PATH", DEFAULT_DB_PATH)
+SAMPLE_RATE = 16_000
 
-_encoder = None  # singleton instance of EncoderClassifier
+_extractor = None
+_lock = threading.Lock()
 
 
-def _get_encoder():
-    """Lazy-load ECAPA. Re-raises so callers can decide how to handle."""
-    global _encoder
-    if _encoder is None:
-        log.info("loading SpeechBrain ECAPA encoder from %s (first use)", MODEL_DIR)
-        # Imports kept local — torchaudio/speechbrain import chain is heavy.
-        from speechbrain.inference.speaker import EncoderClassifier
-        Path(MODEL_DIR).mkdir(parents=True, exist_ok=True)
-        _encoder = EncoderClassifier.from_hparams(
-            source=ECAPA_SOURCE,
-            savedir=MODEL_DIR,
-            run_opts={"device": "cpu"},  # GPU is for the LLM
+def model_path() -> Path:
+    return Path(MODEL_DIR) / MODEL_FILE
+
+
+def installed() -> bool:
+    return model_path().exists()
+
+
+def download() -> None:
+    """Fetch the speaker model (~29 MB). Blocking."""
+    import requests
+    p = model_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".part")
+    with requests.get(MODEL_URL, stream=True, timeout=60) as r:
+        r.raise_for_status()
+        with open(tmp, "wb") as fh:
+            for chunk in r.iter_content(chunk_size=1 << 20):
+                fh.write(chunk)
+    tmp.replace(p)
+
+
+def _get_extractor():
+    """Lazy-load the extractor. Re-raises so callers can decide how to handle."""
+    global _extractor
+    if _extractor is not None:
+        return _extractor
+    with _lock:
+        if _extractor is not None:
+            return _extractor
+        import sherpa_onnx
+        if not installed():
+            log.info("voice_id: speaker model missing — downloading %s", MODEL_FILE)
+            download()
+        cfg = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+            model=str(model_path()),
+            num_threads=max(1, min(2, os.cpu_count() or 1)),
+            provider="cpu",
         )
-    return _encoder
+        _extractor = sherpa_onnx.SpeakerEmbeddingExtractor(cfg)
+        log.info("voice_id: speaker encoder ready (%s, dim=%d)", MODEL_FILE, _extractor.dim)
+        return _extractor
 
 
-def _load_wav_16k_mono(path: str):
-    """Decode any audio file (WebM/Opus, mp3, wav, …) into a 16 kHz mono torch tensor.
+def _load_wav_16k_mono(path: str) -> np.ndarray:
+    """Decode any audio file (WebM/Opus, mp3, wav, …) into float32 mono 16 kHz.
 
-    Routed through ffmpeg because torchaudio ≥2.12 requires torchcodec and our
-    browser inputs are WebM/Opus that the python-side decoders won't handle.
-    ffmpeg is already a required system dependency (used by Whisper).
+    Routed through ffmpeg because browser inputs are WebM/Opus that the
+    python-side decoders won't handle. ffmpeg is a required system dependency.
     """
-    import subprocess
-    import numpy as np
-    import torch
-
-    # ffmpeg → raw 16-bit PCM mono @ 16 kHz on stdout
     cmd = [
         "ffmpeg", "-loglevel", "error", "-nostdin",
         "-i", path,
-        "-f", "s16le", "-ac", "1", "-ar", "16000", "-",
+        "-f", "f32le", "-ac", "1", "-ar", str(SAMPLE_RATE), "-",
     ]
     proc = subprocess.run(cmd, capture_output=True, check=True)
-    pcm = np.frombuffer(proc.stdout, dtype=np.int16)
-    if pcm.size == 0:
+    audio = np.frombuffer(proc.stdout, dtype=np.float32)
+    if audio.size == 0:
         raise RuntimeError("ffmpeg produced empty audio")
-    waveform = torch.from_numpy(pcm.astype(np.float32) / 32768.0).unsqueeze(0)
-    return waveform, 16_000
+    return audio
 
 
 def _audio_seconds(path: str) -> float:
     try:
-        wav, sr = _load_wav_16k_mono(path)
-        return float(wav.shape[-1]) / sr
-    except Exception as exc:
+        return float(_load_wav_16k_mono(path).size) / SAMPLE_RATE
+    except Exception as exc:  # noqa: BLE001
         log.warning("voice_id: could not measure audio length (%s)", exc)
         return 0.0
 
 
 def embed(wav_path: str) -> List[float]:
-    """Compute the 192-dim ECAPA embedding for a single audio file."""
-    waveform, _ = _load_wav_16k_mono(wav_path)
-    enc = _get_encoder()
-    embedding = enc.encode_batch(waveform).squeeze().tolist()
-    if not isinstance(embedding, list):  # zero-length safety
-        embedding = [float(embedding)]
-    return [float(x) for x in embedding]
+    """Compute the speaker embedding for a single audio file."""
+    audio = _load_wav_16k_mono(wav_path)
+    ext = _get_extractor()
+    with _lock:
+        stream = ext.create_stream()
+        stream.accept_waveform(SAMPLE_RATE, audio)
+        stream.input_finished()
+        vec = ext.compute(stream)
+    return [float(x) for x in vec]
 
 
 def _cosine(a: List[float], b: List[float]) -> float:
@@ -136,7 +174,7 @@ def _is_enabled() -> bool:
 
     Stored in app_settings as "1"/"0". When off, identify() returns None
     immediately and the caller falls back to the role query param —
-    skipping the ECAPA embedding step entirely, which is the main latency
+    skipping the embedding step entirely, which is the main latency
     cost on /api/ask-voice for installs with even one enrolled profile.
     """
     try:
@@ -154,9 +192,9 @@ def identify(wav_path: str) -> Optional[Dict[str, Any]]:
 
     The "None" outcomes (all silent, all logged):
       - The voice_id_enabled setting is off
-      - SpeechBrain or torch raises anything (corrupt model, bad audio, …)
-      - No profile has an enrolled embedding
-      - Audio is shorter than ECAPA can usefully encode (<0.4s)
+      - The encoder raises anything (missing model, bad audio, …)
+      - No profile has an enrolled embedding of the current encoder's size
+      - Audio is shorter than the encoder can usefully encode (<0.4s)
       - Best cosine similarity is below HOMEOS_VOICE_MATCH_THRESHOLD
 
     The caller falls back to the role query param.
@@ -165,7 +203,7 @@ def identify(wav_path: str) -> Optional[Dict[str, Any]]:
         return None
     try:
         # Cheap check first: if nobody is enrolled there's no possible match,
-        # so avoid the torch/ffmpeg cost of measuring + embedding the audio.
+        # so avoid the ffmpeg + encoder cost of measuring + embedding the audio.
         profiles = _load_enrolled_profiles()
         if not profiles:
             log.info("voice_id: no enrolled profiles — falling back to role param")
@@ -175,10 +213,18 @@ def identify(wav_path: str) -> Optional[Dict[str, Any]]:
             log.warning("voice_id: audio too short (%.2fs) — skipping ID", secs)
             return None
         query_emb = embed(wav_path)
+        stale = [p["name"] for p in profiles if len(p["embedding"]) != len(query_emb)]
+        if stale:
+            log.warning(
+                "voice_id: %s enrolled with the previous encoder — re-enroll in Settings → Voice",
+                ", ".join(stale),
+            )
         scored = [
             {**p, "similarity": _cosine(query_emb, p["embedding"])}
-            for p in profiles
+            for p in profiles if len(p["embedding"]) == len(query_emb)
         ]
+        if not scored:
+            return None
         scored.sort(key=lambda p: p["similarity"], reverse=True)
         best = scored[0]
         # Always log the raw score so we can tune HOMEOS_VOICE_MATCH_THRESHOLD.
@@ -202,7 +248,7 @@ def identify(wav_path: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def enroll(profile_id: int, wav_path: str) -> Dict[str, Any]:
+def enroll(profile_id: Any, wav_path: str) -> Dict[str, Any]:
     """Compute embedding for `wav_path`, store on the profile. Returns the row."""
     secs = _audio_seconds(wav_path)
     if secs < MIN_ENROLL_SECONDS:
@@ -226,7 +272,7 @@ def enroll(profile_id: int, wav_path: str) -> Dict[str, Any]:
 def warm_up() -> None:
     """Trigger the model download/load. Used by start.sh Phase 4."""
     try:
-        _get_encoder()
-        log.info("voice_id: SpeechBrain ECAPA ready")
+        _get_extractor()
+        log.info("voice_id: speaker encoder ready")
     except Exception as exc:  # noqa: BLE001
         log.warning("voice_id: warm-up failed: %s", exc)

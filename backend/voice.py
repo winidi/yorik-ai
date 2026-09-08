@@ -45,7 +45,20 @@ DURATION_SECONDS = int(os.getenv("HOMEOS_VOICE_CLI_SECONDS", "15"))
 # on-device. Settings → LLM → Speech-to-text exposes the engine
 # picker; switches persist to config.env via _replace_or_append_env in
 # main.py and are mirrored into these module globals via set_backend().
-STT_BACKEND = (os.getenv("HOMEOS_STT_BACKEND") or "whisper").strip().lower()
+def _default_backend() -> str:
+    """Parakeet when its model is on disk (a fresh install downloads it in
+    start.sh), otherwise Whisper. Explicit HOMEOS_STT_BACKEND always wins."""
+    try:
+        from . import stt_parakeet
+        if stt_parakeet.installed():
+            return "parakeet"
+    except Exception:  # noqa: BLE001
+        pass
+    return "whisper"
+
+
+STT_BACKEND = (os.getenv("HOMEOS_STT_BACKEND") or _default_backend()).strip().lower()
+LOCAL_STT_BACKENDS = {"parakeet", "whisper"}
 STT_URL = (os.getenv("HOMEOS_STT_URL") or "").strip()
 STT_API_KEY = os.getenv("HOMEOS_STT_API_KEY") or ""
 STT_MODEL_NAME = (os.getenv("HOMEOS_STT_MODEL_NAME") or "").strip()
@@ -55,9 +68,17 @@ STT_MODEL_NAME = (os.getenv("HOMEOS_STT_MODEL_NAME") or "").strip()
 # paste an API key for the common-case Groq flow.
 STT_BACKEND_CATALOGUE = [
     {
+        "id": "parakeet",
+        "label": "Local Parakeet (CPU)",
+        "blurb": "NVIDIA Parakeet via sherpa-onnx. Runs on the CPU in well under a second, no GPU, no network. Recommended.",
+        "requires_key": False,
+        "default_url": "",
+        "default_model": "",
+    },
+    {
         "id": "whisper",
         "label": "Local Whisper",
-        "blurb": "Runs on this machine. No API key, no network. Audio never leaves the device.",
+        "blurb": "OpenAI Whisper on this machine. Slower on CPU than Parakeet; kept for compatibility.",
         "requires_key": False,
         "default_url": "",
         "default_model": "",
@@ -81,6 +102,13 @@ STT_BACKEND_CATALOGUE = [
 ]
 
 VALID_STT_BACKENDS = {b["id"] for b in STT_BACKEND_CATALOGUE}
+
+
+def backend_catalogue() -> list:
+    """Catalogue for the Settings picker. Whisper is an optional extra
+    (`pip install openai-whisper`) and only listed when importable."""
+    return [b for b in STT_BACKEND_CATALOGUE
+            if b["id"] != "whisper" or _whisper_available()]
 
 # Long-form English names that Whisper sometimes returns when asked
 # for verbose JSON, mapped back to ISO-639-1. Groq returns these
@@ -194,6 +222,14 @@ def transcribe_detailed(path: str) -> Dict[str, str]:
         with automatic Whisper fallback on transient errors so a
         network blip never blocks a voice query.
     """
+    if STT_BACKEND == "parakeet":
+        try:
+            return _transcribe_parakeet(path)
+        except Exception as exc:  # noqa: BLE001
+            if not _whisper_available():
+                raise
+            log.warning("Parakeet failed (%s) — falling back to Whisper for this request", exc)
+            return _transcribe_whisper(path)
     if STT_BACKEND == "whisper":
         return _transcribe_local(path)
     try:
@@ -201,15 +237,40 @@ def transcribe_detailed(path: str) -> Dict[str, str]:
     except Exception as exc:  # noqa: BLE001
         if _should_fall_back(exc):
             log.warning(
-                "STT backend=%s failed (%s) — falling back to local Whisper for this request",
+                "STT backend=%s failed (%s) — falling back to local STT for this request",
                 STT_BACKEND, exc,
             )
             return _transcribe_local(path)
         raise
 
 
+def _transcribe_parakeet(path: str) -> Dict[str, str]:
+    from . import stt_parakeet
+    return stt_parakeet.transcribe_detailed(path)
+
+
+def _whisper_available() -> bool:
+    try:
+        import importlib.util
+        return importlib.util.find_spec("whisper") is not None
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _transcribe_local(path: str) -> Dict[str, str]:
-    """The historical Whisper path. Always available as the safety net."""
+    """The local safety net for cloud backends: Parakeet when its model is
+    on disk, else Whisper."""
+    try:
+        from . import stt_parakeet
+        if stt_parakeet.installed():
+            return _transcribe_parakeet(path)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("local Parakeet failed (%s) — trying Whisper", exc)
+    return _transcribe_whisper(path)
+
+
+def _transcribe_whisper(path: str) -> Dict[str, str]:
+    """The historical Whisper path."""
     result = _model().transcribe(path, fp16=False)
     return {
         "text": (result.get("text") or "").strip(),

@@ -1243,8 +1243,22 @@ interface WhisperModel {
   blurb: string;
 }
 
+interface ParakeetVariant {
+  id: "de" | "multi";
+  label: string;
+  size_mb: number;
+  blurb: string;
+  installed: boolean;
+}
+
+interface ParakeetStatus {
+  model: ParakeetVariant["id"];
+  variants: ParakeetVariant[];
+  download: { state: "idle" | "running" | "done" | "error"; variant: string; message: string };
+}
+
 interface STTBackend {
-  id: "whisper" | "groq" | "openai-compatible";
+  id: "parakeet" | "whisper" | "groq" | "openai-compatible";
   label: string;
   blurb: string;
   requires_key: boolean;
@@ -1260,6 +1274,8 @@ interface STTConfigResponse {
   stt_api_key_set: boolean;
   stt_model_name: string;
   backends: STTBackend[];
+  whisper_available?: boolean;
+  parakeet: ParakeetStatus;
 }
 
 function STTConfigCard({ toast }: {
@@ -1282,22 +1298,70 @@ function STTConfigCard({ toast }: {
   const [savingBackend, setSavingBackend] = useState(false);
   const [testing, setTesting] = useState(false);
 
+  // Parakeet (CPU) variant + on-demand model download.
+  const [parakeet, setParakeet] = useState<ParakeetStatus | null>(null);
+  const [whisperAvailable, setWhisperAvailable] = useState(true);
+  const [busyVariant, setBusyVariant] = useState<string | null>(null);
+
+  const loadConfig = useCallback(async () => {
+    const r = await api.get<STTConfigResponse>("/api/voice/config");
+    setCurrentModel(r.stt_model);
+    setCatalogue(r.catalogue || []);
+    setBackend(r.stt_backend);
+    setBackends(r.backends || []);
+    setUrl(r.stt_url || "");
+    setModelName(r.stt_model_name || "");
+    setApiKeySet(!!r.stt_api_key_set);
+    setParakeet(r.parakeet || null);
+    setWhisperAvailable(r.whisper_available !== false);
+    return r;
+  }, []);
+
   useEffect(() => {
-    (async () => {
-      try {
-        const r = await api.get<STTConfigResponse>("/api/voice/config");
-        setCurrentModel(r.stt_model);
-        setCatalogue(r.catalogue || []);
-        setBackend(r.stt_backend);
-        setBackends(r.backends || []);
-        setUrl(r.stt_url || "");
-        setModelName(r.stt_model_name || "");
-        setApiKeySet(!!r.stt_api_key_set);
-      } catch (e: any) {
-        toast(`Couldn't load voice config: ${e.message}`, "error");
-      }
-    })();
-  }, [toast]);
+    loadConfig().catch((e: any) => toast(`Couldn't load voice config: ${e.message}`, "error"));
+  }, [loadConfig, toast]);
+
+  // While a download runs, poll every 3 s until it settles.
+  const downloading = parakeet?.download.state === "running";
+  useEffect(() => {
+    if (!downloading) return;
+    const t = setInterval(() => {
+      loadConfig().then(r => {
+        if (r.parakeet?.download.state === "done") toast("Parakeet model downloaded.", "success");
+        if (r.parakeet?.download.state === "error") toast(`Download failed: ${r.parakeet.download.message}`, "error");
+      }).catch(() => {});
+    }, 3000);
+    return () => clearInterval(t);
+  }, [downloading, loadConfig, toast]);
+
+  async function pickVariant(id: ParakeetVariant["id"]) {
+    if (!parakeet || id === parakeet.model || busyVariant) return;
+    setBusyVariant(id);
+    try {
+      const r = await api.patch<STTConfigResponse>("/api/voice/config", { parakeet_model: id });
+      setParakeet(r.parakeet);
+      const meta = parakeet.variants.find(v => v.id === id);
+      toast(meta?.installed
+        ? `Switched to ${meta.label}.`
+        : `Switched to ${meta?.label || id}. Download the model to use it.`, "success");
+    } catch (e: any) {
+      toast(e.message || "Switch failed", "error");
+    } finally {
+      setBusyVariant(null);
+    }
+  }
+
+  async function downloadVariant(id: ParakeetVariant["id"]) {
+    try {
+      const r = await api.post<{ ok: boolean; installed: boolean; download: ParakeetStatus["download"] }>(
+        "/api/voice/parakeet/download", { model: id },
+      );
+      setParakeet(p => p ? { ...p, download: r.download } : p);
+      if (!r.installed) toast("Downloading in the background (~600 MB, one-time).", "info");
+    } catch (e: any) {
+      toast(e.message || "Download failed to start", "error");
+    }
+  }
 
   async function pickModel(id: string) {
     if (id === currentModel) return;
@@ -1332,11 +1396,12 @@ function STTConfigCard({ toast }: {
     // Don't auto-save yet — wait for the user to paste a key and
     // click Save. This avoids switching the active backend before
     // it's actually usable.
-    if (id === "whisper") {
-      // Whisper has no key/url to fill; flip the active backend
-      // immediately so the previous cloud config doesn't keep
-      // serving requests.
-      saveBackend({ stt_backend: "whisper" }, "Switched to local Whisper.");
+    if (id === "whisper" || id === "parakeet") {
+      // Local engines have no key/url to fill; flip the active
+      // backend immediately so the previous cloud config doesn't
+      // keep serving requests.
+      saveBackend({ stt_backend: id },
+        id === "parakeet" ? "Switched to local Parakeet." : "Switched to local Whisper.");
     }
   }
 
@@ -1402,7 +1467,7 @@ function STTConfigCard({ toast }: {
   }
 
   const currentBackendMeta = backends.find(b => b.id === backend);
-  const isCloud = backend !== "whisper";
+  const isCloud = backend !== "whisper" && backend !== "parakeet";
 
   return (
     <Card title="Speech-to-text">
@@ -1412,8 +1477,8 @@ function STTConfigCard({ toast }: {
           <div className="text-sm font-medium">Transcription engine</div>
           <p className="text-xs text-muted-foreground mt-0.5">
             Applies to every user — global backend setting.
-            Local Whisper keeps your audio on this machine; cloud engines send
-            audio to the provider but are faster and more accurate.
+            Local engines keep your audio on this machine; Parakeet does that on
+            the CPU in well under a second. Cloud engines send audio to the provider.
           </p>
         </div>
       </div>
@@ -1422,7 +1487,7 @@ function STTConfigCard({ toast }: {
       <div className="space-y-1.5 mb-4">
         {backends.map(b => {
           const active = backend === b.id;
-          const Icon = b.id === "whisper" ? HardDrive : Globe;
+          const Icon = b.id === "parakeet" ? Cpu : b.id === "whisper" ? HardDrive : Globe;
           return (
             <button
               key={b.id}
@@ -1454,6 +1519,63 @@ function STTConfigCard({ toast }: {
           );
         })}
       </div>
+
+      {/* Parakeet variant + model download */}
+      {backend === "parakeet" && parakeet && (
+        <div className="space-y-1.5 mb-4 border border-border rounded-md p-3 bg-muted/30">
+          <div className="text-xs font-medium mb-1">Parakeet model</div>
+          {parakeet.variants.map(v => {
+            const active = parakeet.model === v.id;
+            const isBusy = busyVariant === v.id;
+            const dl = parakeet.download;
+            const running = dl.state === "running" && dl.variant === v.id;
+            return (
+              <div
+                key={v.id}
+                className={cn(
+                  "border rounded-md px-3 py-2 transition flex items-start gap-2",
+                  active ? "border-violet-500 bg-violet-500/5" : "border-border bg-card",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => pickVariant(v.id)}
+                  disabled={busyVariant !== null}
+                  className="flex-1 min-w-0 text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    {active
+                      ? <CheckCircle2 className="w-4 h-4 text-violet-500 shrink-0" />
+                      : isBusy
+                      ? <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                      : <div className="w-4 h-4 rounded-full border border-border shrink-0" />}
+                    <span className="font-medium text-sm">{v.label}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono">~{v.size_mb} MB</span>
+                    {v.installed
+                      ? <span className="text-[10px] text-emerald-600">downloaded</span>
+                      : <span className="text-[10px] text-amber-600">not downloaded</span>}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1 ml-6">{v.blurb}</div>
+                </button>
+                {!v.installed && (
+                  <button
+                    type="button"
+                    onClick={() => downloadVariant(v.id)}
+                    disabled={dl.state === "running"}
+                    className="text-xs px-2.5 py-1.5 rounded border border-border bg-card hover:bg-muted disabled:opacity-60 inline-flex items-center gap-1.5 shrink-0"
+                  >
+                    {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                    {running ? "Downloading" : "Download"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          {parakeet.download.state === "error" && (
+            <p className="text-[11px] text-red-600">{parakeet.download.message}</p>
+          )}
+        </div>
+      )}
 
       {/* Cloud-engine settings (URL + key + model + test) */}
       {isCloud && currentBackendMeta && (
@@ -1534,16 +1656,16 @@ function STTConfigCard({ toast }: {
         </div>
       )}
 
-      {/* Whisper model picker — always visible. Drives the local
-          backend and the fallback path for cloud engines. */}
-      <div className="border-t border-border pt-3 mt-1">
+      {/* Whisper model picker — only when the optional whisper package
+          is installed. */}
+      {whisperAvailable && <div className="border-t border-border pt-3 mt-1">
         <div className="flex items-start gap-2 mb-2">
           <HardDrive className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
           <div className="flex-1">
             <div className="text-xs font-medium">Local Whisper model</div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              {isCloud
-                ? "Used as fallback when the cloud engine is unreachable. Bigger = better fallback quality."
+              {backend !== "whisper"
+                ? "Only used when Parakeet is not available. Bigger = better fallback quality."
                 : "Bigger = more accurate, slower, larger download. Switching downloads the new model on the next voice request."}
             </p>
           </div>
@@ -1584,7 +1706,7 @@ function STTConfigCard({ toast }: {
             );
           })}
         </div>
-      </div>
+      </div>}
     </Card>
   );
 }

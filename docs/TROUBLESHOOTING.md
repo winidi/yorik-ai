@@ -63,19 +63,16 @@ The fixes that go into this file usually come from real bug reports.
 > bash start.sh
 > ```
 
-### `start.sh` hangs at "downloading whisper turbo"
+### `start.sh` hangs at "downloading parakeet STT model"
 
 > **Symptom**: the voice-model download takes ages or appears stuck.
 >
-> **Diagnose**: it's ~1.5 GB and pulls from HuggingFace. Slow connection makes it look frozen. Check disk activity:
+> **Diagnose**: it's ~600 MB and pulls from HuggingFace (German variant) or GitHub (multilingual). A slow connection makes it look frozen. Check disk activity:
 > ```bash
 > iotop -ao   # in another terminal
 > ```
 >
-> **Fix**: be patient (10+ min on a slow line). If genuinely stuck (zero IO for >5 min), `Ctrl-C` and re-run — `start.sh` is idempotent. To skip whisper entirely and use a smaller model:
-> ```bash
-> echo "HOMEOS_WHISPER_MODEL=base" >> config.env
-> ```
+> **Fix**: be patient (10+ min on a slow line). If genuinely stuck (zero IO for >5 min), `Ctrl-C` and re-run — `start.sh` is idempotent. The download can also be started later from Settings → Speech-to-text; until then voice input reports that the model is missing.
 
 ## LLM / chat
 
