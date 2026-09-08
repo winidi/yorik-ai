@@ -131,6 +131,7 @@ Yorik is the glue, not the engines.
 - [docs/INSTALL.md](docs/INSTALL.md) — full install guide
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — common failures
 - [docs/CONNECTORS.md](docs/CONNECTORS.md) — n8n + external services
+- [docs/MCP.md](docs/MCP.md) — Yorik as an MCP server for outside agents (Hermes, Claude Code)
 - [ARCHITECTURE.md](ARCHITECTURE.md) — internals
 - [THREAT_MODEL.md](THREAT_MODEL.md) — security architecture
 - [backend/APP_SDK_README.md](backend/APP_SDK_README.md) — building third-party apps

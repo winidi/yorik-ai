@@ -356,6 +356,7 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
           <VoiceAckToggle toast={toast} />
         </Card>
         <ChangePasswordCard toast={toast} />
+        <ApiTokensCard toast={toast} />
         <VoiceEnrollmentCard toast={toast} />
         <KioskPinCard toast={toast} />
         <KioskAgendaConsentCard toast={toast} />
@@ -550,6 +551,169 @@ function VoiceAckToggle({ toast }: {
 // OTHER users' passwords is the separate ResetPasswordModal in the
 // Users tab (calls /api/users/{id}/reset-password); this card is for
 // "change my own password".
+
+type ApiToken = {
+  id: number;
+  name: string;
+  prefix: string;
+  created_at: string | null;
+  last_used_at: string | null;
+  revoked: boolean;
+};
+
+/** Personal API tokens: how an outside agent (Hermes, Claude, a script)
+ *  talks to this Yorik as the logged-in user. The token is shown once. */
+function ApiTokensCard({ toast }: {
+  toast: (text: string, kind?: "info" | "success" | "error") => void;
+}) {
+  const [tokens, setTokens] = useState<ApiToken[]>([]);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [fresh, setFresh] = useState<{ id: number; token: string } | null>(null);
+  const mcpUrl = `${window.location.origin}/mcp`;
+
+  const load = useCallback(async () => {
+    try {
+      setTokens(await api.get<ApiToken[]>("/api/tokens"));
+    } catch (e: any) {
+      toast(`Couldn't load tokens: ${e.message}`, "error");
+    }
+  }, [toast]);
+  useEffect(() => { load(); }, [load]);
+
+  async function create() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await api.post<ApiToken & { token: string }>("/api/tokens", { name: name.trim() });
+      setFresh({ id: r.id, token: r.token });
+      setName("");
+      await load();
+    } catch (e: any) {
+      toast(`Couldn't create token: ${e.message}`, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revoke(id: number) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api.delete(`/api/tokens/${id}`);
+      if (fresh?.id === id) setFresh(null);
+      await load();
+      toast("Token revoked", "success");
+    } catch (e: any) {
+      toast(`Couldn't revoke token: ${e.message}`, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy(text: string, what: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(`${what} copied`, "success");
+    } catch {
+      toast("Copy failed. Select the text and copy it by hand.", "error");
+    }
+  }
+
+  const live = tokens.filter(t => !t.revoked);
+
+  return (
+    <Card title="API tokens">
+      <div className="mb-3 flex items-start gap-2">
+        <KeyRound className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
+        <div className="flex-1">
+          <div className="text-sm font-medium">Let an agent use Yorik as you</div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            A token gives an outside assistant (Hermes, Claude, a script) the same skills you
+            have in chat, nothing more. Deletions still wait for a confirmation. The MCP endpoint is
+          </p>
+          <button
+            type="button"
+            onClick={() => copy(mcpUrl, "Endpoint")}
+            className="mt-1 inline-flex items-center gap-1 text-xs font-mono text-foreground/80 hover:text-foreground transition"
+            title="Copy endpoint"
+          >
+            {mcpUrl}
+            <Copy className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="Name, e.g. Hermes on the workstation"
+          className={inputClass}
+          maxLength={80}
+          onKeyDown={e => { if (e.key === "Enter") create(); }}
+        />
+        <button
+          type="button"
+          onClick={create}
+          disabled={busy}
+          className="h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm inline-flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+        >
+          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+          Create
+        </button>
+      </div>
+
+      {fresh && (
+        <div className="mt-3 rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/60 p-3">
+          <div className="text-xs text-amber-800 dark:text-amber-300 mb-1.5">
+            Copy this token now. It is shown only once.
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs font-mono break-all select-all">{fresh.token}</code>
+            <button
+              type="button"
+              onClick={() => copy(fresh.token, "Token")}
+              className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition shrink-0"
+            >
+              <Copy className="w-3.5 h-3.5" /> Copy
+            </button>
+          </div>
+        </div>
+      )}
+
+      {live.length > 0 && (
+        <ul className="mt-3 divide-y divide-border">
+          {live.map(t => (
+            <li key={t.id} className="py-2 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm truncate">{t.name}</div>
+                <div className="text-[11px] text-muted-foreground font-mono">
+                  {t.prefix}
+                  <span className="font-sans"> · created {t.created_at?.slice(0, 10) ?? "?"}
+                    {t.last_used_at ? ` · last used ${t.last_used_at.slice(0, 16)}` : " · never used"}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => revoke(t.id)}
+                disabled={busy}
+                className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-red-600 transition disabled:opacity-50"
+                title="Revoke"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Revoke
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {live.length === 0 && !fresh && (
+        <p className="mt-3 text-[11px] text-muted-foreground">No tokens yet.</p>
+      )}
+    </Card>
+  );
+}
 
 function ChangePasswordCard({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;

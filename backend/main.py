@@ -100,6 +100,10 @@ app.include_router(_wa.router)
 # User management (multi-user wave 2) — admin CRUD + self-service profile.
 from . import users as _users
 app.include_router(_users.router)
+from . import api_tokens as _api_tokens
+app.include_router(_api_tokens.router)
+from . import mcp_server as _mcp_server
+app.include_router(_mcp_server.router)
 
 # Spaces / workspace ACL management (Phase B.5).
 from . import space_routes as _space_routes
@@ -2129,7 +2133,7 @@ async def require_session_for_api(request, call_next):
         if not user:
             auth_header = request.headers.get("authorization") or ""
             if auth_header.lower().startswith("bearer "):
-                user = _auth._get_user_from_jwt(auth_header[7:].strip())
+                user = _auth.get_user_from_bearer(auth_header[7:])
         if not user:
             return JSONResponse(
                 {"detail": "not authenticated"},

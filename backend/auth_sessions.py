@@ -546,6 +546,19 @@ def _get_user_from_jwt(token: str) -> Optional[dict[str, Any]]:
     return user
 
 
+def get_user_from_bearer(token: str) -> Optional[dict[str, Any]]:
+    """Resolve an ``Authorization: Bearer`` value. Two shapes exist:
+    a personal API token (``yk_…``, see api_tokens.py) or a Supabase
+    Auth JWT. Returns the user dict or None."""
+    token = (token or "").strip()
+    if not token:
+        return None
+    from .api_tokens import TOKEN_PREFIX, resolve_token
+    if token.startswith(TOKEN_PREFIX):
+        return resolve_token(token)
+    return _get_user_from_jwt(token)
+
+
 def current_user_optional(
     request: Request,
     yorik_session: Optional[str] = Cookie(default=None, alias=COOKIE_NAME),
@@ -558,8 +571,7 @@ def current_user_optional(
     (legacy — still works during the B→C transition)."""
     auth_header = request.headers.get("authorization") or ""
     if auth_header.lower().startswith("bearer "):
-        token = auth_header[7:].strip()
-        user = _get_user_from_jwt(token)
+        user = get_user_from_bearer(auth_header[7:])
         if user:
             return user
     if not yorik_session:

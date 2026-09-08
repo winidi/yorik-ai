@@ -11,6 +11,17 @@ No new features. This is the "works on a stranger's box" pass after the
 first two alpha months, done with the code audit of 2026-08-24 as the
 worklist.
 
+### Added
+
+- **MCP server.** `POST /mcp` exposes the skills registry to outside
+  agents (Hermes, Claude Code, scripts) over Streamable HTTP. One tool
+  per skill the caller may use, schemas generated from `skill.md`,
+  `skill_view` / `pending_confirm` / `pending_cancel` / `whoami` on top.
+  Deletions still stage a confirmation the agent has to resolve.
+  Personal API tokens (Settings → You → API tokens, shown once, hashed
+  at rest) are the only credential; a token acts as its owner and can
+  also call `/api/*`. See [docs/MCP.md](docs/MCP.md).
+
 ### Changed / fixed
 
 - **One database.** Postgres (the bundled Supabase stack) is the only
