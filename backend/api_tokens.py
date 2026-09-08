@@ -101,8 +101,8 @@ def resolve_token(plain: str) -> Optional[dict[str, Any]]:
     h = _hash(plain)
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT t.token_hash, t.revoked_at, u.id, u.name, u.email, u.role, "
-            "u.language, u.disabled "
+            "SELECT t.token_hash, t.revoked_at, t.name AS token_name, u.id, u.name, "
+            "u.email, u.role, u.language, u.disabled, u.agent_may_confirm_deletes "
             "FROM api_tokens t JOIN user_profiles u ON u.id = t.user_id "
             "WHERE t.token_hash = ?",
             (h,),
@@ -121,6 +121,8 @@ def resolve_token(plain: str) -> Optional[dict[str, Any]]:
         "language": row["language"],
         "disabled": row["disabled"],
         "auth": "api_token",
+        "token_name": row.get("token_name") or "",
+        "agent_may_confirm_deletes": bool(row.get("agent_may_confirm_deletes")),
     }
 
 
@@ -180,6 +182,21 @@ def create_my_token(body: TokenCreate,
         raise HTTPException(status_code=403, detail="log in to create tokens")
     plain, row = create_token(user["id"], body.name)
     return {**row, "token": plain}
+
+
+@router.get("/all")
+def list_all_tokens(user: dict[str, Any] = Depends(_current_user())) -> list[dict[str, Any]]:
+    """Every live token in the household with its owner. Admin only."""
+    if (user.get("role") or "").lower() not in ("admin", "platform_admin"):
+        raise HTTPException(status_code=403, detail="admin only")
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT t.id, t.user_id, t.name, t.token_prefix, t.created_at, t.last_used_at, "
+            "t.revoked_at, u.name AS owner_name "
+            "FROM api_tokens t JOIN user_profiles u ON u.id = t.user_id "
+            "WHERE t.revoked_at IS NULL ORDER BY u.name, t.id DESC"
+        ).fetchall()
+    return [{**_public(dict(r)), "owner": r["owner_name"], "owner_id": str(r["user_id"])} for r in rows]
 
 
 @router.delete("/{token_id}")

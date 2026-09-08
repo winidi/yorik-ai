@@ -11194,6 +11194,26 @@ def patch_confirm_mutations(
     return {"ok": True, "confirm_mutations": enabled}
 
 
+@app.patch("/api/profile/agent-deletes")
+def patch_agent_deletes(
+    body: Dict[str, Any] = Body(...),
+    user: dict[str, Any] = Depends(_auth.current_user),
+) -> Dict[str, Any]:
+    """Whether an outside agent (MCP / API token) may run deletions it
+    staged. OFF (default): the deletion waits as a card in this user's
+    notification bell and only a tap there runs it. Browser session only,
+    so an agent can't grant itself the right."""
+    if user.get("auth") == "api_token":
+        raise HTTPException(status_code=403, detail="log in to change this")
+    enabled = bool(body.get("enabled", False))
+    with conn_ctx(DB_PATH) as conn:
+        conn.execute(
+            "UPDATE user_profiles SET agent_may_confirm_deletes=? WHERE id=?",
+            (enabled, user["id"]),
+        )
+    return {"ok": True, "agent_may_confirm_deletes": enabled}
+
+
 # ─── /api/llm/config (existing) ────────────────────────────────────
 
 

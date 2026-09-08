@@ -131,7 +131,7 @@ def test_bad_args_are_tool_errors(token_client):
 def test_create_then_delete_round_trip(token_client):
     """add_calendar_event runs as the token owner; delete stages a
     confirm-before card that pending_confirm resolves."""
-    client, token, uid, _ = token_client
+    client, token, uid, logged_in = token_client
     r = _rpc(client, token, "tools/call", {
         "name": "add_calendar_event",
         "arguments": {"title": "MCP dentist", "starts_at": "2030-01-15T10:00:00"},
@@ -153,12 +153,52 @@ def test_create_then_delete_round_trip(token_client):
     assert body["isError"] is False, body
     pending = body["structuredContent"]["pending_confirmation"]
     assert pending["preview"]["mode"] == "confirm_before"
+    assert "Yorik app" in pending["next"]
     with get_conn() as conn:
         assert conn.execute("SELECT 1 FROM events WHERE id=?", (event_id,)).fetchone()
+
+    # The owner gets a card in the bell; the agent may not confirm.
+    bell = logged_in.get("/api/notifications").json()["notifications"]
+    card = next(n for n in bell if n["kind"] == "agent_pending")
+    assert card["payload"]["pending_id"] == pending["pending_id"]
+    assert "pytest agent" in card["title"] and "MCP dentist" in card["title"]
+
+    r = _rpc(client, token, "tools/call",
+             {"name": "pending_confirm", "arguments": {"pending_id": pending["pending_id"]}})
+    assert r.json()["result"]["isError"] is True
+    with get_conn() as conn:
+        assert conn.execute("SELECT 1 FROM events WHERE id=?", (event_id,)).fetchone()
+
+    # A token cannot grant itself the right; the browser session can.
+    r = client.patch("/api/profile/agent-deletes", json={"enabled": True},
+                     headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 403
+    r = logged_in.patch("/api/profile/agent-deletes", json={"enabled": True})
+    assert r.status_code == 200
+    assert logged_in.get("/api/auth/me").json()["user"]["agent_may_confirm_deletes"] is True
 
     r = _rpc(client, token, "tools/call",
              {"name": "pending_confirm", "arguments": {"pending_id": pending["pending_id"]}})
     assert r.json()["result"]["isError"] is False, r.text
+    with get_conn() as conn:
+        assert conn.execute("SELECT 1 FROM events WHERE id=?", (event_id,)).fetchone() is None
+
+
+def test_owner_deletes_from_the_bell(token_client):
+    """Default policy: the card in the bell runs the deletion."""
+    client, token, uid, logged_in = token_client
+    r = _rpc(client, token, "tools/call", {
+        "name": "add_calendar_event",
+        "arguments": {"title": "Bell test", "starts_at": "2030-02-01T09:00:00"},
+    })
+    created = r.json()["result"]["structuredContent"]["result"]
+    event_id = created.get("event_id") or created.get("id") or (created.get("event") or {}).get("id")
+    r = _rpc(client, token, "tools/call",
+             {"name": "delete_calendar_event", "arguments": {"event_id": int(event_id)}})
+    pending_id = r.json()["result"]["structuredContent"]["pending_confirmation"]["pending_id"]
+    r = logged_in.post(f"/api/pending/{pending_id}/confirm")
+    assert r.status_code == 200, r.text
+    from backend.database import get_conn
     with get_conn() as conn:
         assert conn.execute("SELECT 1 FROM events WHERE id=?", (event_id,)).fetchone() is None
 
@@ -180,3 +220,24 @@ def test_token_lifecycle(token_client):
     assert r.status_code == 200
     assert _rpc(client, token, "ping").status_code == 401
     assert logged_in.get("/api/tokens").json()[0]["revoked"] is True
+
+
+def test_token_calls_are_audited_and_admins_see_all_tokens(token_client, fresh_app):
+    client, token, uid, logged_in = token_client
+    _rpc(client, token, "tools/call", {"name": "check_calendar", "arguments": {"days": 1}})
+    from backend.database import get_conn
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT source FROM skill_invocations WHERE skill_id='check_calendar' AND user_id=? "
+            "ORDER BY id DESC LIMIT 1", (uid,),
+        ).fetchone()
+    assert row and row["source"] == "token:pytest agent"
+
+    # a member cannot list the household's tokens, an admin can
+    assert logged_in.get("/api/tokens/all").status_code == 403
+    admin, _ = login_client(fresh_app, role="admin", email="adm2@example.local")
+    rows = admin.get("/api/tokens/all").json()
+    mine = [r for r in rows if r["owner_id"] == str(uid)]
+    assert mine and mine[0]["name"] == "pytest agent" and "token" not in mine[0]
+    assert admin.delete(f"/api/tokens/{mine[0]['id']}").status_code == 200
+    assert _rpc(client, token, "ping").status_code == 401

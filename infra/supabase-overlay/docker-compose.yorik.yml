@@ -6,6 +6,14 @@
 #  - Supavisor's pooler host ports moved off 5432/6543 (a PostgreSQL on
 #    the host is common) and bound to loopback. Nothing in Yorik uses
 #    them; they stay for local tooling.
+#  - Kong gets two nginx workers. Upstream leaves it at "auto", which on
+#    a 32-thread CPU means 32 workers and ~3 GB of RAM for a gateway
+#    that serves one household.
+#  - Studio, pg-meta and the edge runtime are moved into the "full"
+#    profile: Yorik does not use them, and together they cost ~500 MB.
+#    `docker compose --profile full up -d` brings them back; Kong no
+#    longer waits for Studio to be healthy. (imgproxy stays: storage
+#    declares a dependency on it.)
 services:
   db:
     ports:
@@ -14,3 +22,13 @@ services:
     ports: !override
       - "127.0.0.1:5434:5432"
       - "127.0.0.1:6544:6543"
+  kong:
+    depends_on: !reset {}
+    environment:
+      KONG_NGINX_WORKER_PROCESSES: "2"
+  studio:
+    profiles: ["full"]
+  meta:
+    profiles: ["full"]
+  functions:
+    profiles: ["full"]

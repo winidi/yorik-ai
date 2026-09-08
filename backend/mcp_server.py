@@ -50,10 +50,13 @@ INSTRUCTIONS = (
     "Call skill_view(name) before the first use of a skill to read its "
     "rules and argument details. Skills that delete something do not "
     "delete on their own: the result carries pending_confirmation with a "
-    "pending_id and a preview. Show the preview to your user and call "
-    "pending_confirm(pending_id) only after they agreed, or "
-    "pending_cancel(pending_id) otherwise. Creates and updates are applied "
-    "at once and may also return a pending_id; pending_cancel undoes them."
+    "pending_id and a preview. By default the owner confirms deletions in "
+    "the Yorik app; tell your user the card is waiting in their notification "
+    "bell, and use pending_cancel(pending_id) if they changed their mind. "
+    "Only when the account allows agents to confirm deletions does "
+    "pending_confirm(pending_id) run them, and then only after the human "
+    "agreed. Creates and updates are applied at once and may also return a "
+    "pending_id; pending_cancel undoes them."
 )
 
 _JSON_TYPES = {"string", "integer", "number", "boolean", "array", "object"}
@@ -152,8 +155,9 @@ _BUILTIN_TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "pending_confirm",
-        "description": "Run a staged deletion, or acknowledge an applied change. "
-                       "Only after the human agreed to the preview.",
+        "description": "Acknowledge an applied change, or run a staged deletion when the "
+                       "account allows agents to confirm deletions. Only after the human "
+                       "agreed to the preview.",
         "inputSchema": {
             "type": "object",
             "properties": {"pending_id": {"type": "string"}},
@@ -227,7 +231,8 @@ async def call_tool(user: dict[str, Any], name: str, arguments: dict[str, Any]) 
     skill = reg.get(name)
     if not skill or not _may_call(user, skill):
         raise KeyError(name)
-    ctx = SkillContext(reg, role=_effective_role(user), user_id=user["id"])
+    ctx = SkillContext(reg, role=_effective_role(user), user_id=user["id"],
+                       source=f"token:{user.get('token_name') or '?'}")
     reset_ui_actions()
     try:
         result = await reg.invoke(name, ctx=ctx, **(arguments or {}))
@@ -236,14 +241,57 @@ async def call_tool(user: dict[str, Any], name: str, arguments: dict[str, Any]) 
     payload: dict[str, Any] = {"result": result}
     for action in get_ui_actions():
         if action.get("type") == "pending_confirmation":
-            payload["pending_confirmation"] = {
+            preview = action.get("preview") or {}
+            block = {
                 "pending_id": action.get("pending_id"),
                 "skill": action.get("skill"),
-                "preview": action.get("preview"),
-                "next": ("pending_confirm(pending_id) after the human agreed, "
-                         "pending_cancel(pending_id) otherwise"),
+                "preview": preview,
             }
+            if preview.get("mode") == "confirm_before" and not user.get("agent_may_confirm_deletes"):
+                _notify_owner_of_deletion(user, name, action)
+                block["next"] = ("Nothing is deleted yet. The owner confirms this in the Yorik app "
+                                 "(notification bell); pending_confirm is not allowed for this "
+                                 "account. pending_cancel(pending_id) withdraws it.")
+            else:
+                block["next"] = ("pending_confirm(pending_id) after the human agreed, "
+                                 "pending_cancel(pending_id) otherwise")
+            payload["pending_confirmation"] = block
     return payload
+
+
+def _notify_owner_of_deletion(user: dict[str, Any], skill: str, action: dict[str, Any]) -> None:
+    """A staged deletion from an agent lands in the owner's bell with
+    Delete / Keep buttons. Best effort: a failure here must not fail the
+    skill call, the pending row still exists."""
+    try:
+        from . import notifications as _notif
+        preview = action.get("preview") or {}
+        subject = _preview_subject(preview)
+        agent = user.get("token_name") or "An agent"
+        _notif.create(
+            user_id=user["id"],
+            kind="agent_pending",
+            title=f"{agent} wants to delete {subject}",
+            body="Nothing has been removed. Tap Delete to run it, or Keep to leave it.",
+            payload={
+                "pending_id": action.get("pending_id"),
+                "skill": skill,
+                "preview": preview,
+                "agent": agent,
+            },
+        )
+    except Exception:  # noqa: BLE001
+        log.exception("could not notify owner about staged deletion")
+
+
+def _preview_subject(preview: dict[str, Any]) -> str:
+    for key in ("event", "task", "contact", "draft", "bill"):
+        obj = preview.get(key)
+        if isinstance(obj, dict):
+            title = obj.get("title") or obj.get("name") or obj.get("subject")
+            if title:
+                return f"{key} \"{title}\""
+    return preview.get("title") or preview.get("action") or "an item"
 
 
 def _may_call(user: dict[str, Any], skill: Any) -> bool:
@@ -264,6 +312,15 @@ async def _resolve_pending(user: dict[str, Any], tool: str, pending_id: str) -> 
 
     if not pending_id:
         raise ToolError("pending_id is required")
+    if tool == "pending_confirm" and not user.get("agent_may_confirm_deletes"):
+        from . import pending_actions as _pa
+        row = _pa.get(pending_id)
+        if row and _pa.is_deferred(row):
+            raise ToolError(
+                "This deletion waits for the owner in the Yorik app (notification bell). "
+                "Agents may not confirm deletions for this account; ask the person to tap "
+                "Delete there, or use pending_cancel to withdraw it."
+            )
     handler = _main.pending_confirm if tool == "pending_confirm" else _main.pending_cancel
     try:
         return await handler(pending_id, user=user)

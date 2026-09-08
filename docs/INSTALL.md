@@ -123,7 +123,11 @@ that hasn't been done. On the first run it:
 4. Downloads the on-device models (Parakeet STT, Supertonic-3 TTS,
    speaker encoder, MiniLM embedder) — **~1.5 GB total**, one-time.
    Everything runs on the CPU through onnxruntime; there is no torch.
-5. Brings up the bundled Supabase stack and applies the database migrations
+5. Brings up the bundled Supabase stack (Postgres, Kong, Auth, PostgREST,
+   Realtime, Storage, imgproxy, Supavisor, ~1.5 GB RAM) and applies the
+   database migrations. Supabase Studio, pg-meta and the edge runtime are
+   not started; `docker compose --profile full up -d` inside
+   `infra/supabase/docker/` brings them up when you want them
 6. Brings up the optional Docker stack with auto-detected profiles
    (skips any service whose port is already taken on the host)
 7. Starts the FastAPI backend at `http://localhost:8000`

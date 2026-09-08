@@ -21,6 +21,17 @@ worklist.
   Personal API tokens (Settings → You → API tokens, shown once, hashed
   at rest) are the only credential; a token acts as its owner and can
   also call `/api/*`. See [docs/MCP.md](docs/MCP.md).
+- **Agents cannot delete on their own.** A deletion an agent stages lands
+  as a Delete / Keep card in the owner's notification bell; only that tap
+  runs it. Settings → Beta safety → "Let agents confirm deletions" opts an
+  account out of the guard.
+- **Audit + admin view for tokens.** Skill calls made through a token are
+  logged with `source = token:<name>` in `skill_invocations`; admins see
+  and revoke every member's tokens under Settings → API tokens.
+- **Leaner Supabase.** Kong runs two nginx workers instead of one per CPU
+  thread (3.2 GB → ~0.3 GB on a 32-thread box); Studio, pg-meta and the
+  edge runtime move to the compose profile `full` and stay off unless
+  asked for. The default stack now needs ~1.5 GB.
 - **Parakeet speech-to-text.** NVIDIA parakeet-tdt-0.6b (int8 ONNX via
   sherpa-onnx) replaces Whisper as the default engine: CPU only, about
   100 ms per utterance, no torch. German fine-tune or multilingual

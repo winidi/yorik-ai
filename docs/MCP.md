@@ -62,15 +62,25 @@ deletion and the tool result carries a `pending_confirmation` block:
     "pending_id": "…",
     "skill": "delete_calendar_event",
     "preview": {"mode": "confirm_before", "…": "…"},
-    "next": "pending_confirm(pending_id) after the human agreed, pending_cancel(pending_id) otherwise"
+    "next": "Nothing is deleted yet. The owner confirms this in the Yorik app (notification bell); pending_confirm is not allowed for this account. pending_cancel(pending_id) withdraws it."
   }
 }
 ```
 
-The agent shows the preview to its human, then calls `pending_confirm`
-or `pending_cancel`. Creates and updates are applied at once and may
-return a `pending_id` too; `pending_cancel` undoes them. Pending rows
-expire the same way they do for chat cards.
+By default the agent cannot run it. The staged deletion appears as a
+card in the owner's notification bell in the Yorik app, with Delete and
+Keep buttons; `pending_confirm` over MCP answers with an error that says
+so, and `pending_cancel` withdraws the request. The agent's job is to
+tell its human that the card is waiting.
+
+A user who trusts their agent can flip **Settings → You → Beta safety →
+Let agents confirm deletions**. Then `pending_confirm(pending_id)` runs
+the deletion, and the agent is expected to ask first. The switch is a
+browser-session action; a token cannot set it.
+
+Creates and updates are applied at once and may return a `pending_id`
+too; `pending_cancel` undoes them. Pending rows expire after an hour,
+the same way chat cards do.
 
 ## Errors
 

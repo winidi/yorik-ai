@@ -204,7 +204,7 @@ def get_user_for_session(sid: Optional[str], ip: Optional[str] = None) -> Option
             "       u.phone, u.business_name, u.tax_id, u.iban, u.onboarded_at, "
             "       u.confirm_mutations, u.voice_ack_enabled, u.dev_mode, "
             "       u.default_doc_visibility, u.first_name, u.last_name, "
-            "       u.signature_data_url, u.pin_set_at "
+            "       u.signature_data_url, u.pin_set_at, u.agent_may_confirm_deletes "
             "FROM sessions s JOIN user_profiles u ON u.id = s.user_id "
             "WHERE s.id = ?",
             (sid,),
@@ -262,6 +262,7 @@ def get_user_for_session(sid: Optional[str], ip: Optional[str] = None) -> Option
         "iban":             row["iban"],
         "onboarded_at":     row["onboarded_at"],
         "confirm_mutations": bool(row["confirm_mutations"]),
+        "agent_may_confirm_deletes": bool(row["agent_may_confirm_deletes"]),
         "voice_ack_enabled": bool(row["voice_ack_enabled"]),
         "dev_mode":          bool(row["dev_mode"]),
         "default_doc_visibility": row["default_doc_visibility"] or "private",

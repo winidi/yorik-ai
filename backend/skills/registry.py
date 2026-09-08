@@ -128,7 +128,8 @@ class SkillContext:
 
     def __init__(self, registry: "Registry", role: str = "admin",
                  user_id: Optional[int] = None,
-                 conversation_id: Optional[str] = None):
+                 conversation_id: Optional[str] = None,
+                 source: Optional[str] = None):
         # user_id defaults to None (not 1!) so a missed pass-through at
         # the boundary surfaces as NULL on owner_user_id columns instead
         # of silently picking the seeded "Admin" user. Skills that need
@@ -143,6 +144,9 @@ class SkillContext:
         # one chat thread. Outside of chat (cron, autodraft, briefings)
         # this stays None and the rows have no conv link, which is fine.
         self.conversation_id = conversation_id
+        # Audit marker: None/'chat' for the built-in assistant, 'token:<name>'
+        # when an outside agent calls through /mcp with a personal token.
+        self.source = source
 
     async def call_skill(self, name: str, **args) -> Any:
         """Invoke another skill from inside a skill. Permission check
@@ -322,13 +326,14 @@ class Registry:
         if ctx is None:
             ctx = SkillContext(self)
         conv_id = getattr(ctx, "conversation_id", None)
+        src = getattr(ctx, "source", None)
         # Defence in depth: even if the skill_index already hid this
         # skill, the LLM might name it from conversation memory.
         # Refuse with a clean error rather than silently running.
         if name in _get_disabled_skills():
             _log_invocation(name, success=False, error="skill_disabled", latency_ms=0,
                             user_id=getattr(ctx, "user_id", None),
-                            conversation_id=conv_id, args=args)
+                            conversation_id=conv_id, source=src, args=args)
             raise SkillError(
                 f"skill {name!r} is disabled by admin — pick a different "
                 "skill from the index.\n"
@@ -351,14 +356,14 @@ class Registry:
         if skill.permissions and effective_role not in skill.permissions and "*" not in skill.permissions:
             _log_invocation(name, success=False, error="permission_denied", latency_ms=0,
                             user_id=getattr(ctx, "user_id", None),
-                            conversation_id=conv_id, args=args)
+                            conversation_id=conv_id, source=src, args=args)
             raise SkillError(
                 f"role {ctx.role!r} not permitted to call skill {name!r} "
                 f"(allowed: {skill.permissions})"
             )
         if skill.entrypoint is None:
             _log_invocation(name, success=False, error="no_entrypoint", latency_ms=0,
-                            conversation_id=conv_id, args=args)
+                            conversation_id=conv_id, source=src, args=args)
             raise SkillError(f"skill {name!r} has no entrypoint")
         # Skills are async; if someone wrote a sync function, run it
         # directly (uncommon but handled).
@@ -373,7 +378,7 @@ class Registry:
                      extra={"skill": name, "user_id": uid, "duration_ms": dur, "status": "ok"})
             _log_invocation(name, success=True, error=None,
                             latency_ms=dur, user_id=uid,
-                            conversation_id=conv_id, args=args, result=result)
+                            conversation_id=conv_id, source=src, args=args, result=result)
             return result
         except SkillError as e:
             dur = int((time.monotonic() - started) * 1000)
@@ -381,7 +386,7 @@ class Registry:
                         extra={"skill": name, "user_id": uid, "duration_ms": dur, "status": "skill_error"})
             _log_invocation(name, success=False, error=str(e)[:200],
                             latency_ms=dur, user_id=uid,
-                            conversation_id=conv_id, args=args)
+                            conversation_id=conv_id, source=src, args=args)
             raise
         except TypeError as e:
             dur = int((time.monotonic() - started) * 1000)
@@ -389,7 +394,7 @@ class Registry:
                         extra={"skill": name, "user_id": uid, "duration_ms": dur, "status": "bad_args"})
             _log_invocation(name, success=False, error=f"bad_args: {e}"[:200],
                             latency_ms=dur, user_id=uid,
-                            conversation_id=conv_id, args=args)
+                            conversation_id=conv_id, source=src, args=args)
             raise SkillError(_format_bad_args_error(name, e, skill.inputs))
         except Exception as e:
             dur = int((time.monotonic() - started) * 1000)
@@ -397,7 +402,7 @@ class Registry:
                           extra={"skill": name, "user_id": uid, "duration_ms": dur, "status": "exception"})
             _log_invocation(name, success=False, error=f"{type(e).__name__}: {e}"[:200],
                             latency_ms=dur, user_id=uid,
-                            conversation_id=conv_id, args=args)
+                            conversation_id=conv_id, source=src, args=args)
             raise SkillError(f"skill {name!r} failed: {e}")
 
 
@@ -468,6 +473,7 @@ def _truncate_json(obj: Any, cap: int) -> Optional[str]:
 def _log_invocation(skill_id: str, *, success: bool, error: Optional[str],
                      latency_ms: int, user_id: Optional[int] = None,
                      conversation_id: Optional[str] = None,
+                     source: Optional[str] = None,
                      args: Optional[dict] = None,
                      result: Any = None) -> None:
     """Best-effort telemetry — never raises, never blocks the caller."""
@@ -485,10 +491,10 @@ def _log_invocation(skill_id: str, *, success: bool, error: Optional[str],
             conn.execute(
                 "INSERT INTO skill_invocations "
                 "(skill_id, llm_model, success, error, latency_ms, user_id, "
-                " conversation_id, args_json, result_summary) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " conversation_id, source, args_json, result_summary) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (skill_id, model, 1 if success else 0, error, latency_ms, user_id,
-                 conversation_id, args_json, result_json),
+                 conversation_id, source, args_json, result_json),
             )
     except Exception:  # noqa: BLE001
         # We never want telemetry to break the user's flow.

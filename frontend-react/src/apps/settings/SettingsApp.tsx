@@ -571,14 +571,20 @@ function ApiTokensCard({ toast }: {
   const [busy, setBusy] = useState(false);
   const [fresh, setFresh] = useState<{ id: number; token: string } | null>(null);
   const mcpUrl = `${window.location.origin}/mcp`;
+  const auth = useAuth();
+  const isAdmin = ["admin", "platform_admin"].includes(String(auth.user?.role || "").toLowerCase());
+  const [household, setHousehold] = useState<(ApiToken & { owner: string; owner_id: string })[]>([]);
 
   const load = useCallback(async () => {
     try {
       setTokens(await api.get<ApiToken[]>("/api/tokens"));
+      if (isAdmin) {
+        setHousehold(await api.get<(ApiToken & { owner: string; owner_id: string })[]>("/api/tokens/all"));
+      }
     } catch (e: any) {
       toast(`Couldn't load tokens: ${e.message}`, "error");
     }
-  }, [toast]);
+  }, [toast, isAdmin]);
   useEffect(() => { load(); }, [load]);
 
   async function create() {
@@ -710,6 +716,36 @@ function ApiTokensCard({ toast }: {
       )}
       {live.length === 0 && !fresh && (
         <p className="mt-3 text-[11px] text-muted-foreground">No tokens yet.</p>
+      )}
+      {isAdmin && household.some(t => t.owner_id !== String(auth.user?.id)) && (
+        <div className="mt-4 pt-3 border-t border-border">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">
+            Other members' tokens
+          </div>
+          <ul className="divide-y divide-border">
+            {household.filter(t => t.owner_id !== String(auth.user?.id)).map(t => (
+              <li key={t.id} className="py-2 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm truncate">{t.owner}: {t.name}</div>
+                  <div className="text-[11px] text-muted-foreground font-mono">
+                    {t.prefix}
+                    <span className="font-sans">
+                      {t.last_used_at ? ` · last used ${t.last_used_at.slice(0, 16)}` : " · never used"}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => revoke(t.id)}
+                  disabled={busy}
+                  className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-red-600 transition disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Revoke
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </Card>
   );
@@ -1795,17 +1831,39 @@ function ConfirmMutationsToggle({ toast }: {
 }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
+  const [agentDeletes, setAgentDeletes] = useState<boolean | null>(null);
+  const [savingAgent, setSavingAgent] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
         const r = await api.get<{ logged_in: boolean; user?: any }>("/api/auth/me");
         setEnabled(!!r.user?.confirm_mutations);
+        setAgentDeletes(!!r.user?.agent_may_confirm_deletes);
       } catch {
         setEnabled(true);  // safe default
+        setAgentDeletes(false);
       }
     })();
   }, []);
+
+  async function toggleAgentDeletes() {
+    if (agentDeletes === null) return;
+    const next = !agentDeletes;
+    setSavingAgent(true);
+    try {
+      await api.patch("/api/profile/agent-deletes", { enabled: next });
+      setAgentDeletes(next);
+      toast(next
+        ? "Agents may now confirm deletions themselves"
+        : "Deletions from agents wait for your tap in the notification bell",
+        "success");
+    } catch (e: any) {
+      toast(e.message || "Failed to save", "error");
+    } finally {
+      setSavingAgent(false);
+    }
+  }
 
   async function toggle() {
     if (enabled === null) return;
@@ -1851,6 +1909,33 @@ function ConfirmMutationsToggle({ toast }: {
             className={cn(
               "inline-block h-4 w-4 transform rounded-full bg-white transition",
               enabled ? "translate-x-6" : "translate-x-1",
+            )}
+          />
+        </button>
+      </div>
+      <div className="flex items-start justify-between gap-3 mt-4 pt-4 border-t border-border">
+        <div className="flex-1">
+          <div className="text-sm font-medium">Let agents confirm deletions</div>
+          <p className="text-xs text-muted-foreground mt-1">
+            An outside agent using your API token (Hermes, Claude, a script) can stage a
+            deletion but not run it. When OFF, it waits as a card in your notification bell
+            and only your tap deletes. Turn ON only if you trust the agent to ask you first.
+          </p>
+        </div>
+        <button
+          onClick={toggleAgentDeletes}
+          disabled={agentDeletes === null || savingAgent}
+          className={cn(
+            "shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition",
+            agentDeletes ? "bg-violet-500" : "bg-muted",
+            (agentDeletes === null || savingAgent) && "opacity-60 cursor-wait",
+          )}
+          aria-pressed={!!agentDeletes}
+        >
+          <span
+            className={cn(
+              "inline-block h-4 w-4 transform rounded-full bg-white transition",
+              agentDeletes ? "translate-x-6" : "translate-x-1",
             )}
           />
         </button>

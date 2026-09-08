@@ -95,6 +95,34 @@ export function NotificationBell() {
     }
   }
 
+  // kind='agent_pending': an outside agent (Hermes, …) staged a deletion.
+  // Delete runs it through the normal pending route, Keep discards it.
+  async function resolveAgentPending(n: Notification, decision: "confirm" | "cancel") {
+    const pendingId = n.payload?.pending_id;
+    setBusyId(n.id);
+    try {
+      if (pendingId) {
+        try {
+          await api.post(`/api/pending/${encodeURIComponent(pendingId)}/${decision}`, {});
+        } catch (e: any) {
+          if (e?.status === 404) {
+            toast("This request has expired or was already handled.");
+          } else {
+            throw e;
+          }
+        }
+      }
+      await api.post(`/api/notifications/${n.id}/read`);
+      setList(l => l ? l.filter(x => x.id !== n.id) : l);
+      setUnread(c => Math.max(0, c - 1));
+      if (decision === "confirm") toast("Deleted.");
+    } catch (e: any) {
+      toast(`Couldn't ${decision === "confirm" ? "delete" : "keep"}: ${e?.message || e}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   // Spam confirm — when set, the spam panel expands inline below the
   // notification row instead of firing immediately. Lets the user pick
   // "also block the whole domain" before committing.
@@ -167,7 +195,8 @@ export function NotificationBell() {
               </div>
             )}
             {list?.map(n => {
-              const isProposal = n.kind === "email_proposal";
+              const isAgentPending = n.kind === "agent_pending";
+              const isProposal = n.kind === "email_proposal" || isAgentPending;
               const proposalKind = n.payload?.category as ("bill" | "appointment" | undefined);
               return (
                 <div
@@ -199,7 +228,28 @@ export function NotificationBell() {
                     <div className="text-[10px] text-muted-foreground mt-1">
                       {formatTime(n.created_at)}
                     </div>
-                    {isProposal && spamConfirmId !== n.id && (
+                    {isAgentPending && (
+                      <div className="mt-2 flex flex-wrap gap-2 items-center">
+                        <button
+                          disabled={busyId === n.id}
+                          onClick={(e) => { e.stopPropagation(); resolveAgentPending(n, "confirm"); }}
+                          className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded bg-rose-600 text-white hover:opacity-90 disabled:opacity-50"
+                        >
+                          {busyId === n.id
+                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                            : <Check className="w-3 h-3" />}
+                          Delete
+                        </button>
+                        <button
+                          disabled={busyId === n.id}
+                          onClick={(e) => { e.stopPropagation(); resolveAgentPending(n, "cancel"); }}
+                          className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-border hover:bg-muted/40 disabled:opacity-50"
+                        >
+                          <X className="w-3 h-3" /> Keep
+                        </button>
+                      </div>
+                    )}
+                    {isProposal && !isAgentPending && spamConfirmId !== n.id && (
                       <div className="mt-2 flex flex-wrap gap-2 items-center">
                         <button
                           disabled={busyId === n.id}
