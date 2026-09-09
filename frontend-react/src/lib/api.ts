@@ -93,6 +93,7 @@ export const api = {
   get:    <T>(path: string)              => request<T>(path),
   post:   <T>(path: string, data?: any)  => request<T>(path, { method: "POST", body: data && JSON.stringify(data) }),
   patch:  <T>(path: string, data?: any)  => request<T>(path, { method: "PATCH", body: data && JSON.stringify(data) }),
+  put:    <T>(path: string, data?: any)  => request<T>(path, { method: "PUT", body: data && JSON.stringify(data) }),
   delete: <T>(path: string)              => request<T>(path, { method: "DELETE" }),
 };
 

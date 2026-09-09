@@ -36,7 +36,7 @@ async def execute(
     uid = getattr(ctx, "user_id", None)
     if uid:
         from backend import spaces as _sp
-        visible = _sp.user_visible_space_ids(uid, role)
+        visible = _sp.user_visible_space_ids(uid, role, area="tasks")
         if visible:
             where.append(f"(space_id IN ({','.join('?' * len(visible))}) OR created_by_user_id = ?)")
             params.extend([*visible, uid])

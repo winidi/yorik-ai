@@ -61,28 +61,49 @@ def personal_space_id(user_id: str) -> Optional[int]:
         return int(row["id"]) if row else None
 
 
+AREAS = ("tasks", "calendar", "contacts", "documents")
+# table → sharing area. Tables outside the four areas (bills, …) are only
+# reached through an unscoped membership (the whole space).
+TABLE_AREA = {"tasks": "tasks", "events": "calendar", "calendars": "calendar",
+              "contacts": "contacts", "documents": "documents", "paperless_docs": "documents"}
+
+
+def _membership_space_ids(c, user_id, area: Optional[str]) -> list[int]:
+    """Spaces shared with the user, honouring scoped memberships: a row
+    with scope 'tasks,calendar' counts for those areas only; scope NULL
+    is the whole space. area=None means "any membership at all"."""
+    rows = c.execute("SELECT space_id, scope FROM space_members WHERE user_id = ?", (user_id,)).fetchall()
+    out = []
+    for r in rows:
+        scope = (r["scope"] or "").strip()
+        if not scope or area is None or area in {x.strip() for x in scope.split(",")}:
+            out.append(int(r["space_id"]))
+    return out
+
+
 def user_visible_space_ids(user_id: Optional[int], role: Optional[str],
+                           area: Optional[str] = None,
                            include_others_personal: bool = False) -> list[int]:
-    """Spaces the user can see.
+    """Spaces the user can see, for one area (tasks / calendar / contacts /
+    documents) or in general.
 
     Another person's PERSONAL space is never visible, not even to an
     admin: what Beate uploads as private stays hers, whoever runs the
-    box. Admin rights are for settings, users and backups, not for a
-    quiet look at someone else's documents. The one exception is an
-    explicit membership row (the owner shared their space).
+    box. The way in is a membership row the owner created — either the
+    whole space, or scoped to areas ("Beate sees my tasks and calendar,
+    not my documents"). Admin rights are for settings, users and
+    backups, not for a quiet look at someone else's data.
 
     Role model on top of that:
       platform_admin → every shared space in every workspace, plus own
         personal space and memberships.
       admin → every shared space inside the workspaces this user owns,
         plus own personal space and memberships.
-      everyone else → own personal space + explicit space_members rows.
+      everyone else → own personal space + memberships.
 
     `include_others_personal=True` restores the old all-seeing view for
-    administrative tooling that lists spaces to manage them. Nothing in
-    search, chat, calendar or tasks passes it.
-
-    Returns an empty list for None user (anonymous)."""
+    administrative tooling. Nothing in search, chat, calendar or tasks
+    passes it. Returns an empty list for None user (anonymous)."""
     if user_id is None:
         return []
     r = (role or "").lower()
@@ -90,35 +111,36 @@ def user_visible_space_ids(user_id: Optional[int], role: Optional[str],
         " AND NOT (kind = 'personal' AND owner_user_id IS DISTINCT FROM ?)"
     with conn_ctx() as c:
         if r == "platform_admin":
-            rows = c.execute(
-                "SELECT id FROM spaces WHERE TRUE" + others_personal + " "
-                "UNION SELECT space_id AS id FROM space_members WHERE user_id = ?",
-                ((user_id, user_id) if not include_others_personal else (user_id,)),
-            ).fetchall()
-            return [int(r["id"]) for r in rows]
-        if r == "admin":
+            rows = c.execute("SELECT id FROM spaces WHERE TRUE" + others_personal,
+                             (() if include_others_personal else (user_id,))).fetchall()
+        elif r == "admin":
             rows = c.execute(
                 "SELECT id FROM spaces "
                 "WHERE workspace_id IN (SELECT id FROM workspaces WHERE owner_user_id = ?)"
-                + others_personal + " "
-                "UNION SELECT id FROM spaces WHERE owner_user_id = ? "
-                "UNION SELECT space_id AS id FROM space_members WHERE user_id = ?",
-                ((user_id, user_id, user_id, user_id) if not include_others_personal
-                 else (user_id, user_id, user_id)),
+                + others_personal + " UNION SELECT id FROM spaces WHERE owner_user_id = ?",
+                ((user_id, user_id, user_id) if not include_others_personal else (user_id, user_id)),
             ).fetchall()
-            return [int(r["id"]) for r in rows]
-        # member / restricted / child / employee / viewer
-        rows = c.execute(
-            "SELECT id FROM spaces WHERE owner_user_id = ? "
-            "UNION "
-            "SELECT space_id AS id FROM space_members WHERE user_id = ?",
-            (user_id, user_id),
-        ).fetchall()
-        return [int(r["id"]) for r in rows]
+        else:
+            rows = c.execute("SELECT id FROM spaces WHERE owner_user_id = ?", (user_id,)).fetchall()
+        ids = {int(x["id"]) for x in rows}
+        ids.update(_membership_space_ids(c, user_id, area))
+    return sorted(ids)
+
+
+def _scoped_level(member_row, area: Optional[str]) -> Optional[Level]:
+    """Level of a membership row for one area; None outside its scope."""
+    if not member_row:
+        return None
+    scope = (member_row["scope"] or "").strip() if "scope" in member_row.keys() else ""
+    if scope and area is not None and area not in {x.strip() for x in scope.split(",")}:
+        return None
+    if scope and area is None:
+        return None
+    return member_row["level"]
 
 
 def user_space_level(
-    user_id: str, space_id: int, role: Optional[str] = None,
+    user_id: str, space_id: int, role: Optional[str] = None, area: Optional[str] = None,
 ) -> Optional[Level]:
     """Returns the effective write level of a user in a given space, or
     None if they aren't a member and don't own it. Admin gets 'admin'
@@ -134,10 +156,10 @@ def user_space_level(
             ).fetchone()
             if other_personal:
                 member = c.execute(
-                    "SELECT level FROM space_members WHERE space_id = ? AND user_id = ?",
+                    "SELECT level, scope FROM space_members WHERE space_id = ? AND user_id = ?",
                     (int(space_id), user_id),
                 ).fetchone()
-                return member["level"] if member else None
+                return _scoped_level(member, area)
         if r == "platform_admin":
             return "admin"
         if r == "admin":
@@ -154,13 +176,13 @@ def user_space_level(
         row = c.execute(
             "SELECT owner_user_id FROM spaces WHERE id = ?", (int(space_id),)
         ).fetchone()
-        if row and row["owner_user_id"] is not None and int(row["owner_user_id"]) == user_id:
+        if row and row["owner_user_id"] is not None and str(row["owner_user_id"]) == str(user_id):
             return "admin"
         row = c.execute(
-            "SELECT level FROM space_members WHERE space_id = ? AND user_id = ?",
+            "SELECT level, scope FROM space_members WHERE space_id = ? AND user_id = ?",
             (int(space_id), user_id),
         ).fetchone()
-        return row["level"] if row else None  # type: ignore[return-value]
+        return _scoped_level(row, area)  # type: ignore[return-value]
 
 
 def has_level(actual: Optional[Level], need: Level) -> bool:
@@ -197,8 +219,6 @@ def can_view_row(
 ) -> bool:
     """Visibility check for a single hydrated row. Used by GET-by-id
     handlers. Lists use the SQL fragment from `row_filter()` instead."""
-    if (role or "").lower() == "platform_admin":
-        return True
     if user_id is None:
         return False
     owner = row.get("owner_user_id") or row.get("created_by_user_id")
@@ -206,7 +226,7 @@ def can_view_row(
     if owner is not None and str(owner) == str(user_id):
         return True
     space_id = _resolve_row_space_id(table, row)
-    if space_id is not None and space_id in user_visible_space_ids(user_id, role):
+    if space_id is not None and space_id in user_visible_space_ids(user_id, role, area=TABLE_AREA.get(table)):
         return True
     # Per-row share
     row_id = row.get("id")
@@ -229,8 +249,6 @@ def can_write_row(
     write member of the row's space (or, for events, the calendar's
     space); write-level row_shares entry. Workspace admins write via
     user_space_level('admin') for spaces in workspaces they own."""
-    if (role or "").lower() == "platform_admin":
-        return True
     if user_id is None:
         return False
     owner = row.get("owner_user_id") or row.get("created_by_user_id")
@@ -239,7 +257,7 @@ def can_write_row(
         return True
     space_id = _resolve_row_space_id(table, row)
     if space_id is not None:
-        level = user_space_level(user_id, space_id, role)
+        level = user_space_level(user_id, space_id, role, area=TABLE_AREA.get(table))
         if has_level(level, "write"):
             return True
     row_id = row.get("id")
@@ -274,12 +292,10 @@ def row_filter(
     `table_alias` lets the caller use it inside JOINs or with an alias.
     Defaults to the table name.
     """
-    if (role or "").lower() == "platform_admin":
-        return "1=1", []
     if user_id is None:
         return "1=0", []
     t = table_alias or table
-    spaces = user_visible_space_ids(user_id, role)
+    spaces = user_visible_space_ids(user_id, role, area=TABLE_AREA.get(table))
     parts: list[str] = []
     params: list[Any] = []
 

@@ -246,23 +246,18 @@ class TestReadVisibility:
         assert admin_contact_id not in ids
 
     def test_admin_does_not_see_members_personal_contacts(self, two_user_db):
-        """Phase B: a member's personal space is private even from the
-        household admin. Only platform_admin (infrastructure) sees all."""
+        """A member's personal space is private from every admin, the
+        box operator included (2026-09-09). Sharing is the member's call."""
         admin_contact_id, member_contact_id = two_user_db
         from backend.skills.find_contact.skill import execute
-        result = asyncio.run(execute(
-            ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
-            query="",
-        ))
-        ids = {c["id"] for c in result["contacts"]}
-        assert admin_contact_id in ids
-        assert member_contact_id not in ids
-        result = asyncio.run(execute(
-            ctx=_mk_ctx(role="platform_admin", user_id=IDS["admin"]),
-            query="",
-        ))
-        ids = {c["id"] for c in result["contacts"]}
-        assert member_contact_id in ids
+        for role in ("admin", "platform_admin"):
+            result = asyncio.run(execute(
+                ctx=_mk_ctx(role=role, user_id=IDS["admin"]),
+                query="",
+            ))
+            ids = {c["id"] for c in result["contacts"]}
+            assert admin_contact_id in ids
+            assert member_contact_id not in ids
 
     def test_get_by_id_returns_none_when_inaccessible(self, two_user_db):
         """contacts.get with role+user_id returns None for hidden rows,

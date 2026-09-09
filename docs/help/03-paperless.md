@@ -89,6 +89,13 @@ back. Settings → You sets your default for new uploads.
 
 This holds for admins too. Whoever runs the box sees the shared spaces
 and their own, never another member's private documents, tasks or
-calendars, unless that member shares their space explicitly. Admin
-rights are for settings, users and backups.
+calendars, unless that member shares them. Admin rights are for
+settings, users and backups.
+
+Sharing is per area and per person: Settings → You → **Sharing** shows
+every household member with four boxes — tasks, calendar, contacts,
+documents — and a "can edit" box. Tick tasks and calendar for your
+partner and they see what you are up to, while your documents stay
+yours; they do the same for you. For a child's account the admin sets
+the boxes on the child's behalf.
 \n

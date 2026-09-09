@@ -110,6 +110,8 @@ from . import contact_identity_routes as _contact_identity_routes
 app.include_router(_contact_identity_routes.router)
 from . import push as _push
 app.include_router(_push.router)
+from . import sharing_routes as _sharing_routes
+app.include_router(_sharing_routes.router)
 
 # Spaces / workspace ACL management (Phase B.5).
 from . import space_routes as _space_routes
@@ -3928,7 +3930,7 @@ def list_tasks(
     if True:  # every role, the operator included, is scoped by space visibility
         from . import spaces as _sp
         uid = user.get("id") if user else None
-        visible_spaces = _sp.user_visible_space_ids(uid, role) if uid else []
+        visible_spaces = _sp.user_visible_space_ids(uid, role, area="tasks") if uid else []
         if visible_spaces:
             placeholders = ",".join("?" * len(visible_spaces))
             where_clauses.append(f"(tasks.space_id IN ({placeholders}) OR tasks.created_by_user_id = ?)")

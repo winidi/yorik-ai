@@ -329,8 +329,6 @@ def _visibility_clause(role: Optional[str], user_id: Optional[int]) -> tuple[str
     """
     if role is None and user_id is None:
         return "", []
-    if (role or "").strip().lower() == "platform_admin":
-        return "", []
     from backend import spaces as _sp
     frag, params = _sp.row_filter(user_id, role, "contacts", table_alias="contacts")
     # Spaces handles owner + space + row_shares. Anything else without a

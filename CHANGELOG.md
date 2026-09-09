@@ -21,6 +21,11 @@ worklist.
   Personal API tokens (Settings → You → API tokens, shown once, hashed
   at rest) are the only credential; a token acts as its owner and can
   also call `/api/*`. See [docs/MCP.md](docs/MCP.md).
+- **Sharing per area.** Settings → You → Sharing: for every household
+  member, tick which of your areas they may see (tasks, calendar,
+  contacts, documents) and whether they may edit. Stored as a scoped
+  membership in your personal space; admins can set it for restricted
+  (child) accounts.
 - **Admins no longer see other members' private spaces.** Search,
   chat, calendar and tasks apply the same rule to everyone: own space
   plus shared spaces plus explicit memberships. The former

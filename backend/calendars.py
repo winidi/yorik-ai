@@ -309,7 +309,7 @@ def visible_event_filter(user_id: str, user_role: str) -> tuple[str, list[Any]]:
         # visibility: another member's personal calendar is theirs.
         # (Until 2026-09-09 platform_admin saw every calendar not marked
         # hide_from_admin; that exception is gone.)
-        visible_spaces = _sp.user_visible_space_ids(user_id, user_role)
+        visible_spaces = _sp.user_visible_space_ids(user_id, user_role, area="calendar")
         if visible_spaces:
             placeholders = ",".join("?" * len(visible_spaces))
             parts.append(

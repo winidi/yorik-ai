@@ -40,7 +40,7 @@ async def execute(ctx, query: str = "", k: int = 5) -> dict[str, Any]:
     if user_id is not None:
         try:
             from backend import spaces as _spaces
-            visible_space_ids = _spaces.user_visible_space_ids(user_id, role)
+            visible_space_ids = _spaces.user_visible_space_ids(user_id, role, area="documents")
         except Exception as exc:  # noqa: BLE001
             log.warning("user_visible_space_ids failed for user=%s role=%s: %s",
                         user_id, role, exc)

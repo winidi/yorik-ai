@@ -79,7 +79,7 @@ async def execute(
     role = getattr(ctx, "role", None)
     if user_id is not None:
         from backend import spaces as _sp
-        visible_spaces = _sp.user_visible_space_ids(user_id, role)
+        visible_spaces = _sp.user_visible_space_ids(user_id, role, area="tasks")
         if visible_spaces:
             placeholders = ",".join("?" * len(visible_spaces))
             where.append(f"(space_id IN ({placeholders}) OR created_by_user_id = ?)")
