@@ -44,13 +44,25 @@ _keys: Optional[Dict[str, str]] = None
 
 # ─── keys ───────────────────────────────────────────────────────────
 
+def _pem_path() -> Path:
+    return VAPID_FILE.with_suffix(".pem")
+
+
 def keys() -> Dict[str, str]:
-    """{'public': <urlsafe b64>, 'private': <PEM>} — generated on first use."""
+    """{'public': <urlsafe b64>, 'private': <PEM>} — generated on first use.
+    The PEM is also kept as a file next to it, because pywebpush reads a
+    private key from a path or a base64 blob, not from PEM text."""
     global _keys
     if _keys:
         return _keys
     if VAPID_FILE.exists():
         _keys = json.loads(VAPID_FILE.read_text())
+        if not _pem_path().exists():
+            _pem_path().write_text(_keys["private"])
+            try:
+                _pem_path().chmod(0o600)
+            except OSError:
+                pass
         return _keys
     from py_vapid import Vapid, b64urlencode
     from cryptography.hazmat.primitives import serialization
@@ -64,10 +76,12 @@ def keys() -> Dict[str, str]:
     _keys = {"public": b64urlencode(pub), "private": priv_pem}
     VAPID_FILE.parent.mkdir(parents=True, exist_ok=True)
     VAPID_FILE.write_text(json.dumps(_keys))
-    try:
-        VAPID_FILE.chmod(0o600)
-    except OSError:
-        pass
+    _pem_path().write_text(priv_pem)
+    for f in (VAPID_FILE, _pem_path()):
+        try:
+            f.chmod(0o600)
+        except OSError:
+            pass
     log.info("VAPID key pair generated at %s", VAPID_FILE)
     return _keys
 
@@ -134,7 +148,7 @@ def send(user_id: str, *, title: str, body: str = "", url: str = "/r/home",
             webpush(
                 subscription_info={"endpoint": s["endpoint"], "keys": {"p256dh": s["p256dh"], "auth": s["auth"]}},
                 data=payload,
-                vapid_private_key=k["private"],
+                vapid_private_key=str(_pem_path()),
                 vapid_claims={"sub": _claims_email()},
                 ttl=6 * 3600,
                 timeout=10,
