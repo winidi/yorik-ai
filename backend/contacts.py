@@ -45,10 +45,18 @@ _PHONE_KEEP = re.compile(r"[+\d]")
 
 
 def normalize_phone(value: str) -> str:
-    """Strip everything but digits and a leading +. Anything more clever
-    (E.164 inference) needs the country code, which we don't always have."""
-    s = "".join(c for c in (value or "") if _PHONE_KEEP.match(c))
-    return s
+    """E.164 via libphonenumber (region HOMEOS_PHONE_REGION, default DE):
+    '0511 / 12 34 56' → '+49511123456'. Numbers that don't parse (short
+    codes, garbage) fall back to the old digits-and-plus strip so nothing
+    is lost, they just won't match across sources."""
+    try:
+        from .contact_identity import to_e164
+        e = to_e164(value)
+        if e:
+            return e
+    except Exception:  # noqa: BLE001
+        pass
+    return "".join(c for c in (value or "") if _PHONE_KEEP.match(c))
 
 
 def normalize_channel(kind: str, value: str) -> str:
@@ -111,7 +119,7 @@ _TRANSACTIONAL_LOCALPART_RE = re.compile(
     r"|daily|weekly|monthly"
     r"|email|mail|mailing|mailings"
     r"|customer[\-_.]reviews?|customer[\-_.]service"
-    r"|mein[\-_]?[a-z]+"
+    r"|mein[\-_][a-z]+"
     r")(?:@|\+|$)",
     re.IGNORECASE,
 )
@@ -220,7 +228,29 @@ def is_mass_mailer_email(email: str) -> bool:
     if not e or "@" not in e:
         return False
     domain = e.split("@", 1)[1]
-    return any(pat in domain for pat in _MASS_MAILER_DOMAINS)
+    return any(_domain_matches(domain, pat) for pat in _MASS_MAILER_DOMAINS)
+
+
+def _domain_matches(domain: str, pat: str) -> bool:
+    """Exact-ish domain matching. 'news.' means a leading label,
+    'booking.com' means that domain or a subdomain of it, and a bare
+    token like 'ebay' means the registrable name itself — so
+    'ebay.de' and 'mail.ebay.com' match, 'ebayfan.de' and
+    'hello.mycompany.de' do not."""
+    if pat.endswith("."):
+        return domain.startswith(pat) or ("." + pat) in domain
+    if pat.startswith("."):
+        return pat in domain
+    if "." in pat:
+        return domain == pat or domain.endswith("." + pat)
+    labels = domain.split(".")
+    if len(labels) >= 2:
+        root = labels[-2]
+        # co.uk / com.au style second-level suffixes
+        if root in ("co", "com", "org", "net", "ac", "gov") and len(labels) >= 3:
+            root = labels[-3]
+        return root == pat
+    return domain == pat
 
 
 def find_business_by_email_domain(domain: str) -> Optional[Dict[str, Any]]:

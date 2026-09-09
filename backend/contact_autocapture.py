@@ -32,6 +32,7 @@ import os
 from typing import Iterable, Optional
 
 from . import contacts as _contacts
+from .database import conn_ctx
 
 log = logging.getLogger(__name__)
 
@@ -73,6 +74,7 @@ def on_inbound_email(
                 _contacts.bump_interaction(existing["id"])
             except Exception as exc:  # noqa: BLE001
                 log.debug("bump_interaction failed for %s: %s", existing["id"], exc)
+            _signature_bridge(int(existing["id"]), message_id, existing.get("status") == "active")
             return None
 
         # Unknown sender — decide whether to create a Pending row.
@@ -179,6 +181,7 @@ def on_inbound_email(
 
         log.info("contact_autocapture: parked pending contact id=%d email=%s",
                  contact_id, addr)
+        _signature_bridge(contact_id, message_id, False)
         return None
 
     except Exception as exc:  # noqa: BLE001
@@ -251,6 +254,50 @@ def _is_pseudo_jid(jid: str) -> bool:
     )
 
 
+_SIGNATURE_TAIL_CHARS = 1500
+
+
+def _signature_bridge(contact_id: int, message_id: int, allow_add: bool) -> None:
+    """Phone numbers in the tail of an inbound email (the signature) are
+    the one place where a number and an address appear together. When a
+    number belongs to a different contact (typically a WhatsApp-only one)
+    propose a merge; when nobody owns it and the sender is an approved
+    contact, propose adding it. Never writes channels itself."""
+    try:
+        from . import contact_identity as _ident
+        with conn_ctx() as c:
+            row = c.execute(
+                "SELECT body_text, snippet FROM email_messages WHERE id = ?", (message_id,)
+            ).fetchone()
+        if not row:
+            return
+        text = (row["body_text"] or row["snippet"] or "")
+        tail = text[-_SIGNATURE_TAIL_CHARS:]
+        for e164 in _ident.extract_phones(tail, limit=4):
+            owner = _ident.owner_of("phone", e164)
+            if owner and int(owner["id"]) == int(contact_id):
+                continue
+            if owner and owner.get("status") in ("active", "pending"):
+                _ident.propose(
+                    kind=_ident.PROPOSAL_MERGE, contact_id=int(contact_id),
+                    other_contact_id=int(owner["id"]),
+                    reason=f"the number {e164} in this sender's email signature belongs to "
+                           f"{owner.get('display_name')}",
+                    evidence={"message_id": message_id, "phone": e164, "source": "email_signature"},
+                    confidence=0.8,
+                )
+            elif not owner and allow_add:
+                _ident.propose(
+                    kind=_ident.PROPOSAL_ADD_CHANNEL, contact_id=int(contact_id),
+                    channel_kind="phone", channel_value=e164,
+                    reason=f"{e164} appears in this contact's email signature",
+                    evidence={"message_id": message_id, "source": "email_signature"},
+                    confidence=0.7,
+                )
+    except Exception as exc:  # noqa: BLE001
+        log.debug("signature bridge failed for msg %s: %s", message_id, exc)
+
+
 def _phone_match_for_jid(from_jid: str) -> Optional[Dict[str, Any]]:
     """Bridge vCard imports to WhatsApp JIDs: take the digits of the
     JID, try both `+<digits>` and `<digits>` as a phone-channel value
@@ -260,22 +307,16 @@ def _phone_match_for_jid(from_jid: str) -> Optional[Dict[str, Any]]:
     `kind=whatsapp, value=4915xxx@s.whatsapp.net` would create a
     pending row even though the contact is already on file.
     """
-    if not from_jid or "@" not in from_jid:
+    if not from_jid or not from_jid.endswith("@s.whatsapp.net"):
         return None
-    digits = "".join(c for c in from_jid.split("@", 1)[0] if c.isdigit())
-    if len(digits) < 6:
+    try:
+        from . import contact_identity as _ident
+        e164 = _ident.to_e164(from_jid)
+        if not e164:
+            return None
+        return _contacts.find_by_channel("phone", e164)
+    except Exception:  # noqa: BLE001
         return None
-    for candidate in (f"+{digits}", digits):
-        try:
-            normalized = _contacts.normalize_channel("phone", candidate)
-            if not normalized:
-                continue
-            existing = _contacts.find_by_channel("phone", normalized)
-            if existing:
-                return existing
-        except Exception:
-            continue
-    return None
 
 
 def _attach_wa_to_phone_contact(
@@ -293,7 +334,9 @@ def _attach_wa_to_phone_contact(
     if stray and int(stray["id"]) != cid:
         if (stray.get("status") or "pending") == "pending":
             try:
-                _contacts.delete(int(stray["id"]))
+                from . import contact_identity as _ident
+                _ident.merge(cid, int(stray["id"]),
+                             reason="WhatsApp id matches this contact's phone number")
                 log.info(
                     "wa autocapture: merged pending WA contact %s into "
                     "phone-matched contact %s%s",

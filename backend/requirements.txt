@@ -115,6 +115,9 @@ mail-parser==4.2.1
 # library; handles 2.1/3.0/4.0 syntax, line folding, and quirky
 # real-world exports from iCloud/Google/Outlook.
 vobject==0.9.9
+# Contact identity — E.164 phone normalisation + numbers found in email
+# signatures (backend/contact_identity.py).
+phonenumbers==9.0.38
 
 # Backup encryption: age (the modern Tarsnap-y format).
 # pyrage is a pure-Python binding, no system `age` binary needed.

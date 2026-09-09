@@ -75,6 +75,45 @@ async def execute(
                 if r: space_id = int(r["id"])
     # contacts.create() falls back to creator's personal when space_id is None.
 
+    # Identity first: if any given email/phone/WhatsApp already belongs to a
+    # contact, that contact IS this person — add what's new to it instead
+    # of creating a duplicate. Channels owned by two different contacts are
+    # reported, never reassigned.
+    from backend import contact_identity as _ident
+    _res = _ident.resolve(
+        [("email", e) for e in (emails or [])] + [("phone", p) for p in (phones or [])]
+        + [("whatsapp", j) for j in (whatsapp_jids or [])],
+        display_name=display_name,
+    )
+    if _res.conflicts:
+        others = sorted({f"#{c['contact']['id']} {c['contact'].get('display_name')}" for c in _res.conflicts})
+        raise ValueError(
+            f"these contact details belong to different existing contacts: {', '.join(others)}. "
+            f"Use find_person to pick one and add_contact_channel to extend it."
+        )
+    if _res.contact is not None:
+        existing_id = int(_res.contact["id"])
+        added = []
+        for k, v in _res.unclaimed:
+            try:
+                C.add_channel(existing_id, kind=k, value=v, source=source)
+                added.append(f"{k}:{v}")
+            except Exception:  # noqa: BLE001
+                pass
+        contact = C.get(existing_id)
+        from backend.ui_tools import _append
+        _append({"type": "refresh_data", "table": "contacts", "highlight_id": existing_id,
+                 "reason": f"contact already on file: {contact.get('display_name')}"})
+        return {
+            "contact_id": existing_id, "contact": contact, "existing": True,
+            "added_channels": added,
+            "_llm_hint": (
+                f"Not created: {contact.get('display_name')} (#{existing_id}) already has these "
+                f"contact details" + (f" and got {len(added)} new one(s)" if added else "") +
+                (". The name you gave differs from the stored one; tell the user which contact was used."
+                 if _res.name_conflict else ".")
+            ),
+        }
     contact_id = C.create(
         display_name=display_name,
         kind=kind,

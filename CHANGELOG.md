@@ -21,6 +21,21 @@ worklist.
   Personal API tokens (Settings → You → API tokens, shown once, hashed
   at rest) are the only credential; a token acts as its owner and can
   also call `/api/*`. See [docs/MCP.md](docs/MCP.md).
+- **One rule for "same contact".** `backend/contact_identity.py` decides
+  identity by email or phone (E.164 via libphonenumber; a WhatsApp id is
+  its phone number). The vCard import, the phone picker, `add_contact`,
+  the New-contact form and the email/WhatsApp autocapture all go through
+  it. Yorik never merges on its own any more: a phone number found in an
+  email signature that belongs to another contact becomes a *proposal*
+  in the Contacts page; accepting it merges (channels, addresses, blank
+  fields), the loser becomes a tombstone, and every merge can be undone.
+  On Android the Contacts page picks entries straight from the phone's
+  address book.
+- **Removed** the contact features that produced or destroyed data
+  without a review step: the Paperless document walk, the mailbox
+  crosslink, group-by-employer, the LLM dedupe and the name-based dedupe
+  that deleted rows. Mass-mailer detection now matches domains, not
+  substrings, and `meinhard@…` is no longer treated as a role address.
 - **Yorik can ask the agent back.** The skill `ask_agent` hands a
   question to an OpenAI-shaped agent endpoint (Hermes' API server) and
   relays the answer, one session per user and conversation. Configured

@@ -37,19 +37,39 @@ type VcardImportResult = {
 };
 
 
-export function VcardImportModal({ onClose, onApplied, initialFile }: {
+export function VcardImportModal({ onClose, onApplied, initialFile, initialText, sourceLabel }: {
   onClose: () => void;
   onApplied: () => void;
   // If the caller already has a File (e.g. from a drop event), seed
   // the modal with it so the user doesn't have to pick again.
   initialFile?: File | null;
+  // vCard text built by the caller (the phone's contact picker); the
+  // modal skips the file step and previews it right away.
+  initialText?: string | null;
+  sourceLabel?: string | null;
 }) {
   const [plan, setPlan] = useState<VcardImportPlan | null>(null);
   const [parsing, setParsing] = useState(false);
   const [applying, setApplying] = useState(false);
   const [result, setResult] = useState<VcardImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filename, setFilename] = useState<string | null>(initialFile?.name || null);
+  const [filename, setFilename] = useState<string | null>(initialFile?.name || sourceLabel || null);
+
+  useEffect(() => {
+    if (!initialText) return;
+    (async () => {
+      setError(null);
+      setParsing(true);
+      try {
+        const p = await api.post<VcardImportPlan>("/api/contacts/import/preview", { text: initialText });
+        setPlan(p);
+      } catch (e: any) {
+        setError(e instanceof ApiError ? e.message : String(e));
+      } finally {
+        setParsing(false);
+      }
+    })();
+  }, [initialText]);
   const [dragOver, setDragOver] = useState(false);
 
   async function handleFile(file: File) {

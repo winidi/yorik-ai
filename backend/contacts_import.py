@@ -328,10 +328,12 @@ def plan_import(cards: List[ParsedCard]) -> ImportPlan:
         for ch in card.channels:
             if ch.kind not in ("email", "phone", "whatsapp"):
                 continue
-            normed = _contacts.normalize_channel(ch.kind, ch.value)
-            if not normed:
+            from . import contact_identity as _ident
+            norm = _ident.normalize_identity(ch.kind, ch.value)
+            if not norm:
                 continue
-            existing = _contacts.find_by_channel(ch.kind, normed)
+            normed = norm[1]
+            existing = _ident.owner_of(ch.kind, ch.value)
             if existing:
                 existing_id = int(existing["id"])
                 existing_name = existing.get("display_name")
