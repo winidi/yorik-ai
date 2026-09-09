@@ -412,3 +412,60 @@ def normalize_existing_phone_channels() -> int:
 
 def _now() -> str:
     return datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")
+
+
+# ─── one-off: mine signatures of mail already on file ────────────────
+
+_scan_state: Dict[str, Any] = {"state": "idle", "contacts": 0, "messages": 0, "proposals": 0, "message": ""}
+
+
+def scan_status() -> Dict[str, Any]:
+    return dict(_scan_state)
+
+
+def scan_email_signatures(*, per_sender: int = 3, max_messages: int = 5000) -> Dict[str, Any]:
+    """Run the signature bridge over mail that is already in the database:
+    for every contact with an email address, its latest `per_sender`
+    inbound messages. Creates proposals only, exactly like a live inbound
+    mail would. Idempotent — existing pending proposals are not duplicated."""
+    from .contact_autocapture import _signature_bridge
+    with conn_ctx() as c:
+        before = c.execute("SELECT COUNT(*) AS n FROM contact_proposals WHERE status = 'pending'").fetchone()["n"]
+        rows = c.execute(
+            "SELECT ch.contact_id, ch.value AS email, co.status "
+            "FROM contact_channels ch JOIN contacts co ON co.id = ch.contact_id "
+            "WHERE ch.kind = 'email' AND co.status IN ('active', 'pending')"
+        ).fetchall()
+        todo: List[Tuple[int, int, bool]] = []
+        for r in rows:
+            msgs = c.execute(
+                "SELECT id FROM email_messages WHERE is_sent = 0 AND from_email = ? "
+                "AND body_text IS NOT NULL ORDER BY date_received DESC NULLS LAST LIMIT ?",
+                (r["email"], per_sender),
+            ).fetchall()
+            for m in msgs:
+                todo.append((int(r["contact_id"]), int(m["id"]), r["status"] == "active"))
+            if len(todo) >= max_messages:
+                break
+    contacts = {t[0] for t in todo}
+    _scan_state.update(state="running", contacts=len(contacts), messages=len(todo), proposals=0, message="")
+    # Numbers that show up under several different senders are hotlines
+    # or the household's own — never a reason to merge anyone.
+    from .contact_autocapture import signature_phones
+    seen_by: Dict[str, set] = {}
+    with conn_ctx() as c:
+        for cid, mid, _ in todo:
+            r = c.execute("SELECT body_text FROM email_messages WHERE id = ?", (mid,)).fetchone()
+            for e in signature_phones((r["body_text"] if r else "") or ""):
+                seen_by.setdefault(e, set()).add(cid)
+    ignore = {e for e, who in seen_by.items() if len(who) >= 3}
+    for i, (cid, mid, allow_add) in enumerate(todo, 1):
+        _signature_bridge(cid, mid, allow_add, ignore_numbers=ignore, min_occurrences=2)
+        if i % 50 == 0:
+            _scan_state["message"] = f"{i}/{len(todo)}"
+    with conn_ctx() as c:
+        after = c.execute("SELECT COUNT(*) AS n FROM contact_proposals WHERE status = 'pending'").fetchone()["n"]
+    _scan_state.update(state="done", proposals=int(after - before), message="")
+    log.info("signature scan: %d contacts, %d messages, %d new proposal(s)", len(contacts), len(todo), after - before)
+    return {"contacts": len(contacts), "messages": len(todo), "proposals": int(after - before)}
+

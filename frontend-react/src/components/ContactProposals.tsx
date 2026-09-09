@@ -34,7 +34,7 @@ function channels(c: Contact | null): string {
   return c.channels.map(ch => ch.kind === "whatsapp" ? `WhatsApp ${ch.value.split("@")[0]}` : ch.value).join(" · ");
 }
 
-export function ContactProposals({ onChanged }: { onChanged: () => void }) {
+export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () => void; reloadKey?: number }) {
   const [items, setItems] = useState<Proposal[]>([]);
   const [merges, setMerges] = useState<Merge[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
@@ -45,13 +45,15 @@ export function ContactProposals({ onChanged }: { onChanged: () => void }) {
         api.get<{ proposals: Proposal[] }>("/api/contacts/proposals"),
         api.get<{ merges: Merge[] }>("/api/contacts/merges"),
       ]);
-      setItems(p.proposals || []);
+      // merges first — they are the rare, valuable ones; number
+      // suggestions come in bulk after a signature scan
+      setItems([...(p.proposals || [])].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "merge" ? -1 : 1)));
       setMerges((m.merges || []).filter(x => !x.undone_at).slice(0, 3));
     } catch {
       /* not visible for this role, or backend older than the panel */
     }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, reloadKey]);
 
   async function accept(p: Proposal, keepId?: number) {
     setBusy(p.id);
@@ -91,13 +93,36 @@ export function ContactProposals({ onChanged }: { onChanged: () => void }) {
     }
   }
 
+  async function rejectAllAdds() {
+    setBusy(-999999);
+    try {
+      await api.post(`/api/contacts/proposals/reject-all?kind=add_channel`, {});
+      await load();
+    } catch (e: any) {
+      toast(`Couldn't dismiss: ${e?.message || e}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (items.length === 0 && merges.length === 0) return null;
+  const merges_n = items.filter(i => i.kind === "merge").length;
+  const adds_n = items.length - merges_n;
 
   return (
     <div className="mb-4 rounded-xl border border-amber-300/60 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-700/50 p-3">
       {items.length > 0 && (
-        <div className="text-xs uppercase tracking-wider text-amber-800 dark:text-amber-300 mb-2">
-          Suggestions · {items.length}
+        <div className="text-xs uppercase tracking-wider text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-3">
+          <span>Suggestions · {merges_n > 0 && `${merges_n} merge${merges_n === 1 ? "" : "s"}`}{merges_n > 0 && adds_n > 0 && " · "}{adds_n > 0 && `${adds_n} number${adds_n === 1 ? "" : "s"}`}</span>
+          {adds_n > 1 && (
+            <button
+              disabled={busy === -999999}
+              onClick={rejectAllAdds}
+              className="normal-case tracking-normal text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              dismiss all number suggestions
+            </button>
+          )}
         </div>
       )}
       <ul className="space-y-3">

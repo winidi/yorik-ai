@@ -96,3 +96,29 @@ def merge(body: MergeIn, user: Dict[str, Any] = Depends(_current_user())):
                                              decided_by=str(user.get("id")))}
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+
+
+@router.post("/proposals/scan-signatures")
+def scan_signatures(user: Dict[str, Any] = Depends(_current_user())):
+    """Mine the signatures of mail already on file for phone numbers and
+    turn them into proposals. Admin only; a few seconds for thousands of
+    messages, so it runs inline."""
+    if (user.get("role") or "").lower() not in ("admin", "platform_admin"):
+        raise HTTPException(status_code=403, detail="admin only")
+    if I.scan_status().get("state") == "running":
+        raise HTTPException(status_code=409, detail="a scan is already running")
+    return I.scan_email_signatures()
+
+
+@router.post("/proposals/reject-all")
+def reject_all(kind: Optional[str] = None, user: Dict[str, Any] = Depends(_current_user())):
+    """Dismiss every pending proposal (optionally only one kind)."""
+    _may_edit(user)
+    n = 0
+    for p in I.list_proposals("pending", limit=1000):
+        if kind and p["kind"] != kind:
+            continue
+        I.reject_proposal(int(p["id"]), decided_by=str(user.get("id")))
+        n += 1
+    return {"ok": True, "rejected": n}
+

@@ -165,3 +165,37 @@ def test_proposal_routes(fresh_app):
     assert r.json()["merges"][0]["id"] == mid
     assert client.post(f"/api/contacts/merges/{mid}/undo").status_code == 200
     assert client.post(f"/api/contacts/merges/{mid}/undo").status_code == 409
+
+
+def test_signature_scan_over_existing_mail(fresh_app):
+    from backend import contact_identity as I
+    from backend.database import get_conn
+    client, uid = login_client(fresh_app, role="admin")
+    wa = _mk("Bea", whatsapp="4917612345678@s.whatsapp.net")
+    mail = _mk("Bea Mayer", email="bea@example.org")
+    with get_conn() as conn:
+        for i, body in enumerate(["Gruß\nBea Mayer\nMobil 0176 12345678", "kein Inhalt", "Tel: 0176 12345678"]):
+            conn.execute(
+                "INSERT INTO email_messages (account_id, uid, owner_user_id, message_id, from_email, subject, body_text, is_sent) "
+                "VALUES (1, ?, ?, ?, 'bea@example.org', 's', ?, 0)", (10 + i, uid, f"<scan{i}@t>", body),
+            )
+        conn.commit()
+    r = client.post("/api/contacts/proposals/scan-signatures")
+    assert r.status_code == 200, r.text
+    assert r.json()["contacts"] == 1 and r.json()["messages"] == 3 and r.json()["proposals"] == 1
+    p = I.list_proposals()[0]
+    assert p["kind"] == "merge" and {p["contact_id"], p["other_contact_id"]} == {wa, mail}
+    # running it again adds nothing
+    assert client.post("/api/contacts/proposals/scan-signatures").json()["proposals"] == 0
+    member, _ = login_client(fresh_app, role="member", email="m2@example.local")
+    assert member.post("/api/contacts/proposals/scan-signatures").status_code == 403
+
+
+def test_quoted_replies_do_not_count_as_signature(fresh_app):
+    from backend.contact_autocapture import signature_phones, _own_text
+    body = "Danke!\n\nMobil 0176 12345678\nBea\n\nAm 26.02.2026 um 09:54 schrieb Dirk Winiecki:\n> ruf mich an: 0151 28811000\nVG Dirk"
+    assert _own_text(body).strip().endswith("Bea")
+    assert signature_phones(body) == ["+4917612345678"]
+    body2 = "Hallo\n\n-----Original Message-----\nFrom: x\nTel 0151 28811000"
+    assert signature_phones(body2) == []
+    assert signature_phones("On Tue, Jan 2 wrote:\n0151 28811000") == []

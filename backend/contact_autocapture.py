@@ -29,7 +29,8 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Iterable, Optional
+import re
+from typing import Any, Dict, Iterable, Optional
 
 from . import contacts as _contacts
 from .database import conn_ctx
@@ -256,13 +257,48 @@ def _is_pseudo_jid(jid: str) -> bool:
 
 _SIGNATURE_TAIL_CHARS = 1500
 
+# Where the sender's own text ends and quoted history begins. Anything
+# after the first marker is someone else's signature — usually the
+# household member's own reply, which is how "merge X with yourself"
+# proposals would otherwise appear.
+_QUOTE_MARKERS = re.compile(
+    r"^(?:"
+    r"Am .{4,80} schrieb .{0,120}:?\s*$"
+    r"|On .{4,80} wrote:\s*$"
+    r"|-{2,}\s*(?:Original Message|Ursprüngliche Nachricht|Originalnachricht|Forwarded message|Weitergeleitete Nachricht)\s*-{2,}"
+    r"|(?:Von|From|De):\s.+"
+    r"|>.*"
+    r")",
+    re.IGNORECASE | re.MULTILINE,
+)
 
-def _signature_bridge(contact_id: int, message_id: int, allow_add: bool) -> None:
-    """Phone numbers in the tail of an inbound email (the signature) are
-    the one place where a number and an address appear together. When a
-    number belongs to a different contact (typically a WhatsApp-only one)
-    propose a merge; when nobody owns it and the sender is an approved
-    contact, propose adding it. Never writes channels itself."""
+
+def _own_text(body: str) -> str:
+    """The part of a mail body the sender wrote themselves."""
+    m = _QUOTE_MARKERS.search(body or "")
+    return body[: m.start()] if m else (body or "")
+
+
+def signature_phones(body: str, limit: int = 4) -> list[str]:
+    """E.164 numbers in the sender's own signature area of a mail body."""
+    from . import contact_identity as _ident
+    own = _own_text(body)
+    return _ident.extract_phones(own[-_SIGNATURE_TAIL_CHARS:], limit=limit)
+
+
+def _signature_bridge(contact_id: int, message_id: int, allow_add: bool,
+                      ignore_numbers: Optional[set] = None,
+                      min_occurrences: int = 1) -> None:
+    """Phone numbers in the sender's own signature are the one place where
+    a number and an address appear together. When a number belongs to a
+    different contact (typically a WhatsApp-only one) propose a merge;
+    when nobody owns it and the sender is an approved contact, propose
+    adding it. Never writes channels itself.
+
+    `ignore_numbers`: numbers that turned up under several different
+    senders (hotlines, the household's own numbers) — skipped.
+    `min_occurrences`: for add-channel proposals, how many of the sender's
+    mails must carry the number (the one-off scan asks for 2)."""
     try:
         from . import contact_identity as _ident
         with conn_ctx() as c:
@@ -272,8 +308,9 @@ def _signature_bridge(contact_id: int, message_id: int, allow_add: bool) -> None
         if not row:
             return
         text = (row["body_text"] or row["snippet"] or "")
-        tail = text[-_SIGNATURE_TAIL_CHARS:]
-        for e164 in _ident.extract_phones(tail, limit=4):
+        for e164 in signature_phones(text):
+            if ignore_numbers and e164 in ignore_numbers:
+                continue
             owner = _ident.owner_of("phone", e164)
             if owner and int(owner["id"]) == int(contact_id):
                 continue
@@ -287,6 +324,8 @@ def _signature_bridge(contact_id: int, message_id: int, allow_add: bool) -> None
                     confidence=0.8,
                 )
             elif not owner and allow_add:
+                if min_occurrences > 1 and _occurrences(contact_id, e164) < min_occurrences:
+                    continue
                 _ident.propose(
                     kind=_ident.PROPOSAL_ADD_CHANNEL, contact_id=int(contact_id),
                     channel_kind="phone", channel_value=e164,
@@ -296,6 +335,22 @@ def _signature_bridge(contact_id: int, message_id: int, allow_add: bool) -> None
                 )
     except Exception as exc:  # noqa: BLE001
         log.debug("signature bridge failed for msg %s: %s", message_id, exc)
+
+
+def _occurrences(contact_id: int, e164: str, sample: int = 5) -> int:
+    """In how many of this contact's recent inbound mails the number appears."""
+    try:
+        with conn_ctx() as c:
+            rows = c.execute(
+                "SELECT m.body_text FROM email_messages m JOIN contact_channels ch "
+                "ON ch.kind = 'email' AND ch.value = m.from_email "
+                "WHERE ch.contact_id = ? AND m.is_sent = 0 AND m.body_text IS NOT NULL "
+                "ORDER BY m.date_received DESC NULLS LAST LIMIT ?",
+                (contact_id, sample),
+            ).fetchall()
+        return sum(1 for r in rows if e164 in signature_phones(r["body_text"] or ""))
+    except Exception:  # noqa: BLE001
+        return 0
 
 
 def _phone_match_for_jid(from_jid: str) -> Optional[Dict[str, Any]]:

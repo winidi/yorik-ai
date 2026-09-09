@@ -66,6 +66,28 @@ export function ContactsApp() {
   // entries, we turn them into vCard text and run the normal import
   // (same dedupe by email / phone as a .vcf).
   const [phoneVcf, setPhoneVcf] = useState<string | null>(null);
+  const [proposalsKey, setProposalsKey] = useState(0);
+  const [scanning, setScanning] = useState(false);
+  const authCtx = useAuth();
+  const isAdmin = ["admin", "platform_admin"].includes(String(authCtx.user?.role || "").toLowerCase());
+  // One-off: mine the signatures of mail already on file for phone
+  // numbers and turn matches into merge / add proposals.
+  async function scanSignatures() {
+    setScanning(true);
+    try {
+      const r = await api.post<{ contacts: number; messages: number; proposals: number }>(
+        "/api/contacts/proposals/scan-signatures", {},
+      );
+      toast(r.proposals > 0
+        ? `${r.proposals} suggestion${r.proposals === 1 ? "" : "s"} from ${r.messages} emails of ${r.contacts} contacts.`
+        : `No new suggestions in ${r.messages} emails of ${r.contacts} contacts.`);
+      setProposalsKey(k => k + 1);
+    } catch (e: any) {
+      toast(`Scan failed: ${e?.message || e}`);
+    } finally {
+      setScanning(false);
+    }
+  }
   const canPickFromPhone = typeof navigator !== "undefined"
     && "contacts" in navigator && typeof (navigator as any).contacts?.select === "function";
   async function pickFromPhone() {
@@ -326,6 +348,17 @@ export function ContactsApp() {
               }}
             />
           )}
+          {isAdmin && (
+            <button
+              onClick={scanSignatures}
+              disabled={scanning}
+              className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5 disabled:opacity-60"
+              title="Look for phone numbers in the signatures of mail already on file and suggest matches"
+            >
+              {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+              Scan signatures
+            </button>
+          )}
           {canPickFromPhone && (
             <button
               onClick={pickFromPhone}
@@ -350,7 +383,7 @@ export function ContactsApp() {
           </button>
         </div>
 
-        {!mobileDetailOpen && <ContactProposals onChanged={refresh} />}
+        {!mobileDetailOpen && <ContactProposals onChanged={refresh} reloadKey={proposalsKey} />}
 
         {/* Search — hidden on mobile when a detail/editor is open
             (drill-down mode), since the list it filters is also
