@@ -161,10 +161,12 @@ class TestScopedLookups:
         assert "Milch kaufen member" in titles
         assert "Milch kaufen admin" not in titles
 
-    def test_platform_admin_sees_all_tasks(self, household):
+    def test_platform_admin_does_not_see_members_personal_tasks(self, household):
+        # The box operator sees shared spaces and their own, never another
+        # member's personal space (2026-09-09: "Admin-Ausnahme zu").
         from backend.skills.find_task_by_title.skill import execute
         hits = asyncio.run(execute(ctx=_mk_ctx(role="platform_admin", user_id=IDS["admin"]), query="Milch"))
-        assert len(hits["matches"]) == 2
+        assert {m["title"] for m in hits["matches"]} == {"Milch kaufen admin"}
 
 
 class TestToolAcl:

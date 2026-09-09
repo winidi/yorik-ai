@@ -61,37 +61,50 @@ def personal_space_id(user_id: str) -> Optional[int]:
         return int(row["id"]) if row else None
 
 
-def user_visible_space_ids(user_id: Optional[int], role: Optional[str]) -> list[int]:
+def user_visible_space_ids(user_id: Optional[int], role: Optional[str],
+                           include_others_personal: bool = False) -> list[int]:
     """Spaces the user can see.
 
-    Phase C role model:
-      platform_admin → every space in every workspace (the infra
-        operator). Preserves the single-family-admin "sees all" behaviour.
-      admin → workspace admin: every space inside the workspaces this
-        user owns (workspaces.owner_user_id = user.id), PLUS their
-        personal space + shared-space memberships. Crucially this does
-        NOT span across workspaces the user doesn't own.
-      everyone else → personal space + explicit space_members rows only.
+    Another person's PERSONAL space is never visible, not even to an
+    admin: what Beate uploads as private stays hers, whoever runs the
+    box. Admin rights are for settings, users and backups, not for a
+    quiet look at someone else's documents. The one exception is an
+    explicit membership row (the owner shared their space).
+
+    Role model on top of that:
+      platform_admin → every shared space in every workspace, plus own
+        personal space and memberships.
+      admin → every shared space inside the workspaces this user owns,
+        plus own personal space and memberships.
+      everyone else → own personal space + explicit space_members rows.
+
+    `include_others_personal=True` restores the old all-seeing view for
+    administrative tooling that lists spaces to manage them. Nothing in
+    search, chat, calendar or tasks passes it.
 
     Returns an empty list for None user (anonymous)."""
     if user_id is None:
         return []
     r = (role or "").lower()
+    others_personal = "" if include_others_personal else \
+        " AND NOT (kind = 'personal' AND owner_user_id IS DISTINCT FROM ?)"
     with conn_ctx() as c:
         if r == "platform_admin":
-            rows = c.execute("SELECT id FROM spaces").fetchall()
+            rows = c.execute(
+                "SELECT id FROM spaces WHERE TRUE" + others_personal + " "
+                "UNION SELECT space_id AS id FROM space_members WHERE user_id = ?",
+                ((user_id, user_id) if not include_others_personal else (user_id,)),
+            ).fetchall()
             return [int(r["id"]) for r in rows]
         if r == "admin":
-            # Owned workspaces' spaces ∪ personal ∪ memberships
             rows = c.execute(
                 "SELECT id FROM spaces "
-                "WHERE workspace_id IN "
-                "  (SELECT id FROM workspaces WHERE owner_user_id = ?) "
-                "UNION "
-                "SELECT id FROM spaces WHERE owner_user_id = ? "
-                "UNION "
-                "SELECT space_id AS id FROM space_members WHERE user_id = ?",
-                (user_id, user_id, user_id),
+                "WHERE workspace_id IN (SELECT id FROM workspaces WHERE owner_user_id = ?)"
+                + others_personal + " "
+                "UNION SELECT id FROM spaces WHERE owner_user_id = ? "
+                "UNION SELECT space_id AS id FROM space_members WHERE user_id = ?",
+                ((user_id, user_id, user_id, user_id) if not include_others_personal
+                 else (user_id, user_id, user_id)),
             ).fetchall()
             return [int(r["id"]) for r in rows]
         # member / restricted / child / employee / viewer
@@ -111,9 +124,22 @@ def user_space_level(
     None if they aren't a member and don't own it. Admin gets 'admin'
     everywhere; personal-space owner gets 'admin' on their own."""
     r = (role or "").lower()
-    if r == "platform_admin":
-        return "admin"
     with conn_ctx() as c:
+        if r in ("platform_admin", "admin"):
+            # Someone else's personal space: no level for anyone but a
+            # member the owner added (handled below).
+            other_personal = c.execute(
+                "SELECT 1 FROM spaces WHERE id = ? AND kind = 'personal' "
+                "AND owner_user_id IS DISTINCT FROM ?", (int(space_id), user_id),
+            ).fetchone()
+            if other_personal:
+                member = c.execute(
+                    "SELECT level FROM space_members WHERE space_id = ? AND user_id = ?",
+                    (int(space_id), user_id),
+                ).fetchone()
+                return member["level"] if member else None
+        if r == "platform_admin":
+            return "admin"
         if r == "admin":
             # Workspace admin: admin on every space in workspaces they own
             owns = c.execute(

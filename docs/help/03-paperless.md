@@ -76,3 +76,19 @@ Paperless data lives in `data/paperless/` on the Yorik host. Never leaves the ma
 ## Direct Paperless access
 
 If you need the full Paperless UI (workflows, tags, correspondents, custom fields): `http://localhost:8010`. Login uses `PAPERLESS_ADMIN_PASSWORD` from your `config.env` (or `data/.paperless-admin-pw` after first install). Yorik's API token to Paperless is stored encrypted; you don't need to know it.
+
+
+## Who sees what
+
+Every document is private, shared with the household, or shared with
+the business. Private is the default for uploads and for mail
+attachments: only the person who owns it sees it, and only their
+Yorik searches it. "Teile den Mietvertrag mit der Familie" in the chat
+moves a document to the household; "nur ich soll das sehen" takes it
+back. Settings → You sets your default for new uploads.
+
+This holds for admins too. Whoever runs the box sees the shared spaces
+and their own, never another member's private documents, tasks or
+calendars, unless that member shares their space explicitly. Admin
+rights are for settings, users and backups.
+\n

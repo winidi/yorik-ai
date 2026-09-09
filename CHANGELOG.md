@@ -21,6 +21,11 @@ worklist.
   Personal API tokens (Settings → You → API tokens, shown once, hashed
   at rest) are the only credential; a token acts as its owner and can
   also call `/api/*`. See [docs/MCP.md](docs/MCP.md).
+- **Admins no longer see other members' private spaces.** Search,
+  chat, calendar and tasks apply the same rule to everyone: own space
+  plus shared spaces plus explicit memberships. The former
+  "platform_admin sees all" behaviour survives only behind an explicit
+  flag for administrative tooling.
 - **Yorik on your phone, without a messenger.** Web Push: every bell
   notification reaches the installed app while it is closed (Settings →
   You → Notifications on your phone), with two optional daily nudges

@@ -77,7 +77,7 @@ async def execute(
     # endpoint behaviour.
     user_id = getattr(ctx, "user_id", None)
     role = getattr(ctx, "role", None)
-    if role != "platform_admin" and user_id is not None:
+    if user_id is not None:
         from backend import spaces as _sp
         visible_spaces = _sp.user_visible_space_ids(user_id, role)
         if visible_spaces:

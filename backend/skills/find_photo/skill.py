@@ -226,13 +226,15 @@ async def execute(
     # fall through to the admin key, which meant a workspace member or
     # workspace admin without an Immich account saw the WHOLE
     # installation's library (every other workspace's photos). Fail
-    # closed instead — only platform_admin gets the fallback.
+    # closed instead, for every role.
     if getattr(ctx, "user_id", None):
         from backend.external_users import get_user_immich_creds
         uc = get_user_immich_creds(ctx.user_id)
         if uc:
             args["creds_override"] = uc
-        elif (getattr(ctx, "role", None) or "").lower() != "platform_admin":
+        else:
+            # Fail closed for everyone: without an Immich account of your
+            # own there is nothing you may search, operator or not.
             return {
                 "ok":       False,
                 "op":       op,

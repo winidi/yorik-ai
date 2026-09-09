@@ -42,10 +42,10 @@ async def execute(
 
     # Scope to what the caller may see (Phase B spaces model). Without
     # this a restricted/child role could enumerate any household
-    # member's rows by title. platform_admin sees everything.
+    # member's rows by title. The operator is scoped like everyone else.
     role = (getattr(ctx, "role", None) or "").lower()
     uid = getattr(ctx, "user_id", None)
-    if role != "platform_admin" and uid:
+    if uid:
         from backend import spaces as _sp
         visible = _sp.user_visible_space_ids(uid, role)
         if visible:

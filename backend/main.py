@@ -3925,7 +3925,7 @@ def list_tasks(
     # scoped to spaces in workspaces they own — otherwise an admin from
     # one workspace would see every other workspace's tasks (this leak
     # was caught when WS3 admin Jane saw 7 WS1+WS2 tasks).
-    if role != "platform_admin":
+    if True:  # every role, the operator included, is scoped by space visibility
         from . import spaces as _sp
         uid = user.get("id") if user else None
         visible_spaces = _sp.user_visible_space_ids(uid, role) if uid else []

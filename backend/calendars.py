@@ -304,19 +304,11 @@ def visible_event_filter(user_id: str, user_role: str) -> tuple[str, list[Any]]:
     params: list[Any] = []
 
     r = (user_role or "").lower()
-    if r == "platform_admin":
-        # Platform admin (infra operator) sees every calendar that
-        # isn't explicitly hidden, plus orphan events. Today's pre-T10
-        # `admin` behaviour preserved on this role.
-        parts.append(
-            "events.calendar_id IN (SELECT id FROM calendars WHERE hide_from_admin = 0)"
-        )
-        parts.append("events.calendar_id IS NULL")
-    else:
-        # admin (workspace admin), member, restricted, etc. all flow
-        # through space visibility now. `user_visible_space_ids` returns
-        # the workspace-scoped set for `admin`, full set for platform_admin
-        # (handled above), personal+memberships for everyone else.
+    if True:
+        # Every role, the operator included, flows through space
+        # visibility: another member's personal calendar is theirs.
+        # (Until 2026-09-09 platform_admin saw every calendar not marked
+        # hide_from_admin; that exception is gone.)
         visible_spaces = _sp.user_visible_space_ids(user_id, user_role)
         if visible_spaces:
             placeholders = ",".join("?" * len(visible_spaces))
