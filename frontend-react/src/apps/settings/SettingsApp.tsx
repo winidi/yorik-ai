@@ -32,6 +32,7 @@ import { BackupPicker } from "@/components/BackupPicker";
 import { SeriesManager } from "@/apps/compose/SeriesManager";
 import { DevicesTab } from "./DevicesTab";
 import { HouseholdsTab } from "./HouseholdsTab";
+import { PushCard } from "@/components/PushCard";
 
 type Tab = "profile" | "llm" | "users" | "spaces" | "households" | "apps" | "marketplace" | "installed" | "skills" | "numbering" | "quality" | "connectors" | "extensions" | "storage" | "embeddings" | "backup" | "logs" | "devices";
 
@@ -356,6 +357,7 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
           <VoiceAckToggle toast={toast} />
         </Card>
         <ChangePasswordCard toast={toast} />
+        <PushCard toast={toast} />
         <ApiTokensCard toast={toast} />
         <VoiceEnrollmentCard toast={toast} />
         <KioskPinCard toast={toast} />

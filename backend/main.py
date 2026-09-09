@@ -108,6 +108,8 @@ from . import openai_audio as _openai_audio
 app.include_router(_openai_audio.router)
 from . import contact_identity_routes as _contact_identity_routes
 app.include_router(_contact_identity_routes.router)
+from . import push as _push
+app.include_router(_push.router)
 
 # Spaces / workspace ACL management (Phase B.5).
 from . import space_routes as _space_routes
@@ -2406,6 +2408,8 @@ def _startup() -> None:
     # so the date navigator on /r/briefing can walk back in time.
     from . import briefing_snapshots as _bs_mod
     _bs_mod.start_scheduler(_aio.get_event_loop())
+    # Web Push nudges (morning "plan your day", evening review).
+    _push.start_scheduler(_aio.get_event_loop())
     # Voice acks: pre-synthesize the "klar Moment / on it / ..." pool
     # so the streaming voice endpoint can emit an instant audio reply
     # the moment STT finishes (masking LLM latency). Run in a thread

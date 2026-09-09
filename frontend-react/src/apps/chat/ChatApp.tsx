@@ -718,6 +718,15 @@ function Thread({
     };
   }, []);
 
+  // A push nudge opens /r/chat?say=… — send that line once, then drop
+  // the param so a reload does not resend it.
+  const [autoSay, setAutoSay] = useState<string | null>(() => {
+    try { return new URLSearchParams(window.location.search).get("say"); } catch { return null; }
+  });
+  useEffect(() => {
+    if (autoSay && !text) setText(autoSay);
+  }, [autoSay]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   const send = useCallback(async () => {
     const message = text.trim();
     if (!message || sending) return;
@@ -726,6 +735,11 @@ function Thread({
     setStreamingText("");
     streamedRef.current = "";
     setText("");
+
+    if (autoSay) {
+      setAutoSay(null);
+      try { window.history.replaceState({}, "", window.location.pathname); } catch { /* ignore */ }
+    }
 
     // Optimistically append the user turn so the bubble shows immediately.
     setLocalMessages(prev => [...prev, { role: "user", content: message }]);
@@ -2026,6 +2040,14 @@ function formatToolStatus(tool: string, args: Record<string, any> | undefined): 
   const a = args || {};
   // Try a short summary of "what" the tool is operating on.
   const head = (s: string, n = 50) => s.length > n ? s.slice(0, n - 1) + "…" : s;
+  // Skills run through invoke_skill; a few deserve their own line.
+  if (tool === "invoke_skill" || tool === "use_skill") {
+    const name = String(a.name || "");
+    if (name === "ask_agent") return "Fragt Hermes… (kann eine Minute dauern)";
+    if (name === "plan_my_day") return "Sammelt Termine, Aufgaben und Briefing…";
+    if (name === "plan_day") return "Trägt den Plan ein…";
+    if (name === "day_review") return "Schaut auf den Tag zurück…";
+  }
   switch (tool) {
     case "web_search":   return `🔍 Searching the web for "${head(a.query || "")}"…`;
     case "web_extract":  {

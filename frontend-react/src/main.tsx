@@ -34,6 +34,14 @@ import { Toaster } from "@/components/Toast";
 import { DocBucketProvider } from "./apps/documents/DocBucketContext";
 import { DocBucketPill } from "./components/DocBucketPill";
 
+// Service worker for Web Push (see public/sw.js). Registered under the
+// React scope so it never intercepts /api/*.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/r/sw.js", { scope: "/r/" }).catch(() => { /* no push on this browser */ });
+  });
+}
+
 // React routes mount under /r/ (Vite base + FastAPI ingress).
 // Each <Route> is one ported Yorik app. As more get migrated, add
 // them here; legacy vanilla URLs (/, /chat, etc.) keep working.

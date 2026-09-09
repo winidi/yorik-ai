@@ -123,6 +123,14 @@ curl -s -X POST http://127.0.0.1:8000/mcp -H "Authorization: Bearer yk_…" -H "
 - No OAuth; tokens are the only credential.
 - No resources or prompts, only tools.
 
+## Reporting back: `notify`
+
+Long-running work on the agent's side (a research job, a cron result)
+ends with `notify(title, body, url)`. The message lands in the token
+owner's bell and is pushed to their phone; nobody can notify anyone else.
+Together with `ask_agent` this makes Yorik's own app the channel to the
+agent, no messenger required.
+
 ## The other direction: Yorik asks the agent
 
 Household members who talk to Yorik's own chat (phone, tablet, kiosk)

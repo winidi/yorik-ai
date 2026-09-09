@@ -42,7 +42,22 @@ def create(
              navigate_to),
         )
         conn.commit()
-    return cur.lastrowid
+    nid = int(cur.lastrowid)
+    # Carry it to the phone as well. Best effort, never blocks the caller.
+    try:
+        from . import push as _push
+        _last_push[nid] = _push.send(str(user_id), title=title, body=body or "",
+                                     url=navigate_to or "/r/home", tag=kind)
+    except Exception:  # noqa: BLE001
+        log.debug("push for notification %s failed", nid, exc_info=True)
+    return nid
+
+
+_last_push: dict[int, int] = {}
+
+
+def last_push_count(notification_id: int) -> int:
+    return int(_last_push.pop(notification_id, 0))
 
 
 def list_for_user(user_id: str, unread_only: bool = False, limit: int = 50) -> list[dict[str, Any]]:

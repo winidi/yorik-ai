@@ -118,6 +118,9 @@ vobject==0.9.9
 # Contact identity — E.164 phone normalisation + numbers found in email
 # signatures (backend/contact_identity.py).
 phonenumbers==9.0.38
+# Web Push to the phone app (backend/push.py). VAPID keys are generated
+# once into data/.vapid.json.
+pywebpush==2.5.0
 
 # Backup encryption: age (the modern Tarsnap-y format).
 # pyrage is a pure-Python binding, no system `age` binary needed.

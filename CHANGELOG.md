@@ -21,6 +21,13 @@ worklist.
   Personal API tokens (Settings → You → API tokens, shown once, hashed
   at rest) are the only credential; a token acts as its owner and can
   also call `/api/*`. See [docs/MCP.md](docs/MCP.md).
+- **Yorik on your phone, without a messenger.** Web Push: every bell
+  notification reaches the installed app while it is closed (Settings →
+  You → Notifications on your phone), with two optional daily nudges
+  that open the chat with "Plan meinen Tag" and "Wie war mein Tag?".
+  A new skill `notify` lets an outside agent (Hermes over MCP) leave a
+  message in the bell, so its results arrive in Yorik instead of in a
+  chat platform. The chat shows what it is waiting for ("Fragt Hermes…").
 - **Plan your day in conversation.** `plan_my_day` gathers fixed
   appointments, open tasks, carry-over from yesterday, yesterday's
   review and, when the workstation agent is reachable, its briefing;
