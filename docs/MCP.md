@@ -122,3 +122,27 @@ curl -s -X POST http://127.0.0.1:8000/mcp -H "Authorization: Bearer yk_…" -H "
 - No server-initiated stream (no progress notifications, no `listChanged`).
 - No OAuth; tokens are the only credential.
 - No resources or prompts, only tools.
+
+## The other direction: Yorik asks the agent
+
+Household members who talk to Yorik's own chat (phone, tablet, kiosk)
+can reach the strong agent too. One skill, `ask_agent`, hands a question
+to an OpenAI-shaped chat endpoint and relays the finished answer. The
+reference is Hermes' API server (`hermes gateway` platform `api_server`,
+port 8642), configured in `config.env`:
+
+```
+HOMEOS_AGENT_URL=http://127.0.0.1:8642/v1     # or the Headscale address of the Hermes box
+HOMEOS_AGENT_KEY=<API_SERVER_KEY from ~/.hermes/.env>
+HOMEOS_AGENT_NAME=Hermes
+```
+
+Yorik's assistant uses it for what Yorik does not hold: web research,
+files and notes on the workstation, coding, long reasoning. The agent
+keeps one session per Yorik user and conversation (`X-Hermes-Session-Id`),
+so follow-ups stay in context. When the workstation is off, the skill
+reports that and Yorik says so instead of guessing.
+
+`ask_agent` is deliberately not offered over MCP: an agent cannot ask
+Yorik to ask the agent.
+

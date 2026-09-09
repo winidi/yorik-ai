@@ -5,7 +5,7 @@
 Two ways to use it:
 
 - **With your agent (recommended).** Connect Hermes or another MCP client to `http://<yorik>:8000/mcp` with a personal token. The agent gets one tool per Yorik skill, Yorik keeps the data, the rights and the confirmations. See [docs/MCP.md](docs/MCP.md).
-- **On its own.** Yorik's built-in assistant runs on a local model (Qwen 3.5 9B by default). It works, and it is the less polished of the two paths.
+- **On its own.** Yorik's built-in assistant runs on a local model (Qwen 3.5 9B by default) and can hand questions it cannot answer from the household's data to your agent (`ask_agent`). It works, and it is the less polished of the two paths.
 
 > ### ⚠️ Early rolling alpha. Expect bugs.
 >

@@ -21,6 +21,10 @@ worklist.
   Personal API tokens (Settings → You → API tokens, shown once, hashed
   at rest) are the only credential; a token acts as its owner and can
   also call `/api/*`. See [docs/MCP.md](docs/MCP.md).
+- **Yorik can ask the agent back.** The skill `ask_agent` hands a
+  question to an OpenAI-shaped agent endpoint (Hermes' API server) and
+  relays the answer, one session per user and conversation. Configured
+  via `HOMEOS_AGENT_URL` / `HOMEOS_AGENT_KEY`; not exposed over MCP.
 - **Agents cannot delete on their own.** A deletion an agent stages lands
   as a Delete / Keep card in the owner's notification bell; only that tap
   runs it. Settings → Beta safety → "Let agents confirm deletions" opts an

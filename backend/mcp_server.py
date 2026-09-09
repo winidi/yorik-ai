@@ -192,7 +192,7 @@ def list_tools(user: dict[str, Any]) -> list[dict[str, Any]]:
     disabled = _get_disabled_skills()
     tools: list[dict[str, Any]] = []
     for s in sorted(get_registry().all(), key=lambda x: (x.effective_category, x.name)):
-        if s.name in disabled or s.name in _BUILTIN_NAMES:
+        if s.name in disabled or s.name in _BUILTIN_NAMES or "no-mcp" in (s.tags or []):
             continue
         if s.permissions and role not in s.permissions and "*" not in s.permissions:
             continue
@@ -298,7 +298,7 @@ def _may_call(user: dict[str, Any], skill: Any) -> bool:
     if skill is None:
         return False
     from .skills.registry import _get_disabled_skills
-    if skill.name in _get_disabled_skills():
+    if skill.name in _get_disabled_skills() or "no-mcp" in (skill.tags or []):
         return False
     role = _effective_role(user)
     return not skill.permissions or role in skill.permissions or "*" in skill.permissions
