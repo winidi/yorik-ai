@@ -21,6 +21,16 @@ worklist.
   Personal API tokens (Settings → You → API tokens, shown once, hashed
   at rest) are the only credential; a token acts as its owner and can
   also call `/api/*`. See [docs/MCP.md](docs/MCP.md).
+- **Plan your day in conversation.** `plan_my_day` gathers fixed
+  appointments, open tasks, carry-over from yesterday, yesterday's
+  review and, when the workstation agent is reachable, its briefing;
+  the assistant drafts the day and iterates with you. `plan_day` then
+  writes it: every item a task, at most six items as time blocks in a
+  private "Plan" calendar, linked to their tasks, idempotent per day and
+  item key, one card undoes the whole day. `day_review` compares plan
+  and reality in the evening (done tasks, estimated vs actual minutes
+  from the task timer, carry-over) and feeds the next morning. Tasks now
+  record when they were finished.
 - **One rule for "same contact".** `backend/contact_identity.py` decides
   identity by email or phone (E.164 via libphonenumber; a WhatsApp id is
   its phone number). The vCard import, the phone picker, `add_contact`,

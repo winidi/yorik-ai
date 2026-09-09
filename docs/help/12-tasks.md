@@ -53,3 +53,20 @@ When you add a task, Yorik can auto-fill:
 - **Estimated minutes** based on similar past tasks.
 
 Both are suggestions — overridable in the task editor.
+
+## Planning a day
+
+Say "plan meinen Tag" (or "plan my day"). Yorik collects the day's fixed
+appointments, your open tasks, what yesterday left over and yesterday's
+review, asks the household's agent for the daily briefing if one is
+connected, and drafts the day: a short list with two to four focus blocks
+and the rest as plain tasks. Change it as often as you like ("move the
+writing block to 15:00", "drop the call"). When you say it is good, Yorik
+writes it: one task per item, time blocks in your private **Plan**
+calendar (they never appear in the shared calendar), one card that undoes
+the whole day.
+
+In the evening, "wie war mein Tag" gives a short review: what got done,
+where the task timer's actual minutes differed from the estimate, what
+carries over. Tomorrow's planning starts from that.
+

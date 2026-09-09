@@ -3530,6 +3530,11 @@ def update_task(
     if pre_done == 0 and patch.done is True:
         with conn_ctx(DB_PATH) as conn:
             _fold_elapsed_into_actual(conn, task_id)
+            conn.execute("UPDATE tasks SET done_at = ? WHERE id = ? AND done_at IS NULL",
+                         (datetime.now().isoformat(timespec="seconds"), task_id))
+    elif pre_done == 1 and patch.done is False:
+        with conn_ctx(DB_PATH) as conn:
+            conn.execute("UPDATE tasks SET done_at = NULL WHERE id = ?", (task_id,))
 
     # Recurring task: if this PATCH just flipped done from 0→1, spawn
     # the next instance. Skip when patch.done wasn't actually part of

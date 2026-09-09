@@ -209,6 +209,10 @@ def rollback(pending_id: str) -> Dict[str, Any]:
         # is just discarding the card.
         return {"discarded": kind[len(APPLY_PREFIX):]}
 
+    if kind == "unplan_day":
+        from .day_plans import rollback_plan
+        return rollback_plan(args)
+
     if kind == "delete_event":
         # Reverses add_calendar_event by deleting the inserted row.
         event_id = args.get("event_id")

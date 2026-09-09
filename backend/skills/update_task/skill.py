@@ -75,6 +75,13 @@ async def execute(
     materialised_new_id: Optional[int] = None
     with get_conn() as conn:
         conn.execute(f"UPDATE tasks SET {set_clause} WHERE id=?", params)
+        if "done" in updates:
+            if updates["done"] == 1 and int(before_dict.get("done") or 0) == 0:
+                from datetime import datetime as _dt
+                conn.execute("UPDATE tasks SET done_at = ? WHERE id = ? AND done_at IS NULL",
+                             (_dt.now().isoformat(timespec="seconds"), task_id))
+            elif updates["done"] == 0:
+                conn.execute("UPDATE tasks SET done_at = NULL WHERE id = ?", (task_id,))
         # Recurring task: detect 0→1 done flip and spawn the next
         # instance in the same transaction so the rollback can sweep
         # the child too. Best-effort — never block the actual update.
