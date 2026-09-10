@@ -61,6 +61,7 @@ SCHEMA: Dict[str, Any] = {
         "tasks": {"type": "array", "items": {"type": "object", "properties": {
             "title": {"type": "string", "description": "Imperative, short, e.g. 'Call the school about the trip'."},
             "person": {"type": "string", "description": "Name of the participant who took it on, or the speaker label; empty if nobody did."},
+            "people": {"type": "array", "items": {"type": "string"}, "description": "Everyone who has to be there or do it together (a joint errand, an appointment with the child); usually just the person, more names only when the transcript says so."},
             "due_date": {"type": "string", "description": "YYYY-MM-DD when a day was named or implied, else empty."},
             "why": {"type": "string", "description": "One line quoting or paraphrasing where it came from."}},
             "required": ["title"]}},
@@ -89,6 +90,7 @@ def _prompt(template: str, transcript: str, participants: List[str], recorded_on
         "transcript itself says who that is (addressed by name), never by guessing. Resolve relative days "
         f"(tomorrow, Saturday) against the recording date {recorded_on}. Keep each item to one line and "
         "paraphrase instead of quoting; no quotation marks inside texts. "
+        "A task is done by one person unless the transcript says several must be there together; then list them all in people. "
         "Answer by calling write_report with the JSON; no other text."
     )
     user = f"Participants: {names}.\nRecording date: {recorded_on}.\n\nTranscript:\n{transcript}"
@@ -206,10 +208,13 @@ def _clean(data: Dict[str, Any]) -> Dict[str, Any]:
             out.append({k: str(x.get(k) or "").strip() for k in keys})
         return out
 
-    tasks = objs(data.get("tasks"), ["title", "person", "due_date", "why"])
-    for t in tasks:
+    raw_tasks = _unnest(data.get("tasks"))
+    tasks = objs(raw_tasks, ["title", "person", "due_date", "why"])
+    for t, raw in zip(tasks, [x for x in (raw_tasks or []) if isinstance(x, (dict, str))] if isinstance(raw_tasks, list) else []):
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", t["due_date"] or ""):
             t["due_date"] = ""
+        people = strs(_unnest(raw.get("people"))) if isinstance(raw, dict) else []
+        t["people"] = people or ([t["person"]] if t["person"] else [])
     dates = objs(data.get("dates"), ["text", "date", "time"])
     for d in dates:
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", d["date"] or ""):
@@ -284,9 +289,12 @@ def notify_report(rid: int, row: Dict[str, Any], data: Dict[str, Any]) -> None:
 
 
 def create_task_from_report(*, creator_id: str, title: str, person: str, due_date: Optional[str],
-                            notes: Optional[str], recording_id: int, recording_title: str) -> int:
-    """The same row add_task writes, plus the named member as assignee
-    (so the task reaches their day plan) and a note where it came from."""
+                            notes: Optional[str], recording_id: int, recording_title: str,
+                            with_user_ids: Optional[List[str]] = None) -> int:
+    """The same row add_task writes. Adopting means "mine": the adopter is
+    assigned, plus the people they ticked as doing it together (a joint
+    errand, the doctor with the child). The report's person stays a hint
+    in the row, it assigns nobody by itself."""
     from . import spaces as _sp
     src = f"From the recording \"{recording_title}\" (#{recording_id})" if recording_title else f"From recording #{recording_id}"
     notes = f"{notes}\n{src}" if notes else src
@@ -297,9 +305,8 @@ def create_task_from_report(*, creator_id: str, title: str, person: str, due_dat
             (title.strip()[:200], due_date, person or None, notes, creator_id, _sp.personal_space_id(creator_id)))
         task_id = int(cur.lastrowid)
         conn.execute("INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)", (task_id, creator_id))
-        if person:
-            member = conn.execute("SELECT id FROM user_profiles WHERE lower(name) = lower(?) LIMIT 1", (person,)).fetchone()
-            if member and str(member["id"]) != str(creator_id):
-                conn.execute("INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)", (task_id, member["id"]))
+        for uid in with_user_ids or []:
+            if str(uid) != str(creator_id) and conn.execute("SELECT 1 FROM user_profiles WHERE id = ?", (uid,)).fetchone():
+                conn.execute("INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)", (task_id, uid))
         conn.commit()
     return task_id

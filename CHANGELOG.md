@@ -35,7 +35,8 @@ worklist.
   `add_task` now also assigns a named household member, and day
   planning includes tasks assigned to you, not only ones you created.
   UI: a **Recordings** app (dock, phone and desktop) with the report,
-  Adopt buttons per task and the transcript; a "Record dinner" tile on
+  Adopt per task (adopting means "mine"; tick the others for a joint
+  errand) and the transcript; a "Record dinner" tile on
   the kiosk wall (sign in, tick who is here, done); one recorder pill
   that survives route changes and the kiosk's idle return, uploads a
   chunk every two minutes with retries, resumes after a reload, and

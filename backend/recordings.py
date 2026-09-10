@@ -828,6 +828,7 @@ async def report_build_route(rid: int, body: Optional[ReportIn] = None, user: Di
 class AdoptIn(BaseModel):
     person: Optional[str] = None
     due_date: Optional[str] = None
+    with_user_ids: List[str] = []       # people doing it together with the adopter
 
 
 @router.post("/{rid}/tasks/{index}/adopt")
@@ -848,11 +849,16 @@ def adopt_task_route(rid: int, index: int, body: Optional[AdoptIn] = None, user:
     body = body or AdoptIn()
     person = (body.person if body.person is not None else task.get("person") or "").strip()
     due = (body.due_date if body.due_date is not None else task.get("due_date") or "").strip()[:10] or None
+    allowed = set(_participants(row) + [str(row["owner_user_id"])])
+    together = [u for u in body.with_user_ids if u in allowed and u != str(user["id"])]
     task_id = REP.create_task_from_report(
         creator_id=str(user["id"]), title=task["title"], person=person, due_date=due,
-        notes=(task.get("why") or "").strip() or None, recording_id=rid, recording_title=row["title"])
+        notes=(task.get("why") or "").strip() or None, recording_id=rid, recording_title=row["title"],
+        with_user_ids=together)
+    names = _names([str(user["id"])] + together)
     task["task_id"] = task_id
-    task["adopted_by"] = _names([str(user["id"])]).get(str(user["id"]), "")
+    task["adopted_by"] = names.get(str(user["id"]), "")
+    task["with"] = [names.get(u, "") for u in together]
     task["adopted_at"] = _now()
     _set(rid, report_json=json.dumps(rep, ensure_ascii=False))
     return rep

@@ -15,7 +15,7 @@ LLM_ANSWER = {
     "decisions": [{"text": "Samstag zu Beates Eltern", "who": "alle", "when": "2030-04-06 15:00"}],
     "tasks": [
         {"title": "Schule wegen Ausflug anrufen", "person": "Dirk", "due_date": "2030-04-04", "why": "seit einer Woche offen"},
-        {"title": "Handwerker anrufen", "person": "Dirk", "due_date": "2030-04-05", "why": "hat nicht zurückgerufen"},
+        {"title": "Handwerker anrufen", "person": "Dirk", "people": ["Dirk", "Beate"], "due_date": "2030-04-05", "why": "hat nicht zurückgerufen"},
         {"title": "Küche aufräumen", "person": "Beate", "due_date": "nicht-ein-datum", "why": "Beate übernimmt"},
         "Mutter schreiben",
     ],
@@ -77,6 +77,7 @@ def test_dinner_gets_report_and_one_notification(fresh_app, transcript):
     assert rep["summary"].startswith("Küche") and rep["template"] == "dinner"
     assert [t["title"] for t in rep["tasks"]] == ["Schule wegen Ausflug anrufen", "Handwerker anrufen", "Küche aufräumen", "Mutter schreiben"]
     assert rep["tasks"][2]["due_date"] == "" and rep["tasks"][3]["person"] == ""      # cleaned
+    assert rep["tasks"][1]["people"] == ["Dirk", "Beate"] and rep["tasks"][0]["people"] == ["Dirk"] and rep["tasks"][3]["people"] == []
     assert rep["dates"][0]["date"] == "2030-04-04" and rep["friction"] == ["Der Handwerker hat wieder nicht zurückgerufen."]
     # the prompt carried the transcript, the names and the date
     sys_msg, user_msg = transcript["llm"][0][0]["content"], transcript["llm"][0][1]["content"]
@@ -149,7 +150,7 @@ def test_clean_unnests_json_strings_and_drops_junk():
         "dates": [{"text": "Fußball", "date": "13.09."}],
     })
     assert out["summary"] == "x" and out["decisions"] == [{"text": "Samstag zu den Eltern", "who": "", "when": ""}]
-    assert out["tasks"] == [{"title": "Küche", "person": "Sprecher 2", "due_date": "2026-09-10", "why": ""}]
+    assert out["tasks"] == [{"title": "Küche", "person": "Sprecher 2", "due_date": "2026-09-10", "why": "", "people": ["Sprecher 2"]}]
     assert out["highlights"] == ["schön"] and out["friction"] == [] and out["open_questions"] == []
     assert out["dates"] == [{"text": "Fußball", "date": "", "time": ""}]
 
@@ -180,17 +181,25 @@ def test_report_routes_and_adopt(fresh_app, transcript):
     assert c.post(f"/api/recordings/{rid}/report", json={"refresh": True, "template": "meeting"}).json()["template"] == "meeting"
     assert len(transcript["llm"]) == 2
 
-    # Beate adopts Dirk's task from her phone: created by her, assigned to Dirk too, remembered in the report
+    # Adopt means "mine": Beate taps it, it is hers alone, whatever name the report suggested
     b = _client(fresh_app, beate)
     rep = b.post(f"/api/recordings/{rid}/tasks/0/adopt", json={}).json()
     t = rep["tasks"][0]
-    assert t["task_id"] and t["adopted_by"] == "Beate"
+    assert t["task_id"] and t["adopted_by"] == "Beate" and t["with"] == [] and t["people"] == ["Dirk"]
     with get_conn() as conn:
         row = dict(conn.execute("SELECT title, person, due_date, notes, created_by_user_id FROM tasks WHERE id = ?", (t["task_id"],)).fetchone())
         assigned = {str(r["user_id"]) for r in conn.execute("SELECT user_id FROM task_assignees WHERE task_id = ?", (t["task_id"],)).fetchall()}
     assert row["title"] == "Schule wegen Ausflug anrufen" and row["person"] == "Dirk" and row["due_date"] == "2030-04-04"
-    assert "Abendessen" in row["notes"] and str(row["created_by_user_id"]) == beate and assigned == {dirk, beate}
-    assert "Schule wegen Ausflug anrufen" in {x["title"] for x in D.context_for(dirk, "2030-04-04", "admin")["open_tasks"]}
+    assert "Abendessen" in row["notes"] and str(row["created_by_user_id"]) == beate and assigned == {beate}
+    assert "Schule wegen Ausflug anrufen" not in {x["title"] for x in D.context_for(dirk, "2030-04-04", "admin")["open_tasks"]}
+    # a joint errand: Beate ticks Dirk as doing it together → both get it; strangers are ignored
+    rep = b.post(f"/api/recordings/{rid}/tasks/1/adopt", json={"with_user_ids": [dirk, "00000000-0000-0000-0000-000000000000"]}).json()
+    t1 = rep["tasks"][1]
+    assert t1["with"] == ["Dirk"]
+    with get_conn() as conn:
+        assigned = {str(r["user_id"]) for r in conn.execute("SELECT user_id FROM task_assignees WHERE task_id = ?", (t1["task_id"],)).fetchall()}
+    assert assigned == {beate, dirk}
+    assert "Handwerker anrufen" in {x["title"] for x in D.context_for(dirk, "2030-04-05", "admin")["open_tasks"]}
     assert b.post(f"/api/recordings/{rid}/tasks/0/adopt", json={}).json()["tasks"][0]["task_id"] == t["task_id"]   # idempotent
     assert b.get(f"/api/recordings/{rid}/report").json()["tasks"][0]["task_id"] == t["task_id"]
     assert b.post(f"/api/recordings/{rid}/tasks/9/adopt", json={}).status_code == 404

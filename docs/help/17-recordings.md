@@ -34,7 +34,7 @@ Kids without a profile stay anonymous in the transcript.
 
 For dinners and meetings Yorik writes the report right after the transcript:
 
-- **Tasks** — things one person will do, with the name and a date when one was mentioned. They are proposals: tap **Adopt** to turn one into a real task. It is created for the named person and shows up in their day plan the next morning ("Plan my day").
+- **Tasks** — things one person will do, with the name Yorik heard and a date when one was mentioned. They are proposals; everybody at the table sees the whole list. Tap **Adopt** on the ones that are yours: the task becomes yours and shows up in your day plan the next morning ("Plan my day"). For something you do together (the registry office, the doctor with your child) tick the others in the small box before adding; then all of you get it. What nobody adopted stays visibly open.
 - **Decisions** — agreements that are not one person's to-do.
 - **Nice moments** — praise, successes, plans people were happy about.
 - **What did not go well** — annoyances and things left unresolved, so they can be talked about calmly later.
