@@ -283,6 +283,27 @@ The consent dialog shows this verbatim. The iframe's `Content-Security-Policy` a
 
 ## What apps cannot do (yet)
 
+Verified against the code on 2026-09-10 while building the dinner
+recorder (see `docs/ADDONS.md`); these are the limits as shipped, not
+as designed:
+
+- **The iframe cannot reach the network or the microphone.** The host
+  renders the app with `sandbox="allow-scripts"` and a
+  `connect-src 'none'` policy. `fetch` to Yorik's API, `network.outbound`
+  origins, Supabase-js and `getUserMedia` all fail. Everything the app
+  needs goes through `window.yorik.callOperation`.
+- **Operations do not know the user.** An `@operation` receives only
+  its declared parameters; there is no user id, no role, and the
+  `role=[…]` argument is not enforced. `auth.uid()` is NULL for
+  connector writes.
+- **`permissions.invokes_skills` and `permissions.scheduled` are
+  declarations.** They are validated and shown on the consent screen;
+  there is no SDK call that invokes a skill and no scheduler reads
+  `scheduled`.
+
+An add-on that needs any of that today is built as skills plus a core
+module instead; `docs/ADDONS.md` walks through one.
+
 By design, in this v1 of the platform:
 
 - **No writes to Yorik core tables.** If you need to add a contact or create an event, call a skill (`compose_draft`, etc.) — declaring `permissions.writes` is accepted as a no-op and logged so reviewers see it.

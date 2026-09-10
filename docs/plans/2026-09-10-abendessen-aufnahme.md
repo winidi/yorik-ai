@@ -1,8 +1,17 @@
 # Plan: Abendessen-Aufnahme als Yorik-Add-on
 
-Stand 2026-09-10. Noch nichts gebaut. Dieser Plan ist die Arbeitsgrundlage
-und wird beim Bau fortgeschrieben; die Anleitung "Dein erstes Add-on"
-entsteht aus dem Protokoll der Umsetzung (Phase 4).
+Stand 2026-09-10 abends: **Phasen 1 bis 4 umgesetzt** (Commits
+6992604, f43f55b, 42d5013 und der Doku-Commit danach). Abweichung vom
+Plan: Phase 3 wurde nativ im Kern gebaut, nicht als Community-App,
+weil die App-Plattform im Sandbox-Iframe weder Mikrofon noch Netzwerk
+noch Nutzeridentität hat und `invokes_skills` nur eine Deklaration ist
+(Details in `docs/ADDONS.md` und `docs/BUILD_AN_APP.md`, Abschnitt
+"What apps cannot do"). Die Anleitung ist `docs/ADDONS.md`, die
+Nutzerhilfe `docs/help/17-recordings.md`. Offen: ein echtes Abendessen
+mit enrollten Stimmprofilen (Meilenstein aus Phase 1, braucht Dirk am
+Tisch), und die Plattform-Lücken als eigenes Vorhaben.
+
+Ursprünglicher Plan ab hier unverändert.
 
 ## 1. Ziel
 

@@ -137,7 +137,8 @@ Yorik is the glue, not the engines.
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — common failures
 - [docs/CONNECTORS.md](docs/CONNECTORS.md) — n8n + external services
 - [docs/MCP.md](docs/MCP.md) — Yorik as an MCP server for outside agents (Hermes, Claude Code)
-- [docs/SPEECH.md](docs/SPEECH.md) — Yorik as the household's speech server (OpenAI-shaped STT/TTS for Dictate, Hermes, scripts)
+- [docs/SPEECH.md](docs/SPEECH.md) — Yorik as the household's speech server (OpenAI-shaped STT/TTS for Dictate, Hermes, scripts); recordings of dinners and meetings
+- [docs/ADDONS.md](docs/ADDONS.md) — building an add-on, shown on the dinner recorder: migration, module, skills, UI, tests, and where the sandboxed app platform stands
 - [docs/WINDOWS.md](docs/WINDOWS.md) — running Yorik on Windows via WSL2, and Windows as a client
 - [ARCHITECTURE.md](ARCHITECTURE.md) — internals
 - [THREAT_MODEL.md](THREAT_MODEL.md) — security architecture
