@@ -13,6 +13,18 @@ worklist.
 
 ### Added
 
+- **Recordings.** A conversation at the table (dinner, meeting) is
+  recorded by the device in front of the user, uploaded in chunks, and
+  turned into a transcript with speaker turns on the CPU: sherpa-onnx
+  speaker segmentation (pyannote) + 3D-Speaker clustering, enrolled voice
+  profiles put names on the speakers, Parakeet transcribes each turn.
+  Only the people named at start can see it (row shares; no admin
+  exception); everyone at the table gets a bell entry and a push when
+  the transcript is ready. Audio is deleted after
+  `HOMEOS_RECORDING_RETENTION_DAYS`, the transcript stays. Skills
+  `start_recording`, `finish_recording`, `recording_status`; routes
+  under `/api/recordings`. The report on top (tasks, highlights,
+  friction) and the table UI follow.
 - **MCP server.** `POST /mcp` exposes the skills registry to outside
   agents (Hermes, Claude Code, scripts) over Streamable HTTP. One tool
   per skill the caller may use, schemas generated from `skill.md`,

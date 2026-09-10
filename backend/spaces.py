@@ -307,6 +307,7 @@ def row_filter(
         "contacts": "created_by_user_id",
         "events":   "owner_user_id",
         "calendars": "owner_user_id",
+        "recordings": "owner_user_id",
     }.get(table)
     if owner_col:
         parts.append(f"{t}.{owner_col} = ?")

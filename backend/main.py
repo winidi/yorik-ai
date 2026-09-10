@@ -112,6 +112,8 @@ from . import push as _push
 app.include_router(_push.router)
 from . import sharing_routes as _sharing_routes
 app.include_router(_sharing_routes.router)
+from . import recordings as _recordings
+app.include_router(_recordings.router)
 
 # Spaces / workspace ACL management (Phase B.5).
 from . import space_routes as _space_routes
@@ -2412,6 +2414,8 @@ def _startup() -> None:
     _bs_mod.start_scheduler(_aio.get_event_loop())
     # Web Push nudges (morning "plan your day", evening review).
     _push.start_scheduler(_aio.get_event_loop())
+    # Recordings: hourly retention sweep (audio deleted after N days, transcript stays).
+    _recordings.start_scheduler(_aio.get_event_loop())
     # Voice acks: pre-synthesize the "klar Moment / on it / ..." pool
     # so the streaming voice endpoint can emit an instant audio reply
     # the moment STT finishes (masking LLM latency). Run in a thread

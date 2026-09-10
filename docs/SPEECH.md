@@ -71,6 +71,35 @@ The scripts read `YORIK_URL` and `YORIK_TOKEN` from `~/.hermes/yorik.env`.
 **Anything else** that has an "OpenAI-compatible" audio setting: base URL
 `http://yorik.local:8000/v1`, API key = the Yorik token.
 
+## Recordings (a whole conversation)
+
+`/api/recordings` records a dinner or a meeting and turns it into a
+transcript with speaker turns, on the CPU:
+
+1. `POST /api/recordings` `{title, kind, participants:[user_id]}` → `{id}`.
+   Participants are the only people who will see the transcript.
+2. `POST /api/recordings/{id}/chunk` (multipart `audio`, form `seq`)
+   every couple of minutes while the browser records (WebM/Opus chunks
+   from MediaRecorder concatenate as they are).
+3. `POST /api/recordings/{id}/finish` joins the chunks and queues the
+   pipeline: speaker segmentation and clustering (sherpa-onnx, pyannote
+   segmentation-3.0 + 3D-Speaker CAM++), match against the enrolled
+   voice profiles (Settings → Voice; unmatched voices are "Speaker N"),
+   Parakeet per turn. `GET /api/recordings/{id}` shows `status` and
+   `progress`; `GET …/transcript` the turns. Everyone at the table gets
+   a bell entry + push when it is done.
+
+Models (~35 MB) are downloaded on first use into `data/diarization/`
+(`HOMEOS_DIARIZATION_AUTO_DOWNLOAD=0` to forbid; `POST
+/api/recordings/models/download` as admin to fetch later). Audio lives in
+`data/recordings/<id>/` and is deleted after
+`HOMEOS_RECORDING_RETENTION_DAYS` (30); the transcript stays. Rough
+processing time for an hour of audio: minutes on a workstation, tens of
+minutes on an 8 GB laptop (`HOMEOS_DIARIZATION_THREADS`, default 4).
+
+From chat: `start_recording`, `finish_recording` ("the dinner is
+over"), `recording_status` ("what did we discuss").
+
 ## Engines and models
 
 - STT: `backend/stt_parakeet.py`, models in `data/stt/` (~600 MB, one
