@@ -53,6 +53,15 @@ def test_delegates_with_session_and_key(agent):
     msgs = agent["body"]["messages"]
     assert msgs[0]["role"] == "system" and "Anna" in msgs[0]["content"] and "(de)" in msgs[0]["content"]
     assert msgs[1]["content"].startswith("Was steht oben") and "Context: wir reden" in msgs[1]["content"]
+    # Chat-sized questions run without thinking unless config.env says otherwise.
+    assert agent["body"]["model_options"] == {"reasoning_effort": "none"}
+
+
+def test_reasoning_level_from_config(agent, monkeypatch):
+    from backend.skills.ask_agent.skill import execute
+    monkeypatch.setenv("HOMEOS_AGENT_REASONING", "medium")
+    asyncio.run(execute(_ctx(), question="Denk gründlich nach."))
+    assert agent["body"]["model_options"] == {"reasoning_effort": "medium"}
 
 
 def test_errors_are_reported_not_invented(agent, monkeypatch):

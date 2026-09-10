@@ -22,6 +22,10 @@ def _cfg() -> dict[str, Any]:
         "model": (os.getenv("HOMEOS_AGENT_MODEL") or "hermes-agent").strip(),
         "name": (os.getenv("HOMEOS_AGENT_NAME") or "Hermes").strip(),
         "timeout": float(os.getenv("HOMEOS_AGENT_TIMEOUT") or 150),
+        # Thinking level Hermes runs the question with: none (fast, default),
+        # low, medium, high. Yorik questions are chat turns; deep reasoning
+        # costs 4-5x the tokens for the same answer.
+        "reasoning": (os.getenv("HOMEOS_AGENT_REASONING") or "none").strip().lower(),
     }
 
 
@@ -77,6 +81,8 @@ async def execute(ctx, question: str, context: Optional[str] = None) -> dict[str
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user_msg}],
         "stream": False,
     }
+    if cfg["reasoning"]:
+        body["model_options"] = {"reasoning_effort": cfg["reasoning"]}
 
     import httpx
     started = time.monotonic()

@@ -48,7 +48,10 @@ the same agent session.
 
 Configured in `config.env`: `HOMEOS_AGENT_URL` (e.g. `http://127.0.0.1:8642/v1`),
 `HOMEOS_AGENT_KEY`, optional `HOMEOS_AGENT_MODEL` (default `hermes-agent`),
-`HOMEOS_AGENT_NAME` (default `Hermes`), `HOMEOS_AGENT_TIMEOUT` seconds (default 150).
+`HOMEOS_AGENT_NAME` (default `Hermes`), `HOMEOS_AGENT_TIMEOUT` seconds (default 150),
+`HOMEOS_AGENT_REASONING` (default `none`: the agent answers without thinking,
+which is 4-5x fewer tokens for a chat-sized question; `medium` or `high` for
+deliberate reasoning).
 Without a URL the skill returns `error` and Yorik says so.
 
 Not exposed over MCP (tag `no-mcp`): an agent must not be able to ask
