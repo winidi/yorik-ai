@@ -2126,6 +2126,27 @@ async def rate_limit_api(request, call_next):
     return await call_next(request)
 
 
+# Typed on a phone, "workstation.tailf0bde1.ts.net" becomes an http request
+# (Android Chrome adds http:// to a bare host). Tailscale Serve hands plain
+# http on :80 to us with X-Forwarded-Proto: http; send such visitors to
+# the https port Yorik is served on, so the family never has to type
+# https:// or a port. Only for the tailnet name — LAN http stays http.
+_TS_HTTPS_PORT = (os.getenv("YORIK_TAILSCALE_HTTPS_PORT") or "8445").strip()
+
+
+@app.middleware("http")
+async def https_upgrade_for_tailnet_name(request, call_next):
+    host = (request.headers.get("host") or "").split(":")[0].lower()
+    proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").lower()
+    if proto == "http" and host.endswith(".ts.net") and _TS_HTTPS_PORT:
+        port = "" if _TS_HTTPS_PORT == "443" else f":{_TS_HTTPS_PORT}"
+        target = f"https://{host}{port}{request.url.path}"
+        if request.url.query:
+            target += f"?{request.url.query}"
+        return RedirectResponse(target, status_code=308)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def require_session_for_api(request, call_next):
     """Reject /api/* requests without a valid session, except a small

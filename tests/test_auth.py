@@ -147,3 +147,16 @@ def test_logout_revokes_cookie(fresh_app) -> None:
     assert client.get("/api/events").status_code == 200
     client.post("/api/auth/logout")
     assert client.get("/api/events").status_code == 401
+
+
+def test_bare_tailnet_name_is_sent_to_https(fresh_app):
+    """A phone typing the *.ts.net name arrives as plain http via Tailscale
+    Serve on :80; it is redirected to the https port. LAN http is untouched."""
+    from fastapi.testclient import TestClient
+    c = TestClient(fresh_app)
+    r = c.get("/r/home?x=1", headers={"host": "workstation.tailf0bde1.ts.net", "x-forwarded-proto": "http"}, follow_redirects=False)
+    assert r.status_code == 308 and r.headers["location"] == "https://workstation.tailf0bde1.ts.net:8445/r/home?x=1"
+    r = c.get("/api/health", headers={"host": "workstation.tailf0bde1.ts.net", "x-forwarded-proto": "https"}, follow_redirects=False)
+    assert r.status_code == 200
+    r = c.get("/api/health", headers={"host": "192.168.0.45:8000"}, follow_redirects=False)
+    assert r.status_code == 200
