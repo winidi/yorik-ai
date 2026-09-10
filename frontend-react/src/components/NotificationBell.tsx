@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Bell, Check, CheckCheck, Loader2, ShieldAlert, X } from "lucide-react";
+import { Bell, Check, CheckCheck, Loader2, ShieldAlert, X, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
@@ -78,6 +78,51 @@ export function NotificationBell() {
       setUnread(0);
     } catch {}
   }
+  // Swipe away / the x: the entry is deleted for good.
+  async function dismiss(id: number) {
+    const gone = list?.find(n => n.id === id);
+    setList(l => l ? l.filter(n => n.id !== id) : l);
+    if (gone && !gone.is_read) setUnread(c => Math.max(0, c - 1));
+    try { await api.delete(`/api/notifications/${id}`); } catch {}
+  }
+  async function clearAll() {
+    setList([]);
+    setUnread(0);
+    try { await api.delete("/api/notifications"); } catch {}
+  }
+  // Horizontal swipe on a row (touch or mouse). pan-y on the scroll
+  // container leaves horizontal moves to us; past SWIPE_PX the row is gone.
+  const SWIPE_PX = 80;
+  const [drag, setDrag] = useState<{ id: number; dx: number } | null>(null);
+  const dragStart = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
+  function onRowPointerDown(e: React.PointerEvent, id: number) {
+    if (e.button !== 0) return;
+    dragStart.current = { id, x: e.clientX, y: e.clientY, moved: false };
+  }
+  function onRowPointerMove(e: React.PointerEvent) {
+    const d = dragStart.current;
+    if (!d) return;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (!d.moved && Math.abs(dx) < 10) return;
+    if (!d.moved && Math.abs(dy) > Math.abs(dx)) { dragStart.current = null; return; }   // vertical: scrolling
+    d.moved = true;
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    setDrag({ id: d.id, dx });
+  }
+  function onRowPointerUp(e: React.PointerEvent) {
+    const d = dragStart.current;
+    dragStart.current = null;
+    if (!d) return;
+    const dx = e.clientX - d.x;
+    setDrag(null);
+    if (d.moved && Math.abs(dx) >= SWIPE_PX) {
+      void dismiss(d.id);
+      suppressClick.current = d.id;
+    } else if (d.moved) {
+      suppressClick.current = d.id;
+    }
+  }
+  const suppressClick = useRef<number | null>(null);
   // For kind='email_proposal': one-click accept → the backend runs the
   // matching skill (add_bill / add_calendar_event) and marks the
   // notification read.
@@ -172,15 +217,27 @@ export function NotificationBell() {
         >
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
             <h3 className="font-semibold text-sm">Notifications</h3>
-            {list && list.some(n => !n.is_read) && (
-              <button
-                onClick={markAllRead}
-                className="text-[11px] text-primary hover:underline flex items-center gap-1"
-              >
-                <CheckCheck className="w-3 h-3" />
-                Mark all read
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {list && list.some(n => !n.is_read) && (
+                <button
+                  onClick={markAllRead}
+                  className="text-[11px] text-primary hover:underline flex items-center gap-1"
+                >
+                  <CheckCheck className="w-3 h-3" />
+                  Mark all read
+                </button>
+              )}
+              {list && list.length > 0 && (
+                <button
+                  onClick={clearAll}
+                  className="text-[11px] text-muted-foreground hover:text-foreground hover:underline flex items-center gap-1"
+                  title="Remove all entries"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Clear all
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto">
             {loading && !list && (
@@ -202,11 +259,18 @@ export function NotificationBell() {
                 <div
                   key={n.id}
                   className={cn(
-                    "w-full text-left p-3 border-b border-border/40 transition flex gap-3",
+                    "group relative w-full text-left p-3 border-b border-border/40 flex gap-3 select-none",
+                    drag?.id === n.id ? "transition-none" : "transition",
                     !n.is_read && "bg-primary/[0.04]",
                     !isProposal && "hover:bg-muted/30 cursor-pointer",
                   )}
+                  style={drag?.id === n.id ? { transform: `translateX(${drag.dx}px)`, opacity: Math.max(0.2, 1 - Math.abs(drag.dx) / 240) } : undefined}
+                  onPointerDown={(e) => onRowPointerDown(e, n.id)}
+                  onPointerMove={onRowPointerMove}
+                  onPointerUp={onRowPointerUp}
+                  onPointerCancel={() => { dragStart.current = null; setDrag(null); }}
                   onClick={isProposal ? undefined : () => {
+                    if (suppressClick.current === n.id) { suppressClick.current = null; return; }
                     markRead(n.id);
                     if (n.navigate_to) {
                       setOpen(false);
@@ -214,6 +278,15 @@ export function NotificationBell() {
                     }
                   }}
                 >
+                  <button
+                    onClick={(e) => { e.stopPropagation(); void dismiss(n.id); }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="absolute top-2 right-2 p-1 rounded-full text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-muted"
+                    title="Remove"
+                    aria-label="Remove notification"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                   <span className={cn(
                     "w-2 h-2 rounded-full mt-1.5 shrink-0",
                     n.is_read ? "bg-transparent" : "bg-primary",
@@ -263,7 +336,7 @@ export function NotificationBell() {
                         </button>
                         <button
                           disabled={busyId === n.id}
-                          onClick={(e) => { e.stopPropagation(); markRead(n.id); setList(l => l ? l.filter(x => x.id !== n.id) : l); }}
+                          onClick={(e) => { e.stopPropagation(); void dismiss(n.id); }}
                           className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-border hover:bg-muted/40 disabled:opacity-50"
                         >
                           <X className="w-3 h-3" /> Dismiss

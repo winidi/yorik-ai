@@ -42,6 +42,21 @@ def mark_all(user: dict = Depends(current_user)):
     return {"ok": True, "marked": n}
 
 
+@router.delete("/{notification_id}")
+def dismiss_one(notification_id: int, user: dict = Depends(current_user)):
+    """Swipe away / the x on an entry."""
+    n = notif.dismiss(user["id"], [notification_id])
+    if not n:
+        raise HTTPException(status_code=404, detail="no such notification")
+    return {"ok": True}
+
+
+@router.delete("")
+def dismiss_all(read_only: bool = Query(False), user: dict = Depends(current_user)):
+    """Clear the bell. read_only=true keeps what was never opened."""
+    return {"ok": True, "removed": notif.dismiss_all(user["id"], read_only=read_only)}
+
+
 @router.post("/{notification_id}/accept")
 async def accept_proposal(notification_id: int, user: dict = Depends(current_user)):
     """Accept an actionable notification (kind='email_proposal'): dispatches

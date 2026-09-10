@@ -876,13 +876,17 @@ if _docker_ready; then
       exit 1
     fi
 
+    # Always `up -d`: it is idempotent and fast when everything runs,
+    # and it restarts whatever is down. A "something is running" probe
+    # once skipped this while only the WhatsApp bridge was up and Immich
+    # and Paperless had been stopped for days (2026-09-10).
     if docker compose "${COMPOSE_FILES[@]}" ps --status=running 2>/dev/null | grep -q "yorik-"; then
-      skip "docker stack already running (profiles: $COMPOSE_PROFILES)"
+      say "DOCKER" "checking the stack (profiles: $COMPOSE_PROFILES)"
     else
       say "DOCKER" "bringing up: $COMPOSE_PROFILES (first time may pull ~5GB)"
-      docker compose "${COMPOSE_FILES[@]}" up -d >/dev/null
-      ok "docker stack started"
     fi
+    docker compose "${COMPOSE_FILES[@]}" up -d >/dev/null
+    ok "docker stack up"
 
     # Immich first-boot stale-bind-mount auto-heal. Symptom: container
     # binds /home/$USER/yorik-ai/data/immich/library → /data, but the

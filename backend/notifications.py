@@ -106,6 +106,32 @@ def mark_read(user_id: str, ids: list[int]) -> int:
     return cur.rowcount or 0
 
 
+def dismiss(user_id: str, ids: list[int]) -> int:
+    """Swipe away: the entry is gone from the bell. Only the owner's own
+    rows; a pending agent deletion card counts as 'keep' when dismissed
+    (its pending action simply expires)."""
+    if not ids:
+        return 0
+    placeholders = ",".join("?" * len(ids))
+    with get_conn() as conn:
+        cur = conn.execute(
+            f"DELETE FROM notifications WHERE user_id=? AND id IN ({placeholders})",
+            (user_id, *ids),
+        )
+        conn.commit()
+    return cur.rowcount or 0
+
+
+def dismiss_all(user_id: str, *, read_only: bool = False) -> int:
+    with get_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM notifications WHERE user_id=?" + (" AND is_read=1" if read_only else ""),
+            (user_id,),
+        )
+        conn.commit()
+    return cur.rowcount or 0
+
+
 def mark_all_read(user_id: str) -> int:
     with get_conn() as conn:
         cur = conn.execute(

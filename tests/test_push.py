@@ -99,3 +99,21 @@ def test_notify_skill_reaches_bell_and_phone(fresh_app, sent):
     # over MCP the tool is visible
     from backend.mcp_server import list_tools
     assert "notify" in {t["name"] for t in list_tools({"id": uid, "role": "member"})}
+
+
+def test_notifications_can_be_dismissed(fresh_app, sent):
+    from backend import notifications as N
+    client, uid = login_client(fresh_app, role="member")
+    other, _ = login_client(fresh_app, role="member", name="Other", email="other@example.local")
+    a = N.create(user_id=uid, kind="agent_message", title="A")
+    b = N.create(user_id=uid, kind="agent_message", title="B")
+    c = N.create(user_id=uid, kind="agent_message", title="C")
+    assert other.delete(f"/api/notifications/{a}").status_code == 404          # not theirs
+    assert client.delete(f"/api/notifications/{a}").json() == {"ok": True}
+    assert [n["title"] for n in client.get("/api/notifications").json()["notifications"]] == ["C", "B"]
+    client.post(f"/api/notifications/{b}/read")
+    assert client.delete("/api/notifications?read_only=true").json()["removed"] == 1
+    assert [n["title"] for n in client.get("/api/notifications").json()["notifications"]] == ["C"]
+    assert client.delete("/api/notifications").json()["removed"] == 1
+    assert client.get("/api/notifications").json()["notifications"] == []
+    assert c and client.delete(f"/api/notifications/{c}").status_code == 404
