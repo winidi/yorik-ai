@@ -306,10 +306,11 @@ def context_for(user_id: str, plan_date: str, role: str = "member") -> Dict[str,
         ).fetchall()]
         open_tasks = [dict(r) for r in conn.execute(
             "SELECT id, title, due_date, priority, category, estimated_minutes, plan_date, plan_key "
-            "FROM tasks WHERE (done = 0 OR done IS NULL) AND created_by_user_id = ? "
+            "FROM tasks WHERE (done = 0 OR done IS NULL) "
+            "AND (created_by_user_id = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)) "
             "AND (due_date IS NULL OR due_date <= ?) AND parent_task_id IS NULL "
             "ORDER BY due_date NULLS LAST, priority DESC NULLS LAST, id LIMIT 40",
-            (user_id, plan_date),
+            (user_id, user_id, plan_date),
         ).fetchall()]
     yday = (date.fromisoformat(plan_date) - timedelta(days=1)).isoformat()
     prev = get_plan(user_id, yday)

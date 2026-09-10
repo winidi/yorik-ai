@@ -97,8 +97,17 @@ Models (~35 MB) are downloaded on first use into `data/diarization/`
 processing time for an hour of audio: minutes on a workstation, tens of
 minutes on an 8 GB laptop (`HOMEOS_DIARIZATION_THREADS`, default 4).
 
+Dinner and meeting recordings get a **report** right after the
+transcript (`HOMEOS_RECORDING_AUTO_REPORT`): summary, decisions, tasks
+with a person and date, nice moments, friction, open questions, dates.
+One LLM pass with thinking on (`HOMEOS_REPORT_REASONING`, default
+medium), stored in `report_json`, so it outlives the audio. Tasks are
+proposals; adopting one goes through `add_task`, which also assigns the
+named household member so the task shows up in their day plan.
+
 From chat: `start_recording`, `finish_recording` ("the dinner is
-over"), `recording_status` ("what did we discuss").
+over"), `recording_status` ("what did we discuss"), `recording_report`
+("what came out of it").
 
 ## Engines and models
 

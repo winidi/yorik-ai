@@ -22,9 +22,14 @@ worklist.
   exception); everyone at the table gets a bell entry and a push when
   the transcript is ready. Audio is deleted after
   `HOMEOS_RECORDING_RETENTION_DAYS`, the transcript stays. Skills
-  `start_recording`, `finish_recording`, `recording_status`; routes
-  under `/api/recordings`. The report on top (tasks, highlights,
-  friction) and the table UI follow.
+  `start_recording`, `finish_recording`, `recording_status`,
+  `recording_report`; routes under `/api/recordings`. Dinner and
+  meeting recordings get a report right after the transcript (summary,
+  decisions, tasks with a person, nice moments, friction, open
+  questions, dates); tasks stay proposals until someone adopts them.
+  `add_task` now also assigns a named household member, and day
+  planning includes tasks assigned to you, not only ones you created.
+  The table UI follows.
 - **MCP server.** `POST /mcp` exposes the skills registry to outside
   agents (Hermes, Claude Code, scripts) over Streamable HTTP. One tool
   per skill the caller may use, schemas generated from `skill.md`,

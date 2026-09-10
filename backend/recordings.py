@@ -73,6 +73,7 @@ MAX_WINDOW_S = 45.0           # Parakeet window per decode
 MERGE_GAP_S = 1.0             # same speaker, pause shorter than this → one turn
 IDENTIFY_SECONDS = 20.0       # speech per cluster used for the profile match
 KINDS = ("dinner", "meeting", "conversation")
+AUTO_REPORT_KINDS = tuple(k.strip() for k in (os.getenv("HOMEOS_RECORDING_AUTO_REPORT") or "dinner,meeting").split(",") if k.strip())
 
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="recordings")
 _diarizer = None
@@ -547,8 +548,20 @@ def process(rid: int) -> Dict[str, Any]:
         log.info("recordings: #%s done — %.0f s audio, %d turns, %d speakers (%s), %.0f s processing",
                  rid, dur, len(rows), len(speakers), ", ".join(speakers), took)
         workers.heartbeat("recordings", "ok", f"#{rid} done in {took:.0f}s")
-        _notify_done(rid, row, dur, len(rows), speakers)
-        return {"id": rid, "status": "done", "turns": len(rows), "speakers": speakers, "seconds": round(took, 1)}
+        report = None
+        if rows and row["kind"] in AUTO_REPORT_KINDS:
+            _set(rid, progress="report")
+            workers.heartbeat("recordings", "ok", f"#{rid} report")
+            try:
+                from . import recording_reports as _rep
+                report = _rep.build_report(rid, row["kind"], notify=True)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("recordings: #%s report failed (%s); transcript is there", rid, exc)
+            _set(rid, progress=None)
+        if report is None:
+            _notify_done(rid, row, dur, len(rows), speakers)
+        return {"id": rid, "status": "done", "turns": len(rows), "speakers": speakers, "seconds": round(took, 1),
+                "report": bool(report)}
     except Exception as exc:  # noqa: BLE001
         log.exception("recordings: #%s failed", rid)
         _set(rid, status="failed", progress=None, error=f"{type(exc).__name__}: {exc}"[:500])

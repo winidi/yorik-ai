@@ -36,6 +36,7 @@ def rec(monkeypatch, tmp_path):
         return {0: {"user_id": calls["beate"], "name": "Beate", "similarity": 0.8}} if calls.get("beate") in candidates else {}
     monkeypatch.setattr(R, "identify_clusters", fake_identify)
     monkeypatch.setattr(R, "schedule_processing", lambda rid: R._process_safe(rid))
+    monkeypatch.setattr(R, "AUTO_REPORT_KINDS", ())     # reports have their own tests
     return calls
 
 

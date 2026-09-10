@@ -63,6 +63,17 @@ async def execute(
                 "INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)",
                 (task_id, creator_id),
             )
+        # A named household member is assigned too, so the task shows up
+        # in their day planning (person stays free text for outsiders).
+        if person and person.strip():
+            member = conn.execute(
+                "SELECT id FROM user_profiles WHERE lower(name) = lower(?) LIMIT 1", (person.strip(),)
+            ).fetchone()
+            if member and str(member["id"]) != str(creator_id):
+                conn.execute(
+                    "INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)",
+                    (task_id, member["id"]),
+                )
         row = conn.execute(
             "SELECT id, title, due_date, done, person, notes, space_id, "
             "       category, parent_task_id, recurrence_rule "
