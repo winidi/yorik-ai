@@ -281,3 +281,25 @@ def notify_report(rid: int, row: Dict[str, Any], data: Dict[str, Any]) -> None:
                           payload={"recording_id": rid}, navigate_to=f"/r/chat?say={say}")
         except Exception as exc:  # noqa: BLE001
             log.warning("recording_reports: notify %s failed: %s", uid, exc)
+
+
+def create_task_from_report(*, creator_id: str, title: str, person: str, due_date: Optional[str],
+                            notes: Optional[str], recording_id: int, recording_title: str) -> int:
+    """The same row add_task writes, plus the named member as assignee
+    (so the task reaches their day plan) and a note where it came from."""
+    from . import spaces as _sp
+    src = f"From the recording \"{recording_title}\" (#{recording_id})" if recording_title else f"From recording #{recording_id}"
+    notes = f"{notes}\n{src}" if notes else src
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO tasks (title, due_date, done, person, notes, created_by_user_id, space_id) "
+            "VALUES (?, ?, 0, ?, ?, ?, ?)",
+            (title.strip()[:200], due_date, person or None, notes, creator_id, _sp.personal_space_id(creator_id)))
+        task_id = int(cur.lastrowid)
+        conn.execute("INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)", (task_id, creator_id))
+        if person:
+            member = conn.execute("SELECT id FROM user_profiles WHERE lower(name) = lower(?) LIMIT 1", (person,)).fetchone()
+            if member and str(member["id"]) != str(creator_id):
+                conn.execute("INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)", (task_id, member["id"]))
+        conn.commit()
+    return task_id

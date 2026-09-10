@@ -287,6 +287,17 @@ register(App(
 # Briefing — daily inbox digest powered by JSON templates (briefings/).
 # Lives in the React shell at /r/briefing alongside Email.
 register(App(
+    id="recordings",
+    name="Recordings",
+    icon="🎙",
+    description="Record a dinner or a meeting; Yorik writes the transcript with speakers and a report with tasks, nice moments and friction.",
+    view_kind="native",
+    chrome="embedded",
+    tags=["bundled", "core"],
+    aliases=["recordings", "recording", "dinner", "aufnahme", "aufnahmen", "abendessen", "protokoll"],
+))
+
+register(App(
     id="briefing",
     name="Briefing",
     icon="📰",

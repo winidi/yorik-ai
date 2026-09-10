@@ -95,6 +95,9 @@ export const api = {
   patch:  <T>(path: string, data?: any)  => request<T>(path, { method: "PATCH", body: data && JSON.stringify(data) }),
   put:    <T>(path: string, data?: any)  => request<T>(path, { method: "PUT", body: data && JSON.stringify(data) }),
   delete: <T>(path: string)              => request<T>(path, { method: "DELETE" }),
+  /** multipart upload (audio chunks, files); extra headers optional */
+  postForm: <T>(path: string, form: FormData, headers?: Record<string, string>) =>
+    request<T>(path, { method: "POST", body: form, headers }),
 };
 
 export { ApiError };

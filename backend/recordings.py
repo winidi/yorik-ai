@@ -31,6 +31,7 @@ import asyncio
 import json
 import logging
 import os
+import secrets
 import shutil
 import subprocess
 import tarfile
@@ -44,7 +45,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
 import numpy as np
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -167,7 +168,9 @@ def can_view(rid: int, user: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return dict(r) if r else None
 
 
-def public(row: Dict[str, Any]) -> Dict[str, Any]:
+def public(row: Dict[str, Any], *, with_token: bool = False) -> Dict[str, Any]:
+    """with_token: only for the creating call — the device that records
+    keeps the token; it never appears in lists or later reads."""
     ids = _participants(row)
     names = _names(ids + [str(row["owner_user_id"])])
     return {
@@ -189,6 +192,7 @@ def public(row: Dict[str, Any]) -> Dict[str, Any]:
         "audio_available": row.get("audio_deleted_at") is None and (rec_dir(row["id"]) / "audio.webm").exists(),
         "has_report": bool(row.get("report_json")),
         "report_template": row.get("report_template"),
+        **({"upload_token": row.get("upload_token")} if with_token else {}),
     }
 
 
@@ -205,9 +209,10 @@ def create(owner_id: str, *, title: str = "", kind: str = "conversation",
         raise ValueError(f"unknown participant(s): {', '.join(unknown)}")
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO recordings (owner_user_id, space_id, title, kind, participants_json) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (owner_id, _sp.personal_space_id(owner_id), (title or "").strip()[:200], kind, json.dumps(ids)))
+            "INSERT INTO recordings (owner_user_id, space_id, title, kind, participants_json, upload_token, started_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (owner_id, _sp.personal_space_id(owner_id), (title or "").strip()[:200], kind, json.dumps(ids),
+             secrets.token_urlsafe(24), _now()))    # local time, like every other timestamp Yorik writes
         rid = int(cur.lastrowid)
         conn.commit()
     _share_with(rid, ids)
@@ -680,6 +685,25 @@ def _owned(rid: int, user: Dict[str, Any]) -> Dict[str, Any]:
     return row
 
 
+def _device_or_owner(rid: int, request: Request, user: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Chunk and finish: the recording device authenticates with the
+    upload token it got at creation, or the owner's session does."""
+    token = (request.headers.get("x-recording-token") or "").strip()
+    if token:
+        row = _row(rid)
+        if row and row.get("upload_token") and secrets.compare_digest(str(row["upload_token"]), token):
+            return row
+        raise HTTPException(status_code=403, detail="bad recording token")
+    if not user:
+        raise HTTPException(status_code=401, detail="not authenticated")
+    return _owned(rid, user)
+
+
+def _current_user_optional():
+    from .auth_sessions import current_user_optional
+    return current_user_optional
+
+
 @router.get("/models")
 def models_status(user: Dict[str, Any] = Depends(_current_user())):
     return {"installed": models_installed(), "dir": str(MODEL_DIR), "auto_download": AUTO_DOWNLOAD}
@@ -706,13 +730,13 @@ def create_route(body: CreateIn, user: Dict[str, Any] = Depends(_current_user())
         row = create(str(user["id"]), title=body.title, kind=body.kind, participants=body.participants)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return public(row)
+    return public(row, with_token=True)
 
 
 @router.post("/{rid}/chunk")
-async def chunk_route(rid: int, seq: int = Form(...), audio: UploadFile = File(...),
-                      user: Dict[str, Any] = Depends(_current_user())):
-    _owned(rid, user)
+async def chunk_route(rid: int, request: Request, seq: int = Form(...), audio: UploadFile = File(...),
+                      user: Optional[Dict[str, Any]] = Depends(_current_user_optional())):
+    _device_or_owner(rid, request, user)
     data = await audio.read()
     if len(data) > MAX_CHUNK_MB * 1024 * 1024:
         raise HTTPException(status_code=413, detail=f"chunk larger than {MAX_CHUNK_MB} MB")
@@ -725,8 +749,9 @@ async def chunk_route(rid: int, seq: int = Form(...), audio: UploadFile = File(.
 
 
 @router.post("/{rid}/finish")
-def finish_route(rid: int, body: Optional[FinishIn] = None, user: Dict[str, Any] = Depends(_current_user())):
-    _owned(rid, user)
+def finish_route(rid: int, request: Request, body: Optional[FinishIn] = None,
+                 user: Optional[Dict[str, Any]] = Depends(_current_user_optional())):
+    _device_or_owner(rid, request, user)
     try:
         row = finish(rid, duration_s=(body.duration_s if body else None))
     except ValueError as exc:
@@ -759,6 +784,78 @@ def audio_route(rid: int, user: Dict[str, Any] = Depends(_current_user())):
     if row.get("audio_deleted_at") or not f.exists():
         raise HTTPException(status_code=410, detail="audio was deleted")
     return FileResponse(str(f), media_type="audio/webm")
+
+
+class ReportIn(BaseModel):
+    refresh: bool = False
+    template: Optional[str] = None
+
+
+@router.get("/{rid}/report")
+def report_get_route(rid: int, user: Dict[str, Any] = Depends(_current_user())):
+    from . import recording_reports as REP
+    row = can_view(rid, user)
+    if not row:
+        raise HTTPException(status_code=404, detail="no such recording")
+    rep = REP.get_report(rid)
+    if not rep:
+        raise HTTPException(status_code=404, detail="no report yet")
+    return rep
+
+
+@router.post("/{rid}/report")
+async def report_build_route(rid: int, body: Optional[ReportIn] = None, user: Dict[str, Any] = Depends(_current_user())):
+    """Write (or rewrite) the report; a long LLM pass, so it runs off the loop."""
+    from . import recording_reports as REP
+    row = can_view(rid, user)
+    if not row:
+        raise HTTPException(status_code=404, detail="no such recording")
+    if row["status"] != "done":
+        raise HTTPException(status_code=409, detail=f"transcript is not ready ({row['status']})")
+    body = body or ReportIn()
+    existing = REP.get_report(rid)
+    if existing and not body.refresh:
+        return existing
+    try:
+        return await asyncio.get_running_loop().run_in_executor(
+            None, lambda: REP.build_report(rid, body.template, notify=existing is None))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"report failed: {exc}")
+
+
+class AdoptIn(BaseModel):
+    person: Optional[str] = None
+    due_date: Optional[str] = None
+
+
+@router.post("/{rid}/tasks/{index}/adopt")
+def adopt_task_route(rid: int, index: int, body: Optional[AdoptIn] = None, user: Dict[str, Any] = Depends(_current_user())):
+    """Turn one proposed task of the report into a real task. Anyone at
+    the table may adopt; the task is created by them, assigned to the
+    named household member too, and the report remembers the task id."""
+    from . import recording_reports as REP
+    row = can_view(rid, user)
+    if not row:
+        raise HTTPException(status_code=404, detail="no such recording")
+    rep = REP.get_report(rid)
+    if not rep or index < 0 or index >= len(rep.get("tasks") or []):
+        raise HTTPException(status_code=404, detail="no such task in the report")
+    task = rep["tasks"][index]
+    if task.get("task_id"):
+        return rep
+    body = body or AdoptIn()
+    person = (body.person if body.person is not None else task.get("person") or "").strip()
+    due = (body.due_date if body.due_date is not None else task.get("due_date") or "").strip()[:10] or None
+    task_id = REP.create_task_from_report(
+        creator_id=str(user["id"]), title=task["title"], person=person, due_date=due,
+        notes=(task.get("why") or "").strip() or None, recording_id=rid, recording_title=row["title"])
+    task["task_id"] = task_id
+    task["adopted_by"] = _names([str(user["id"])]).get(str(user["id"]), "")
+    task["adopted_at"] = _now()
+    _set(rid, report_json=json.dumps(rep, ensure_ascii=False))
+    return rep
 
 
 @router.delete("/{rid}")

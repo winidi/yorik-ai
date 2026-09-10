@@ -62,8 +62,17 @@ def test_record_process_and_participant_visibility(fresh_app, rec):
     assert r.json()["status"] == "recording" and [p["name"] for p in r.json()["participants"]] == ["Beate", "Kid"]
     assert client.post("/api/recordings", json={"participants": ["00000000-0000-0000-0000-000000000000"]}).status_code == 400
 
+    token = r.json()["upload_token"]
+    assert token and "upload_token" not in client.get(f"/api/recordings/{rid}").json()
     assert _upload(client, rid, 0).json()["chunks"] == 1
-    assert _upload(client, rid, 1).json()["chunks"] == 2
+    # the device uploads with the token even when the session is someone else's (or none)
+    from fastapi.testclient import TestClient
+    anon = TestClient(fresh_app)
+    assert anon.post(f"/api/recordings/{rid}/chunk", data={"seq": "1"}, files={"audio": ("c.webm", b"webm-bytes", "audio/webm")},
+                     headers={"X-Recording-Token": token}).json()["chunks"] == 2
+    assert anon.post(f"/api/recordings/{rid}/chunk", data={"seq": "2"}, files={"audio": ("c.webm", b"x", "audio/webm")},
+                     headers={"X-Recording-Token": "wrong"}).status_code == 403
+    assert anon.post(f"/api/recordings/{rid}/chunk", data={"seq": "2"}, files={"audio": ("c.webm", b"x", "audio/webm")}).status_code == 401
     assert client.post(f"/api/recordings/{rid}/finish", json={"duration_s": 10}).status_code == 200
     assert (R.rec_dir(rid) / "audio.webm").read_bytes() == b"webm-byteswebm-bytes"
     assert not list(R.rec_dir(rid).glob("chunk-*"))
@@ -85,7 +94,6 @@ def test_record_process_and_participant_visibility(fresh_app, rec):
 
     # participants see it (member and restricted), a non-participant admin does not
     from backend import auth_sessions
-    from fastapi.testclient import TestClient
     for uid, expect in ((beate, 200), (kid, 200), (other_admin, 404)):
         c = TestClient(fresh_app)
         c.cookies.set(auth_sessions.COOKIE_NAME, auth_sessions.create_session(uid, user_agent="t", ip="127.0.0.1"))

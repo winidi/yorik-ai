@@ -22,6 +22,9 @@ import { Slideshow, type SlideshowPhoto } from "./Slideshow";
 import { IdleOverlay } from "./IdleOverlay";
 import { AvatarPinFallback, type PickableUser } from "./AvatarPinFallback";
 import { AgendaPane } from "./AgendaPane";
+import { RecordingStartDialog } from "@/components/RecordingStartDialog";
+import { getRecorderState, subscribeRecorder } from "@/components/RecorderDock";
+import { Mic } from "lucide-react";
 
 // Pointer-gesture thresholds. Picked for a wall-mounted tablet —
 // a tap is ≤8px movement; a swipe is ≥40px primarily horizontal.
@@ -66,6 +69,15 @@ export function AmbientApp() {
   // Agenda pane — opened by swipe-right, shows today's events from
   // every consenting household member. User-agnostic surface.
   const [agendaOpen, setAgendaOpen] = useState(false);
+
+  // Dinner recording from the wall: the tile opens the sign-in picker
+  // (so the recording belongs to a person, not the wall), then the
+  // "who is here" dialog; RecorderDock does the rest and stays visible
+  // over the slideshow.
+  const [recordOpen, setRecordOpen] = useState(false);
+  const [recordAfterSignIn, setRecordAfterSignIn] = useState(false);
+  const [recorderLive, setRecorderLive] = useState(() => getRecorderState().phase !== "idle");
+  useEffect(() => subscribeRecorder(st => setRecorderLive(st.phase !== "idle")), []);
 
   // "Hi Dirk" greeting overlay — fades in when VoiceFab's
   // identification handler dispatches yorik:user:switched after a
@@ -362,6 +374,23 @@ export function AmbientApp() {
     >
       <Slideshow photos={photos} />
       <IdleOverlay greeting={timeGreeting()} />
+      {!recorderLive && (
+        <button
+          onPointerDown={e => e.stopPropagation()}
+          onPointerUp={e => e.stopPropagation()}
+          onClick={() => {
+            // sign in first so the recording is a person's, then ask who is here
+            setRecordAfterSignIn(true);
+            void openPicker();
+          }}
+          className="fixed left-10 bottom-28 z-20 flex items-center gap-2 rounded-full bg-black/55 hover:bg-black/70 backdrop-blur-md text-white/90 px-4 py-2.5 text-sm border border-white/15"
+        >
+          <Mic className="w-4 h-4 text-red-400" /> Record dinner
+        </button>
+      )}
+      {recordOpen && (
+        <RecordingStartDialog dark defaultKind="dinner" onClose={() => { setRecordOpen(false); setRecordAfterSignIn(false); }} />
+      )}
       {greeting && (
         <div
           aria-live="polite"
@@ -412,6 +441,7 @@ export function AmbientApp() {
             // wall again and the next tap re-opens the picker.
             setPickerOpen(false);
             auth.refresh().catch(() => {});
+            if (recordAfterSignIn) { setRecordAfterSignIn(false); setRecordOpen(true); return; }
             navigate("/chat");
           }}
         />

@@ -1918,12 +1918,20 @@ _AUTH_WHITELIST_EXACT: Final[frozenset[str]] = frozenset({
 })
 
 
+_RECORDING_DEVICE_RE: Final = re.compile(r"^/api/recordings/\d+/(chunk|finish)$")
+
+
 def _auth_path_allowed(path: str) -> bool:
     if path in _AUTH_WHITELIST_EXACT:
         return True
     for prefix in _AUTH_WHITELIST_PREFIX:
         if path.startswith(prefix):
             return True
+    # The recording device authenticates these two with its per-recording
+    # upload token (or the owner's session) inside the route — see
+    # backend/recordings.py _device_or_owner.
+    if _RECORDING_DEVICE_RE.match(path):
+        return True
     return False
 
 

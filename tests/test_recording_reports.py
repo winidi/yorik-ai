@@ -161,3 +161,39 @@ def test_repair_json_escapes_quotes_inside_strings():
                                {"title": "Schule", "why": "seit \"einer\" Woche"}]
     assert REP._extract_json('Here: ```json\n{"summary": "a "b" c", "tasks": []}\n```') == {"summary": "a \"b\" c", "tasks": []}
     assert REP._clean({"tasks": raw})["tasks"][0]["title"] == "Küche"
+
+
+def test_report_routes_and_adopt(fresh_app, transcript):
+    from backend import day_plans as D
+    from backend.calendars import ensure_calendars_for_user
+    from backend.database import get_conn
+    dirk, beate = transcript["dirk"], transcript["beate"]
+    ensure_calendars_for_user(beate, "Beate")
+    c = _client(fresh_app, dirk)
+    rid = c.post("/api/recordings", json={"title": "Abendessen", "kind": "dinner", "participants": [beate]}).json()["id"]
+    c.post(f"/api/recordings/{rid}/chunk", data={"seq": "0"}, files={"audio": ("a.webm", b"x", "audio/webm")})
+    c.post(f"/api/recordings/{rid}/finish")
+    rep = c.get(f"/api/recordings/{rid}/report").json()
+    assert rep["template"] == "dinner" and len(rep["tasks"]) == 4
+    assert c.post(f"/api/recordings/{rid}/report", json={}).json()["generated_at"] == rep["generated_at"]   # reused
+    assert len(transcript["llm"]) == 1
+    assert c.post(f"/api/recordings/{rid}/report", json={"refresh": True, "template": "meeting"}).json()["template"] == "meeting"
+    assert len(transcript["llm"]) == 2
+
+    # Beate adopts Dirk's task from her phone: created by her, assigned to Dirk too, remembered in the report
+    b = _client(fresh_app, beate)
+    rep = b.post(f"/api/recordings/{rid}/tasks/0/adopt", json={}).json()
+    t = rep["tasks"][0]
+    assert t["task_id"] and t["adopted_by"] == "Beate"
+    with get_conn() as conn:
+        row = dict(conn.execute("SELECT title, person, due_date, notes, created_by_user_id FROM tasks WHERE id = ?", (t["task_id"],)).fetchone())
+        assigned = {str(r["user_id"]) for r in conn.execute("SELECT user_id FROM task_assignees WHERE task_id = ?", (t["task_id"],)).fetchall()}
+    assert row["title"] == "Schule wegen Ausflug anrufen" and row["person"] == "Dirk" and row["due_date"] == "2030-04-04"
+    assert "Abendessen" in row["notes"] and str(row["created_by_user_id"]) == beate and assigned == {dirk, beate}
+    assert "Schule wegen Ausflug anrufen" in {x["title"] for x in D.context_for(dirk, "2030-04-04", "admin")["open_tasks"]}
+    assert b.post(f"/api/recordings/{rid}/tasks/0/adopt", json={}).json()["tasks"][0]["task_id"] == t["task_id"]   # idempotent
+    assert b.get(f"/api/recordings/{rid}/report").json()["tasks"][0]["task_id"] == t["task_id"]
+    assert b.post(f"/api/recordings/{rid}/tasks/9/adopt", json={}).status_code == 404
+    stranger = _client(fresh_app, seed_user(name="Stranger", role="admin"))
+    assert stranger.get(f"/api/recordings/{rid}/report").status_code == 404
+    assert stranger.post(f"/api/recordings/{rid}/tasks/1/adopt", json={}).status_code == 404

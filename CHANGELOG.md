@@ -29,7 +29,13 @@ worklist.
   questions, dates); tasks stay proposals until someone adopts them.
   `add_task` now also assigns a named household member, and day
   planning includes tasks assigned to you, not only ones you created.
-  The table UI follows.
+  UI: a **Recordings** app (dock, phone and desktop) with the report,
+  Adopt buttons per task and the transcript; a "Record dinner" tile on
+  the kiosk wall (sign in, tick who is here, done); one recorder pill
+  that survives route changes and the kiosk's idle return, uploads a
+  chunk every two minutes with retries, resumes after a reload, and
+  keeps uploading with a per-recording token when the shared tablet's
+  session changes hands. "Yorik, the dinner is over" ends it by voice.
 - **MCP server.** `POST /mcp` exposes the skills registry to outside
   agents (Hermes, Claude Code, scripts) over Streamable HTTP. One tool
   per skill the caller may use, schemas generated from `skill.md`,

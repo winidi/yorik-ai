@@ -18,8 +18,7 @@ import {
   House, Calendar, ListTodo, MessageSquare, FolderOpen,
   FilePlus, Camera, MessageCircle, Inbox, Contact,
   Newspaper, Settings,
-  type LucideIcon,
-} from "lucide-react";
+  Mic, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -59,6 +58,7 @@ const APP_VISUAL: Record<string, { Icon: LucideIcon; gradient: string; activeGra
   email:    { Icon: Inbox,         gradient: "from-sky-500/30 to-blue-500/30",       activeGradient: "from-sky-500/50 to-blue-500/50",       text: "text-sky-500",     ring: "ring-sky-400/40",     activeRing: "ring-sky-400/80" },
   contacts: { Icon: Contact,       gradient: "from-orange-500/30 to-amber-500/30",   activeGradient: "from-orange-500/50 to-amber-500/50",   text: "text-orange-500",  ring: "ring-orange-400/40",  activeRing: "ring-orange-400/80" },
   briefing: { Icon: Newspaper,     gradient: "from-fuchsia-500/30 to-purple-500/30", activeGradient: "from-fuchsia-500/50 to-purple-500/50", text: "text-fuchsia-500", ring: "ring-fuchsia-400/40", activeRing: "ring-fuchsia-400/80" },
+  recordings: { Icon: Mic,           gradient: "from-red-500/30 to-rose-500/30",       activeGradient: "from-red-500/50 to-rose-500/50",       text: "text-red-500",     ring: "ring-red-400/40",     activeRing: "ring-red-400/80" },
   settings: { Icon: Settings,      gradient: "from-slate-500/30 to-zinc-500/30",     activeGradient: "from-slate-500/50 to-zinc-500/50",     text: "text-slate-500",   ring: "ring-slate-400/40",   activeRing: "ring-slate-400/80" },
 };
 

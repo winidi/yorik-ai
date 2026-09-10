@@ -5,6 +5,8 @@ import { api } from "@/lib/api";
 import "./index.css";
 import { EmailApp } from "./apps/email/EmailApp";
 import { BriefingApp } from "./apps/briefing/BriefingApp";
+import { RecordingsApp } from "@/apps/recordings/RecordingsApp";
+import { RecorderDock } from "@/components/RecorderDock";
 import { WhatsAppApp } from "./apps/whatsapp/WhatsAppApp";
 import { CalendarApp } from "./apps/calendar/CalendarApp";
 import { ChatApp } from "./apps/chat/ChatApp";
@@ -197,6 +199,8 @@ createRoot(document.getElementById("root")!).render(
           <VoiceFab />
           <VoiceListeningOverlay />
           <NavigationBridge />
+          {/* long recordings (dinner, meeting) — outside ChromeGate so the pill survives the kiosk's return to /ambient */}
+          <RecorderDock />
           <KioskRedirect />
           <KioskIdleWatch />
           <SwipeNav />
@@ -214,6 +218,8 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/contacts" element={<ErrorBoundary><ContactsApp /></ErrorBoundary>} />
             <Route path="/settings" element={<ErrorBoundary><SettingsApp /></ErrorBoundary>} />
             <Route path="/briefing" element={<ErrorBoundary><BriefingApp /></ErrorBoundary>} />
+            <Route path="/recordings" element={<ErrorBoundary><RecordingsApp /></ErrorBoundary>} />
+            <Route path="/recordings/:id" element={<ErrorBoundary><RecordingsApp /></ErrorBoundary>} />
             <Route path="/ambient" element={<ErrorBoundary><AmbientApp /></ErrorBoundary>} />
             <Route path="/community-app/:appId" element={<ErrorBoundary><CommunityApp /></ErrorBoundary>} />
           </Routes>

@@ -107,7 +107,15 @@ named household member so the task shows up in their day plan.
 
 From chat: `start_recording`, `finish_recording` ("the dinner is
 over"), `recording_status` ("what did we discuss"), `recording_report`
-("what came out of it").
+("what came out of it"). In the app: the **Recordings** dock entry
+(list, report with Adopt per task, transcript, audio) and the "Record
+dinner" tile on the kiosk wall. The recorder itself is one component
+(`frontend-react/src/components/RecorderDock.tsx`) mounted outside the
+route chrome: a chunk every two minutes with retries, resume after a
+reload, wake lock, and a per-recording upload token so a shared tablet
+keeps uploading after a PIN switch. `POST …/tasks/{index}/adopt` turns
+one proposed task into a real one for the named person; `GET/POST
+…/report` read or (re)write the report.
 
 ## Engines and models
 

@@ -2047,6 +2047,10 @@ function formatToolStatus(tool: string, args: Record<string, any> | undefined): 
     if (name === "plan_my_day") return "Sammelt Termine, Aufgaben und Briefing…";
     if (name === "plan_day") return "Trägt den Plan ein…";
     if (name === "day_review") return "Schaut auf den Tag zurück…";
+    if (name === "start_recording") return "Startet die Aufnahme…";
+    if (name === "finish_recording") return "Beendet die Aufnahme…";
+    if (name === "recording_status") return "Liest das Transkript…";
+    if (name === "recording_report") return "Holt den Bericht… (beim ersten Mal bis zu einer Minute)";
   }
   switch (tool) {
     case "web_search":   return `🔍 Searching the web for "${head(a.query || "")}"…`;
