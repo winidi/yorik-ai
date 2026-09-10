@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import secrets
 from typing import Any, Optional
 
@@ -42,6 +43,22 @@ SERVER_VERSION = "0.1.0"
 _KNOWN_PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 _DEFAULT_PROTOCOL_VERSION = "2025-06-18"
 _TEXT_CAP = 60_000
+
+INSTRUCTIONS_COMPACT = (
+    "You are talking to a Yorik instance, a self-hosted household server "
+    "(calendar, tasks, contacts, documents, photos, letters, email). Yorik's "
+    "skills are not listed as separate tools: the description of invoke_skill "
+    "carries the index (name, one line, argument names). Call "
+    "invoke_skill(name, args) directly with the argument names from that "
+    "list; a wrong name is answered with the valid keys, retry once. "
+    "skill_view(name) gives the full rules and examples when you need them "
+    "(letters, deletions, relative dates). Skills that delete something do not "
+    "delete on their own: the result carries pending_confirmation; by default "
+    "the owner confirms in the Yorik app, tell your user the card is waiting, "
+    "and use pending_cancel(pending_id) if they changed their mind. Creates "
+    "and updates apply at once and may return a pending_id; pending_cancel "
+    "undoes them."
+)
 
 INSTRUCTIONS = (
     "You are talking to a Yorik instance, a self-hosted household server "
@@ -181,10 +198,114 @@ _BUILTIN_TOOLS: list[dict[str, Any]] = [
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
 ]
-_BUILTIN_NAMES = {t["name"] for t in _BUILTIN_TOOLS}
+_BUILTIN_NAMES = {t["name"] for t in _BUILTIN_TOOLS} | {"invoke_skill", "list_skills"}
 
 
-def list_tools(user: dict[str, Any]) -> list[dict[str, Any]]:
+# Per token: which skills' manifests were read, and when. The compact
+# mode refuses the first invoke of a skill that has not been read — the
+# same discipline Yorik's own loop enforces per turn. Sessions over MCP
+# are long-lived, so the memory lasts hours, not one turn.
+_VIEW_TTL_S = 12 * 3600
+_viewed: dict[str, dict[str, float]] = {}
+
+
+def _require_view() -> bool:
+    """Off by default: with the argument names in the index a 27B-class
+    model gets the call right first time, and a wrong name comes back
+    with the valid keys anyway. YORIK_MCP_REQUIRE_VIEW=1 turns the
+    read-first gate on for weaker models."""
+    return (os.getenv("YORIK_MCP_REQUIRE_VIEW") or "").strip().lower() in ("1", "true", "on")
+
+
+def _view_key(user: dict[str, Any]) -> str:
+    return f"{user.get('id')}:{user.get('token_name') or ''}"
+
+
+def _mark_viewed(user: dict[str, Any], skill_name: str) -> None:
+    import time
+    _viewed.setdefault(_view_key(user), {})[skill_name] = time.monotonic()
+
+
+def _was_viewed(user: dict[str, Any], skill_name: str) -> bool:
+    import time
+    t = _viewed.get(_view_key(user), {}).get(skill_name)
+    return bool(t) and (time.monotonic() - t) < _VIEW_TTL_S
+
+
+def _visible_skills(user: dict[str, Any]) -> list[Any]:
+    from .skills import get_registry
+    from .skills.registry import _get_disabled_skills
+    role = _effective_role(user)
+    disabled = _get_disabled_skills()
+    out = []
+    for s in sorted(get_registry().all(), key=lambda x: (x.effective_category, x.name)):
+        if s.name in disabled or s.name in _BUILTIN_NAMES or "no-mcp" in (s.tags or []):
+            continue
+        if s.permissions and role not in s.permissions and "*" not in s.permissions:
+            continue
+        out.append(s)
+    return out
+
+
+def skill_index_text(user: dict[str, Any]) -> str:
+    """The index Yorik's own chat carries: one line per skill, grouped by
+    category, argument names with * for required. ~5k tokens for 60 skills."""
+    lines: list[str] = []
+    cat = None
+    for s in _visible_skills(user):
+        if "mcp-first-class" in (s.tags or []):
+            continue  # listed as its own tool in compact mode
+        if s.effective_category != cat:
+            cat = s.effective_category
+            lines.append(f"[{cat}]")
+        args = s._arg_summary()
+        lines.append(f"- {s.name}: {s.description}" + (f" (args: {args})" if args else ""))
+    return "\n".join(lines)
+
+
+def _compact_tools(user: dict[str, Any]) -> list[dict[str, Any]]:
+    index = skill_index_text(user)
+    # Skills an agent needs without the read-first step (notify, …) keep
+    # their own tool; skill.md tag `mcp-first-class`.
+    first_class = [
+        {"name": s.name, "description": _skill_description(s), "inputSchema": _input_schema(s.inputs)}
+        for s in _visible_skills(user) if "mcp-first-class" in (s.tags or [])
+    ]
+    return first_class + [
+        {
+            "name": "invoke_skill",
+            "description": (
+                "Run one Yorik skill by name with its arguments, using the argument names "
+                "from the list below (* = required). Call it directly; a wrong argument name "
+                "comes back as an error that lists the valid keys, then retry once. Use "
+                "skill_view(name) when a skill has rules you need (letters, deletions, "
+                "dates).\n\nSkills:\n" + index
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "skill name from the list"},
+                    "args": {"type": "object", "description": "arguments as named in the manifest",
+                             "additionalProperties": True},
+                },
+                "required": ["name"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "list_skills",
+            "description": "The skill index again (name, one line, argument names), grouped by category.",
+            "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    ]
+
+
+def list_tools(user: dict[str, Any], mode: str = "full") -> list[dict[str, Any]]:
+    """full (default): one tool per skill with its complete schema.
+    compact: 7 tools, skills behind invoke_skill + skill_view, for clients
+    that put every tool schema into the prompt."""
+    if mode != "full":
+        return _BUILTIN_TOOLS + _compact_tools(user)
     from .skills import get_registry
     from .skills.registry import _get_disabled_skills
 
@@ -210,9 +331,27 @@ class ToolError(Exception):
     """Reported to the agent as an isError result, not a protocol error."""
 
 
-async def call_tool(user: dict[str, Any], name: str, arguments: dict[str, Any]) -> Any:
+async def call_tool(user: dict[str, Any], name: str, arguments: dict[str, Any],
+                    mode: str = "full") -> Any:
     from .skills import get_registry, SkillContext, SkillError
     from .ui_tools import get_ui_actions, reset_ui_actions
+
+    if name == "list_skills":
+        return {"skills": skill_index_text(user)}
+    if name == "invoke_skill":
+        skill_name = str(arguments.get("name") or "").strip()
+        args = arguments.get("args") or {}
+        if not isinstance(args, dict):
+            raise ToolError("args must be an object")
+        reg = get_registry()
+        if not skill_name or not _may_call(user, reg.get(skill_name)):
+            raise ToolError(f"unknown skill: {skill_name!r}. Call list_skills for the index.")
+        if mode != "full" and _require_view() and not _was_viewed(user, skill_name):
+            raise ToolError(
+                f"REJECTED: read skill_view(name='{skill_name}') first — it has the argument "
+                f"rules and examples — then call invoke_skill again with the same args."
+            )
+        return await call_tool(user, skill_name, args, mode="full")
 
     if name == "whoami":
         return {"id": user["id"], "name": user.get("name"), "role": user.get("role"),
@@ -223,6 +362,7 @@ async def call_tool(user: dict[str, Any], name: str, arguments: dict[str, Any]) 
         view = reg.view(skill_name)
         if not view or not _may_call(user, reg.get(skill_name)):
             raise ToolError(f"unknown skill: {skill_name!r}")
+        _mark_viewed(user, skill_name)
         return view
     if name in ("pending_confirm", "pending_cancel"):
         return await _resolve_pending(user, name, str(arguments.get("pending_id") or ""))
@@ -253,8 +393,8 @@ async def call_tool(user: dict[str, Any], name: str, arguments: dict[str, Any]) 
                                  "(notification bell); pending_confirm is not allowed for this "
                                  "account. pending_cancel(pending_id) withdraws it.")
             else:
-                block["next"] = ("pending_confirm(pending_id) after the human agreed, "
-                                 "pending_cancel(pending_id) otherwise")
+                block["next"] = ("Already applied — nothing to confirm. pending_cancel(pending_id) "
+                                 "undoes it within the hour if the user changes their mind.")
             payload["pending_confirmation"] = block
     return payload
 
@@ -348,7 +488,7 @@ def _as_text(obj: Any) -> str:
     return text
 
 
-async def _handle(user: dict[str, Any], msg: Any) -> Optional[dict[str, Any]]:
+async def _handle(user: dict[str, Any], msg: Any, mode: str = "full") -> Optional[dict[str, Any]]:
     """One JSON-RPC message → one response dict, or None for notifications."""
     if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0" or "method" not in msg:
         return _rpc_error(msg.get("id") if isinstance(msg, dict) else None,
@@ -368,19 +508,19 @@ async def _handle(user: dict[str, Any], msg: Any) -> Optional[dict[str, Any]]:
             "protocolVersion": version,
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
-            "instructions": INSTRUCTIONS,
+            "instructions": INSTRUCTIONS if mode == "full" else INSTRUCTIONS_COMPACT,
         })
     if method == "ping":
         return _rpc_result(msg_id, {})
     if method == "tools/list":
-        return _rpc_result(msg_id, {"tools": list_tools(user)})
+        return _rpc_result(msg_id, {"tools": list_tools(user, mode)})
     if method == "tools/call":
         name = str(params.get("name") or "")
         arguments = params.get("arguments") or {}
         if not isinstance(arguments, dict):
             return _rpc_error(msg_id, -32602, "arguments must be an object")
         try:
-            result = await call_tool(user, name, arguments)
+            result = await call_tool(user, name, arguments, mode)
         except KeyError:
             return _rpc_error(msg_id, -32602, f"unknown tool: {name}")
         except ToolError as exc:
@@ -419,7 +559,13 @@ async def mcp_post(request: Request) -> Response:
     messages = body if isinstance(body, list) else [body]
     if not messages:
         return JSONResponse(_rpc_error(None, -32600, "invalid request"), status_code=400)
-    responses = [r for r in [await _handle(user, m) for m in messages] if r is not None]
+    # Default: one tool per skill with its complete schema. Hermes and
+    # similar clients keep MCP schemas behind a describe/call bridge, so
+    # the size never reaches the prompt and per-skill tools cost nothing.
+    # ?tools=compact collapses the skills behind invoke_skill for clients
+    # that load every schema into the prompt.
+    mode = "compact" if (request.query_params.get("tools") or "").lower() == "compact" else "full"
+    responses = [r for r in [await _handle(user, m, mode) for m in messages] if r is not None]
 
     headers = {"Mcp-Session-Id": request.headers.get("mcp-session-id") or secrets.token_hex(16)}
     if not responses:

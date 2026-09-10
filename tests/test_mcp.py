@@ -14,11 +14,14 @@ from fastapi.testclient import TestClient
 from tests.conftest import login_client
 
 
-def _rpc(client, token, method, params=None, msg_id=1):
+def _rpc(client, token, method, params=None, msg_id=1, mode="full"):
+    """Most tests were written against the full surface (one tool per
+    skill); compact is the default on the wire and gets its own tests."""
     body = {"jsonrpc": "2.0", "id": msg_id, "method": method}
     if params is not None:
         body["params"] = params
-    return client.post("/mcp", json=body, headers={"Authorization": f"Bearer {token}"})
+    url = "/mcp?tools=compact" if mode == "compact" else "/mcp"
+    return client.post(url, json=body, headers={"Authorization": f"Bearer {token}"})
 
 
 @pytest.fixture
@@ -241,3 +244,52 @@ def test_token_calls_are_audited_and_admins_see_all_tokens(token_client, fresh_a
     assert mine and mine[0]["name"] == "pytest agent" and "token" not in mine[0]
     assert admin.delete(f"/api/tokens/{mine[0]['id']}").status_code == 200
     assert _rpc(client, token, "ping").status_code == 401
+
+
+def test_compact_mode_collapses_skills_behind_invoke_skill(token_client):
+    client, token, uid, _ = token_client
+    r = _rpc(client, token, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                            "clientInfo": {"name": "t", "version": "0"}}, mode="compact")
+    assert "invoke_skill(name, args) directly" in r.json()["result"]["instructions"]
+    assert "invoke_skill" not in _rpc(client, token, "initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                            "clientInfo": {"name": "t", "version": "0"}}).json()["result"]["instructions"]
+    tools = _rpc(client, token, "tools/list", mode="compact").json()["result"]["tools"]
+    names = [t["name"] for t in tools]
+    assert names == ["skill_view", "pending_confirm", "pending_cancel", "whoami", "notify", "invoke_skill", "list_skills"]
+    inv = next(t for t in tools if t["name"] == "invoke_skill")
+    assert "- check_calendar:" in inv["description"] and "[calendar]" in inv["description"]
+    assert "compose_draft" in inv["description"]           # member may use it
+    assert "- ask_agent:" not in inv["description"]         # no-mcp skill stays hidden
+    # compact is much smaller than full
+    import json
+    full = _rpc(client, token, "tools/list", mode="full").json()["result"]["tools"]
+    assert len(json.dumps(tools)) < len(json.dumps(full)) / 3
+
+    # direct invoke works; a wrong argument name answers with the valid keys
+    r = _rpc(client, token, "tools/call", {"name": "invoke_skill", "arguments": {"name": "check_calendar", "args": {"days": 3}}}, mode="compact")
+    body = r.json()["result"]
+    assert body["isError"] is False, body
+    assert "result" in body["structuredContent"]
+    r = _rpc(client, token, "tools/call", {"name": "invoke_skill", "arguments": {"name": "check_calendar", "args": {"range": "week"}}}, mode="compact")
+    body = r.json()["result"]
+    assert body["isError"] is True and "AVAILABLE KEYS" in body["content"][0]["text"]
+    # optional read-first gate for weaker models
+    import os
+    os.environ["YORIK_MCP_REQUIRE_VIEW"] = "1"
+    try:
+        r = _rpc(client, token, "tools/call", {"name": "invoke_skill", "arguments": {"name": "add_task", "args": {"title": "x"}}}, mode="compact")
+        body = r.json()["result"]
+        assert body["isError"] is True and "skill_view(name='add_task')" in body["content"][0]["text"]
+        _rpc(client, token, "tools/call", {"name": "skill_view", "arguments": {"name": "add_task"}}, mode="compact")
+        r = _rpc(client, token, "tools/call", {"name": "invoke_skill", "arguments": {"name": "add_task", "args": {"title": "x"}}}, mode="compact")
+        assert r.json()["result"]["isError"] is False, r.json()["result"]
+    finally:
+        os.environ.pop("YORIK_MCP_REQUIRE_VIEW", None)
+    # unknown skill, wrong args shape
+    r = _rpc(client, token, "tools/call", {"name": "invoke_skill", "arguments": {"name": "nope", "args": {}}}, mode="compact")
+    assert r.json()["result"]["isError"] is True
+    r = _rpc(client, token, "tools/call", {"name": "list_skills", "arguments": {}}, mode="compact")
+    assert "- add_task:" in r.json()["result"]["structuredContent"]["skills"]
+    # full mode does not gate
+    r = _rpc(client, token, "tools/call", {"name": "check_tasks", "arguments": {}}, mode="full")
+    assert r.json()["result"]["isError"] is False, r.json()["result"]

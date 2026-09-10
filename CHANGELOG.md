@@ -38,6 +38,13 @@ worklist.
   A new skill `notify` lets an outside agent (Hermes over MCP) leave a
   message in the bell, so its results arrive in Yorik instead of in a
   chat platform. The chat shows what it is waiting for ("Fragt Hermes…").
+- **Compact MCP surface as an option.** `/mcp?tools=compact` offers
+  seven tools with the skills behind `invoke_skill` (the one-line index
+  in its description), about 11 KB of schemas instead of 64 KB, for
+  clients that load every schema into the prompt. The default stays one
+  tool per skill: Hermes fetches schemas on demand, and measured turns
+  were faster that way. Results of applied creates now say "nothing to
+  confirm" so agents stop looking for a confirmation step.
 - **Plan your day in conversation.** `plan_my_day` gathers fixed
   appointments, open tasks, carry-over from yesterday, yesterday's
   review and, when the workstation agent is reachable, its briefing;

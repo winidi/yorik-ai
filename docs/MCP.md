@@ -37,18 +37,32 @@ tokens. That stays a browser action.
 
 ## Tools
 
-`tools/list` returns:
+Two surfaces, chosen by the URL.
 
-- one tool per skill the owner may call, named like the skill, with an
-  input schema generated from the `inputs` block of its `skill.md`;
-- `skill_view(name)` — the full manifest (rules, examples). Agents should
-  read it before the first call to a skill, exactly as the built-in loop does;
-- `pending_confirm(pending_id)` and `pending_cancel(pending_id)` — the
-  confirmation card, as tools;
-- `whoami` — the account the token acts as.
+**Full (default, `/mcp`)** lists one tool per skill with the complete
+input schema generated from its `skill.md`, plus `skill_view`,
+`pending_confirm`, `pending_cancel`, `notify`, `whoami`. Hermes keeps MCP
+schemas behind a describe/call bridge and fetches only the one it needs,
+so 65 tools cost it nothing per turn.
 
-Skills an admin disabled in Settings are absent from the list and refused
-on call.
+**Compact (`/mcp?tools=compact`)** mirrors Yorik's own two-step loop for
+clients that put every tool schema into the prompt (about 11 KB instead
+of 64 KB):
+
+- `invoke_skill(name, args)` — runs a skill. Its description carries the
+  index of every skill the owner may use: name, one line, argument names
+  (`*` = required). Agents call it directly; a wrong argument name is
+  answered with the valid keys. `YORIK_MCP_REQUIRE_VIEW=1` in config.env
+  adds a read-first gate (the first call to a skill is refused until its
+  manifest was read) for weaker models — off by default because it costs
+  two extra agent rounds per skill.
+- `skill_view(name)` — the full manifest (rules, examples, argument
+  details) for skills with rules worth reading before the call.
+- `list_skills` — the index again.
+- `pending_confirm`, `pending_cancel`, `notify`, `whoami`.
+
+Skills an admin disabled in Settings are absent in both modes and refused
+on call. Skills tagged `no-mcp` (like `ask_agent`) never appear.
 
 ## Confirmations
 

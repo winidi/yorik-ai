@@ -28,7 +28,7 @@ outputs:
 cost: instant
 permissions: [admin, member]
 side_effects: Creates a notification for the calling user and pushes it to their subscribed devices.
-tags: [notifications, agent]
+tags: [notifications, agent, mcp-first-class]
 category: system
 ---
 
