@@ -151,13 +151,27 @@ Household members who talk to Yorik's own chat (phone, tablet, kiosk)
 can reach the strong agent too. One skill, `ask_agent`, hands a question
 to an OpenAI-shaped chat endpoint and relays the finished answer. The
 reference is Hermes' API server (`hermes gateway` platform `api_server`,
-port 8642), configured in `config.env`:
+port 8642).
+
+**Each person has their own agent.** Settings → You → **My agent**
+stores the URL, a name and the key on the profile; what a person asks
+goes to that person's machine and nowhere else. Somebody without an
+agent gets told so and Yorik answers as best it can. The household
+agent in `config.env` is used for people without their own only when
+the admin switches that on:
 
 ```
-HOMEOS_AGENT_URL=http://127.0.0.1:8642/v1     # or the Headscale address of the Hermes box
+HOMEOS_AGENT_URL=http://127.0.0.1:8642/v1     # the household agent (optional)
 HOMEOS_AGENT_KEY=<API_SERVER_KEY from ~/.hermes/.env>
 HOMEOS_AGENT_NAME=Hermes
+HOMEOS_AGENT_SHARED=0                         # 1: members without their own agent use this one
+HOMEOS_AGENT_REASONING=none                   # thinking level for questions from Yorik
 ```
+
+A Hermes on another PC is reachable over Tailscale
+(`http://<tailscale-name>:8642/v1`); Hermes' API server binds to
+127.0.0.1 by default, so either bind it to the Tailscale address or
+put `tailscale serve` in front.
 
 Yorik's assistant uses it for what Yorik does not hold: web research,
 files and notes on the workstation, coding, long reasoning. The agent

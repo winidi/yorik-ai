@@ -10666,6 +10666,48 @@ def patch_agent_deletes(
     return {"ok": True, "agent_may_confirm_deletes": enabled}
 
 
+@app.get("/api/profile/agent")
+def get_profile_agent(user: dict[str, Any] = Depends(_auth.current_user)) -> Dict[str, Any]:
+    """The person's own agent (their Hermes). The key is never returned."""
+    from .skills.ask_agent.skill import shared_agent_enabled
+    with conn_ctx(DB_PATH) as conn:
+        row = conn.execute("SELECT agent_url, agent_key, agent_name FROM user_profiles WHERE id=?",
+                           (user["id"],)).fetchone()
+    return {
+        "url": (row["agent_url"] or "") if row else "",
+        "name": (row["agent_name"] or "") if row else "",
+        "key_set": bool(row and row["agent_key"]),
+        "shared_available": shared_agent_enabled() and bool((os.getenv("HOMEOS_AGENT_URL") or "").strip()),
+    }
+
+
+@app.patch("/api/profile/agent")
+def patch_profile_agent(
+    body: Dict[str, Any] = Body(...),
+    user: dict[str, Any] = Depends(_auth.current_user),
+) -> Dict[str, Any]:
+    """Set or clear the person's own agent. Browser session only: an
+    agent must not be able to point Yorik at another agent. An empty
+    url clears everything; an absent key keeps the stored one."""
+    if user.get("auth") == "api_token":
+        raise HTTPException(status_code=403, detail="log in to change this")
+    url = str(body.get("url") or "").strip().rstrip("/")
+    if url and not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(status_code=400, detail="url must start with http:// or https://")
+    name = str(body.get("name") or "").strip()[:40]
+    with conn_ctx(DB_PATH) as conn:
+        if not url:
+            conn.execute("UPDATE user_profiles SET agent_url=NULL, agent_key=NULL, agent_name=NULL WHERE id=?",
+                         (user["id"],))
+        elif "key" in body:
+            conn.execute("UPDATE user_profiles SET agent_url=?, agent_key=?, agent_name=? WHERE id=?",
+                         (url, str(body.get("key") or "").strip() or None, name or None, user["id"]))
+        else:
+            conn.execute("UPDATE user_profiles SET agent_url=?, agent_name=? WHERE id=?",
+                         (url, name or None, user["id"]))
+    return get_profile_agent(user)
+
+
 # ─── /api/llm/config (existing) ────────────────────────────────────
 
 

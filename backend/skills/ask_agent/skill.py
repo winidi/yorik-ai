@@ -15,12 +15,45 @@ from typing import Any, Optional
 log = logging.getLogger("yorik.skills.ask_agent")
 
 
-def _cfg() -> dict[str, Any]:
+def personal_agent(user_id: Any) -> Optional[dict[str, Any]]:
+    """The asking person's own agent from their profile, or None."""
+    if not user_id:
+        return None
+    try:
+        from backend.database import get_conn
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT agent_url, agent_key, agent_name FROM user_profiles WHERE id = ?", (str(user_id),)
+            ).fetchone()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("ask_agent: could not read the profile agent (%s)", exc)
+        return None
+    if not row or not (row["agent_url"] or "").strip():
+        return None
+    return {"url": row["agent_url"].strip().rstrip("/"), "key": (row["agent_key"] or "").strip(),
+            "name": (row["agent_name"] or "").strip() or "your agent"}
+
+
+def shared_agent_enabled() -> bool:
+    """The household agent from config.env is used for people without
+    their own only when the admin says so; off by default, because it
+    is somebody's machine with somebody's files."""
+    return (os.getenv("HOMEOS_AGENT_SHARED") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _cfg(ctx=None) -> dict[str, Any]:
+    own = personal_agent(getattr(ctx, "user_id", None)) if ctx is not None else None
+    if own:
+        base = own
+    elif shared_agent_enabled():
+        base = {"url": (os.getenv("HOMEOS_AGENT_URL") or "").strip().rstrip("/"),
+                "key": (os.getenv("HOMEOS_AGENT_KEY") or "").strip(),
+                "name": (os.getenv("HOMEOS_AGENT_NAME") or "Hermes").strip()}
+    else:
+        base = {"url": "", "key": "", "name": (os.getenv("HOMEOS_AGENT_NAME") or "Hermes").strip()}
     return {
-        "url": (os.getenv("HOMEOS_AGENT_URL") or "").strip().rstrip("/"),
-        "key": (os.getenv("HOMEOS_AGENT_KEY") or "").strip(),
+        **base,
         "model": (os.getenv("HOMEOS_AGENT_MODEL") or "hermes-agent").strip(),
-        "name": (os.getenv("HOMEOS_AGENT_NAME") or "Hermes").strip(),
         "timeout": float(os.getenv("HOMEOS_AGENT_TIMEOUT") or 150),
         # Thinking level Hermes runs the question with: none (fast, default),
         # low, medium, high. Yorik questions are chat turns; deep reasoning
@@ -54,15 +87,15 @@ def _session_id(ctx) -> str:
 
 
 async def execute(ctx, question: str, context: Optional[str] = None) -> dict[str, Any]:
-    cfg = _cfg()
+    cfg = _cfg(ctx)
     question = (question or "").strip()
     if not question:
         return {"error": "question is empty"}
     if not cfg["url"]:
         return {
-            "error": "no agent configured",
-            "_llm_hint": "Tell the user no workstation agent is configured "
-                         "(HOMEOS_AGENT_URL in config.env) and answer as best you can.",
+            "error": "no agent configured for you",
+            "_llm_hint": "Tell the user that no agent is set up for them yet (Settings > You > My agent) "
+                         "and answer as best you can.",
         }
 
     name, language = _user(ctx)

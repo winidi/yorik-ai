@@ -37,9 +37,10 @@ def agent(monkeypatch):
 
     monkeypatch.setattr(httpx, "AsyncClient", factory)
     monkeypatch.setattr(S, "_user", lambda ctx: ("Anna", "de"))
-    monkeypatch.setenv("HOMEOS_AGENT_URL", "http://agent.test:8642/v1/")
-    monkeypatch.setenv("HOMEOS_AGENT_KEY", "secret")
-    monkeypatch.setenv("HOMEOS_AGENT_NAME", "Hermes")
+    # Anna's own agent, as Settings > You > My agent would store it
+    monkeypatch.setattr(S, "personal_agent", lambda uid: {"url": "http://agent.test:8642/v1", "key": "secret", "name": "Hermes"} if uid == "u1" else None)
+    monkeypatch.delenv("HOMEOS_AGENT_URL", raising=False)
+    monkeypatch.delenv("HOMEOS_AGENT_SHARED", raising=False)
     return seen
 
 
@@ -72,9 +73,10 @@ def test_errors_are_reported_not_invented(agent, monkeypatch):
     agent["mode"] = "down"
     out = asyncio.run(execute(_ctx(), question="x"))
     assert "not reachable" in out["error"]
-    monkeypatch.setenv("HOMEOS_AGENT_URL", "")
+    from backend.skills.ask_agent import skill as S
+    monkeypatch.setattr(S, "personal_agent", lambda uid: None)      # nobody set one up
     out = asyncio.run(execute(_ctx(), question="x"))
-    assert out["error"] == "no agent configured"
+    assert out["error"] == "no agent configured for you"
 
 
 def test_not_exposed_over_mcp(fresh_app):
@@ -83,3 +85,31 @@ def test_not_exposed_over_mcp(fresh_app):
     user = {"id": "u", "role": "admin"}
     assert "ask_agent" not in {t["name"] for t in list_tools(user)}
     assert _may_call(user, get_registry().get("ask_agent")) is False
+
+
+def test_someone_without_an_agent_is_not_routed_to_another_persons(agent, monkeypatch):
+    from backend.skills.ask_agent.skill import execute
+    out = asyncio.run(execute(_ctx(user_id="u2"), question="Was ist Headscale?"))
+    assert "error" in out and "no agent" in out["error"].lower() and "url" not in agent
+    # the household agent from config.env is used only when the admin switched that on
+    monkeypatch.setenv("HOMEOS_AGENT_URL", "http://household.test:8642/v1")
+    monkeypatch.setenv("HOMEOS_AGENT_KEY", "hh")
+    out = asyncio.run(execute(_ctx(user_id="u2"), question="Was ist Headscale?"))
+    assert "error" in out
+    monkeypatch.setenv("HOMEOS_AGENT_SHARED", "1")
+    out = asyncio.run(execute(_ctx(user_id="u2"), question="Was ist Headscale?"))
+    assert out["answer"] == "Antwort vom Agenten." and agent["url"].startswith("http://household.test")
+
+
+def test_profile_agent_routes(fresh_app):
+    from tests.conftest import login_client
+    from backend.skills.ask_agent.skill import personal_agent
+    client, uid = login_client(fresh_app, role="member", name="Beate")
+    assert client.get("/api/profile/agent").json() == {"url": "", "name": "", "key_set": False, "shared_available": False}
+    r = client.patch("/api/profile/agent", json={"url": "http://beate-pc:8642/v1/", "key": "k1", "name": "Beates Hermes"}).json()
+    assert r == {"url": "http://beate-pc:8642/v1", "name": "Beates Hermes", "key_set": True, "shared_available": False}
+    assert personal_agent(uid) == {"url": "http://beate-pc:8642/v1", "key": "k1", "name": "Beates Hermes"}
+    assert client.patch("/api/profile/agent", json={"url": "http://beate-pc:8642/v1", "name": "H"}).json()["key_set"] is True   # key kept
+    assert client.patch("/api/profile/agent", json={"url": "ftp://x"}).status_code == 400
+    assert client.patch("/api/profile/agent", json={"url": ""}).json()["key_set"] is False
+    assert personal_agent(uid) is None

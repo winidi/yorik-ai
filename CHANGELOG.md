@@ -13,6 +13,11 @@ worklist.
 
 ### Added
 
+- **My agent, per person.** Settings → You → My agent: the Hermes (or
+  any OpenAI-shaped endpoint) Yorik hands your questions to. What one
+  member asks never reaches another member's machine; the household
+  agent in `config.env` serves people without their own only with
+  `HOMEOS_AGENT_SHARED=1`.
 - **Recordings.** A conversation at the table (dinner, meeting) is
   recorded by the device in front of the user, uploaded in chunks, and
   turned into a transcript with speaker turns on the CPU: sherpa-onnx
