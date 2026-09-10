@@ -22,7 +22,6 @@ import os
 import re
 from datetime import date
 from typing import Any, Dict, List, Optional
-from urllib.parse import quote
 
 from .database import get_conn
 
@@ -279,11 +278,10 @@ def notify_report(rid: int, row: Dict[str, Any], data: Dict[str, Any]) -> None:
     if data["highlights"]:
         bits.append(f"{len(data['highlights'])} nice moment{'s' if len(data['highlights']) != 1 else ''}")
     body = ", ".join(bits) or data["summary"][:120]
-    say = quote(f"Show me the report of recording {rid}.")
     for uid in [str(row["owner_user_id"])] + R._participants(row):
         try:
             _notif.create(user_id=uid, kind="recording_report", title=f"{title}: report ready", body=body,
-                          payload={"recording_id": rid}, navigate_to=f"/r/chat?say={say}")
+                          payload={"recording_id": rid}, navigate_to=f"/r/recordings/{rid}")
         except Exception as exc:  # noqa: BLE001
             log.warning("recording_reports: notify %s failed: %s", uid, exc)
 

@@ -87,6 +87,7 @@ def test_dinner_gets_report_and_one_notification(fresh_app, transcript):
         titles = [n["title"] for n in N.list_for_user(uid)]
         assert titles == ["Abendessen: report ready"], titles
     assert N.list_for_user(beate)[0]["body"] == "4 tasks, 1 decision, 1 nice moment"
+    assert N.list_for_user(beate)[0]["navigate_to"] == f"/r/recordings/{rid}"      # the bell opens the report, not the chat
 
 
 def test_conversation_kind_has_no_auto_report_but_skill_builds_it(fresh_app, transcript):

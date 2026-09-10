@@ -42,7 +42,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib.parse import quote
 
 import numpy as np
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -578,11 +577,10 @@ def _notify_done(rid: int, row: Dict[str, Any], dur: float, turns: int, speakers
     from . import notifications as _notif
     title = row["title"] or {"dinner": "Dinner", "meeting": "Meeting"}.get(row["kind"], "Recording")
     body = f"{dur/60:.0f} min, {turns} turns, {len(speakers)} speakers: {', '.join(speakers)}"
-    say = quote(f"Show me the transcript of recording {rid}.")
     for uid in [str(row["owner_user_id"])] + _participants(row):
         try:
             _notif.create(user_id=uid, kind="recording_done", title=f"{title}: transcript ready", body=body,
-                          payload={"recording_id": rid}, navigate_to=f"/r/chat?say={say}")
+                          payload={"recording_id": rid}, navigate_to=f"/r/recordings/{rid}")
         except Exception as exc:  # noqa: BLE001
             log.warning("recordings: notify %s failed: %s", uid, exc)
 
