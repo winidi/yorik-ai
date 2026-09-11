@@ -4,10 +4,10 @@ description: Gather what a day plan needs (fixed appointments, open tasks, carry
 when_to_use: |
   Trigger: "plan meinen Tag", "wie sieht mein Tag aus", "lass uns den Tag strukturieren", "plan my day".
   Call it first; it returns the material, never a finished plan.
-  Draft two layers: at most 4 time blocks with times around the fixed events, and below them today's task list without times, as long as it needs to be.
+  Draft with fixed sections: fixed events, at most 4 time blocks, today's full task list without times, suggestions from conversations, suggestions from the person's agent, one backlog line.
   Follow the person's `rules` (who does what at home, working hours, how many items).
-  Offer `report_candidates` (tasks from recordings nobody adopted) and `agent_candidates` (from the person's own agent) as suggestions, marked with their source; do not put them in the plan unasked.
-  Close the draft with one line on what stays in the backlog, then ask what to change; call plan_day only when the user says the plan is good.
+  Suggestions (`report_candidates`, `agent_candidates`) stay out of the plan until the user picks one; list all agent candidates, never a selection.
+  Then ask what to change; call plan_day only when the user says the plan is good.
   When the user corrects who does what or a habit, ask once whether to remember it and call remember_planning_rule.
   When the result has `outside_error`, plan from Yorik's data alone and mention it in half a sentence.
   Carry-over tasks come first unless the user says otherwise.

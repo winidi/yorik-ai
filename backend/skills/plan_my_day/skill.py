@@ -72,13 +72,14 @@ async def execute(ctx, date: Optional[str] = None, ask_agent: bool = True,
                  context={k: context[k] for k in ("fixed_events", "open_tasks", "carry_over")})
     out["_full_output"] = True      # the whole context, not the 1500-char card
     out["_llm_hint"] = (
-        "Two layers: (1) up to 4 time blocks with HH:MM around fixed_events (never move those), fitted into "
-        "free_minutes; (2) today's list: every open task the person should do today, without times — as long "
-        "as it needs to be, carry_over first. Follow rules. Offer report_candidates and agent_candidates as "
-        "suggestions marked with their source; a chosen candidate goes into the plan with its report_ref or as "
-        "a new item. End with what stays in the backlog (backlog.open_total minus planned) in one line. "
-        "Show the draft as a numbered list and ask what to change; do not call plan_day until the user says "
-        "it is good. When the user corrects who does what or a habit, ask once whether to remember it and "
-        "call remember_planning_rule."
+        "Write the draft in the user's language with exactly these sections, in this order: "
+        "(1) Feste Termine: fixed_events, never moved. "
+        "(2) Zeitblöcke: at most 4 items with HH:MM, fitted into free_minutes, carry_over first. "
+        "(3) Heute: every remaining open task that is due today, overdue or undated — all of them, one line each, no times. "
+        "(4) Vorschläge aus Gesprächen: report_candidates, up to 8, each with its 'from'; they are NOT in the plan until the user picks one. "
+        "(5) Aus Hermes: ALL agent_candidates with their minutes and why; same rule, suggestions only. Omit the section only when there are none. "
+        "(6) Backlog: one line — how many open tasks stay unplanned (backlog.open_total minus what is in 2 and 3) and up to 5 titles. "
+        "Follow rules. Then ask what to change; call plan_day only when the user says it is good. "
+        "When the user corrects who does what or a habit, ask once whether to remember it and call remember_planning_rule."
     )
     return out
