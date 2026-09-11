@@ -29,6 +29,7 @@ async def execute(ctx, recording_id: Optional[int] = None) -> Dict[str, Any]:
         "duration_s": info["duration_s"], "participants": [p["name"] for p in info["participants"]],
         "owner": info["owner_name"], "has_report": info["has_report"],
     }
+    out["_full_output"] = True      # the transcript must reach the model whole
     if info["status"] == "done":
         segs = R.segments(info["id"])
         out["speakers"] = sorted({s["speaker"] for s in segs})

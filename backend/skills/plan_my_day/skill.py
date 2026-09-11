@@ -70,6 +70,7 @@ async def execute(ctx, date: Optional[str] = None, ask_agent: bool = True,
             out["outside_error"] = f"{type(exc).__name__}: {exc}"
     D.save_draft(str(user_id), plan_date, ((existing or {}).get("draft") or {}).get("items") or [],
                  context={k: context[k] for k in ("fixed_events", "open_tasks", "carry_over")})
+    out["_full_output"] = True      # the whole context, not the 1500-char card
     out["_llm_hint"] = (
         "Two layers: (1) up to 4 time blocks with HH:MM around fixed_events (never move those), fitted into "
         "free_minutes; (2) today's list: every open task the person should do today, without times — as long "

@@ -36,6 +36,6 @@ async def execute(ctx, recording_id: Optional[int] = None, template: Optional[st
     return {
         "recording_id": rid, "title": row["title"], "kind": row["kind"], "recorded_on": (row.get("started_at") or "")[:10],
         "participants": list(R._names(R._participants(row) + [str(row["owner_user_id"])]).values()),
-        "report": report, "generated": generated,
+        "report": report, "generated": generated, "_full_output": True,
         "_llm_hint": "Present the report section by section in the user's language; number the tasks and offer to add them with add_task.",
     }

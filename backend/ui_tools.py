@@ -638,31 +638,40 @@ class UseSkillTool(Tool[UseSkillArgs]):
         # accurate about, so it invented five. Including both keeps the
         # narration discipline AND gives the LLM ground truth when a
         # legitimate enumeration is asked for.
-        if isinstance(result, dict) and result.get("_llm_hint"):
-            from .skills.skill_tool import _compact_json
-            hint = str(result["_llm_hint"])
-            data = {k: v for k, v in result.items() if k != "_llm_hint"}
-            if data:
-                preview = (
-                    f"{hint}\n\n"
-                    f"Source data (quote only what is here — do not invent rows):\n"
-                    f"{_compact_json(data, max_chars=1500)}"
-                )
-            else:
-                preview = hint
-        elif isinstance(result, dict) and result.get("_full_output"):
-            # Opt-out for skills whose entire job is to hand the LLM a
-            # long verbatim payload (e.g. read_email returns the full
-            # body so the agent can answer questions about it). The
-            # default 800-char cap below would defeat that purpose and
-            # stamp "(truncated)" on a deliberately complete result.
-            data = {k: v for k, v in result.items() if k != "_full_output"}
-            preview = str(data)
-        else:
-            preview = str(result)
-            if len(preview) > 800:
-                preview = preview[:800] + "…(truncated)"
-        return ToolResult(success=True, result_for_llm=preview)
+        return ToolResult(success=True, result_for_llm=render_skill_result(result))
+
+
+FULL_OUTPUT_MAX_CHARS = 24_000
+
+
+def render_skill_result(result: Any) -> str:
+    """What the LLM reads after a skill ran.
+
+    `_llm_hint` + data: the steering rule first, then the structured data
+    as compact JSON, cut at 1500 chars — enough for a card, not for a
+    day plan. A skill that returns `_full_output: True` (plan_my_day with
+    its candidates, recording_status with the transcript, read_email)
+    gets its whole payload, up to FULL_OUTPUT_MAX_CHARS, with the hint
+    still on top. Anything else is a short str()."""
+    from .skills.skill_tool import _compact_json
+    if isinstance(result, dict) and result.get("_llm_hint"):
+        hint = str(result["_llm_hint"])
+        full = bool(result.get("_full_output"))
+        data = {k: v for k, v in result.items() if k not in ("_llm_hint", "_full_output")}
+        if not data:
+            return hint
+        return (
+            f"{hint}\n\n"
+            f"Source data (quote only what is here — do not invent rows):\n"
+            f"{_compact_json(data, max_chars=FULL_OUTPUT_MAX_CHARS if full else 1500)}"
+        )
+    if isinstance(result, dict) and result.get("_full_output"):
+        data = {k: v for k, v in result.items() if k != "_full_output"}
+        return str(data)
+    preview = str(result)
+    if len(preview) > 800:
+        preview = preview[:800] + "…(truncated)"
+    return preview
 
 
 # ─────────────────────── Phase 2 (toolfix): unified surface ──────────
