@@ -10,9 +10,10 @@ from typing import Any, Dict, List, Optional
 # can be parsed into candidates; the agent knows the person's files and
 # notes (Homebase), Yorik does not and should not.
 AGENT_QUESTION = (
-    "Ich plane meinen Tag für {date} ({weekday}). Nenne mir bis zu 10 Kandidaten aus meinem Backlog, "
-    "meinen Notizen und offenen Punkten, die heute sinnvoll wären. Antworte NUR mit Zeilen im Format\n"
-    "- Titel | Minuten | warum (ein Satz)\n"
+    "Ich plane meinen Tag für {date} ({weekday}). Nenne mir bis zu 10 Kandidaten aus meinen Notizen, "
+    "Dateien und dem Backlog auf dem Rechner (Homebase), die heute sinnvoll wären. Meine Yorik-Aufgaben "
+    "und den Yorik-Kalender kenne ich schon, die nicht nennen und dafür keine Yorik-Tools aufrufen. "
+    "Antworte NUR mit Zeilen im Format\n- Titel | Minuten | warum (ein Satz)\n"
     "Keine Einleitung, kein Fazit. Fristen zuerst.{request}"
 )
 
@@ -55,7 +56,9 @@ async def execute(ctx, date: Optional[str] = None, ask_agent: bool = True,
                 request=(f" Anlass: {request.strip()[:300]}" if request else ""))
             res = await ctx.call_skill("ask_agent", question=q)
             if res.get("answer"):
-                cands = parse_candidates(res["answer"])
+                known = {t["title"].strip().lower() for t in context.get("open_tasks", [])}
+                known |= {t["title"].strip().lower() for t in context.get("report_candidates", [])}
+                cands = [c for c in parse_candidates(res["answer"]) if c["title"].strip().lower() not in known]
                 if cands:
                     out["agent_candidates"] = cands
                 else:

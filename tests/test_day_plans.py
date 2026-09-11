@@ -195,3 +195,22 @@ def test_planning_rules_routes(fresh_app):
     assert client.get("/api/profile/planning-rules").json() == {"rules": ""}
     assert client.patch("/api/profile/planning-rules", json={"rules": "  Einkauf mache ich.  "}).json() == {"rules": "Einkauf mache ich."}
     assert client.get("/api/profile/planning-rules").json()["rules"] == "Einkauf mache ich."
+
+
+def test_agent_candidates_skip_what_yorik_already_has(planner, monkeypatch):
+    from backend.database import get_conn
+    from backend.skills.plan_my_day.skill import execute as plan_my_day
+    uid = planner
+    with get_conn() as conn:
+        conn.execute("INSERT INTO tasks (title, done, created_by_user_id) VALUES ('Steuerberater anrufen', 0, ?)", (uid,))
+        conn.commit()
+    seen = {}
+    ctx = _ctx(uid)
+    async def fake_call(name, **kw):
+        assert name == "ask_agent"
+        seen["q"] = kw["question"]
+        return {"answer": "- Steuerberater anrufen | 15 | offen\n- Video 9 schneiden | 90 | Deadline"}
+    ctx.call_skill = fake_call
+    out = asyncio.run(plan_my_day(ctx, date="2030-04-03"))
+    assert "Homebase" in seen["q"] and "keine Yorik-Tools" in seen["q"]
+    assert [c["title"] for c in out["agent_candidates"]] == ["Video 9 schneiden"]
