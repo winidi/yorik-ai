@@ -70,3 +70,12 @@ In the evening, "wie war mein Tag" gives a short review: what got done,
 where the task timer's actual minutes differed from the estimate, what
 carries over. Tomorrow's planning starts from that.
 
+
+
+## Plan my day
+
+Say "Plan meinen Tag" (or tap the morning reminder). Yorik gathers your fixed appointments, the tasks assigned to you that are due, what yesterday's plan left open, and your undated backlog, and drafts the day in two layers: a few time blocks with times, and today's task list below them without times, as long as it needs to be. Tasks proposed in a dinner or meeting report that nobody adopted are offered as suggestions, marked with where they came from; so are candidates from your own agent (Settings → You → My agent), if you have one.
+
+Change the draft in conversation ("streich das", "nimm die Glasflaschen dazu", "das macht Beate"). When you say it is good, Yorik writes the tasks and blocks the time in your "Plan" calendar, undoable with one tap. In the evening, "Wie war mein Tag" reviews it; what was not done comes back as carry-over tomorrow.
+
+**Planning rules** (Settings → You → Planning rules) are a few sentences Yorik reads every time: who does what at home, your working hours, how many items a day. When you correct Yorik in chat, it asks once whether to remember the correction there.

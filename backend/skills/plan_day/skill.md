@@ -7,6 +7,8 @@ when_to_use: |
   Give each item a short stable `key` (e.g. "schreiben-video-9") so a later revision updates instead of duplicating.
   Only items with fixed times or deliberate focus blocks get `start`/`end` (HH:MM); at most 6 blocks a day, the rest stay tasks.
   Use `task_id` when an item stands for an existing open task so it is scheduled, not recreated.
+  Use `report_ref` (from report_candidates) when an item was a suggestion from a recording report, so the report shows it as adopted.
+  Items without times are fine and expected; a plan may hold up to 40 items.
 when_not_to_use: |
   Drafting or discussing a plan: that is plan_my_day. A single appointment or task: add_calendar_event / add_task.
 inputs:
@@ -17,7 +19,7 @@ inputs:
   items:
     type: array
     required: true
-    description: 'List of {key, title, start?, end?, category?, notes?, estimated_minutes?, task_id?}. Times as HH:MM.'
+    description: 'List of {key, title, start?, end?, category?, notes?, estimated_minutes?, task_id?, report_ref?}. Times as HH:MM.'
 outputs:
   summary:
     type: object

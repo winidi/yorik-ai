@@ -29,7 +29,7 @@ from .database import get_conn
 log = logging.getLogger("yorik.day_plans")
 
 PLAN_CALENDAR_NAME = "Plan"
-MAX_ITEMS = 20
+MAX_ITEMS = 40
 MAX_BLOCKS = 6
 
 _KEY_RE = re.compile(r"[^a-z0-9]+")
@@ -90,6 +90,7 @@ def normalize_items(plan_date: str, items: List[Dict[str, Any]]) -> List[Dict[st
             raise ValueError(f"item {title!r}: end before start")
         if start:
             blocks += 1
+        report_ref = str(raw.get("report_ref") or "").strip() or None
         est = raw.get("estimated_minutes")
         out.append({
             "key": key,
@@ -99,6 +100,7 @@ def normalize_items(plan_date: str, items: List[Dict[str, Any]]) -> List[Dict[st
             "category": (str(raw.get("category") or "").strip() or None),
             "notes": (str(raw.get("notes") or "").strip() or None),
             "estimated_minutes": int(est) if isinstance(est, (int, float)) and est > 0 else None,
+            "report_ref": report_ref,
             "task_id": raw.get("task_id"),   # an existing open task the item stands for
         })
     if blocks > MAX_BLOCKS:
@@ -127,6 +129,7 @@ def apply_plan(*, user_id: str, plan_date: str, items: List[Dict[str, Any]],
     restore the previous state."""
     items = normalize_items(plan_date, items)
     cal_id = plan_calendar_id(user_id, user_name)
+    adopted: List[tuple] = []          # (report_ref, task_id) — linked after the commit
     rb: Dict[str, Any] = {"created_tasks": [], "created_events": [], "task_before": {},
                           "event_before": {}, "deleted_tasks": [], "deleted_events": [],
                           "plan_date": plan_date, "user_id": user_id}
@@ -154,6 +157,9 @@ def apply_plan(*, user_id: str, plan_date: str, items: List[Dict[str, Any]],
                 task_id = int(cur.lastrowid)
                 rb["created_tasks"].append(task_id)
                 summary["created"] += 1
+                if it.get("report_ref"):
+                    conn.execute("INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)", (task_id, user_id))
+                    adopted.append((it["report_ref"], task_id))
             else:
                 task_id = int(task["id"])
                 rb["task_before"][str(task_id)] = {k: task.get(k) for k in
@@ -214,6 +220,8 @@ def apply_plan(*, user_id: str, plan_date: str, items: List[Dict[str, Any]],
             (user_id, plan_date, json.dumps({"items": items}, default=str), _now(), _now()),
         )
         conn.commit()
+    for ref, task_id in adopted:
+        _link_report_task(ref, task_id, user_id)
     log.info("day plan %s for %s: %s", plan_date, user_id, summary)
     return {"summary": summary, "items": items, "rollback_args": rb, "calendar_id": cal_id}
 
@@ -304,26 +312,106 @@ def context_for(user_id: str, plan_date: str, role: str = "member") -> Dict[str,
             f"FROM events WHERE ({where}) AND starts_at <= ? AND COALESCE(ends_at, starts_at) >= ? "
             f"ORDER BY starts_at", (*params, day_end, day_start),
         ).fetchall()]
+        mine = ("(created_by_user_id = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)) "
+                "AND parent_task_id IS NULL AND (done = 0 OR done IS NULL)")
         open_tasks = [dict(r) for r in conn.execute(
-            "SELECT id, title, due_date, priority, category, estimated_minutes, plan_date, plan_key "
-            "FROM tasks WHERE (done = 0 OR done IS NULL) "
-            "AND (created_by_user_id = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)) "
-            "AND (due_date IS NULL OR due_date <= ?) AND parent_task_id IS NULL "
-            "ORDER BY due_date NULLS LAST, priority DESC NULLS LAST, id LIMIT 40",
+            "SELECT id, title, due_date, priority, category, estimated_minutes, plan_date, plan_key, person "
+            f"FROM tasks WHERE {mine} AND (due_date IS NULL OR due_date <= ?) "
+            "ORDER BY due_date NULLS LAST, priority DESC NULLS LAST, id LIMIT 60",
             (user_id, user_id, plan_date),
         ).fetchall()]
+        backlog_total = conn.execute(f"SELECT COUNT(*) AS n FROM tasks WHERE {mine}", (user_id, user_id)).fetchone()["n"]
+        later = [dict(r) for r in conn.execute(
+            "SELECT id, title, due_date FROM tasks "
+            f"WHERE {mine} AND due_date > ? ORDER BY due_date, id LIMIT 15",
+            (user_id, user_id, plan_date),
+        ).fetchall()]
+        rules_row = conn.execute("SELECT planning_rules FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
     yday = (date.fromisoformat(plan_date) - timedelta(days=1)).isoformat()
     prev = get_plan(user_id, yday)
     carry = [t for t in open_tasks if t.get("plan_date") and t["plan_date"] < plan_date]
+    fixed = [e for e in events if not e.get("plan_key")]
     return {
         "date": plan_date,
         "weekday": date.fromisoformat(plan_date).strftime("%A"),
-        "fixed_events": [e for e in events if not e.get("plan_key")],
+        "fixed_events": fixed,
         "existing_blocks": [e for e in events if e.get("plan_key")],
         "open_tasks": open_tasks,
+        "backlog": {"open_total": int(backlog_total), "shown": len(open_tasks),
+                    "due_later": later, "more_undated": max(0, int(backlog_total) - len(open_tasks) - len(later))},
+        "free_minutes": free_minutes(fixed, plan_date),
         "carry_over": carry,
+        "report_candidates": report_candidates(user_id, plan_date),
+        "rules": ((rules_row["planning_rules"] if rules_row else None) or "").strip(),
         "yesterday_review": (prev or {}).get("review"),
     }
+
+
+WORK_START, WORK_END = 8 * 60, 20 * 60      # the window a day plan fills, minutes from midnight
+
+
+def free_minutes(fixed_events: List[Dict[str, Any]], plan_date: str) -> int:
+    """Minutes between WORK_START and WORK_END not covered by fixed events."""
+    busy = 0
+    for e in fixed_events:
+        if e.get("all_day"):
+            continue
+        try:
+            s = datetime.fromisoformat(str(e["starts_at"])[:19])
+            t = datetime.fromisoformat(str(e.get("ends_at") or e["starts_at"])[:19])
+        except (TypeError, ValueError):
+            continue
+        a = max(WORK_START, s.hour * 60 + s.minute if s.date().isoformat() == plan_date else WORK_START)
+        b = min(WORK_END, t.hour * 60 + t.minute if t.date().isoformat() == plan_date else WORK_END)
+        busy += max(0, b - a)
+    return max(0, WORK_END - WORK_START - busy)
+
+
+def report_candidates(user_id: str, plan_date: str, days: int = 14) -> List[Dict[str, Any]]:
+    """Tasks proposed in recording reports the person was part of and
+    that nobody adopted yet. Suggestions, with the report's person hint;
+    picking one in a plan adopts it (plan_day, report_ref)."""
+    import json as _json
+    since = (date.fromisoformat(plan_date) - timedelta(days=days)).isoformat()
+    out: List[Dict[str, Any]] = []
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT r.id, r.title, r.kind, r.started_at, r.report_json FROM recordings r "
+            "WHERE r.report_json IS NOT NULL AND r.started_at >= ? AND ("
+            "  r.owner_user_id = ? OR r.id IN (SELECT row_id FROM row_shares WHERE table_name = 'recordings' AND user_id = ?)) "
+            "ORDER BY r.id DESC LIMIT 10", (since, user_id, user_id)).fetchall()
+    for r in rows:
+        try:
+            rep = _json.loads(r["report_json"])
+        except (TypeError, ValueError):
+            continue
+        for i, t in enumerate(rep.get("tasks") or []):
+            if t.get("task_id") or not t.get("title"):
+                continue
+            out.append({"report_ref": f"{r['id']}:{i}", "title": t["title"], "person": t.get("person") or "",
+                        "due_date": t.get("due_date") or "", "why": t.get("why") or "",
+                        "from": f"{r['title'] or r['kind']} {str(r['started_at'])[:10]}"})
+    return out[:30]
+
+
+def set_planning_rules(user_id: str, text: str) -> str:
+    text = (text or "").strip()[:2000]
+    with get_conn() as conn:
+        conn.execute("UPDATE user_profiles SET planning_rules = ? WHERE id = ?", (text or None, user_id))
+        conn.commit()
+    return text
+
+
+def add_planning_rule(user_id: str, line: str) -> str:
+    line = " ".join((line or "").split())[:300]
+    if not line:
+        raise ValueError("empty rule")
+    with get_conn() as conn:
+        row = conn.execute("SELECT planning_rules FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
+    current = ((row["planning_rules"] if row else None) or "").strip()
+    if line.lower() in current.lower():
+        return current
+    return set_planning_rules(user_id, (current + "\n" if current else "") + line)
 
 
 # ─── evening review ─────────────────────────────────────────────────
@@ -369,3 +457,31 @@ def review_day(user_id: str, plan_date: str) -> Dict[str, Any]:
         )
         conn.commit()
     return review
+
+
+def _link_report_task(report_ref: str, task_id: int, user_id: str) -> None:
+    """A plan item taken from a recording report: mark that proposal
+    adopted so the report and the other participants see it."""
+    import json as _json
+    try:
+        rid_s, idx_s = report_ref.split(":", 1)
+        rid, idx = int(rid_s), int(idx_s)
+    except ValueError:
+        return
+    with get_conn() as conn:
+        row = conn.execute("SELECT report_json FROM recordings WHERE id = ?", (rid,)).fetchone()
+        if not row or not row["report_json"]:
+            return
+        try:
+            rep = _json.loads(row["report_json"])
+        except ValueError:
+            return
+        tasks = rep.get("tasks") or []
+        if idx < 0 or idx >= len(tasks) or tasks[idx].get("task_id"):
+            return
+        name = conn.execute("SELECT name FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
+        tasks[idx]["task_id"] = task_id
+        tasks[idx]["adopted_by"] = (name["name"] if name else "") or ""
+        tasks[idx]["adopted_at"] = _now()
+        conn.execute("UPDATE recordings SET report_json = ? WHERE id = ?", (_json.dumps(rep, ensure_ascii=False), rid))
+        conn.commit()

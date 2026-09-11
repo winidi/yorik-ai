@@ -2,8 +2,35 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date as _date
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
+
+# What Yorik asks the person's own agent. A fixed shape so the answer
+# can be parsed into candidates; the agent knows the person's files and
+# notes (Homebase), Yorik does not and should not.
+AGENT_QUESTION = (
+    "Ich plane meinen Tag für {date} ({weekday}). Nenne mir bis zu 10 Kandidaten aus meinem Backlog, "
+    "meinen Notizen und offenen Punkten, die heute sinnvoll wären. Antworte NUR mit Zeilen im Format\n"
+    "- Titel | Minuten | warum (ein Satz)\n"
+    "Keine Einleitung, kein Fazit. Fristen zuerst.{request}"
+)
+
+_LINE = re.compile(r"^\s*[-*•]\s*(?P<title>[^|]+?)\s*\|\s*(?P<min>\d{1,3})?\s*(?:min|Min\.?|Minuten)?\s*\|?\s*(?P<why>.*)$")
+
+
+def parse_candidates(text: str) -> List[Dict[str, Any]]:
+    """'- Titel | 45 | warum' lines → [{title, estimated_minutes, why}]."""
+    out: List[Dict[str, Any]] = []
+    for raw in (text or "").splitlines():
+        m = _LINE.match(raw)
+        if not m or not m.group("title").strip():
+            continue
+        mins = m.group("min")
+        out.append({"title": m.group("title").strip()[:200],
+                    "estimated_minutes": int(mins) if mins else None,
+                    "why": (m.group("why") or "").strip().strip("|").strip()[:300]})
+    return out[:10]
 
 
 async def execute(ctx, date: Optional[str] = None, ask_agent: bool = True,
@@ -23,23 +50,31 @@ async def execute(ctx, date: Optional[str] = None, ask_agent: bool = True,
     }
     if ask_agent:
         try:
-            q = (f"Ich plane meinen Tag für {plan_date} ({context['weekday']}). "
-                 f"Gib mir in höchstens 8 kurzen Stichpunkten: das heutige Briefing aus dem Homebase, "
-                 f"offene Punkte und Fristen, die heute zählen. Keine Einleitung.")
-            if request:
-                q += f" Anlass: {request.strip()[:300]}"
+            q = AGENT_QUESTION.format(
+                date=plan_date, weekday=context["weekday"],
+                request=(f" Anlass: {request.strip()[:300]}" if request else ""))
             res = await ctx.call_skill("ask_agent", question=q)
             if res.get("answer"):
-                out["outside_context"] = res["answer"]
+                cands = parse_candidates(res["answer"])
+                if cands:
+                    out["agent_candidates"] = cands
+                else:
+                    out["outside_context"] = res["answer"]
             elif res.get("error"):
+                # no agent for this person, or the workstation is off: plan from Yorik's data
                 out["outside_error"] = res["error"]
         except Exception as exc:  # noqa: BLE001
             out["outside_error"] = f"{type(exc).__name__}: {exc}"
     D.save_draft(str(user_id), plan_date, ((existing or {}).get("draft") or {}).get("items") or [],
                  context={k: context[k] for k in ("fixed_events", "open_tasks", "carry_over")})
     out["_llm_hint"] = (
-        "Draft 3–8 items around fixed_events (never move those), carry_over first, 2–4 focus blocks with "
-        "HH:MM times at most, the rest as plain tasks. Show the draft as a numbered list and ask what to change. "
-        "Do not call plan_day until the user says it is good."
+        "Two layers: (1) up to 4 time blocks with HH:MM around fixed_events (never move those), fitted into "
+        "free_minutes; (2) today's list: every open task the person should do today, without times — as long "
+        "as it needs to be, carry_over first. Follow rules. Offer report_candidates and agent_candidates as "
+        "suggestions marked with their source; a chosen candidate goes into the plan with its report_ref or as "
+        "a new item. End with what stays in the backlog (backlog.open_total minus planned) in one line. "
+        "Show the draft as a numbered list and ask what to change; do not call plan_day until the user says "
+        "it is good. When the user corrects who does what or a habit, ask once whether to remember it and "
+        "call remember_planning_rule."
     )
     return out

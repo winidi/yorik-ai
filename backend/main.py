@@ -10687,6 +10687,21 @@ def patch_agent_deletes(
     return {"ok": True, "agent_may_confirm_deletes": enabled}
 
 
+@app.get("/api/profile/planning-rules")
+def get_planning_rules(user: dict[str, Any] = Depends(_auth.current_user)) -> Dict[str, Any]:
+    with conn_ctx(DB_PATH) as conn:
+        row = conn.execute("SELECT planning_rules FROM user_profiles WHERE id=?", (user["id"],)).fetchone()
+    return {"rules": ((row["planning_rules"] if row else None) or "")}
+
+
+@app.patch("/api/profile/planning-rules")
+def patch_planning_rules(body: Dict[str, Any] = Body(...), user: dict[str, Any] = Depends(_auth.current_user)) -> Dict[str, Any]:
+    """Free text the day planner reads every time: who does what at home,
+    working hours, how many items a day. A few sentences."""
+    from . import day_plans as _dp
+    return {"rules": _dp.set_planning_rules(user["id"], str(body.get("rules") or ""))}
+
+
 @app.get("/api/profile/agent")
 def get_profile_agent(user: dict[str, Any] = Depends(_auth.current_user)) -> Dict[str, Any]:
     """The person's own agent (their Hermes). The key is never returned."""

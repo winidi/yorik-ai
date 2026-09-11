@@ -140,3 +140,58 @@ def test_context_and_review(planner, monkeypatch):
     assert c["yesterday_review"]["done_planned"] == 1
     assert "outside_error" in out and "outside_context" not in out
     assert _rows("SELECT status FROM day_plans WHERE plan_date='2030-04-03'")[0]["status"] == "draft"
+
+
+def test_context_backlog_candidates_rules_and_report_ref(planner, monkeypatch):
+    """The planner sees the whole picture: free minutes, backlog counts,
+    un-adopted report tasks as candidates, the person's rules; a plan item
+    with report_ref adopts the proposal."""
+    import json
+    from backend import day_plans as D
+    from backend.database import get_conn
+    from backend.skills.plan_my_day.skill import parse_candidates
+    from backend.skills.remember_planning_rule.skill import execute as remember
+    uid = planner
+    cal = _rows("SELECT id FROM calendars WHERE owner_user_id=? AND kind='personal'", uid)[0]["id"]
+    with get_conn() as conn:
+        conn.execute("INSERT INTO events (title, starts_at, ends_at, all_day, calendar_id, owner_user_id) VALUES "
+                     "('Zahnarzt', '2030-04-03T15:00:00', '2030-04-03T16:30:00', 0, ?, ?)", (cal, uid))
+        conn.execute("INSERT INTO tasks (title, done, created_by_user_id, due_date) VALUES ('Später', 0, ?, '2030-04-20')", (uid,))
+        conn.execute("INSERT INTO tasks (title, done, created_by_user_id) VALUES ('Undatiert', 0, ?)", (uid,))
+        rep = {"summary": "s", "decisions": [], "highlights": [], "friction": [], "open_questions": [], "dates": [],
+               "tasks": [{"title": "Glasflaschen wegbringen", "person": "Sprecher 2", "due_date": "", "why": "Keller"},
+                         {"title": "Schon erledigt", "person": "", "due_date": "", "why": "", "task_id": 1}]}
+        conn.execute("INSERT INTO recordings (owner_user_id, title, kind, status, started_at, report_json) VALUES (?, 'Abendessen', 'dinner', 'done', '2030-04-01 19:00:00', ?)",
+                     (uid, json.dumps(rep)))
+        rid = conn.execute("SELECT max(id) AS id FROM recordings").fetchone()["id"]
+        conn.commit()
+    asyncio.run(remember(_ctx(uid), rule="Küche macht Beate."))
+    asyncio.run(remember(_ctx(uid), rule="küche macht beate."))       # no duplicate
+    c = D.context_for(uid, "2030-04-03", "admin")
+    assert c["free_minutes"] == 12 * 60 - 90
+    assert c["backlog"]["open_total"] == 2 and [t["title"] for t in c["backlog"]["due_later"]] == ["Später"]
+    assert [t["title"] for t in c["open_tasks"]] == ["Undatiert"]
+    assert c["report_candidates"] == [{"report_ref": f"{rid}:0", "title": "Glasflaschen wegbringen", "person": "Sprecher 2",
+                                       "due_date": "", "why": "Keller", "from": "Abendessen 2030-04-01"}]
+    assert c["rules"] == "Küche macht Beate."
+    assert parse_candidates("- Video 9 schneiden | 90 | Deadline Freitag\n- Steuerberater anrufen | 15min | seit Wochen offen\nkein Punkt") == [
+        {"title": "Video 9 schneiden", "estimated_minutes": 90, "why": "Deadline Freitag"},
+        {"title": "Steuerberater anrufen", "estimated_minutes": 15, "why": "seit Wochen offen"}]
+
+    D.apply_plan(user_id=uid, plan_date="2030-04-03", items=[
+        {"key": "glas", "title": "Glasflaschen wegbringen", "report_ref": f"{rid}:0"},
+        {"key": "undatiert", "title": "Undatiert", "task_id": _rows("SELECT id FROM tasks WHERE title='Undatiert'")[0]["id"]},
+    ])
+    rep2 = json.loads(_rows("SELECT report_json FROM recordings WHERE id=?", rid)[0]["report_json"])
+    tid = rep2["tasks"][0]["task_id"]
+    assert tid and rep2["tasks"][0]["adopted_by"] == "Planner"
+    assert {str(r["user_id"]) for r in _rows("SELECT user_id FROM task_assignees WHERE task_id=?", tid)} == {uid}
+    assert D.context_for(uid, "2030-04-03", "admin")["report_candidates"] == []   # adopted, no longer a candidate
+
+
+def test_planning_rules_routes(fresh_app):
+    from tests.conftest import login_client
+    client, uid = login_client(fresh_app, role="member", name="Beate")
+    assert client.get("/api/profile/planning-rules").json() == {"rules": ""}
+    assert client.patch("/api/profile/planning-rules", json={"rules": "  Einkauf mache ich.  "}).json() == {"rules": "Einkauf mache ich."}
+    assert client.get("/api/profile/planning-rules").json()["rules"] == "Einkauf mache ich."
