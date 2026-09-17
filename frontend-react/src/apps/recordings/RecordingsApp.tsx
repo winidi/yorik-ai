@@ -90,7 +90,10 @@ export function RecordingsApp() {
                                     selected === r.id ? "border-primary bg-muted/60" : "border-border")}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-medium truncate">{r.title || KIND_LABEL[r.kind] || "Recording"}</div>
-                  <StatusPill r={r} />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">{KIND_LABEL[r.kind] || r.kind}</span>
+                    <StatusPill r={r} />
+                  </div>
                 </div>
                 <div className="text-[11px] text-muted-foreground mt-0.5">
                   {fmtDate(r.started_at)}{r.duration_s ? ` · ${fmtDuration(r.duration_s)}` : ""} · {[r.owner_name, ...r.participants.map(p => p.name)].filter(Boolean).join(", ")}
@@ -172,9 +175,25 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
   }
   async function buildReport(refresh = false) {
     setBusy("report");
+    setErr(null);
     try {
-      setReport(await api.post<Report>(`/api/recordings/${id}/report`, { refresh }));
-      setRec(r => r ? { ...r, has_report: true } : r);
+      const r = await api.post<Report | { queued: boolean }>(`/api/recordings/${id}/report`, { refresh });
+      if ("queued" in r && r.queued) {
+        // long recordings take the model minutes; poll until the report is there
+        for (let i = 0; i < 200; i++) {
+          await new Promise(res => setTimeout(res, 3000));
+          const st = await api.get<Recording>(`/api/recordings/${id}`);
+          if (st.error && st.error.startsWith("report failed")) { setErr(st.error); break; }
+          if (st.has_report && st.progress !== "report") {
+            setReport(await api.get<Report>(`/api/recordings/${id}/report`));
+            setRec(st);
+            break;
+          }
+        }
+      } else {
+        setReport(r as Report);
+        setRec(x => x ? { ...x, has_report: true } : x);
+      }
     } catch (e: any) { setErr(e?.message || "could not write the report"); }
     finally { setBusy(null); }
   }
@@ -196,6 +215,7 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
         <div className="flex-1 min-w-0">
           <h2 className="text-xl font-semibold truncate">{rec.title || KIND_LABEL[rec.kind]}</h2>
           <div className="text-xs text-muted-foreground">
+            <span className="rounded-full border border-border px-1.5 py-0.5 mr-1.5">{KIND_LABEL[rec.kind] || rec.kind}</span>
             {fmtDate(rec.started_at)}{rec.duration_s ? ` · ${fmtDuration(rec.duration_s)}` : ""} · {[rec.owner_name, ...rec.participants.map(p => p.name)].filter(Boolean).join(", ")}
           </div>
         </div>
@@ -216,7 +236,8 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
           <span>The transcript is there. No report yet.</span>
           <button onClick={() => buildReport(false)} disabled={busy === "report"}
                   className="flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
-            {busy === "report" ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} Write the report
+            {busy === "report" ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+            {busy === "report" ? "Writing… (minutes for a long recording)" : "Write the report"}
           </button>
         </div>
       )}

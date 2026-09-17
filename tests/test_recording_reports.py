@@ -39,6 +39,7 @@ def transcript(fresh_app, monkeypatch, tmp_path):
     monkeypatch.setattr(R, "identify_clusters", lambda audio, segs, cands: {})
     monkeypatch.setattr(R, "transcribe_segment", lambda audio: "Wer räumt die Küche auf?")
     monkeypatch.setattr(R, "schedule_processing", lambda rid: R._process_safe(rid))
+    monkeypatch.setattr(R, "schedule_report", lambda rid, template, notify: R._report_job(rid, template, notify))
     calls = []
 
     def fake_llm(messages):
@@ -179,7 +180,10 @@ def test_report_routes_and_adopt(fresh_app, transcript):
     assert rep["template"] == "dinner" and len(rep["tasks"]) == 4
     assert c.post(f"/api/recordings/{rid}/report", json={}).json()["generated_at"] == rep["generated_at"]   # reused
     assert len(transcript["llm"]) == 1
-    assert c.post(f"/api/recordings/{rid}/report", json={"refresh": True, "template": "meeting"}).json()["template"] == "meeting"
+    r = c.post(f"/api/recordings/{rid}/report", json={"refresh": True, "template": "meeting"})
+    assert r.status_code == 202 and r.json()["queued"] is True          # written in the background
+    assert c.get(f"/api/recordings/{rid}/report").json()["template"] == "meeting"
+    assert c.get(f"/api/recordings/{rid}").json()["progress"] is None
     assert len(transcript["llm"]) == 2
 
     # Adopt means "mine": Beate taps it, it is hers alone, whatever name the report suggested

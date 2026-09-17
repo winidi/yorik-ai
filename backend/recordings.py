@@ -45,7 +45,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from .database import get_conn
@@ -801,9 +801,35 @@ def report_get_route(rid: int, user: Dict[str, Any] = Depends(_current_user())):
     return rep
 
 
+def _report_job(rid: int, template: Optional[str], notify: bool) -> None:
+    from . import recording_reports as REP
+    _set(rid, progress="report", error=None)
+    try:
+        REP.build_report(rid, template, notify=notify)
+        _set(rid, progress=None)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("recordings: #%s report failed: %s", rid, exc)
+        _set(rid, progress=None, error=f"report failed: {exc}"[:500])
+
+
+def schedule_report(rid: int, template: Optional[str], notify: bool) -> None:
+    """Queue the report on the worker thread; a long recording takes the
+    model minutes, too long for a browser request to wait on."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is None:
+        _report_job(rid, template, notify)
+        return
+    loop.run_in_executor(_executor, _report_job, rid, template, notify)
+
+
 @router.post("/{rid}/report")
 async def report_build_route(rid: int, body: Optional[ReportIn] = None, user: Dict[str, Any] = Depends(_current_user())):
-    """Write (or rewrite) the report; a long LLM pass, so it runs off the loop."""
+    """Write (or rewrite) the report. Returns the report when it exists
+    already, else 202 and the work runs in the background; the UI polls
+    the recording (progress 'report' → has_report)."""
     from . import recording_reports as REP
     row = can_view(rid, user)
     if not row:
@@ -814,13 +840,11 @@ async def report_build_route(rid: int, body: Optional[ReportIn] = None, user: Di
     existing = REP.get_report(rid)
     if existing and not body.refresh:
         return existing
-    try:
-        return await asyncio.get_running_loop().run_in_executor(
-            None, lambda: REP.build_report(rid, body.template, notify=existing is None))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"report failed: {exc}")
+    if row.get("progress") == "report":
+        return JSONResponse({"queued": True, "recording_id": rid}, status_code=202)
+    _set(rid, progress="report", error=None)
+    schedule_report(rid, body.template, existing is None)
+    return JSONResponse({"queued": True, "recording_id": rid}, status_code=202)
 
 
 class AdoptIn(BaseModel):
