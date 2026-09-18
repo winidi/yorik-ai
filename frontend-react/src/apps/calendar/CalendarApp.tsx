@@ -9,7 +9,7 @@
  * week/day → new event with that time pre-filled.
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon,
@@ -324,7 +324,42 @@ export function CalendarApp() {
     `/api/tasks?role=${ROLE}${calIdsParam.replace("&", "&")}`,
     [calIdsParam],
   );
-  const events = eventsApi.data || [];
+  // Drag-and-drop in the time grid: the new times show at once and are
+  // dropped again when the server's answer is in.
+  const [timeOverrides, setTimeOverrides] = useState<Map<string, { starts_at: string; ends_at: string }>>(new Map());
+  const events = useMemo(() => {
+    const raw = eventsApi.data || [];
+    if (timeOverrides.size === 0) return raw;
+    return raw.map(e => {
+      const o = timeOverrides.get(eventKey(e));
+      return o ? { ...e, ...o } : e;
+    });
+  }, [eventsApi.data, timeOverrides]);
+
+  const onEventTimeChange = useCallback(async (ev: CalendarEvent, startsAt: string, endsAt: string) => {
+    const key = eventKey(ev);
+    setTimeOverrides(m => new Map(m).set(key, { starts_at: startsAt, ends_at: endsAt }));
+    try {
+      let body = { starts_at: startsAt, ends_at: endsAt };
+      if (ev.recurring) {
+        // An occurrence is drawn from the series row, so the series
+        // gets the same shift in minutes and keeps its own date.
+        const base = await api.get<CalendarEvent>(`/api/events/${ev.id}?role=${ROLE}`);
+        const dStart = minutesBetween(ev.starts_at, startsAt);
+        const dEnd = minutesBetween(ev.ends_at || ev.starts_at, endsAt);
+        body = {
+          starts_at: shiftIso(base.starts_at, dStart),
+          ends_at: shiftIso(base.ends_at || base.starts_at, dEnd),
+        };
+      }
+      await api.patch(`/api/events/${ev.id}?role=${ROLE}`, body);
+    } catch (e: any) {
+      toast(`Move failed: ${e.message || e}`);
+    }
+    await eventsApi.refetch();
+    setTimeOverrides(m => { const n = new Map(m); n.delete(key); return n; });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventsApi.refetch]);
   const tasks = tasksApi.data || [];
 
   // Deep-link: `/calendar?event=N` opens the dialog for that event.
@@ -584,6 +619,7 @@ export function CalendarApp() {
             highlightedIds={highlightedIds}
             onSelectDay={setSelected}
             onEventClick={setEditing}
+            onEventTimeChange={onEventTimeChange}
             onRangeSelected={(day, startMin, endMin) => {
               setSelected(day);
               setEditing({ defaultDate: day, defaultStartMin: startMin, defaultEndMin: endMin });
@@ -610,6 +646,7 @@ export function CalendarApp() {
             eventsByDay={eventsByDay}
             onSelectDay={setSelected}
             onEventClick={setEditing}
+            onEventTimeChange={onEventTimeChange}
             onRangeSelected={(day, startMin, endMin) => {
               setSelected(day);
               setEditing({ defaultDate: day, defaultStartMin: startMin, defaultEndMin: endMin });
@@ -1040,7 +1077,7 @@ function EventChip({ ev, highlighted, onClick }:
       )}
       style={{
         background: vis.fill,
-        color: vis.accent,
+        color: vis.text,
         borderLeft: `2px solid ${vis.border}`,
       }}
     >
@@ -2872,18 +2909,33 @@ function ViewSwitcher({ value, onChange, options }:
 
 // ───────────────────────── time-grid view (week + day) ─────────────
 
-// Full 24 hours visible internally. Scrollbar is hidden but scroll
-// works (mouse-wheel, touchpad). Initial scroll auto-positions so
-// the user lands at "now" — they can scroll up to see early hours
-// or down to see late evening / next day's wrap-around.
+// The grid holds the full 24 hours, but the window shows about
+// HOURS_IN_VIEW of them (07:00–20:00 on a normal day) and the rest is
+// reached by scrolling, like Google Calendar. The hour height follows
+// the height of the window, so a tall monitor gets tall, readable
+// blocks instead of the whole day squeezed onto one screen. Scrollbar
+// is hidden but scroll works (mouse-wheel, touchpad).
 const GRID_START_HOUR = 0;     // 00:00
 const GRID_END_HOUR   = 24;    // 24:00
-const HOUR_PX         = 64;
+const MIN_HOUR_PX     = 56;
+const HOURS_IN_VIEW   = 13;
+const FIRST_HOUR_IN_VIEW = 7;
 const VISIBLE_HOURS = GRID_END_HOUR - GRID_START_HOUR; // 24
+
+const HourPxContext = createContext(64);
+
+/** First hour at the top of the window: 07:00 unless "now" would fall
+ *  outside 07:00–20:00. */
+function initialTopHour(now: Date): number {
+  const h = now.getHours();
+  if (h < FIRST_HOUR_IN_VIEW) return Math.max(GRID_START_HOUR, h - 1);
+  if (h >= FIRST_HOUR_IN_VIEW + HOURS_IN_VIEW - 1) return GRID_END_HOUR - HOURS_IN_VIEW;
+  return FIRST_HOUR_IN_VIEW;
+}
 
 function TimeGridView({
   days, today, selected, eventsByDay, highlightedIds,
-  onSelectDay, onEventClick, onRangeSelected, onTaskDropped, singleDay,
+  onSelectDay, onEventClick, onEventTimeChange, onRangeSelected, onTaskDropped, singleDay,
 }: {
   days: Date[];
   today: Date;
@@ -2892,22 +2944,111 @@ function TimeGridView({
   highlightedIds?: Set<number>;
   onSelectDay: (d: Date) => void;
   onEventClick: (e: CalendarEvent) => void;
+  onEventTimeChange: (e: CalendarEvent, startsAt: string, endsAt: string) => void;
   onRangeSelected: (d: Date, startMin: number, endMin: number) => void;
   onTaskDropped: (d: Date, mins: number, task: Task) => void;
   singleDay?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [evDrag, setEvDrag] = useState<EventDrag | null>(null);
+  // A drag ends with a mouseup on the block, which the browser follows
+  // with a click; this keeps the edit dialog closed after a real drag.
+  const suppressClickRef = useRef(false);
+  const evDragRef = useRef<EventDrag | null>(null);
+  evDragRef.current = evDrag;
 
-  // Auto-scroll to current hour on mount. With the full 24h grid we
-  // need this — otherwise the user lands at midnight every time.
-  useEffect(() => {
+  // Hour height from the window height; 0 until measured.
+  const [measuredPx, setMeasuredPx] = useState(0);
+  const HOUR_PX = measuredPx || 64;
+  // The hour at the top edge. Kept across resizes so the view stays put
+  // when the hour height changes.
+  const topHourRef = useRef(initialTopHour(new Date()) - GRID_START_HOUR);
+
+  useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const now = new Date();
-    const minsNow = now.getHours() * 60 + now.getMinutes();
-    const targetPx = Math.max(0, (minsNow - GRID_START_HOUR * 60) * (HOUR_PX / 60) - 180);
-    el.scrollTop = targetPx;
+    const measure = () => setMeasuredPx(
+      Math.max(MIN_HOUR_PX, Math.floor(el.clientHeight / HOURS_IN_VIEW)));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !measuredPx) return;
+    el.scrollTop = topHourRef.current * measuredPx;
+  }, [measuredPx]);
+
+  // Move / resize an event with the mouse. Tracked on the window so the
+  // pointer may leave the block and the column.
+  const dragActive = !!evDrag;
+  useEffect(() => {
+    if (!dragActive) return;
+    function onMove(e: MouseEvent) {
+      setEvDrag(d => {
+        if (!d) return d;
+        const dy = e.clientY - d.startY + ((scrollRef.current?.scrollTop ?? 0) - d.startScroll);
+        if (!d.moved && Math.abs(dy) < 4 && Math.abs(e.clientX - d.startX) < 4) return d;
+        const dMin = Math.round((dy * 60 / HOUR_PX) / 15) * 15;
+        const dur = d.origEnd - d.origStart;
+        let { startMin, endMin, dayIdx } = d;
+        if (d.mode === "move") {
+          startMin = Math.max(0, Math.min(24 * 60 - dur, d.origStart + dMin));
+          endMin = startMin + dur;
+          const rect = gridRef.current?.getBoundingClientRect();
+          if (rect && !d.event.recurring && days.length > 1) {
+            const colW = (rect.width - TIME_RAIL_PX) / days.length;
+            const idx = Math.floor((e.clientX - rect.left - TIME_RAIL_PX) / colW);
+            dayIdx = Math.max(0, Math.min(days.length - 1, idx));
+          }
+        } else if (d.mode === "resize-end") {
+          endMin = Math.max(d.origStart + 15, Math.min(24 * 60, d.origEnd + dMin));
+        } else {
+          startMin = Math.max(0, Math.min(d.origEnd - 15, d.origStart + dMin));
+        }
+        return { ...d, moved: true, startMin, endMin, dayIdx };
+      });
+    }
+    function onUp() {
+      const d = evDragRef.current;
+      setEvDrag(null);
+      if (!d?.moved) return;
+      suppressClickRef.current = true;
+      setTimeout(() => { suppressClickRef.current = false; }, 0);
+      const changed = d.dayIdx !== d.origDayIdx || d.startMin !== d.origStart || d.endMin !== d.origEnd;
+      if (!changed) return;
+      const date = isoDate(days[d.dayIdx]);
+      const end = d.endMin >= 24 * 60 ? "23:59" : minsToTime(d.endMin);
+      onEventTimeChange(d.event, `${date}T${minsToTime(d.startMin)}:00`, `${date}T${end}:00`);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setEvDrag(null);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("keydown", onKey);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragActive, HOUR_PX, days.length, onEventTimeChange]);
+
+  function startEventDrag(ev: CalendarEvent, dayIdx: number, mode: EventDrag["mode"], e: React.MouseEvent) {
+    if (e.button !== 0) return;
+    const { startMin, endMin } = minutesOf(ev);
+    setEvDrag({
+      event: ev, mode, moved: false,
+      startX: e.clientX, startY: e.clientY,
+      startScroll: scrollRef.current?.scrollTop ?? 0,
+      origDayIdx: dayIdx, origStart: startMin, origEnd: endMin,
+      dayIdx, startMin, endMin,
+    });
+  }
 
   // Live "now" tick — re-render every 60s so the indicator stays accurate.
   const [, setNowTick] = useState(0);
@@ -2917,10 +3058,11 @@ function TimeGridView({
   }, []);
 
   return (
+    <HourPxContext.Provider value={HOUR_PX}>
     <div className="flex-1 flex flex-col min-h-0 bg-background">
       {/* Sticky day-header */}
       <div className="flex border-b border-border bg-card/40 backdrop-blur-sm shrink-0">
-        <div className="w-14 shrink-0" /> {/* gutter aligning with the time-rail */}
+        <div className="w-14 shrink-0" /> {/* gutter aligning with the time-rail (TIME_RAIL_PX) */}
         {days.map(d => {
           const isToday = sameDay(d, today);
           const isSel   = sameDay(d, selected);
@@ -2954,8 +3096,17 @@ function TimeGridView({
       <AllDayStrip days={days} eventsByDay={eventsByDay} onEventClick={onEventClick} />
 
       {/* Scrollable time grid — scrollbar hidden, wheel/trackpad still scroll. */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar">
-        <div className="flex relative w-full min-w-0" style={{ minHeight: VISIBLE_HOURS * HOUR_PX }}>
+      <div
+        ref={scrollRef}
+        onScroll={(e) => { if (measuredPx) topHourRef.current = e.currentTarget.scrollTop / measuredPx; }}
+        className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar"
+      >
+        <div
+          ref={gridRef}
+          className={cn("flex relative w-full min-w-0", evDrag?.moved && "select-none",
+            evDrag?.moved && (evDrag.mode === "move" ? "cursor-grabbing" : "cursor-ns-resize"))}
+          style={{ minHeight: VISIBLE_HOURS * HOUR_PX }}
+        >
           {/* Time rail */}
           <div className="w-14 shrink-0 relative">
             {Array.from({ length: VISIBLE_HOURS }, (_, i) => {
@@ -2963,7 +3114,7 @@ function TimeGridView({
               return (
                 <div
                   key={h}
-                  className="text-[10px] text-muted-foreground tabular-nums text-right pr-2 -translate-y-2"
+                  className="text-[11px] text-muted-foreground tabular-nums text-right pr-2 -translate-y-2"
                   style={{ height: HOUR_PX }}
                 >
                   {i === 0 ? "" : `${String(h).padStart(2, "0")}:00`}
@@ -2973,14 +3124,17 @@ function TimeGridView({
           </div>
 
           {/* Day columns */}
-          {days.map(d => (
+          {days.map((d, i) => (
             <DayColumn
               key={d.toISOString()}
               day={d}
               isToday={sameDay(d, today)}
               events={eventsByDay.get(isoDate(d)) || []}
               highlightedIds={highlightedIds}
-              onEventClick={onEventClick}
+              onEventClick={(ev) => { if (!suppressClickRef.current) onEventClick(ev); }}
+              onEventDragStart={(ev, mode, e) => startEventDrag(ev, i, mode, e)}
+              draggingKey={evDrag?.moved ? eventKey(evDrag.event) : null}
+              dragPreview={evDrag?.moved && evDrag.dayIdx === i ? evDrag : null}
               onRangeSelected={onRangeSelected}
               onTaskDropped={onTaskDropped}
               wider={!!singleDay}
@@ -2993,27 +3147,34 @@ function TimeGridView({
         .no-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
     </div>
+    </HourPxContext.Provider>
   );
 }
 
 function DayColumn({
-  day, isToday, events, highlightedIds, onEventClick, onRangeSelected, onTaskDropped, wider,
+  day, isToday, events, highlightedIds, onEventClick, onEventDragStart, draggingKey, dragPreview,
+  onRangeSelected, onTaskDropped, wider,
 }: {
   day: Date;
   isToday: boolean;
   events: CalendarEvent[];
   highlightedIds?: Set<number>;
   onEventClick: (e: CalendarEvent) => void;
+  onEventDragStart: (ev: CalendarEvent, mode: EventDrag["mode"], e: React.MouseEvent) => void;
+  draggingKey: string | null;
+  dragPreview: EventDrag | null;
   onRangeSelected: (d: Date, startMin: number, endMin: number) => void;
   onTaskDropped: (d: Date, mins: number, task: Task) => void;
   wider?: boolean;
 }) {
+  const canEdit = useCanEditEvent();
   // Lay out non-all-day events with overlap-aware columns.
   const positioned = useMemo(() => assignColumns(
     events.filter(e => !e.all_day)
           .map(e => ({ event: e, ...minutesOf(e) }))
   ), [events]);
 
+  const HOUR_PX = useContext(HourPxContext);
   const now = new Date();
   const showNowLine = isToday;
   const nowMins = now.getHours() * 60 + now.getMinutes();
@@ -3166,14 +3327,29 @@ function DayColumn({
           columnCount={columnCount}
           highlighted={!!highlightedIds?.has(event.id)}
           onClick={(e) => { e.stopPropagation(); onEventClick(event); }}
+          onDragStart={canEdit(event) ? (mode, e) => onEventDragStart(event, mode, e) : undefined}
+          dimmed={draggingKey === eventKey(event)}
         />
       ))}
+
+      {/* The event being dragged, at its new place */}
+      {dragPreview && (
+        <EventBlock
+          event={dragPreview.event}
+          startMin={dragPreview.startMin}
+          endMin={dragPreview.endMin}
+          column={0}
+          columnCount={1}
+          preview
+          onClick={() => {}}
+        />
+      )}
     </div>
   );
 }
 
 function EventBlock({
-  event, startMin, endMin, column, columnCount, highlighted, onClick,
+  event, startMin, endMin, column, columnCount, highlighted, onClick, onDragStart, dimmed, preview,
 }: {
   event: CalendarEvent;
   startMin: number;
@@ -3182,7 +3358,13 @@ function EventBlock({
   columnCount: number;
   highlighted?: boolean;
   onClick: (e: React.MouseEvent) => void;
+  /** Set when the viewer may change the event: the block moves, its
+   *  top and bottom edges resize. */
+  onDragStart?: (mode: EventDrag["mode"], e: React.MouseEvent) => void;
+  dimmed?: boolean;
+  preview?: boolean;
 }) {
+  const HOUR_PX = useContext(HourPxContext);
   // Clip the block to the visible window so an event starting at 5am
   // doesn't get drawn at negative top.
   const visStart = Math.max(startMin, GRID_START_HOUR * 60);
@@ -3200,10 +3382,12 @@ function EventBlock({
     <button
       data-event-block
       onClick={onClick}
-      onMouseDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => { e.stopPropagation(); onDragStart?.("move", e); }}
       className={cn(
-        "absolute z-10 text-left rounded-md p-1.5 overflow-hidden cursor-pointer hover:brightness-110 hover:shadow-lg transition shadow-sm",
+        "group/ev absolute z-10 text-left rounded-md p-1.5 overflow-hidden cursor-pointer hover:brightness-110 hover:shadow-lg transition-[filter,box-shadow,opacity] shadow-sm",
         highlighted && "ring-2 ring-violet-400 ring-offset-1 animate-pulse-flash z-20",
+        dimmed && "opacity-40",
+        preview && "z-30 shadow-xl pointer-events-none ring-1 ring-primary/50",
       )}
       style={{
         top,
@@ -3212,7 +3396,7 @@ function EventBlock({
         width: `calc(${widthPct}% - 4px)`,
         background: vis.fill,
         borderLeft: `3px solid ${vis.border}`,
-        color: vis.accent,
+        color: vis.text,
       }}
     >
       {highlighted && (
@@ -3224,13 +3408,27 @@ function EventBlock({
           .animate-pulse-flash { animation: pulse-flash 1s ease-in-out 3; }
         `}</style>
       )}
-      <div className="text-[11px] font-semibold leading-tight truncate">
+      <div className={cn("font-semibold leading-tight truncate", HOUR_PX >= 96 ? "text-sm" : "text-xs")}>
         {event.title || "(no title)"}
       </div>
-      {height > 32 && (
-        <div className="text-[10px] tabular-nums opacity-80 mt-0.5">
+      {(height > 32 || preview) && (
+        <div className={cn("tabular-nums opacity-80 mt-0.5", HOUR_PX >= 96 ? "text-xs" : "text-[11px]")}>
           {minsToTime(startMin)}{event.ends_at && ` – ${minsToTime(endMin)}`}
         </div>
+      )}
+      {onDragStart && !preview && (
+        <>
+          {height >= 36 && (
+            <span
+              className="absolute left-0 right-0 top-0 h-1.5 cursor-ns-resize"
+              onMouseDown={(e) => { e.stopPropagation(); onDragStart("resize-start", e); }}
+            />
+          )}
+          <span
+            className="absolute left-0 right-0 bottom-0 h-1.5 cursor-ns-resize"
+            onMouseDown={(e) => { e.stopPropagation(); onDragStart("resize-end", e); }}
+          />
+        </>
       )}
     </button>
   );
@@ -3266,7 +3464,7 @@ function AllDayStrip({
                   return {
                     background: v.fill,
                     borderLeft: `2px solid ${v.border}`,
-                    color: v.accent,
+                    color: v.text,
                   };
                 })()}
               >
@@ -3278,6 +3476,47 @@ function AllDayStrip({
       })}
     </div>
   );
+}
+
+const TIME_RAIL_PX = 56; // the w-14 time rail left of the day columns
+
+/** One event being moved or resized in the time grid. */
+interface EventDrag {
+  event: CalendarEvent;
+  mode: "move" | "resize-start" | "resize-end";
+  moved: boolean;
+  startX: number; startY: number; startScroll: number;
+  origDayIdx: number; origStart: number; origEnd: number;
+  dayIdx: number; startMin: number; endMin: number;
+}
+
+function eventKey(e: CalendarEvent): string {
+  return `${e.id}_${e.occurrence_date || ""}`;
+}
+
+/** Who may drag an event: not a "Busy" placeholder, not an event that
+ *  runs past midnight, and only on a calendar the viewer can write. */
+function useCanEditEvent() {
+  const { calendarsById } = useContext(CalendarVisualContext);
+  return useCallback((e: CalendarEvent) => {
+    if (e._busy_only || e.all_day) return false;
+    if (e.ends_at && e.ends_at.slice(0, 10) !== e.starts_at.slice(0, 10)) return false;
+    const cal = e.calendar_id != null ? calendarsById.get(e.calendar_id) : null;
+    return !cal || !!cal.you_own || cal.access_level === "write";
+  }, [calendarsById]);
+}
+
+function minutesBetween(fromIso: string, toIso: string): number {
+  return Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 60000);
+}
+
+/** Local ISO datetime shifted by minutes (local getters; toISOString
+ *  would move the date). */
+function shiftIso(iso: string, minutes: number): string {
+  const d = new Date(iso);
+  d.setMinutes(d.getMinutes() + minutes);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 // Minutes-from-midnight start/end of an event.
@@ -3443,7 +3682,7 @@ function eventVisual(
   ev: { color?: string | null; category?: string | null; calendar_id?: number | null },
   highlighted: boolean,
   calendarsById?: Map<number, Calendar>,
-): { accent: string; fill: string; border: string } {
+): { accent: string; fill: string; border: string; text: string } {
   const sw = swatchFor(ev.category);
   // If we can resolve the event's calendar AND it isn't owned by the
   // viewer, the fill comes from the calendar's color so "whose" is
@@ -3453,41 +3692,28 @@ function eventVisual(
   // haven't been migrated to useEventVisualFn yet).
   const cal = ev.calendar_id != null ? calendarsById?.get(ev.calendar_id) : null;
   const isSharedView = !!(cal && cal.you_own === false);
+  let fillColor = ev.color || "#818cf8";
+  let stripe = fillColor;
   if (isSharedView) {
-    const calColor = cal!.color || "#818cf8";
-    const stripe = sw ? sw.accent : calColor;
-    return {
-      accent: stripe,
-      fill:   hexToRgba(calColor, highlighted ? 0.36 : 0.20),
-      border: stripe,
-    };
+    fillColor = cal!.color || "#818cf8";
+    stripe = sw ? sw.accent : fillColor;
+  } else if (sw) {
+    fillColor = stripe = sw.accent;
   }
-  if (sw) {
-    return {
-      accent: sw.accent,
-      fill:   highlighted ? hexToRgba(sw.accent, 0.32) : sw.fill,
-      border: sw.accent,
-    };
-  }
-  const c = ev.color || "#818cf8";
-  return {
-    accent: c,
-    fill:   hexToRgba(c, highlighted ? 0.32 : 0.18),
-    border: c,
-  };
+  return softVisual(fillColor, stripe, highlighted);
 }
 
-function hexToRgba(hex: string, alpha: number): string {
-  // Accept #rgb / #rrggbb. Falls back to hex string for other formats.
-  const m = /^#?([0-9a-f]{3,8})$/i.exec(hex.trim());
-  if (!m) return hex;
-  let s = m[1];
-  if (s.length === 3) s = s.split("").map(c => c + c).join("");
-  if (s.length !== 6) return hex;
-  const r = parseInt(s.slice(0, 2), 16);
-  const g = parseInt(s.slice(2, 4), 16);
-  const b = parseInt(s.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+/** Flat, quiet event colours: the stored colour is mixed into the
+ *  theme's surface instead of being shown raw, so a saturated person
+ *  colour becomes a soft opaque fill, a toned-down stripe and a tinted
+ *  text that stays readable in the light and the dark theme. */
+function softVisual(fillColor: string, stripe: string, highlighted: boolean) {
+  return {
+    accent: `color-mix(in oklab, ${stripe} 65%, var(--card))`,
+    border: `color-mix(in oklab, ${stripe} 65%, var(--card))`,
+    fill:   `color-mix(in oklab, ${fillColor} ${highlighted ? 40 : 24}%, var(--card))`,
+    text:   `color-mix(in oklab, ${stripe} 35%, var(--foreground))`,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════
