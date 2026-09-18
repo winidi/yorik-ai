@@ -13,6 +13,12 @@ worklist.
 
 ### Added
 
+- **Optional apps that are really off.** Recordings is an opt-in app
+  (Settings → Apps, or `YORIK_ENABLE_RECORDINGS=1`); off means no dock
+  entry, no kiosk tile, and its skills leave the chat menu and the MCP
+  tool list (skills tagged `app:<id>`). Each person has a colour and a
+  photo (Settings → You); the personal calendar takes the colour, and
+  the calendar, the kiosk sign-in and the kiosk agenda show the photo.
 - **My agent, per person.** Settings → You → My agent: the Hermes (or
   any OpenAI-shaped endpoint) Yorik hands your questions to. What one
   member asks never reaches another member's machine; the household

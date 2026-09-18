@@ -8,6 +8,10 @@ summary: Record a dinner or a meeting on the tablet or phone; Yorik writes the t
 
 Yorik can listen to a whole conversation at the table and write it down afterwards: who said what, what was decided, who took on which task, the nice moments worth keeping, and what did not go well. Nothing leaves your Yorik box; the transcript and the report are visible only to the people you named when you started.
 
+## Switching it on
+
+Recordings is an optional app. An admin switches it on under **Settings → Apps**; until then there is no Record button, no tile on the wall and Yorik does not offer to record in chat. Switch it off again the same way.
+
 ## Starting a recording
 
 Three ways, same result:

@@ -174,10 +174,13 @@ _DISABLED_SKILLS_KEY = "disabled_skills"
 
 
 def _get_disabled_skills() -> set[str]:
-    """Return the set of currently-disabled skill names. Empty set
+    """Return the set of currently-disabled skill names: the ones an
+    admin switched off in Settings → Skills, plus every skill that
+    belongs to an opt-in app that is off (tag `app:<id>`). Empty set
     on any error (DB not initialised, table missing in tests, …) —
     fail-open keeps the LLM working when the disable infra itself
     breaks."""
+    out: set[str] = set()
     try:
         from ..database import get_conn
         with get_conn() as conn:
@@ -185,11 +188,42 @@ def _get_disabled_skills() -> set[str]:
                 "SELECT value FROM app_settings WHERE key = ?",
                 (_DISABLED_SKILLS_KEY,),
             ).fetchone()
-        if not row or not row["value"]:
-            return set()
-        return {n.strip() for n in str(row["value"]).split(",") if n.strip()}
+        if row and row["value"]:
+            out |= {n.strip() for n in str(row["value"]).split(",") if n.strip()}
     except Exception:  # noqa: BLE001
-        return set()
+        pass
+    try:
+        out |= _skills_of_disabled_apps()
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def app_of(skill: "Skill") -> Optional[str]:
+    """The opt-in app a skill belongs to (`app:<id>` tag), or None."""
+    for t in skill.tags or []:
+        if t.startswith("app:"):
+            return t[4:].strip() or None
+    return None
+
+
+def _skills_of_disabled_apps() -> set[str]:
+    """Skills tagged app:<id> whose app is opt-in and currently off.
+    An app that is off leaves no trace: no tool in chat, none over MCP."""
+    from .. import apps as _apps
+    reg = get_registry()
+    off: dict[str, bool] = {}
+    names: set[str] = set()
+    for s in reg.all():
+        app_id = app_of(s)
+        if not app_id:
+            continue
+        if app_id not in off:
+            app = _apps.get(app_id) if hasattr(_apps, "get") else None
+            off[app_id] = bool(app and app.opt_in and not _apps._is_opt_in_enabled(app_id))
+        if off[app_id]:
+            names.add(s.name)
+    return names
 
 
 def _set_disabled_skills(skills: set[str]) -> None:

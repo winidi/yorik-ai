@@ -21,13 +21,13 @@ outputs:
     description: Pipeline step while processing.
   transcript:
     type: string
-    description: "[mm:ss] Name: text" per turn, present when done (long ones are cut at 12000 characters).
+    description: One line per turn as [mm:ss] Name and text, present when done (long ones are cut at 12000 characters).
   speakers:
     type: array
 cost: instant
 permissions: [admin, member, restricted]
 side_effects: none
-tags: [recordings, voice, read]
+tags: [recordings, voice, read, app:recordings]
 category: system
 ---
 

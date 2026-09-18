@@ -33,7 +33,7 @@ outputs:
 cost: instant
 permissions: [admin, member]
 side_effects: Creates a recording row; the device starts capturing audio and uploads it to Yorik.
-tags: [recordings, voice, write]
+tags: [recordings, voice, write, app:recordings]
 category: system
 ---
 

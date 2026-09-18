@@ -1804,7 +1804,7 @@ function KioskAgendaConsentCard({ toast }: {
     <Card title="Household wall">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="text-sm font-medium">Show my appointments on the household wall</div>
+          <div className="text-sm font-medium">Show me on the household wall (my appointments and my tasks on the family board)</div>
           <p className="text-xs text-muted-foreground mt-1">
             When ON, swiping right on the kitchen tablet's photo wall reveals
             today's agenda — including YOUR events alongside everyone else

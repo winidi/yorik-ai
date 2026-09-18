@@ -1,6 +1,6 @@
 ---
 name: recording_report
-description: The structured report of a recording: decisions, tasks with a person, nice moments, friction, open questions and dates.
+description: The structured report of a recording with decisions, tasks with a person, nice moments, friction, open questions and dates.
 when_to_use: |
   Use it when the user asks what came out of the dinner or meeting, wants the report, or wants the tasks from it ("was ist beim Abendessen rausgekommen", "zeig den Bericht", "welche Aufgaben").
   Without `recording_id` it takes the user's latest finished recording; the report is generated on first call and reused afterwards (`refresh: true` writes it anew).
@@ -31,7 +31,7 @@ outputs:
 cost: instant when the report exists, else one long LLM pass
 permissions: [admin, member, restricted]
 side_effects: Stores the report on the recording; the first generation notifies the participants.
-tags: [recordings, read]
+tags: [recordings, read, app:recordings]
 category: system
 ---
 

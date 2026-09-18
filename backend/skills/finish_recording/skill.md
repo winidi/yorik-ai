@@ -21,7 +21,7 @@ outputs:
 cost: instant; the transcript itself takes minutes in the background
 permissions: [admin, member]
 side_effects: Stops the capture on the device, joins the audio and starts the speaker + transcript pipeline.
-tags: [recordings, voice, write]
+tags: [recordings, voice, write, app:recordings]
 category: system
 ---
 

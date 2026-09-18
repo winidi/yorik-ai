@@ -155,6 +155,29 @@ and quotes the transcript with German quotation marks that break JSON;
 the session middleware rejected the device routes before they could
 authenticate; Postgres wrote UTC start times. Each one became a test.
 
+## Making an add-on optional
+
+Not every household wants a microphone at the table or a board on the
+wall. An add-on that a household can leave out is registered as an
+**opt-in app** and switched on under Settings → Apps (or with
+`YORIK_ENABLE_<ID>=1` in `config.env`). Off means off everywhere:
+
+1. Register the app with `opt_in=True` in `backend/apps.py`. The dock
+   and the home screen only list enabled apps, so the page disappears
+   by itself.
+2. Tag every skill of the add-on with `app:<id>` (last tag in
+   `skill.md`). The registry treats skills of a disabled opt-in app
+   like disabled skills: not in the chat menu, not over MCP, refused on
+   call. Nothing else to write.
+3. Surfaces outside the app's page (a kiosk tile, a card on the home
+   screen) check `GET /api/apps` for the id before rendering.
+4. Data and routes may stay; they answer only for people who already
+   have rows. Migrations run regardless, which is fine: an unused table
+   costs nothing and a later switch-on finds everything in place.
+
+Recordings is the first add-on built this way; the family board is the
+second.
+
 ## Where the community app platform stands
 
 `docs/BUILD_AN_APP.md` describes sandboxed apps: five files, their own

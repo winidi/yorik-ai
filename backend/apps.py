@@ -286,6 +286,9 @@ register(App(
 # full installed-apps catalogue.
 # Briefing — daily inbox digest powered by JSON templates (briefings/).
 # Lives in the React shell at /r/briefing alongside Email.
+# Optional: a household that does not want a microphone at the table
+# never sees it — no dock entry, no kiosk tile, no skills in chat or
+# over MCP. Enable via Settings → Apps or YORIK_ENABLE_RECORDINGS=1.
 register(App(
     id="recordings",
     name="Recordings",
@@ -293,8 +296,9 @@ register(App(
     description="Record a dinner or a meeting; Yorik writes the transcript with speakers and a report with tasks, nice moments and friction.",
     view_kind="native",
     chrome="embedded",
-    tags=["bundled", "core"],
+    tags=["bundled", "optional"],
     aliases=["recordings", "recording", "dinner", "aufnahme", "aufnahmen", "abendessen", "protokoll"],
+    opt_in=True,
 ))
 
 register(App(

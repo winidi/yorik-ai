@@ -1181,6 +1181,101 @@ def auth_voice_login(
                                    "role": target["role"]}}
 
 
+# ── Kiosk: what the wall shows, and the family board feed ───────────
+# The mode is a per-device preference (photos | board | calendar | tasks),
+# switched on the tablet itself or later in Settings → Devices, stored in
+# app_settings keyed by the wall device id (or the kiosk session id).
+_KIOSK_MODES = ("photos", "board", "calendar", "tasks")
+
+
+def _kiosk_device_key(request: Request) -> str:
+    dev = (request.headers.get("x-yorik-wall-device") or "").strip()
+    if dev:
+        return f"kiosk_mode_dev_{dev[:64]}"
+    sid = request.cookies.get(_auth.COOKIE_NAME) or ""
+    return f"kiosk_mode_sid_{sid[:64]}"
+
+
+@app.get("/api/ambient/mode", tags=["kiosk"])
+def ambient_mode_get(request: Request) -> Dict[str, Any]:
+    _require_kiosk_session(request)
+    with conn_ctx(DB_PATH) as conn:
+        row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (_kiosk_device_key(request),)).fetchone()
+    mode = (row["value"] if row else "") or "photos"
+    return {"mode": mode if mode in _KIOSK_MODES else "photos", "modes": list(_KIOSK_MODES)}
+
+
+class _KioskModeBody(BaseModel):
+    mode: str
+
+
+@app.patch("/api/ambient/mode", tags=["kiosk"])
+def ambient_mode_set(body: _KioskModeBody, request: Request) -> Dict[str, Any]:
+    _require_kiosk_session(request)
+    mode = (body.mode or "").strip().lower()
+    if mode not in _KIOSK_MODES:
+        raise HTTPException(400, f"mode must be one of {', '.join(_KIOSK_MODES)}")
+    with conn_ctx(DB_PATH) as conn:
+        conn.execute(
+            "INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now')) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+            (_kiosk_device_key(request), mode))
+        conn.commit()
+    return {"mode": mode, "modes": list(_KIOSK_MODES)}
+
+
+@app.get("/api/ambient/board", tags=["kiosk"])
+def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
+    """The family board feed: everyone who lets the wall show them
+    (kiosk_agenda_consent), their events of the week and their open and
+    today-done tasks. Consent is the one switch: a person who did not
+    tick it does not appear on the wall at all. No session needed on the
+    tablet; the kiosk gate is enough because the wall is in the house."""
+    from datetime import datetime as _dt, timedelta as _td
+    from . import people as _people_mod
+    _require_kiosk_session(request)
+    days = max(1, min(int(days or 7), 14))
+    today = _dt.now().date()
+    week_start = today - _td(days=today.weekday())
+    end = week_start + _td(days=days)
+    with conn_ctx(DB_PATH) as conn:
+        allowed = {str(r["id"]) for r in conn.execute(
+            "SELECT id FROM user_profiles WHERE kiosk_agenda_consent = 1 AND (disabled = 0 OR disabled IS NULL)").fetchall()}
+        people = [p for p in _people_mod.household() if p["id"] in allowed]
+        ids = [p["id"] for p in people]
+        events, tasks = [], []
+        if ids:
+            ph = ",".join("?" * len(ids))
+            for r in conn.execute(
+                f"SELECT e.id, e.title, e.starts_at, e.ends_at, e.all_day, e.owner_user_id, e.location, c.kind AS cal_kind "
+                f"FROM events e LEFT JOIN calendars c ON c.id = e.calendar_id "
+                f"WHERE e.starts_at >= ? AND e.starts_at < ? AND (e.owner_user_id IN ({ph}) OR c.kind = 'shared') "
+                f"ORDER BY e.starts_at",
+                (week_start.isoformat(), end.isoformat(), *ids)).fetchall():
+                events.append({"id": r["id"], "title": r["title"], "starts_at": r["starts_at"], "ends_at": r["ends_at"],
+                               "all_day": bool(r["all_day"]), "owner_id": str(r["owner_user_id"]) if r["owner_user_id"] else None,
+                               "shared": r["cal_kind"] == "shared", "location": r["location"]})
+            for r in conn.execute(
+                f"SELECT t.id, t.title, t.due_date, t.done, t.done_at, t.person, t.category, t.recurrence_rule, t.estimated_minutes, "
+                f"       t.created_by_user_id, COALESCE(string_agg(a.user_id::text, ','), '') AS assignee_ids "
+                f"FROM tasks t LEFT JOIN task_assignees a ON a.task_id = t.id "
+                f"WHERE t.parent_task_id IS NULL AND ("
+                f"  (t.done = 0 OR t.done IS NULL) OR t.done_at >= ?) "
+                f"GROUP BY t.id ORDER BY t.due_date NULLS LAST, t.id",
+                (today.isoformat(),)).fetchall():
+                assignees = [x for x in (r["assignee_ids"] or "").split(",") if x]
+                owners = set(assignees) | ({str(r["created_by_user_id"])} if r["created_by_user_id"] and not assignees else set())
+                mine = [u for u in owners if u in allowed]
+                if not mine:
+                    continue
+                tasks.append({"id": r["id"], "title": r["title"], "due_date": r["due_date"], "done": bool(r["done"]),
+                              "done_at": r["done_at"], "assignee_ids": mine, "person": r["person"] or "",
+                              "routine": bool(r["recurrence_rule"]) or (r["category"] or "").lower() in ("routine", "routines"),
+                              "estimated_minutes": r["estimated_minutes"]})
+    return {"today": today.isoformat(), "week_start": week_start.isoformat(), "days": days,
+            "people": people, "events": events, "tasks": tasks}
+
+
 @app.get("/api/auth/pin-pickable", tags=["auth"])
 def auth_pin_pickable(request: Request) -> Dict[str, Any]:
     """Users the kiosk wall can pick + PIN-switch to. Returns

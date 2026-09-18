@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2, Settings as SettingsIcon } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthGate";
 import { Slideshow, type SlideshowPhoto } from "./Slideshow";
 import { IdleOverlay } from "./IdleOverlay";
@@ -24,7 +25,8 @@ import { AvatarPinFallback, type PickableUser } from "./AvatarPinFallback";
 import { AgendaPane } from "./AgendaPane";
 import { RecordingStartDialog } from "@/components/RecordingStartDialog";
 import { getRecorderState, subscribeRecorder } from "@/components/RecorderDock";
-import { Mic } from "lucide-react";
+import { Mic, Images, LayoutGrid, CalendarDays, ListChecks } from "lucide-react";
+import { FamilyBoard, type BoardMode } from "./FamilyBoard";
 
 // Pointer-gesture thresholds. Picked for a wall-mounted tablet —
 // a tap is ≤8px movement; a swipe is ≥40px primarily horizontal.
@@ -78,6 +80,35 @@ export function AmbientApp() {
   const [recordAfterSignIn, setRecordAfterSignIn] = useState(false);
   const [recorderLive, setRecorderLive] = useState(() => getRecorderState().phase !== "idle");
   useEffect(() => subscribeRecorder(st => setRecorderLive(st.phase !== "idle")), []);
+  // What the wall shows: photos, or the family board in one of three
+  // layouts. Per device, switched with the button bottom-right.
+  type WallMode = "photos" | BoardMode;
+  const [mode, setMode] = useState<WallMode>("photos");
+  const MODES: Array<{ id: WallMode; label: string; Icon: typeof Images }> = [
+    { id: "photos", label: "Fotos", Icon: Images },
+    { id: "board", label: "Tafel", Icon: LayoutGrid },
+    { id: "calendar", label: "Kalender", Icon: CalendarDays },
+    { id: "tasks", label: "Aufgaben", Icon: ListChecks },
+  ];
+  useEffect(() => {
+    api.get<{ mode: WallMode }>("/api/ambient/mode").then(r => setMode(r.mode)).catch(() => {});
+  }, []);
+  async function cycleMode() {
+    const next = MODES[(MODES.findIndex(m => m.id === mode) + 1) % MODES.length].id;
+    setMode(next);
+    try { await api.patch("/api/ambient/mode", { mode: next }); } catch {}
+  }
+  // the board's avatar tap: sign in as that person, stay on the wall
+  const [boardSignIn, setBoardSignIn] = useState(false);
+  const meId: string | null = (auth.user as any)?.id || null;
+
+  // Recordings is an optional app; when it is off there is no tile on the wall.
+  const [recordingsOn, setRecordingsOn] = useState(false);
+  useEffect(() => {
+    api.get<Array<{ id: string }>>("/api/apps")
+      .then(list => setRecordingsOn(Array.isArray(list) && list.some(a => a.id === "recordings")))
+      .catch(() => setRecordingsOn(false));
+  }, []);
 
   // "Hi Dirk" greeting overlay — fades in when VoiceFab's
   // identification handler dispatches yorik:user:switched after a
@@ -372,9 +403,27 @@ export function AmbientApp() {
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
     >
-      <Slideshow photos={photos} />
-      <IdleOverlay greeting={timeGreeting()} />
-      {!recorderLive && (
+      {mode === "photos" ? (
+        <>
+          <Slideshow photos={photos} />
+          <IdleOverlay greeting={timeGreeting()} />
+        </>
+      ) : (
+        <div className="absolute inset-0 z-10" onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}>
+          <FamilyBoard mode={mode} currentUserId={meId} onNeedSignIn={() => { setBoardSignIn(true); void openPicker(); }} />
+        </div>
+      )}
+      <button
+        onPointerDown={e => e.stopPropagation()}
+        onPointerUp={e => e.stopPropagation()}
+        onClick={() => { void cycleMode(); }}
+        className={cn("fixed right-5 bottom-5 z-30 flex items-center gap-2 rounded-full px-4 py-2.5 text-sm border backdrop-blur-md",
+                      mode === "photos" ? "bg-black/55 hover:bg-black/70 text-white/90 border-white/15" : "bg-white/90 hover:bg-white text-[#1f2430] border-[#e9e6df] shadow")}
+        title="Anzeige wechseln"
+      >
+        {(() => { const m = MODES.find(x => x.id === mode)!; return <><m.Icon className="w-4 h-4" /> {m.label}</>; })()}
+      </button>
+      {recordingsOn && !recorderLive && (
         <button
           onPointerDown={e => e.stopPropagation()}
           onPointerUp={e => e.stopPropagation()}
@@ -442,6 +491,7 @@ export function AmbientApp() {
             setPickerOpen(false);
             auth.refresh().catch(() => {});
             if (recordAfterSignIn) { setRecordAfterSignIn(false); setRecordOpen(true); return; }
+            if (boardSignIn) { setBoardSignIn(false); return; }
             navigate("/chat");
           }}
         />
