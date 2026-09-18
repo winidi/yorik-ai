@@ -33,8 +33,8 @@ free_busy for non-owners even on calendars they have read on. This is
 the "even though Mum can see my Personal calendar, hide *this specific*
 therapy appointment" escape hatch.
 
-Admin pass-through: users with role='admin' implicitly get 'read' on
-every calendar unless that calendar has hide_from_admin=1.
+No admin pass-through: admins see their own calendars and what was
+shared with them, like everybody else.
 """
 
 from __future__ import annotations
@@ -129,13 +129,14 @@ def _explicit_share(calendar_id: int, user_id: str) -> Optional[str]:
 
 def effective_access(user_id: str, user_role: str, calendar: Dict[str, Any]) -> Optional[str]:
     """Return the user's effective access level on this calendar, or None
-    if they cannot see it. Phase B: the calendar's space membership
-    decides it. Resolution order:
+    if they cannot see it. The calendar's space decides it; there is no
+    admin exception (the event filter dropped it on 2026-09-09, the
+    sidebar list followed on 2026-09-19).
 
       1. Owner of the calendar → 'write' (always wins).
-      2. Admin pass-through unless calendar.hide_from_admin.
-      3. Space membership on calendar.space_id mapped to a level.
-      4. None.
+      2. Level in calendar.space_id for the area "calendar": the owner's
+         per-area sharing, or membership of a shared space.
+      3. None.
 
     Space level mapping (no free_busy sub-level for now — Phase C work):
       space write/admin → calendar 'write'
@@ -144,26 +145,10 @@ def effective_access(user_id: str, user_role: str, calendar: Dict[str, Any]) -> 
     """
     if calendar["owner_user_id"] == user_id:
         return "write"
-    role_l = (user_role or "").lower()
-    if role_l == "platform_admin" and not calendar.get("hide_from_admin"):
-        return "read"
-    if role_l == "admin" and not calendar.get("hide_from_admin"):
-        # Workspace admin pass-through: only for calendars in workspaces
-        # this user owns. Falls through to space membership otherwise.
-        from . import database as _db
-        with _db.conn_ctx() as _c:
-            owns = _c.execute(
-                "SELECT 1 FROM workspaces w "
-                "JOIN spaces s ON s.workspace_id = w.id "
-                "WHERE s.id = ? AND w.owner_user_id = ?",
-                (calendar.get("space_id"), user_id),
-            ).fetchone()
-        if owns:
-            return "read"
     space_id = calendar.get("space_id")
     if space_id is not None:
         from . import spaces as _sp
-        level = _sp.user_space_level(user_id, int(space_id), user_role)
+        level = _sp.user_space_level(user_id, int(space_id), user_role, area="calendar")
         if level == "read":
             return "read"
         if level in ("write", "admin"):
