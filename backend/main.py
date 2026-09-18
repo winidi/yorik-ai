@@ -1224,6 +1224,23 @@ def ambient_mode_set(body: _KioskModeBody, request: Request) -> Dict[str, Any]:
     return {"mode": mode, "modes": list(_KIOSK_MODES)}
 
 
+def _kiosk_or_session(request: Request) -> None:
+    """The wall (kiosk gate) or any signed-in household member."""
+    try:
+        _require_kiosk_session(request)
+        return
+    except HTTPException:
+        pass
+    sid = request.cookies.get(_auth.COOKIE_NAME)
+    user = _auth.get_user_for_session(sid, ip=request.client.host if request.client else None) if sid else None
+    if not user:
+        auth_header = request.headers.get("authorization") or ""
+        if auth_header.lower().startswith("bearer "):
+            user = _auth.get_user_from_bearer(auth_header[7:])
+    if not user:
+        raise HTTPException(403, "kiosk device or signed-in member required")
+
+
 @app.get("/api/ambient/board", tags=["kiosk"])
 def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
     """The family board feed: everyone who lets the wall show them
@@ -1233,7 +1250,7 @@ def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
     tablet; the kiosk gate is enough because the wall is in the house."""
     from datetime import datetime as _dt, timedelta as _td
     from . import people as _people_mod
-    _require_kiosk_session(request)
+    _kiosk_or_session(request)
     days = max(1, min(int(days or 7), 14))
     today = _dt.now().date()
     week_start = today - _td(days=today.weekday())

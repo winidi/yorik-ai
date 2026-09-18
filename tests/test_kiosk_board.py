@@ -66,3 +66,11 @@ def test_board_shows_only_consenting_people(fresh_app, monkeypatch):
     assert set(titles) == {"Küche", "Erledigt heute"}
     assert titles["Küche"]["assignee_ids"] == [beate] and titles["Erledigt heute"]["done"] is True
     assert b["week_start"] == monday.isoformat() and b["days"] == 7
+
+
+def test_board_feed_answers_a_signed_in_member_too(fresh_app):
+    from fastapi.testclient import TestClient
+    from tests.conftest import login_client
+    client, uid = login_client(fresh_app, role="member", name="Beate")
+    assert client.get("/api/ambient/board").json()["people"] == []          # signed in, nobody consented yet
+    assert TestClient(fresh_app).get("/api/ambient/board").status_code in (401, 403)

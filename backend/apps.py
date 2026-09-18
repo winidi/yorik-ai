@@ -302,6 +302,17 @@ register(App(
 ))
 
 register(App(
+    id="board",
+    name="Family board",
+    icon="🗓",
+    description="The week in everyone's colour and today's tasks per person — the wall tablet's view, on any screen.",
+    view_kind="native",
+    chrome="embedded",
+    tags=["bundled", "core"],
+    aliases=["board", "family board", "familientafel", "tafel", "wand"],
+))
+
+register(App(
     id="briefing",
     name="Briefing",
     icon="📰",

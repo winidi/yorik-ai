@@ -12,7 +12,7 @@
 // intentionally NOT here — it's reachable from /r/home and is a
 // destination, not a daily driver. Matches the vanilla dock so
 // muscle memory + swipe order line up.
-export const DOCK_ORDER = ["home", "calendar", "tasks", "chat", "docs", "compose", "photos", "whatsapp", "email", "contacts", "briefing", "recordings"];
+export const DOCK_ORDER = ["home", "calendar", "tasks", "chat", "docs", "compose", "photos", "whatsapp", "email", "contacts", "briefing", "board", "recordings"];
 
 // app id → React route inside this SPA. Apps not in this map
 // either don't exist in the React shell (vanilla) or are
@@ -30,6 +30,7 @@ export const REACT_ROUTES: Record<string, string> = {
   contacts: "/contacts",
   briefing: "/briefing",
   recordings: "/recordings",
+  board:    "/board",
   settings: "/settings",
 };
 
