@@ -114,6 +114,8 @@ from . import sharing_routes as _sharing_routes
 app.include_router(_sharing_routes.router)
 from . import recordings as _recordings
 app.include_router(_recordings.router)
+from . import people as _people
+app.include_router(_people.router)
 
 # Spaces / workspace ACL management (Phase B.5).
 from . import space_routes as _space_routes
@@ -1192,6 +1194,8 @@ def auth_pin_pickable(request: Request) -> Dict[str, Any]:
     flow is exclusively for the household-tablet user-picker UX.
     """
     _require_kiosk_session(request)
+    from . import people as _people_mod
+    looks = {p["id"]: p for p in _people_mod.household()}
     with conn_ctx(DB_PATH) as conn:
         rows = conn.execute(
             "SELECT id, name, COALESCE(first_name, '') AS first_name "
@@ -1203,9 +1207,11 @@ def auth_pin_pickable(request: Request) -> Dict[str, Any]:
     return {
         "users": [
             {
-                "id":         int(r["id"]),
+                "id":         str(r["id"]),
                 "name":       r["name"],
                 "first_name": r["first_name"] or (r["name"].split(" ")[0] if r["name"] else ""),
+                "color":      looks.get(str(r["id"]), {}).get("color"),
+                "avatar_url": looks.get(str(r["id"]), {}).get("avatar_url"),
             }
             for r in rows
         ]
@@ -1442,6 +1448,8 @@ def ambient_agenda(request: Request) -> Dict[str, Any]:
     here — consent is per-user, not per-space.
     """
     _require_kiosk_session(request)
+    from . import people as _people_mod
+    _agenda_looks = {p["id"]: p for p in _people_mod.household()}
     out: list[dict[str, Any]] = []
     with conn_ctx(DB_PATH) as conn:
         rows = conn.execute(
@@ -1467,9 +1475,11 @@ def ambient_agenda(request: Request) -> Dict[str, Any]:
             "ends_at":    r["ends_at"],
             "location":   r["location"],
             "owner": {
-                "id":         int(r["owner_user_id"]),
+                "id":         str(r["owner_user_id"]),
                 "name":       r["owner_name"],
                 "first_name": owner_first,
+                "color":      _agenda_looks.get(str(r["owner_user_id"]), {}).get("color"),
+                "avatar_url": _agenda_looks.get(str(r["owner_user_id"]), {}).get("avatar_url"),
             },
         })
     return {"events": out}

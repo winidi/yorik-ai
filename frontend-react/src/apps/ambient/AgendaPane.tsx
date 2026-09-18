@@ -23,9 +23,11 @@ interface AgendaEvent {
   ends_at:    string | null;
   location:   string | null;
   owner: {
-    id:         number;
+    id:         string;
     name:       string;
     first_name: string;
+    color?:     string | null;
+    avatar_url?: string | null;
   };
 }
 
@@ -171,11 +173,11 @@ function AgendaRow({ ev }: { ev: AgendaEvent }) {
       </div>
       <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
         <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white shadow"
-          style={{ background: ownerColor }}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white shadow overflow-hidden"
+          style={{ background: ev.owner.color || ownerColor }}
           title={ev.owner.name}
         >
-          {initial}
+          {ev.owner.avatar_url ? <img src={ev.owner.avatar_url} alt="" className="w-full h-full object-cover" /> : initial}
         </div>
         <div className="text-[10px] text-muted-foreground max-w-[60px] truncate">
           {ev.owner.first_name || ev.owner.name}
@@ -188,8 +190,10 @@ function AgendaRow({ ev }: { ev: AgendaEvent }) {
 // Hash user_id → a stable hue so each household member gets a
 // consistent avatar colour across slides. Same scheme any future
 // per-user UI surface can reuse.
-function ownerHue(uid: number): string {
-  const h = (uid * 137) % 360;
+function ownerHue(uid: string | number): string {
+  let n = typeof uid === "number" ? uid : 0;
+  if (typeof uid === "string") for (let i = 0; i < uid.length; i++) n = (n * 31 + uid.charCodeAt(i)) % 100000;
+  const h = (n * 137) % 360;
   return `linear-gradient(135deg, hsl(${h} 70% 55%), hsl(${(h + 35) % 360} 70% 45%))`;
 }
 

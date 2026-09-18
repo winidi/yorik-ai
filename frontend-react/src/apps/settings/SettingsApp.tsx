@@ -35,6 +35,7 @@ import { HouseholdsTab } from "./HouseholdsTab";
 import { PushCard } from "@/components/PushCard";
 import { AgentCard } from "@/components/AgentCard";
 import { PlanningRulesCard } from "@/components/PlanningRulesCard";
+import { ProfileLookCard } from "@/components/ProfileLookCard";
 import { SharingCard } from "@/components/SharingCard";
 
 type Tab = "profile" | "llm" | "users" | "spaces" | "households" | "apps" | "marketplace" | "installed" | "skills" | "numbering" | "quality" | "connectors" | "extensions" | "storage" | "embeddings" | "backup" | "logs" | "devices";
@@ -354,6 +355,7 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
           </div>
         </Card>
 
+        <ProfileLookCard toast={toast} />
         <SignatureUpload toast={toast} />
         <ThemeToggle />
         <Card title="Voice">

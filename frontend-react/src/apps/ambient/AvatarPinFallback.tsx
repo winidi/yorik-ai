@@ -25,6 +25,8 @@ import { api, ApiError } from "@/lib/api";
 import { PinPad } from "@/components/PinPad";
 
 export interface PickableUser {
+  color?: string | null;
+  avatar_url?: string | null;
   id:         number;
   name:       string;
   first_name: string;
@@ -136,8 +138,11 @@ export function AvatarPinFallback({ users, transcript, retryMessage, onClose, on
                 onClick={() => setPicked(u)}
                 className="flex flex-col items-center gap-3 p-5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition"
               >
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center text-3xl font-semibold">
-                  {(u.first_name?.[0] || u.name?.[0] || "?").toUpperCase()}
+                <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-semibold overflow-hidden ring-4 ring-white/20"
+                     style={{ background: u.color || "#6d5bd0" }}>
+                  {u.avatar_url
+                    ? <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
+                    : (u.first_name?.[0] || u.name?.[0] || "?").toUpperCase()}
                 </div>
                 <div className="text-base font-medium">{u.first_name || u.name}</div>
               </button>

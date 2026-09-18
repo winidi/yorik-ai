@@ -36,6 +36,8 @@ function leaveAt(startsAt: string, travelSeconds: number): string {
   return `${hh}:${mm}`;
 }
 import { cn } from "@/lib/utils";
+import { PersonAvatar } from "@/components/PersonAvatar";
+import { usePerson } from "@/lib/people";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { Dock } from "@/components/Dock";
@@ -2225,18 +2227,19 @@ function AssigneeChip({ name, isMe, isEveryone, onRemove }:
 
 function UserAvatar({ name, size = "sm" }:
   { name: string; size?: "xs" | "sm" }) {
+  // the person's own colour and photo from their profile; the old
+  // name-hash colour stays as the fallback for names that are not members
+  const person = usePerson(name);
   const initials = (name || "?")
     .split(/\s+/).filter(Boolean).slice(0, 2)
     .map(s => s[0]).join("").toUpperCase();
   let h = 0;
   for (let i = 0; i < name.length; i++) h = ((h << 5) - h) + name.charCodeAt(i);
   const hue = Math.abs(h) % 360;
-  const dim = size === "xs" ? "w-4 h-4 text-[9px]" : "w-5 h-5 text-[10px]";
+  const px = size === "xs" ? 16 : 20;
   return (
-    <span className={cn("rounded-full flex items-center justify-center font-semibold shrink-0", dim)}
-      style={{ background: `hsl(${hue} 50% 50% / 0.25)`, color: `hsl(${hue} 60% 50%)` }}>
-      {initials}
-    </span>
+    <PersonAvatar name={name} size={px} color={person?.color} avatarUrl={person?.avatar_url}
+      fallbackStyle={{ background: `hsl(${hue} 50% 50% / 0.25)`, color: `hsl(${hue} 60% 50%)` }} initials={initials} />
   );
 }
 
