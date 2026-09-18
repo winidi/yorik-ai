@@ -419,6 +419,92 @@ def add_user_to_household(user_id: str, level: Level = "write") -> Optional[int]
     return household_id
 
 
+# ─── Family calendars ────────────────────────────────────────────────
+# In a family everybody sees everybody's calendar unless they say
+# otherwise. It is ordinary sharing: a read membership in the owner's
+# personal space, scoped to "calendar", which the owner sees and can
+# untick under Settings → You → Sharing. No admin exception involved.
+
+
+def _household_member_ids(c) -> list[str]:
+    rows = c.execute(
+        "SELECT u.id FROM user_profiles u "
+        "JOIN space_members m ON m.user_id = u.id "
+        "JOIN spaces s ON s.id = m.space_id AND s.slug = 'household' "
+        "WHERE u.disabled = 0 ORDER BY u.created_at, u.id"
+    ).fetchall()
+    return [str(r["id"]) for r in rows]
+
+
+def _shares_calendar(c, space_id: int, member_id: str) -> bool:
+    row = c.execute("SELECT scope FROM space_members WHERE space_id = ? AND user_id = ?",
+                    (space_id, member_id)).fetchone()
+    if not row:
+        return False
+    scope = (row["scope"] or "").strip()
+    return not scope or "calendar" in {x.strip() for x in scope.split(",")}
+
+
+def _add_calendar_share(c, space_id: int, member_id: str, added_by: Optional[str]) -> bool:
+    """Give member_id read access to the calendar area of a personal
+    space. Never narrows or upgrades what the owner set: an existing
+    read share gets "calendar" added, anything else is left alone."""
+    row = c.execute("SELECT level, scope FROM space_members WHERE space_id = ? AND user_id = ?",
+                    (space_id, member_id)).fetchone()
+    if not row:
+        c.execute("INSERT INTO space_members (space_id, user_id, level, scope, added_by_user_id) "
+                  "VALUES (?, ?, 'read', 'calendar', ?)", (space_id, member_id, added_by))
+        return True
+    scope = (row["scope"] or "").strip()
+    have = {x.strip() for x in scope.split(",")} if scope else set(AREAS)
+    if "calendar" in have or row["level"] != "read":
+        return False
+    have.add("calendar")
+    new_scope = None if have >= set(AREAS) else ",".join(a for a in AREAS if a in have)
+    c.execute("UPDATE space_members SET scope = ? WHERE space_id = ? AND user_id = ?",
+              (new_scope, space_id, member_id))
+    return True
+
+
+def share_calendars_in_household(*, only_user: Optional[str] = None,
+                                 exclude: tuple = (), added_by: Optional[str] = None) -> list[tuple[str, str]]:
+    """Share calendars between the members of the household, read only.
+    Returns the (owner_id, member_id) shares that were added.
+
+    only_user=<id>: a new account. It shares with everybody and
+    everybody shares with it, except people who evidently opted out
+    (they live with others and share their calendar with none of them).
+    only_user=None: the whole household at once, the admin's switch.
+    Idempotent."""
+    added: list[tuple[str, str]] = []
+    skip = {str(x) for x in exclude}
+    with conn_ctx() as c:
+        members = [m for m in _household_member_ids(c) if m not in skip]
+        spaces_by_owner = {}
+        for m in members:
+            row = c.execute("SELECT id FROM spaces WHERE kind = 'personal' AND owner_user_id = ?", (m,)).fetchone()
+            if row:
+                spaces_by_owner[m] = int(row["id"])
+        for owner in members:
+            sid = spaces_by_owner.get(owner)
+            if sid is None:
+                continue
+            for member in members:
+                if member == owner:
+                    continue
+                if only_user is not None:
+                    if only_user not in (owner, member):
+                        continue
+                    if owner != only_user:
+                        others = [m for m in members if m not in (owner, only_user)]
+                        if others and not any(_shares_calendar(c, sid, o) for o in others):
+                            continue  # the owner took their calendar back from everybody
+                if _add_calendar_share(c, sid, member, added_by or owner):
+                    added.append((owner, member))
+        c.commit()
+    return added
+
+
 def backfill_calendar_space_ids(user_id: str) -> None:
     """Set space_id on calendars that came up with NULL — happens when
     a calendar is created BEFORE the user's personal space exists (the

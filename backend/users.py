@@ -231,6 +231,13 @@ def create_user(body: UserCreate) -> dict[str, Any]:
             {"space_id": space_id, "level": join_level} if space_id is not None
             else {"error": "no household space (workspace not seeded?)"}
         )
+        # A family sees each other's calendars by default; ordinary
+        # sharing that each person can untick (spaces.share_calendars_…).
+        if space_id is not None and _workspace_kind() == "family":
+            try:
+                _sp.share_calendars_in_household(only_user=uid)
+            except Exception:  # noqa: BLE001 — never fail a user create over this
+                pass
 
     # Re-sync every space the new user is a member of so that, when
     # provisioning succeeded but the join had already happened above

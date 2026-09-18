@@ -5,6 +5,8 @@
                                           areas [] removes the share
     Both accept ?owner=<user_id> so an admin can set sharing for a
     child/restricted account they manage.
+    POST /api/sharing/family-calendars    {"exclude_user_ids": []} — operator only: the whole
+                                          household shares calendars, read only
 
 Implemented as a membership in the owner's personal space with a scope
 (space_members.scope). "Read" means seeing, "write" means editing too.
@@ -87,7 +89,41 @@ def sharing(owner: Optional[str] = Query(default=None), user: Dict[str, Any] = D
             "i_share": {"areas": _parse_scope(g["scope"]), "level": g["level"]} if g else {"areas": [], "level": None},
             "shares_with_me": {"areas": _parse_scope(rcv["scope"]), "level": rcv["level"]} if rcv else {"areas": [], "level": None},
         })
-    return {"owner_id": owner_id, "areas": list(AREAS), "members": out}
+    can_set_default = (user.get("role") or "").lower() == "platform_admin" and owner_id == str(user["id"])
+    return {"owner_id": owner_id, "areas": list(AREAS), "members": out,
+            "can_set_family_default": can_set_default}
+
+
+class FamilyCalendarsIn(BaseModel):
+    exclude_user_ids: List[str] = []
+
+
+@router.post("/family-calendars")
+def family_calendars(body: FamilyCalendarsIn, user: Dict[str, Any] = Depends(_current_user())):
+    """Everybody in the household shares their calendar with everybody,
+    read only. The one place where the operator sets sharing for adults:
+    each of them gets a bell entry and can untick it again."""
+    if user.get("auth") == "api_token":
+        raise HTTPException(status_code=403, detail="log in to change sharing")
+    if (user.get("role") or "").lower() != "platform_admin":
+        raise HTTPException(status_code=403, detail="only the operator can set the household default")
+    from . import spaces as _sp
+    added = _sp.share_calendars_in_household(exclude=tuple(body.exclude_user_ids), added_by=user["id"])
+    owners = {o for o, _ in added if str(o) != str(user["id"])}
+    try:
+        from . import notifications
+        for owner in owners:
+            notifications.create(
+                owner, kind="sharing_default",
+                title="Familienkalender",
+                body=f"{user.get('name') or 'Der Admin'} hat eingestellt, dass die Familie die Kalender "
+                     "der anderen sieht (nur lesen). Private Termine bleiben verborgen. "
+                     "Ändern: Einstellungen → Du → Teilen.",
+                navigate_to="/r/settings",
+            )
+    except Exception:  # noqa: BLE001
+        pass
+    return {"ok": True, "added": len(added)}
 
 
 class ShareIn(BaseModel):

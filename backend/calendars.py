@@ -145,6 +145,8 @@ def effective_access(user_id: str, user_role: str, calendar: Dict[str, Any]) -> 
     """
     if calendar["owner_user_id"] == user_id:
         return "write"
+    if calendar.get("kind") == "plan":
+        return None  # day-planning blocks are nobody else's business
     space_id = calendar.get("space_id")
     if space_id is not None:
         from . import spaces as _sp
@@ -299,9 +301,11 @@ def visible_event_filter(user_id: str, user_role: str) -> tuple[str, list[Any]]:
             placeholders = ",".join("?" * len(visible_spaces))
             parts.append(
                 f"events.calendar_id IN "
-                f"(SELECT id FROM calendars WHERE space_id IN ({placeholders}))"
+                f"(SELECT id FROM calendars WHERE space_id IN ({placeholders}) "
+                f"AND (kind <> 'plan' OR owner_user_id = ?))"
             )
             params.extend(visible_spaces)
+            params.append(user_id)
         # Invitation visibility — orthogonal to space membership.
         parts.append("events.id IN (SELECT event_id FROM event_attendees WHERE user_id = ?)")
         params.append(user_id)

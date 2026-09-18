@@ -62,6 +62,17 @@ worklist.
   Personal API tokens (Settings → You → API tokens, shown once, hashed
   at rest) are the only credential; a token acts as its owner and can
   also call `/api/*`. See [docs/MCP.md](docs/MCP.md).
+- **Family calendars.** In a family household everybody sees
+  everybody's calendar, read only, as ordinary per-area sharing each
+  person can untick (Settings → You → Sharing). New accounts join the
+  default; the operator switches it on once for existing accounts and
+  leaves out non-family accounts. Private events show as "Busy", Plan
+  calendars are never shared. The calendar sidebar lost its admin
+  exception (it listed other people's calendars as empty names) and now
+  lists people who shared only the calendar area.
+- **Calendar on the desktop.** About 13 hours in view with the hour
+  height following the window, quieter event colours, drag to move and
+  resize.
 - **Sharing per area.** Settings → You → Sharing: for every household
   member, tick which of your areas they may see (tasks, calendar,
   contacts, documents) and whether they may edit. Stored as a scoped

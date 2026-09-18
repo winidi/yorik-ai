@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 type Share = { areas: string[]; level: "read" | "write" | null };
 type Member = { user_id: string; name: string; role: string; i_share: Share; shares_with_me: Share };
-type Status = { owner_id: string; areas: string[]; members: Member[] };
+type Status = { owner_id: string; areas: string[]; members: Member[]; can_set_family_default?: boolean };
 
 const LABEL: Record<string, string> = { tasks: "Tasks", calendar: "Calendar", contacts: "Contacts", documents: "Documents" };
 
@@ -22,6 +22,8 @@ export function SharingCard({ toast, ownerId, title }: {
 }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // Operator only: who is left out of the family-calendar default.
+  const [leftOut, setLeftOut] = useState<Set<string>>(new Set());
   const q = ownerId ? `?owner=${encodeURIComponent(ownerId)}` : "";
 
   const load = useCallback(async () => {
@@ -45,6 +47,19 @@ export function SharingCard({ toast, ownerId, title }: {
     }
   }
 
+  async function shareFamilyCalendars() {
+    setBusy("family");
+    try {
+      const r = await api.post<{ added: number }>("/api/sharing/family-calendars", { exclude_user_ids: [...leftOut] });
+      toast(r.added ? `Calendars shared in the family (${r.added} new).` : "Already shared, nothing to add.", "success");
+      await load();
+    } catch (e: any) {
+      toast(`Couldn't share: ${e?.message || e}`, "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (!status) return null;
 
   return (
@@ -55,13 +70,50 @@ export function SharingCard({ toast, ownerId, title }: {
         <div className="flex-1">
           <div className="text-sm font-medium">Who may see what of {ownerId ? "this account" : "yours"}</div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Nothing is shared until you tick it, admins included. Tick an area to let a member see it;
-            "can edit" also lets them change it. Documents and letters you mark as household are visible anyway.
+            Only what is ticked here is shared, admins included. In a family, calendars start out ticked
+            for everyone (read only); untick to take yours back. Events marked private show as "Busy", the
+            Plan calendar is never shared. "Can edit" also lets a member change things. Documents and letters
+            you mark as household are visible anyway.
           </p>
         </div>
       </div>
 
       {status.members.length === 0 && <p className="text-[11px] text-muted-foreground">No other members yet.</p>}
+
+      {status.can_set_family_default && status.members.length > 0 && (
+        <div className="mb-4 rounded-lg border border-border bg-muted/30 p-3">
+          <div className="text-sm font-medium">Family calendars</div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Everyone in the household sees everyone's calendar, read only. Each person gets a note in the
+            bell and can untick it again. Leave out accounts that are not family:
+          </p>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            {status.members.map(m => (
+              <label key={m.user_id} className="flex items-center gap-1.5 text-xs">
+                <input
+                  type="checkbox"
+                  checked={leftOut.has(m.user_id)}
+                  onChange={e => setLeftOut(prev => {
+                    const n = new Set(prev);
+                    if (e.target.checked) n.add(m.user_id); else n.delete(m.user_id);
+                    return n;
+                  })}
+                  className="w-3.5 h-3.5 accent-violet-500"
+                />
+                leave out {m.name}
+              </label>
+            ))}
+          </div>
+          <button
+            onClick={shareFamilyCalendars}
+            disabled={busy === "family"}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-60"
+          >
+            {busy === "family" && <Loader2 className="w-3 h-3 animate-spin" />}
+            Share calendars in the family
+          </button>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
