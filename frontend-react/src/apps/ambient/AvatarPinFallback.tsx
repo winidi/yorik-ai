@@ -18,7 +18,7 @@
  * "Retry as <name>" button that POSTs to /api/ask (text path, no voice
  * round-trip) with the transcript the backend captured.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
@@ -34,6 +34,7 @@ export interface PickableUser {
 
 interface Props {
   users:        PickableUser[];
+  preselectId?: string;       // the board: the circle that was tapped
   transcript:   string;     // what the speaker said — shown so they know the picker is about THEIR ask
   retryMessage: string;     // text to POST to /api/ask after switching
   onClose:      () => void;
@@ -48,8 +49,14 @@ interface Props {
   onSignInWithPassword?: () => void;
 }
 
-export function AvatarPinFallback({ users, transcript, retryMessage, onClose, onSwitched, onSignInWithPassword }: Props) {
+export function AvatarPinFallback({ users, transcript, retryMessage, onClose, onSwitched, onSignInWithPassword, preselectId }: Props) {
   const [picked, setPicked]   = useState<PickableUser | null>(null);
+  useEffect(() => {
+    if (!picked && preselectId) {
+      const u = users.find(x => String(x.id) === String(preselectId));
+      if (u) setPicked(u);
+    }
+  }, [users, preselectId, picked]);
   const [errorText, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy]       = useState(false);
 

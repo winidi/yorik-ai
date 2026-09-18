@@ -98,9 +98,19 @@ export function AmbientApp() {
     setMode(next);
     try { await api.patch("/api/ambient/mode", { mode: next }); } catch {}
   }
-  // the board's avatar tap: sign in as that person, stay on the wall
+  // the board's avatar tap: sign in as that person, stay on the wall.
+  // The unlock lasts ACTIVE_MS after the last touch; then the wall is
+  // read-only again and the next tick asks for a PIN, so a child cannot
+  // tick a parent's list an hour later.
+  const ACTIVE_MS = 3 * 60_000;
   const [boardSignIn, setBoardSignIn] = useState(false);
-  const meId: string | null = (auth.user as any)?.id || null;
+  const [boardPerson, setBoardPerson] = useState<string | null>(null);
+  const [activeUntil, setActiveUntil] = useState(0);
+  const [, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick(x => x + 1), 15_000); return () => clearInterval(t); }, []);
+  const active = activeUntil > Date.now();
+  const meId: string | null = active ? ((auth.user as any)?.id || null) : null;
+  const touchBoard = () => { if (activeUntil > Date.now()) setActiveUntil(Date.now() + ACTIVE_MS); };
 
   // Recordings is an optional app; when it is off there is no tile on the wall.
   const [recordingsOn, setRecordingsOn] = useState(false);
@@ -409,8 +419,9 @@ export function AmbientApp() {
           <IdleOverlay greeting={timeGreeting()} />
         </>
       ) : (
-        <div className="absolute inset-0 z-10" onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}>
-          <FamilyBoard mode={mode} currentUserId={meId} onNeedSignIn={() => { setBoardSignIn(true); void openPicker(); }} />
+        <div className="absolute inset-0 z-10" onPointerDown={e => { e.stopPropagation(); touchBoard(); }} onPointerUp={e => e.stopPropagation()}>
+          <FamilyBoard mode={mode} currentUserId={meId} lockOthers
+                       onNeedSignIn={(p) => { setBoardSignIn(true); setBoardPerson(p.id); void openPicker(); }} />
         </div>
       )}
       <button
@@ -461,6 +472,7 @@ export function AmbientApp() {
       {pickerOpen && (
         <AvatarPinFallback
           users={pickableUsers ?? []}
+          preselectId={boardPerson || undefined}
           transcript={pickerError ? `Couldn't load users: ${pickerError}` : ""}
           retryMessage=""
           onClose={() => setPickerOpen(false)}
@@ -491,7 +503,7 @@ export function AmbientApp() {
             setPickerOpen(false);
             auth.refresh().catch(() => {});
             if (recordAfterSignIn) { setRecordAfterSignIn(false); setRecordOpen(true); return; }
-            if (boardSignIn) { setBoardSignIn(false); return; }
+            if (boardSignIn) { setBoardSignIn(false); setBoardPerson(null); setActiveUntil(Date.now() + ACTIVE_MS); return; }
             navigate("/chat");
           }}
         />

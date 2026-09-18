@@ -11,7 +11,7 @@
  * that person's, their tiles become tappable.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, Lock } from "lucide-react";
 import { api } from "@/lib/api";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { cn } from "@/lib/utils";
@@ -35,10 +35,12 @@ function addDays(iso: string, n: number): string {
 function hhmm(iso: string): string { return iso.slice(11, 16); }
 function dayOf(iso: string): string { return iso.slice(0, 10); }
 
-export function FamilyBoard({ mode, currentUserId, onNeedSignIn }: {
+export function FamilyBoard({ mode, currentUserId, onNeedSignIn, lockOthers = false }: {
   mode: BoardMode;
   currentUserId: string | null;
   onNeedSignIn: (person: Person) => void;
+  /** show a lock on tiles that are not the active person's (the wall) */
+  lockOthers?: boolean;
 }) {
   const [feed, setFeed] = useState<Feed | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
@@ -56,10 +58,10 @@ export function FamilyBoard({ mode, currentUserId, onNeedSignIn }: {
     return m;
   }, [feed]);
 
-  async function toggle(t: Task) {
+  async function toggle(t: Task, owner: Person) {
     if (!feed) return;
     const mine = currentUserId && t.assignee_ids.includes(currentUserId);
-    if (!mine) { const p = byId.get(t.assignee_ids[0]); if (p) onNeedSignIn(p); return; }
+    if (!mine) { onNeedSignIn(owner); return; }
     setBusy(t.id);
     try {
       await api.patch(`/api/tasks/${t.id}`, { done: t.done ? 0 : 1 });
@@ -125,14 +127,14 @@ export function FamilyBoard({ mode, currentUserId, onNeedSignIn }: {
                     <PersonAvatar name={p.name} color={p.color} avatarUrl={p.avatar_url} size={54} className={cn("ring-4", isMe ? "ring-[#1f2430]" : "ring-white")} />
                     <div>
                       <div className="text-2xl font-extrabold leading-tight">{p.first_name || p.name}</div>
-                      <div className="text-[13px] text-[#6b7280]">{open} offen · {done} erledigt{isMe ? " · angemeldet" : ""}</div>
+                      <div className="text-[13px] text-[#6b7280]">{open} offen · {done} erledigt{isMe ? " · angemeldet" : lockOthers ? " · antippen zum Abhaken" : ""}</div>
                     </div>
                   </button>
                   <div className="flex flex-col gap-2 overflow-y-auto min-h-0">
                     {routines.length > 0 && <div className="text-[11.5px] tracking-[.08em] uppercase text-[#6b7280] font-bold mt-1">Routine heute</div>}
-                    {routines.map(t => <Tile key={t.id} t={t} color={p.color} today={feed.today} busy={busy === t.id} onTap={() => toggle(t)} />)}
+                    {routines.map(t => <Tile key={t.id} t={t} color={p.color} today={feed.today} busy={busy === t.id} locked={lockOthers && !isMe} onTap={() => toggle(t, p)} />)}
                     {tasks.length > 0 && routines.length > 0 && <div className="text-[11.5px] tracking-[.08em] uppercase text-[#6b7280] font-bold mt-1">Aufgaben</div>}
-                    {tasks.map(t => <Tile key={t.id} t={t} color={p.color} today={feed.today} busy={busy === t.id} onTap={() => toggle(t)} />)}
+                    {tasks.map(t => <Tile key={t.id} t={t} color={p.color} today={feed.today} busy={busy === t.id} locked={lockOthers && !isMe} onTap={() => toggle(t, p)} />)}
                     {mine.length === 0 && <div className="text-sm text-[#9aa0ab]">Nichts offen. Schöner Tag.</div>}
                   </div>
                 </div>
@@ -150,7 +152,7 @@ export function FamilyBoard({ mode, currentUserId, onNeedSignIn }: {
   );
 }
 
-function Tile({ t, color, today, busy, onTap }: { t: Task; color: string; today: string; busy: boolean; onTap: () => void }) {
+function Tile({ t, color, today, busy, locked = false, onTap }: { t: Task; color: string; today: string; busy: boolean; locked?: boolean; onTap: () => void }) {
   const due = t.due_date && t.due_date <= today && !t.done;
   return (
     <button onClick={onTap} disabled={busy}
@@ -159,7 +161,7 @@ function Tile({ t, color, today, busy, onTap }: { t: Task; color: string; today:
             style={{ borderColor: `color-mix(in srgb, ${color} 25%, white)` }}>
       <span className={cn("w-[26px] h-[26px] rounded-[9px] border-[2.5px] grid place-items-center text-white", t.done && "bg-[#2f9e64] border-[#2f9e64]")}
             style={t.done ? undefined : { borderColor: color }}>
-        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#6b7280]" /> : t.done ? <Check className="w-4 h-4" /> : null}
+        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#6b7280]" /> : t.done ? <Check className="w-4 h-4" /> : locked ? <Lock className="w-3 h-3 text-[#9aa0ab]" /> : null}
       </span>
       <span className={cn("text-[16px] leading-tight", t.done && "line-through text-[#6b7280]")}>{t.title}
         {t.estimated_minutes ? <small className="block text-xs text-[#6b7280]">{t.estimated_minutes} Min.</small> : null}

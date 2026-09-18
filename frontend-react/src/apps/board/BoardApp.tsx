@@ -28,7 +28,7 @@ export function BoardApp() {
     <div className="h-screen overflow-hidden bg-[#fbfaf7]">
       <div className="relative h-full pb-24">
         <div className="relative h-full">
-          <FamilyBoard mode={mode} currentUserId={meId} onNeedSignIn={() => {}} />
+          <FamilyBoard mode={mode} currentUserId={meId} lockOthers onNeedSignIn={() => {}} />
         </div>
       </div>
       <div className="fixed right-16 top-3 z-30 flex gap-1 rounded-full bg-white/90 border border-[#e9e6df] shadow p-1">
