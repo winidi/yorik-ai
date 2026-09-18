@@ -31,7 +31,7 @@ export function BoardApp() {
           <FamilyBoard mode={mode} currentUserId={meId} onNeedSignIn={() => {}} />
         </div>
       </div>
-      <div className="fixed right-4 top-4 z-30 flex gap-1 rounded-full bg-white/90 border border-[#e9e6df] shadow p-1">
+      <div className="fixed right-16 top-3 z-30 flex gap-1 rounded-full bg-white/90 border border-[#e9e6df] shadow p-1">
         {MODES.map(m => (
           <button key={m.id} onClick={() => pick(m.id)} title={m.label}
                   className={cn("flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold",
