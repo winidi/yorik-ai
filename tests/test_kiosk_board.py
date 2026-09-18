@@ -65,6 +65,7 @@ def test_board_shows_only_consenting_people(fresh_app, monkeypatch):
     titles = {t["title"]: t for t in b["tasks"]}
     assert set(titles) == {"Küche", "Erledigt heute"}
     assert titles["Küche"]["assignee_ids"] == [beate] and titles["Erledigt heute"]["done"] is True
+    assert titles["Küche"]["category"] == "" and b["routine_log"] == []
     assert b["week_start"] == monday.isoformat() and b["days"] == 7
 
 

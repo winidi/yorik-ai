@@ -25,13 +25,13 @@ export function BoardApp() {
   function pick(m: BoardMode) { setMode(m); try { localStorage.setItem("yorik:board:mode", m); } catch {} }
 
   return (
-    <div className="h-screen overflow-hidden bg-[#fbfaf7]">
-      <div className="relative h-full pb-24">
-        <div className="relative h-full">
+    <div className="h-screen overflow-y-auto bg-[#fbfaf7]">
+      <div className="relative min-h-full md:h-full md:pb-24">
+        <div className="relative min-h-full md:h-full">
           <FamilyBoard mode={mode} currentUserId={meId} lockOthers onNeedSignIn={() => {}} />
         </div>
       </div>
-      <div className="fixed right-16 top-3 z-30 flex gap-1 rounded-full bg-white/90 border border-[#e9e6df] shadow p-1">
+      <div className="fixed right-20 md:right-6 bottom-24 md:bottom-6 z-30 flex gap-1 rounded-full bg-white/95 border border-[#e9e6df] shadow-lg p-1">
         {MODES.map(m => (
           <button key={m.id} onClick={() => pick(m.id)} title={m.label}
                   className={cn("flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold",

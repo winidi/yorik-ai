@@ -1,0 +1,6 @@
+/* Bundled for the wall (Yorik runs offline). Latin subsets of Nunito (OFL) and Atkinson Hyperlegible (OFL). */
+@font-face { font-family: 'Atkinson Hyperlegible'; font-style: normal; font-weight: 400; font-display: swap; src: url('/r/fonts/AtkinsonHyperlegible-400.woff2') format('woff2'); }
+@font-face { font-family: 'Atkinson Hyperlegible'; font-style: normal; font-weight: 700; font-display: swap; src: url('/r/fonts/AtkinsonHyperlegible-700.woff2') format('woff2'); }
+@font-face { font-family: 'Nunito'; font-style: normal; font-weight: 600; font-display: swap; src: url('/r/fonts/Nunito-600.woff2') format('woff2'); }
+@font-face { font-family: 'Nunito'; font-style: normal; font-weight: 700; font-display: swap; src: url('/r/fonts/Nunito-700.woff2') format('woff2'); }
+@font-face { font-family: 'Nunito'; font-style: normal; font-weight: 800; font-display: swap; src: url('/r/fonts/Nunito-800.woff2') format('woff2'); }

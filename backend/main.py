@@ -1272,6 +1272,8 @@ def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
                 events.append({"id": r["id"], "title": r["title"], "starts_at": r["starts_at"], "ends_at": r["ends_at"],
                                "all_day": bool(r["all_day"]), "owner_id": str(r["owner_user_id"]) if r["owner_user_id"] else None,
                                "shared": r["cal_kind"] == "shared", "location": r["location"]})
+            week_ago = (today - _td(days=6)).isoformat()
+            routine_log: list = []
             for r in conn.execute(
                 f"SELECT t.id, t.title, t.due_date, t.done, t.done_at, t.person, t.category, t.recurrence_rule, t.estimated_minutes, "
                 f"       t.created_by_user_id, COALESCE(string_agg(a.user_id::text, ','), '') AS assignee_ids "
@@ -1279,18 +1281,26 @@ def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
                 f"WHERE t.parent_task_id IS NULL AND ("
                 f"  (t.done = 0 OR t.done IS NULL) OR t.done_at >= ?) "
                 f"GROUP BY t.id ORDER BY t.due_date NULLS LAST, t.id",
-                (today.isoformat(),)).fetchall():
+                (week_ago,)).fetchall():
                 assignees = [x for x in (r["assignee_ids"] or "").split(",") if x]
                 owners = set(assignees) | ({str(r["created_by_user_id"])} if r["created_by_user_id"] and not assignees else set())
                 mine = [u for u in owners if u in allowed]
                 if not mine:
                     continue
+                routine = bool(r["recurrence_rule"]) or (r["category"] or "").lower() in ("routine", "routines")
+                done_day = (r["done_at"] or "")[:10]
+                if r["done"] and routine and done_day:
+                    # the week of ticks behind a routine (Mo–So dots on the card)
+                    for u in mine:
+                        routine_log.append({"title": r["title"], "user_id": u, "day": done_day})
+                if r["done"] and done_day != today.isoformat():
+                    continue
                 tasks.append({"id": r["id"], "title": r["title"], "due_date": r["due_date"], "done": bool(r["done"]),
                               "done_at": r["done_at"], "assignee_ids": mine, "person": r["person"] or "",
-                              "routine": bool(r["recurrence_rule"]) or (r["category"] or "").lower() in ("routine", "routines"),
+                              "category": r["category"] or "", "routine": routine,
                               "estimated_minutes": r["estimated_minutes"]})
     return {"today": today.isoformat(), "week_start": week_start.isoformat(), "days": days,
-            "people": people, "events": events, "tasks": tasks}
+            "people": people, "events": events, "tasks": tasks, "routine_log": routine_log if ids else []}
 
 
 @app.get("/api/auth/pin-pickable", tags=["auth"])
