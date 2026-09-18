@@ -27,8 +27,10 @@ const SHARED = "#6b7a8f";
 const WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 function addDays(iso: string, n: number): string {
+  // local calendar arithmetic; toISOString() would shift the date in UTC
   const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  const p = (x: number) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 function hhmm(iso: string): string { return iso.slice(11, 16); }
 function dayOf(iso: string): string { return iso.slice(0, 10); }
@@ -73,17 +75,17 @@ export function FamilyBoard({ mode, currentUserId, onNeedSignIn }: {
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#fbfaf7] text-[#1f2430] select-none"
          style={{ fontFamily: '"Atkinson Hyperlegible", "Nunito", "Segoe UI", system-ui, sans-serif' }}>
-      <div className="h-full grid gap-4 p-5" style={{ gridTemplateRows: showWeek && showPeople ? "auto auto 1fr" : "auto 1fr" }}>
-        <header className="flex items-baseline justify-between gap-4">
+      <div className="h-full grid gap-4 p-5 min-w-0" style={{ gridTemplateColumns: "minmax(0, 1fr)", gridTemplateRows: showWeek && showPeople ? "auto auto 1fr" : "auto 1fr" }}>
+        <header className="flex items-baseline justify-between gap-4 flex-wrap min-w-0">
           <h1 className="text-3xl font-extrabold tracking-tight">{new Date(feed.today + "T00:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })}</h1>
-          <div className="flex gap-4 text-sm text-[#6b7280]">
+          <div className="flex gap-4 text-sm text-[#6b7280] flex-wrap min-w-0">
             {feed.people.map(p => <span key={p.id} className="flex items-center gap-1.5"><i className="w-2.5 h-2.5 rounded-full" style={{ background: p.color }} />{p.first_name || p.name}</span>)}
             <span className="flex items-center gap-1.5"><i className="w-2.5 h-2.5 rounded-full" style={{ background: SHARED }} />Alle</span>
           </div>
         </header>
 
         {showWeek && (
-          <section className={cn("grid gap-2.5", mode === "calendar" ? "h-full min-h-0" : "")} style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
+          <section className={cn("grid gap-2.5 min-w-0", mode === "calendar" ? "h-full min-h-0" : "")} style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
             {days.map((d, i) => {
               const today = d === feed.today;
               const evs = eventsByDay.get(d) || [];
@@ -110,7 +112,7 @@ export function FamilyBoard({ mode, currentUserId, onNeedSignIn }: {
         )}
 
         {showPeople && (
-          <section className="grid gap-4 min-h-0" style={{ gridTemplateColumns: `repeat(${Math.max(1, feed.people.length)}, minmax(0, 1fr))` }}>
+          <section className="grid gap-4 min-h-0 min-w-0" style={{ gridTemplateColumns: `repeat(${Math.max(1, feed.people.length)}, minmax(0, 1fr))` }}>
             {feed.people.map(p => {
               const mine = feed.tasks.filter(t => t.assignee_ids.includes(p.id));
               const routines = mine.filter(t => t.routine);
