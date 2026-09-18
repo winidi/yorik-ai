@@ -31,6 +31,7 @@ The skill loads all files at boot, keys them by filename (`01-first-run.md` → 
 | `themes` | Visual customisation per app | Full |
 | `extensions` | ZUGFeRD, regional add-ons | Full |
 | `recordings` | Recording a dinner or meeting, speakers, the report, adopting tasks, privacy | Full |
+| `family-board` | The wall tablet: modes, who appears, colours and photos, ticking tasks | Full |
 | `troubleshooting` | Common errors + fixes | Full |
 
 ## Authoring style

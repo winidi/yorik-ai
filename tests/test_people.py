@@ -69,6 +69,7 @@ def test_colour_and_photo(fresh_app, avatars):
 def test_default_colours_are_distinct_and_stable(fresh_app):
     from backend import people as P
     a = seed_user(name="A", role="admin"); b = seed_user(name="B", role="member"); c = seed_user(name="C", role="member")
-    cols = [p["color"] for p in P.household()]
-    assert len(cols) == len(set(cols)) == 3
-    assert P.color_for(a, None) == P.household()[0]["color"]
+    by_id = {p["id"]: p["color"] for p in P.household()}
+    cols = [by_id[a], by_id[b], by_id[c]]
+    assert len(set(cols)) == 3 and all(x.startswith("#") for x in cols)
+    assert P.color_for(a, None) == by_id[a] and P.color_for(c, None) == by_id[c]   # stable, not positional luck

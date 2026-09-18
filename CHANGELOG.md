@@ -13,6 +13,12 @@ worklist.
 
 ### Added
 
+- **Family board on the wall.** The kiosk tablet has four modes per
+  device (photos, board, calendar, tasks), switched with a button on
+  the tablet: the week in everyone's colour and photo, today's tasks
+  and routines per person, tap to tick after a PIN sign-in. Each
+  person decides whether they appear ("Show me on the household wall").
+  See [docs/help/18-family-board.md](docs/help/18-family-board.md).
 - **Optional apps that are really off.** Recordings is an opt-in app
   (Settings → Apps, or `YORIK_ENABLE_RECORDINGS=1`); off means no dock
   entry, no kiosk tile, and its skills leave the chat menu and the MCP

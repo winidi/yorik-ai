@@ -178,6 +178,28 @@ wall. An add-on that a household can leave out is registered as an
 Recordings is the first add-on built this way; the family board is the
 second.
 
+## The second example: the family board
+
+Built 2026-09-18 in a day, on the same five layers, and different from
+the recorder in one useful way: no models, no pipeline, no new data.
+It rearranges what Yorik already holds.
+
+| Layer | Family board | Where |
+| --- | --- | --- |
+| 1. Data | `user_profiles.color`, `avatar_at`; photos under `data/avatars/`; the wall mode in `app_settings` per device | `migrations_pg/140_people_look.sql` |
+| 2. Module | colour + photo, household lookup; the board feed and the mode routes | `backend/people.py`, `backend/main.py` (`/api/ambient/board`, `/api/ambient/mode`) |
+| 3. Skills | none — the wall is read and tapped, not talked to | |
+| 4. UI | `FamilyBoard.tsx` inside the kiosk route, the mode button, `PersonAvatar` + `lib/people.ts` used everywhere a person is shown | `frontend-react/src/apps/ambient/`, `components/` |
+| 5. Tests + docs | kiosk gate, consent filter, per-device mode; help page | `tests/test_kiosk_board.py`, `tests/test_people.py`, `docs/help/18-family-board.md` |
+
+What held up from the recorder: a route behind the kiosk gate with
+one consent switch per person instead of sessions; a feed shaped for
+the screen rather than the tables; module-level lookups (`household()`)
+that every avatar in the app shares; a per-device preference in
+`app_settings` instead of a schema change. What was new: a feature
+with no skill at all is still an add-on. The layers are a menu, not a
+form.
+
 ## Where the community app platform stands
 
 `docs/BUILD_AN_APP.md` describes sandboxed apps: five files, their own
