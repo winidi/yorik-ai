@@ -8,6 +8,13 @@ visibility rule the app uses, so a changed share needs no rebuild.
 
 Paperless documents and Immich photos keep their own indexes.
 
+Embedder: the bundled MiniLM by default. YORIK_SEARCH_EMBED_URL points
+the index at an OpenAI-shaped /v1/embeddings server instead — the
+bundled option is Qwen3-Embedding-4B in a llama.cpp container on the
+CPU (scripts/install-search-embedder.sh), which separates hits from
+noise far better. Every chunk records the model that wrote it; after a
+switch the sweep re-embeds, and a search only compares like with like.
+
 The indexer is a background sweep: rows that never change (email,
 WhatsApp, finished recordings) are indexed once, small tables that do
 change (tasks, contacts, events, drafts) are compared by hash, rows
@@ -38,6 +45,33 @@ SWEEP_INTERVAL_S = int(os.getenv("YORIK_SEARCH_INDEX_INTERVAL_S", "300"))
 # Rows per source and sweep, so the first run over a big mailbox yields
 # to the rest of the box; the sweep loops until nothing is left.
 MAX_ROWS_PER_PASS = 2000
+
+EMBED_URL = os.getenv("YORIK_SEARCH_EMBED_URL", "").rstrip("/")
+EMBED_MODEL = os.getenv("YORIK_SEARCH_EMBED_MODEL", "qwen3-embedding-4b")
+# Qwen3-Embedding wants the task spelled out on the query side only.
+QUERY_PREFIX = os.getenv(
+    "YORIK_SEARCH_EMBED_QUERY_PREFIX",
+    "Instruct: Given a search query, retrieve relevant passages that answer the query\nQuery: ",
+).replace("\\n", "\n") if EMBED_URL else ""
+EMBED_BATCH = 32
+
+
+def model_tag() -> str:
+    """Names the embedder in search_chunks.model."""
+    if EMBED_URL:
+        return EMBED_MODEL
+    from .embedders import local as _local
+    return _local.MODEL_NAME.split("/")[-1]
+
+
+def max_distance() -> float:
+    """Cosine distance up to which a hit by meaning is shown. Measured
+    on German household texts: MiniLM puts real hits below 0.5 and noise
+    from 0.57; Qwen3-Embedding-4B real hits up to 0.61, noise above."""
+    override = os.getenv("YORIK_SEARCH_MAX_DISTANCE")
+    if override:
+        return float(override)
+    return 0.61 if EMBED_URL else 0.55
 
 
 def _now() -> str:
@@ -147,8 +181,24 @@ def vec_literal(vec: list[float]) -> str:
     return "[" + ",".join(repr(float(x)) for x in vec) + "]"
 
 
+def _embed_external(texts: list[str]) -> list[list[float]]:
+    import requests
+    out: list[list[float]] = []
+    for i in range(0, len(texts), EMBED_BATCH):
+        r = requests.post(f"{EMBED_URL}/embeddings",
+                          json={"model": EMBED_MODEL, "input": texts[i:i + EMBED_BATCH]}, timeout=120)
+        r.raise_for_status()
+        data = sorted(r.json()["data"], key=lambda d: d.get("index", 0))
+        out.extend(_l2(d["embedding"]) for d in data)
+    return out
+
+
 def embed_many(texts: list[str]) -> list[list[float]]:
-    """Normalised vectors for a batch. Module-level so tests swap it."""
+    """Normalised vectors for a batch of stored texts. Module-level so
+    tests swap it. With an external embedder configured there is no
+    fallback: two models in one index would not compare."""
+    if EMBED_URL:
+        return _embed_external(texts)
     from . import documents as _docs
     if _docs.EMBED_BACKEND in ("auto", "local") and not _docs.EMBED_BASE_URL:
         from .embedders import local as _local
@@ -160,7 +210,7 @@ def embed_query(text: str) -> Optional[str]:
     """The query as a pgvector literal, or None when no embedder works
     (the search then stays keyword-only)."""
     try:
-        return vec_literal(embed_many([text])[0])
+        return vec_literal(embed_many([QUERY_PREFIX + text])[0])
     except Exception as exc:  # noqa: BLE001
         log.debug("query embed failed: %s", exc)
         return None
@@ -179,16 +229,16 @@ def _write_rows(src: Source, rows: list[Any]) -> int:
         pending.extend((int(r["id"]), i, c, digest) for i, c in enumerate(chunks))
     to_embed = [p[2] for p in pending if p[2]]
     vectors = iter(embed_many(to_embed)) if to_embed else iter(())
-    now = _now()
+    now, model = _now(), model_tag()
     with get_conn() as conn:
         for row_id in {p[0] for p in pending}:
             conn.execute("DELETE FROM search_chunks WHERE source = ? AND row_id = ?", (src.name, row_id))
         for row_id, chunk_no, text, digest in pending:
             vec = vec_literal(next(vectors)) if text else None
             conn.execute(
-                "INSERT INTO search_chunks (source, row_id, chunk_no, text, content_hash, embedding, indexed_at) "
-                "VALUES (?, ?, ?, ?, ?, ?::vector, ?)",
-                (src.name, row_id, chunk_no, text, digest, vec, now),
+                "INSERT INTO search_chunks (source, row_id, chunk_no, text, content_hash, embedding, model, indexed_at) "
+                "VALUES (?, ?, ?, ?, ?, ?::vector, ?, ?)",
+                (src.name, row_id, chunk_no, text, digest, vec, model, now),
             )
         conn.commit()
     return len(rows)
@@ -225,11 +275,13 @@ def _index_mutable(src: Source) -> int:
 
 
 def _drop_gone(src: Source) -> int:
+    """Chunks of rows that no longer exist, and chunks another embedder
+    wrote (they come back with the current one in the same sweep)."""
     with get_conn() as conn:
         cur = conn.execute(
-            f"DELETE FROM search_chunks sc WHERE sc.source = ? AND NOT EXISTS "
-            f"(SELECT 1 FROM {src.table} t WHERE t.id = sc.row_id AND ({src.where}))",
-            (src.name,),
+            f"DELETE FROM search_chunks sc WHERE sc.source = ? AND (sc.model <> ? OR NOT EXISTS "
+            f"(SELECT 1 FROM {src.table} t WHERE t.id = sc.row_id AND ({src.where})))",
+            (src.name, model_tag()),
         )
         conn.commit()
         return cur.rowcount or 0

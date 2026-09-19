@@ -37,8 +37,18 @@ wörtlich vorkommt ("Stromrechnung" findet die Mail der Stadtwerke).
 - Unveränderliches (Mails, WhatsApp, fertige Aufnahmen) wird einmal
   indexiert; Kleines und Veränderliches (Aufgaben, Termine, Kontakte,
   Entwürfe) wird per Hash verglichen.
-- Embedder ist der vorhandene lokale MiniLM (mehrsprachig, CPU, etwa
-  200 Texte pro Sekunde); der Erstlauf dauert wenige Minuten.
+- Embedder: Standard ist der mitgelieferte MiniLM. Besser ist
+  Qwen3-Embedding-4B (Q4) in einem llama.cpp-Container auf der CPU
+  (`scripts/install-search-embedder.sh`, Compose-Profil `search-embed`,
+  Port 8093): 2,5 GB RAM, kein GPU-Speicher, Anfrage 0,15 s, Erstlauf
+  etwa eine halbe Stunde. Gemessen an zehn deutschen Haushaltsanfragen
+  trennt es Treffer (bis 0,61) sauber von Rauschen (ab 0,62); MiniLM,
+  bge-m3 und Qwen3-0.6B tun das nicht. Jede Zeile im Index nennt ihr
+  Modell; nach einem Wechsel baut der Indexer neu, gemischt wird nie.
+- Kein nächtlicher GPU-Lauf: die Anfrage braucht dasselbe Modell den
+  ganzen Tag, der tägliche Zuwachs ist auf der CPU Sekundensache, und
+  ninfer müsste dafür weichen. Das Chat-Modell selbst taugt nicht
+  (kein /v1/embeddings, nicht auf Ähnlichkeit trainiert).
 - Fällt der Embedder aus, bleibt die Stichwortsuche.
 
 ## Offen

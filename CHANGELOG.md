@@ -73,6 +73,10 @@ worklist.
   rule, so a changed share needs no rebuild. **Fixed:** the calendar
   branch of the search had no visibility filter and found everybody's
   events, private ones included.
+  Optional stronger embedder for it: Qwen3-Embedding-4B in a llama.cpp
+  container on the CPU (`scripts/install-search-embedder.sh`), no GPU
+  memory; the index records the model per row and rebuilds after a
+  switch.
 - **Family calendars.** In a family household everybody sees
   everybody's calendar, read only, as ordinary per-area sharing each
   person can untick (Settings → You → Sharing). New accounts join the

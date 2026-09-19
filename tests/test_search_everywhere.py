@@ -149,3 +149,19 @@ def test_chunking_keeps_the_head_and_the_limit():
     chunks = chunk_text(text, 3)
     assert len(chunks) == 3 and chunks[0].startswith("Betreff Stromrechnung")
     assert all(len(c) <= 600 for c in chunks)
+
+
+def test_model_switch_rebuilds_and_never_mixes(house, monkeypatch):
+    from backend import search_index
+    from backend.database import get_conn
+    dirk_c, dirk = house["dirk"]
+    _add_task(dirk, "Abschlag Stadtwerke überweisen")
+    assert search_index.sweep()["tasks"] == 1
+
+    monkeypatch.setattr(search_index, "model_tag", lambda: "another-model")
+    assert _hits(dirk_c, "Stromrechnung", "tasks") == []             # old vectors are not compared
+    assert search_index.sweep()["tasks"] == 1                        # re-embedded with the new model
+    assert _hits(dirk_c, "Stromrechnung", "tasks") == ["Abschlag Stadtwerke überweisen"]
+    with get_conn() as conn:
+        models = {r["model"] for r in conn.execute("SELECT DISTINCT model FROM search_chunks").fetchall()}
+    assert models == {"another-model"}

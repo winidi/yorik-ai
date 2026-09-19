@@ -751,6 +751,16 @@ if _docker_ready; then
     fi
   done
 
+  # Search embedder (opt-in, CPU): the model for "find by meaning".
+  if [[ "${YORIK_SEARCH_EMBED:-0}" == "1" ]]; then
+    _embed_file="models/embed/${YORIK_SEARCH_EMBED_FILE:-Qwen3-Embedding-4B-Q4_K_M.gguf}"
+    if [[ -f "$_embed_file" ]]; then
+      PROFILES+=("search-embed")
+    else
+      warn "YORIK_SEARCH_EMBED=1 but $_embed_file is missing — run scripts/install-search-embedder.sh; search stays on the bundled embedder"
+    fi
+  fi
+
   if (( ${#PROFILES[@]} == 0 )); then
     ok "all four services already running — nothing to bundle"
   else

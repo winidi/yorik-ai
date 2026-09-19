@@ -279,6 +279,30 @@ services:
     volumes:
       - whatsapp_bridge_data:/data
 
+  # ─── Search embedder ────────────────────────────────────────
+  # The model behind "find by meaning" (backend/search_index.py):
+  # Qwen3-Embedding in llama.cpp, on the CPU, so it takes nothing from
+  # the GPU that serves the chat model. Opt-in: start.sh adds the
+  # profile when YORIK_SEARCH_EMBED=1 and the model file is there
+  # (scripts/install-search-embedder.sh does both). For a GPU with room
+  # set YORIK_SEARCH_EMBED_IMAGE to the server-cuda image, NGL to 99
+  # and layer the nvidia override.
+  search-embed:
+    container_name: yorik-search-embed
+    image: ${YORIK_SEARCH_EMBED_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
+    restart: unless-stopped
+    profiles: ["search-embed"]
+    ports:
+      - "127.0.0.1:${YORIK_SEARCH_EMBED_PORT:-8093}:8080"
+    volumes:
+      - ./models/embed:/models:ro
+    command: >
+      -m /models/${YORIK_SEARCH_EMBED_FILE:-Qwen3-Embedding-4B-Q4_K_M.gguf}
+      --embedding --pooling last
+      -ngl ${YORIK_SEARCH_EMBED_NGL:-0} -t ${YORIK_SEARCH_EMBED_THREADS:-8}
+      -c 4096 -np 8 -b 1024 -ub 1024
+      --host 0.0.0.0 --port 8080
+
 volumes:
   immich_model_cache:
   paperless_redis:

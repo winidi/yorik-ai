@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS search_chunks (
     chunk_no     INTEGER NOT NULL DEFAULT 0,
     text         TEXT    NOT NULL,
     content_hash TEXT    NOT NULL,   -- hash of the whole row text, same on every chunk of a row
-    embedding    vector(384),
+    embedding    vector,             -- no fixed dimension: the model is a setting (see model)
+    model        TEXT    NOT NULL,   -- embedder that wrote the row; other models' rows are re-embedded
     indexed_at   TEXT    NOT NULL,
     UNIQUE (source, row_id, chunk_no)
 );

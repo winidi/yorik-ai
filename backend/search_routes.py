@@ -108,13 +108,6 @@ async def universal_search(q: str = Query(..., min_length=2),
 
 # ───────────────────────── email ────────────────────────────────────
 
-# Cosine distance below which a hit by meaning is shown. The
-# multilingual MiniLM puts paraphrases around 0.3–0.5 and unrelated
-# text above 0.7; without a cutoff every query returns its nearest
-# neighbours, however far.
-_SEMANTIC_MAX_DISTANCE = 0.55
-
-
 def _hybrid(*, source: str, table: str, columns: str, visible: tuple[str, list],
             keyword: Optional[tuple[str, list]], order: str, qvec: Optional[str]) -> list[dict[str, Any]]:
     """Keyword hits, then hits by meaning, one row each, for one table.
@@ -136,15 +129,17 @@ def _hybrid(*, source: str, table: str, columns: str, visible: tuple[str, list],
             except Exception as exc:  # noqa: BLE001
                 log.warning("universal-search %s keyword branch failed: %s", source, exc)
         if qvec and len(rows) < PER_SOURCE_LIMIT:
+            from . import search_index
+            limit = search_index.max_distance()
             try:
                 for r in conn.execute(
                     f"SELECT {columns}, sc.text AS _snippet, (sc.embedding <=> ?::vector) AS _distance "
                     f"FROM search_chunks sc JOIN {table} ON {table}.id = sc.row_id "
-                    f"WHERE sc.source = ? AND sc.embedding IS NOT NULL AND ({vis_sql}) "
+                    f"WHERE sc.source = ? AND sc.model = ? AND sc.embedding IS NOT NULL AND ({vis_sql}) "
                     f"ORDER BY _distance LIMIT ?",
-                    (qvec, source, *vis_params, PER_SOURCE_LIMIT * 4),
+                    (qvec, source, search_index.model_tag(), *vis_params, PER_SOURCE_LIMIT * 4),
                 ).fetchall():
-                    if r["_distance"] is None or r["_distance"] > _SEMANTIC_MAX_DISTANCE:
+                    if r["_distance"] is None or r["_distance"] > limit:
                         break
                     if int(r["id"]) in seen:
                         continue
