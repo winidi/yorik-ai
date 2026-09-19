@@ -62,6 +62,17 @@ worklist.
   Personal API tokens (Settings → You → API tokens, shown once, hashed
   at rest) are the only credential; a token acts as its owner and can
   also call `/api/*`. See [docs/MCP.md](docs/MCP.md).
+- **Search everywhere, by meaning too.** The search palette and the
+  `universal_search` skill (chat, voice, MCP) now cover tasks,
+  contacts, recordings (title, report, transcript) and letters next to
+  mail, WhatsApp, documents, photos and calendar. A background indexer
+  (`backend/search_index.py`, table `search_chunks`, worker
+  "search-index" on the home screen) embeds all of it with the bundled
+  multilingual model; every source answers by keyword first, then by
+  meaning. Visibility is checked at query time with the app's own
+  rule, so a changed share needs no rebuild. **Fixed:** the calendar
+  branch of the search had no visibility filter and found everybody's
+  events, private ones included.
 - **Family calendars.** In a family household everybody sees
   everybody's calendar, read only, as ordinary per-area sharing each
   person can untick (Settings → You → Sharing). New accounts join the

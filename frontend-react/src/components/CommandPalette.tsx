@@ -11,13 +11,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Search, Mail, MessageSquare, FileText, Image as ImageIcon,
-  Calendar, X, Loader2, ArrowRight,
+  Calendar, X, Loader2, ArrowRight, CheckSquare, Users, Mic, PenLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 
 interface SearchHit {
-  source: "email" | "whatsapp" | "paperless" | "immich" | "calendar";
+  source: "email" | "whatsapp" | "paperless" | "immich" | "calendar"
+        | "tasks" | "contacts" | "recordings" | "drafts";
   id: number | string;
   title: string;
   subtitle?: string;
@@ -39,10 +40,15 @@ const SOURCE_META: Record<string, { label: string; icon: any; tint: string }> = 
   paperless: { label: "Documents", icon: FileText,     tint: "text-amber-500" },
   immich:    { label: "Photos",    icon: ImageIcon,    tint: "text-pink-500" },
   calendar:  { label: "Calendar",  icon: Calendar,     tint: "text-violet-500" },
+  tasks:     { label: "Tasks",     icon: CheckSquare,  tint: "text-teal-500" },
+  contacts:  { label: "Contacts",  icon: Users,        tint: "text-orange-500" },
+  recordings: { label: "Recordings", icon: Mic,        tint: "text-rose-500" },
+  drafts:    { label: "Letters & drafts", icon: PenLine, tint: "text-sky-500" },
 };
 
 const SOURCE_ORDER: Array<keyof typeof SOURCE_META> = [
-  "email", "whatsapp", "paperless", "immich", "calendar",
+  "calendar", "tasks", "email", "whatsapp", "paperless", "contacts",
+  "recordings", "drafts", "immich",
 ];
 
 export function CommandPalette() {
@@ -153,7 +159,7 @@ export function CommandPalette() {
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search across email, WhatsApp, documents, photos, calendar…"
+            placeholder="Search everything: mail, WhatsApp, documents, calendar, tasks, contacts, recordings…"
             className="flex-1 h-9 bg-transparent text-base placeholder:text-muted-foreground focus:outline-none"
           />
           {loading && <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />}
@@ -247,8 +253,8 @@ function Hint() {
   return (
     <div className="p-8 text-center text-sm text-muted-foreground">
       <Search className="w-8 h-8 mx-auto mb-3 opacity-40" />
-      <div>Search everything — email, WhatsApp, filed documents, photos, calendar.</div>
-      <div className="mt-2 text-xs opacity-70">Try a name, topic, or invoice number.</div>
+      <div>Search everything you may see — mail, WhatsApp, documents, photos, calendar, tasks, contacts, recordings, letters.</div>
+      <div className="mt-2 text-xs opacity-70">Try a name, a topic or an invoice number. Words need not match exactly; Yorik also finds by meaning.</div>
     </div>
   );
 }

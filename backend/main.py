@@ -2577,6 +2577,10 @@ def _startup() -> None:
     _push.start_scheduler(_aio.get_event_loop())
     # Recordings: hourly retention sweep (audio deleted after N days, transcript stays).
     _recordings.start_scheduler(_aio.get_event_loop())
+    # Search: the semantic index over mail, WhatsApp, tasks, contacts,
+    # events, recordings and drafts (first run, then every few minutes).
+    from . import search_index as _search_index
+    _search_index.start_scheduler(_aio.get_event_loop())
     # Voice acks: pre-synthesize the "klar Moment / on it / ..." pool
     # so the streaming voice endpoint can emit an instant audio reply
     # the moment STT finishes (masking LLM latency). Run in a thread
