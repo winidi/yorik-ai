@@ -77,6 +77,8 @@ worklist.
   container on the CPU (`scripts/install-search-embedder.sh`), no GPU
   memory; the index records the model per row and rebuilds after a
   switch.
+  Settings → Embeddings has the switch (on/off), the choice of model,
+  the index progress per source and a rebuild button.
 - **Family calendars.** In a family household everybody sees
   everybody's calendar, read only, as ordinary per-area sharing each
   person can untick (Settings → You → Sharing). New accounts join the

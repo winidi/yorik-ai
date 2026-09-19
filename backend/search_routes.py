@@ -417,3 +417,63 @@ def _search_drafts(q: str, user_id: str, qvec: Optional[str] = None) -> list[dic
         "timestamp":   r["updated_at"],
         "navigate_to": f"/r/compose?draft_id={r['id']}",
     } for r in rows]
+
+
+# ───────────────────────── settings: search by meaning ──────────────
+
+def _require_admin(user: dict) -> None:
+    if (user.get("role") or "").lower() not in ("admin", "platform_admin"):
+        raise HTTPException(status_code=403, detail="role required: admin")
+
+
+@router.get("/search/index")
+def search_index_status(user: dict = Depends(current_user)) -> dict[str, Any]:
+    """Settings → Embeddings: is search by meaning on, with which
+    model, and how far is the index."""
+    _require_admin(user)
+    from . import search_index as si
+    indexed, totals = si.stats(), si.totals()
+    return {
+        "enabled": si.enabled(),
+        "embedder": "service" if si.use_service() else "bundled",
+        "model": si.model_tag(),
+        "service": {"configured": bool(si.EMBED_URL), "model": si.EMBED_MODEL,
+                    "reachable": si.service_reachable()},
+        "sources": [{"source": name, "indexed": indexed.get(name, 0), "total": totals.get(name, 0)}
+                    for name in si.SOURCES],
+    }
+
+
+from pydantic import BaseModel  # noqa: E402
+
+
+class _SearchIndexIn(BaseModel):
+    enabled: Optional[bool] = None
+    embedder: Optional[str] = None      # 'service' | 'bundled'
+
+
+@router.put("/search/index")
+def search_index_set(body: _SearchIndexIn, user: dict = Depends(current_user)) -> dict[str, Any]:
+    _require_admin(user)
+    from . import search_index as si
+    from .household_settings import set_setting
+    if body.enabled is not None:
+        set_setting(si.SETTING_ENABLED, "1" if body.enabled else "0", updated_by_user_id=user["id"])
+    if body.embedder is not None:
+        if body.embedder not in ("service", "bundled"):
+            raise HTTPException(status_code=400, detail="embedder must be 'service' or 'bundled'")
+        if body.embedder == "service" and not si.EMBED_URL:
+            raise HTTPException(status_code=400, detail="no embedding service is installed "
+                                "(scripts/install-search-embedder.sh)")
+        set_setting(si.SETTING_EMBEDDER, body.embedder, updated_by_user_id=user["id"])
+    si.wake()
+    return search_index_status(user)
+
+
+@router.post("/search/index/rebuild")
+def search_index_rebuild(user: dict = Depends(current_user)) -> dict[str, Any]:
+    _require_admin(user)
+    from . import search_index as si
+    dropped = si.clear()
+    si.wake()
+    return {"ok": True, "dropped": dropped}

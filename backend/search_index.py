@@ -52,13 +52,32 @@ EMBED_MODEL = os.getenv("YORIK_SEARCH_EMBED_MODEL", "qwen3-embedding-4b")
 QUERY_PREFIX = os.getenv(
     "YORIK_SEARCH_EMBED_QUERY_PREFIX",
     "Instruct: Given a search query, retrieve relevant passages that answer the query\nQuery: ",
-).replace("\\n", "\n") if EMBED_URL else ""
+).replace("\\n", "\n")
 EMBED_BATCH = 32
+
+
+# Settings → Embeddings writes these two (household_settings); config.env
+# only says where an embedding service lives.
+SETTING_ENABLED = "search_semantic_enabled"      # '1' (default) | '0'
+SETTING_EMBEDDER = "search_embedder"             # 'service' (default when configured) | 'bundled'
+
+
+def enabled() -> bool:
+    from .household_settings import get_setting
+    return get_setting(SETTING_ENABLED, default="1") != "0"
+
+
+def use_service() -> bool:
+    """The embedding service is configured and not switched off."""
+    if not EMBED_URL:
+        return False
+    from .household_settings import get_setting
+    return get_setting(SETTING_EMBEDDER, default="service") != "bundled"
 
 
 def model_tag() -> str:
     """Names the embedder in search_chunks.model."""
-    if EMBED_URL:
+    if use_service():
         return EMBED_MODEL
     from .embedders import local as _local
     return _local.MODEL_NAME.split("/")[-1]
@@ -71,7 +90,7 @@ def max_distance() -> float:
     override = os.getenv("YORIK_SEARCH_MAX_DISTANCE")
     if override:
         return float(override)
-    return 0.61 if EMBED_URL else 0.55
+    return 0.61 if use_service() else 0.55
 
 
 def _now() -> str:
@@ -197,7 +216,7 @@ def embed_many(texts: list[str]) -> list[list[float]]:
     """Normalised vectors for a batch of stored texts. Module-level so
     tests swap it. With an external embedder configured there is no
     fallback: two models in one index would not compare."""
-    if EMBED_URL:
+    if use_service():
         return _embed_external(texts)
     from . import documents as _docs
     if _docs.EMBED_BACKEND in ("auto", "local") and not _docs.EMBED_BASE_URL:
@@ -209,8 +228,11 @@ def embed_many(texts: list[str]) -> list[list[float]]:
 def embed_query(text: str) -> Optional[str]:
     """The query as a pgvector literal, or None when no embedder works
     (the search then stays keyword-only)."""
+    if not enabled():
+        return None
     try:
-        return vec_literal(embed_many([QUERY_PREFIX + text])[0])
+        prefix = QUERY_PREFIX if use_service() else ""
+        return vec_literal(embed_many([prefix + text])[0])
     except Exception as exc:  # noqa: BLE001
         log.debug("query embed failed: %s", exc)
         return None
@@ -288,8 +310,12 @@ def _drop_gone(src: Source) -> int:
 
 
 def sweep() -> dict[str, int]:
-    """One pass over every source. Returns rows indexed per source."""
+    """One pass over every source. Returns rows indexed per source.
+    Switched off in the settings: nothing happens, the index stays as
+    it is and is current again one sweep after switching back on."""
     out: dict[str, int] = {}
+    if not enabled():
+        return out
     for src in SOURCES.values():
         try:
             _drop_gone(src)
@@ -300,6 +326,35 @@ def sweep() -> dict[str, int]:
     return out
 
 
+def service_reachable() -> Optional[bool]:
+    """None when no service is configured."""
+    if not EMBED_URL:
+        return None
+    try:
+        import requests
+        return requests.get(EMBED_URL.rsplit("/v1", 1)[0] + "/health", timeout=2).ok
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def clear() -> int:
+    """Drop the whole index; the next sweep builds it again."""
+    with get_conn() as conn:
+        cur = conn.execute("DELETE FROM search_chunks")
+        conn.commit()
+        return cur.rowcount or 0
+
+
+def totals() -> dict[str, int]:
+    """Rows each source could have in the index."""
+    out: dict[str, int] = {}
+    with get_conn() as conn:
+        for src in SOURCES.values():
+            out[src.name] = int(conn.execute(
+                f"SELECT COUNT(*) AS n FROM {src.table} t WHERE ({src.where})").fetchone()["n"])
+    return out
+
+
 def stats() -> dict[str, int]:
     with get_conn() as conn:
         return {r["source"]: int(r["n"]) for r in conn.execute(
@@ -307,11 +362,19 @@ def stats() -> dict[str, int]:
 
 
 _scheduler_task = None
+_wake: Optional[asyncio.Event] = None
+
+
+def wake() -> None:
+    """Run a sweep now instead of at the next interval (settings page)."""
+    if _wake is not None:
+        _wake.set()
 
 
 def start_scheduler(loop: asyncio.AbstractEventLoop) -> None:
     from . import workers
-    global _scheduler_task
+    global _scheduler_task, _wake
+    _wake = asyncio.Event()
     workers.register("search-index", kind="indexer", expected_interval_s=SWEEP_INTERVAL_S)
 
     async def _loop():
@@ -323,10 +386,15 @@ def start_scheduler(loop: asyncio.AbstractEventLoop) -> None:
                 indexed = sum(n for n in result.values() if n > 0)
                 busy = any(n >= MAX_ROWS_PER_PASS for n in result.values())
                 failed = [k for k, n in result.items() if n < 0]
-                workers.heartbeat("search-index", "warn" if failed else "ok",
-                                  f"{indexed} rows indexed" + (f", failed: {', '.join(failed)}" if failed else ""))
+                detail = "switched off in Settings → Embeddings" if not result else \
+                    f"{indexed} rows indexed" + (f", failed: {', '.join(failed)}" if failed else "")
+                workers.heartbeat("search-index", "warn" if failed else "ok", detail)
             except Exception as exc:  # noqa: BLE001
                 log.warning("search index: sweep failed: %s", exc)
-            await asyncio.sleep(5 if busy else SWEEP_INTERVAL_S)
+            try:
+                await asyncio.wait_for(_wake.wait(), timeout=5 if busy else SWEEP_INTERVAL_S)
+            except asyncio.TimeoutError:
+                pass
+            _wake.clear()
 
     _scheduler_task = loop.create_task(_loop(), name="search-index")

@@ -2440,6 +2440,134 @@ interface EmbeddingsStatus {
   taxonomy_tag_counts: TaxonomyTagCount[];
 }
 
+type SearchIndexStatus = {
+  enabled: boolean;
+  embedder: "service" | "bundled";
+  model: string;
+  service: { configured: boolean; model: string; reachable: boolean | null };
+  sources: { source: string; indexed: number; total: number }[];
+};
+
+const SEARCH_SOURCE_LABEL: Record<string, string> = {
+  email: "Email", whatsapp: "WhatsApp", tasks: "Tasks", contacts: "Contacts",
+  events: "Calendar", recordings: "Recordings", drafts: "Letters & drafts",
+};
+
+/** Settings → Embeddings: search by meaning on/off, which model, how
+ *  far the index is. Backend: backend/search_index.py. */
+function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const [st, setSt] = useState<SearchIndexStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setSt(await api.get<SearchIndexStatus>("/api/search/index")); } catch { /* card stays hidden */ }
+  }, []);
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  async function put(body: { enabled?: boolean; embedder?: "service" | "bundled" }) {
+    setBusy(true);
+    try {
+      setSt(await api.put<SearchIndexStatus>("/api/search/index", body));
+    } catch (e: any) {
+      toast(`Couldn't save: ${e?.message || e}`, "error");
+    } finally { setBusy(false); }
+  }
+  async function rebuild() {
+    if (!confirm("Drop the search index and build it again? It runs in the background; until it is done, search finds by keyword only.")) return;
+    setBusy(true);
+    try {
+      await api.post("/api/search/index/rebuild", {});
+      toast("Rebuild started.", "success");
+      load();
+    } catch (e: any) {
+      toast(`Rebuild failed: ${e?.message || e}`, "error");
+    } finally { setBusy(false); }
+  }
+
+  if (!st) return null;
+  const indexed = st.sources.reduce((n, x) => n + x.indexed, 0);
+  const total = st.sources.reduce((n, x) => n + x.total, 0);
+  const pct = total > 0 ? Math.min(100, Math.round((indexed / total) * 100)) : 0;
+
+  return (
+    <Card title="Search by meaning">
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-xs text-muted-foreground">
+          The search (Ctrl+K, chat, agents) also finds mail, WhatsApp, tasks, contacts, calendar, recordings
+          and letters when the words differ: "Stromrechnung" finds the mail from the Stadtwerke. Off means
+          keyword search only; the index stays and is current again shortly after switching back on.
+        </p>
+        <label className="flex items-center gap-2 text-sm shrink-0">
+          <input
+            type="checkbox"
+            checked={st.enabled}
+            disabled={busy}
+            onChange={e => put({ enabled: e.target.checked })}
+            className="w-4 h-4 accent-violet-500"
+          />
+          {st.enabled ? "On" : "Off"}
+        </label>
+      </div>
+
+      <div className={cn("mt-4", !st.enabled && "opacity-50")}>
+        <div className="text-xs font-medium mb-1.5">Model</div>
+        <div className="flex flex-col gap-1.5 text-sm">
+          <label className="flex items-start gap-2">
+            <input type="radio" name="search-embedder" className="mt-1 accent-violet-500"
+              checked={st.embedder === "bundled"} disabled={busy || !st.enabled}
+              onChange={() => put({ embedder: "bundled" })} />
+            <span>Bundled (MiniLM)
+              <span className="block text-xs text-muted-foreground">Small and fast, finds clear paraphrases.</span>
+            </span>
+          </label>
+          <label className={cn("flex items-start gap-2", !st.service.configured && "opacity-60")}>
+            <input type="radio" name="search-embedder" className="mt-1 accent-violet-500"
+              checked={st.embedder === "service"} disabled={busy || !st.enabled || !st.service.configured}
+              onChange={() => put({ embedder: "service" })} />
+            <span>{st.service.configured ? st.service.model : "Qwen3-Embedding-4B"} (embedding service, CPU)
+              <span className="block text-xs text-muted-foreground">
+                {!st.service.configured
+                  ? "Not installed. Run scripts/install-search-embedder.sh on the server once (2.5 GB), then restart Yorik."
+                  : st.service.reachable
+                    ? "Running. Separates hits from noise much better; uses no GPU memory."
+                    : "Installed, but the service does not answer. Search finds by keyword until it is back."}
+              </span>
+            </span>
+          </label>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-2">Changing the model rebuilds the index in the background.</p>
+
+        <div className="mt-4 flex items-baseline justify-between">
+          <div className="text-sm font-medium tabular-nums">
+            {indexed.toLocaleString()} <span className="text-muted-foreground font-normal">/ {total.toLocaleString()} entries indexed</span>
+          </div>
+          <div className="text-xs text-muted-foreground tabular-nums">{st.model} · {pct}%</div>
+        </div>
+        <div className="h-2 mt-1.5 rounded-full bg-muted overflow-hidden">
+          <div className={cn("h-full rounded-full transition-all", pct === 100 ? "bg-emerald-500" : "bg-violet-500")}
+               style={{ width: `${pct}%` }} />
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground tabular-nums">
+          {st.sources.map(x => (
+            <span key={x.source}>{SEARCH_SOURCE_LABEL[x.source] || x.source} {x.indexed.toLocaleString()}/{x.total.toLocaleString()}</span>
+          ))}
+        </div>
+        <button
+          onClick={rebuild}
+          disabled={busy || !st.enabled}
+          className="mt-3 text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition disabled:opacity-50"
+        >
+          Rebuild index
+        </button>
+      </div>
+    </Card>
+  );
+}
+
 function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
   const [status, setStatus] = useState<EmbeddingsStatus | null>(null);
   const [loading, setLoading] = useState(false);
@@ -2557,8 +2685,9 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
         <div>
           <h1 className="text-2xl font-semibold">Embeddings</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Semantic search runs on a vector index of every Paperless chunk.
-            This page shows the pipeline's health and lets you trigger a full reindex.
+            Search by meaning runs on vector indexes: one over mail, messages, tasks, contacts,
+            calendar, recordings and letters, one over the filed documents. Switch it, pick the
+            model and watch the indexes here.
           </p>
         </div>
         <button
@@ -2573,8 +2702,10 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
 
       <div className="space-y-4">
 
+        <SearchByMeaningCard toast={toast} />
+
         {/* Index population */}
-        <Card title="Index population">
+        <Card title="Documents: index population">
           <div className="flex items-baseline justify-between mb-2">
             <div className="text-2xl font-semibold tabular-nums">
               {status.vec_count.toLocaleString()}

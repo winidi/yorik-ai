@@ -165,3 +165,28 @@ def test_model_switch_rebuilds_and_never_mixes(house, monkeypatch):
     with get_conn() as conn:
         models = {r["model"] for r in conn.execute("SELECT DISTINCT model FROM search_chunks").fetchall()}
     assert models == {"another-model"}
+
+
+def test_switch_in_the_settings(house):
+    from backend import search_index
+    dirk_c, dirk = house["dirk"]; beate_c, _ = house["beate"]
+    _add_task(dirk, "Abschlag Stadtwerke überweisen")
+    search_index.sweep()
+    assert _hits(dirk_c, "Stromrechnung", "tasks") == ["Abschlag Stadtwerke überweisen"]
+
+    assert beate_c.put("/api/search/index", json={"enabled": False}).status_code == 403
+    st = dirk_c.put("/api/search/index", json={"enabled": False}).json()
+    assert st["enabled"] is False and st["embedder"] == "bundled"
+    assert _hits(dirk_c, "Stromrechnung", "tasks") == []             # keyword only
+    assert _hits(dirk_c, "stadtwerke", "tasks") == ["Abschlag Stadtwerke überweisen"]
+    _add_task(dirk, "Zahnarzt anrufen")
+    assert search_index.sweep() == {}                                # the indexer rests
+
+    st = dirk_c.put("/api/search/index", json={"enabled": True}).json()
+    assert st["enabled"] is True
+    assert search_index.sweep()["tasks"] == 1                        # catches up
+    tasks = next(x for x in dirk_c.get("/api/search/index").json()["sources"] if x["source"] == "tasks")
+    assert tasks == {"source": "tasks", "indexed": 2, "total": 2}
+
+    assert dirk_c.put("/api/search/index", json={"embedder": "service"}).status_code == 400   # none installed
+    assert dirk_c.post("/api/search/index/rebuild").json()["dropped"] >= 2
