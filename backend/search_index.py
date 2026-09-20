@@ -53,7 +53,10 @@ QUERY_PREFIX = os.getenv(
     "YORIK_SEARCH_EMBED_QUERY_PREFIX",
     "Instruct: Given a search query, retrieve relevant passages that answer the query\nQuery: ",
 ).replace("\\n", "\n")
-EMBED_BATCH = 32
+# Small requests: the server has no priorities, so a search query waits
+# behind whatever the indexer has queued. Four texts are one per slot.
+EMBED_BATCH = 4
+QUERY_TIMEOUT_S = 2.5      # then the search answers by keyword only
 
 
 # Settings → Embeddings writes these two (household_settings); config.env
@@ -201,9 +204,9 @@ def vec_literal(vec: list[float]) -> str:
     return "[" + ",".join(repr(float(x)) for x in vec) + "]"
 
 
-def _post_embeddings(texts: list[str]) -> list[list[float]]:
+def _post_embeddings(texts: list[str], timeout: float = 120) -> list[list[float]]:
     import requests
-    r = requests.post(f"{EMBED_URL}/embeddings", json={"model": EMBED_MODEL, "input": texts}, timeout=120)
+    r = requests.post(f"{EMBED_URL}/embeddings", json={"model": EMBED_MODEL, "input": texts}, timeout=timeout)
     r.raise_for_status()
     data = sorted(r.json()["data"], key=lambda d: d.get("index", 0))
     return [_l2(d["embedding"]) for d in data]
@@ -252,8 +255,9 @@ def embed_query(text: str) -> Optional[str]:
     if not enabled():
         return None
     try:
-        prefix = QUERY_PREFIX if use_service() else ""
-        return vec_literal(embed_many([prefix + text])[0])
+        if use_service():
+            return vec_literal(_post_embeddings([QUERY_PREFIX + text], timeout=QUERY_TIMEOUT_S)[0])
+        return vec_literal(embed_many([text])[0])
     except Exception as exc:  # noqa: BLE001
         log.debug("query embed failed: %s", exc)
         return None
