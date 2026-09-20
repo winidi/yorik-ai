@@ -225,6 +225,27 @@ def _is_assignee(user_id, table: str, row: dict[str, Any]) -> bool:
                          (int(row["id"]), user_id)).fetchone() is not None
 
 
+def _is_guardian(user_id, role: Optional[str], table: str, row: dict[str, Any]) -> bool:
+    """Parents run the children's to-dos: a household member who is not
+    a restricted account may see and change a task assigned to one
+    (tick it on the family board, move it, reword it). Tasks between
+    adults stay with their owner and assignees."""
+    if table != "tasks" or row.get("id") is None:
+        return False
+    if (role or "").lower() not in ("member", "admin", "platform_admin"):
+        return False
+    with conn_ctx() as c:
+        return c.execute(
+            "SELECT 1 FROM task_assignees a JOIN user_profiles u ON u.id = a.user_id "
+            "WHERE a.task_id = ? AND lower(u.role) = 'restricted' "
+            "AND EXISTS (SELECT 1 FROM space_members m JOIN spaces s ON s.id = m.space_id "
+            "            WHERE s.slug = 'household' AND m.user_id = a.user_id) "
+            "AND EXISTS (SELECT 1 FROM space_members m JOIN spaces s ON s.id = m.space_id "
+            "            WHERE s.slug = 'household' AND m.user_id = ?)",
+            (int(row["id"]), user_id),
+        ).fetchone() is not None
+
+
 def can_view_row(
     user_id: Optional[int], role: Optional[str], table: str, row: dict[str, Any],
 ) -> bool:
@@ -239,7 +260,7 @@ def can_view_row(
     space_id = _resolve_row_space_id(table, row)
     if space_id is not None and space_id in user_visible_space_ids(user_id, role, area=TABLE_AREA.get(table)):
         return True
-    if _is_assignee(user_id, table, row):
+    if _is_assignee(user_id, table, row) or _is_guardian(user_id, role, table, row):
         return True
     # Per-row share
     row_id = row.get("id")
@@ -273,7 +294,7 @@ def can_write_row(
         level = user_space_level(user_id, space_id, role, area=TABLE_AREA.get(table))
         if has_level(level, "write"):
             return True
-    if _is_assignee(user_id, table, row):
+    if _is_assignee(user_id, table, row) or _is_guardian(user_id, role, table, row):
         return True
     row_id = row.get("id")
     if row_id is not None:

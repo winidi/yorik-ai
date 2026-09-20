@@ -79,6 +79,10 @@ worklist.
   switch.
   Settings → Embeddings has the switch (on/off), the choice of model,
   the index progress per source and a rebuild button.
+- **Family board for parents.** A parent ticks the children's tiles
+  and adds a to-do to anyone's column with "+ Aufgabe" (children add
+  to their own). The /board page offers "Mich anzeigen" to a person
+  who is not on the board yet.
 - **A task belongs to its assignees too.** Whoever a task is assigned
   to sees it in their own list, may tick and edit it, and finds it in
   the search, wherever it was created: a parent puts a to-do on a

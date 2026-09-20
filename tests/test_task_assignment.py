@@ -55,3 +55,24 @@ def test_assign_by_chat_and_calendar_view(family):
     ids = ",".join(str(c["id"]) for c in kid_c.get("/api/calendars").json())
     r = kid_c.get(f"/api/tasks?role=restricted&calendar_ids={ids}")     # was int(uuid) → 500
     assert r.status_code == 200, r.text
+
+
+def test_parent_ticks_a_childs_task_but_not_another_adults(family, fresh_app):
+    from backend import spaces as S
+    from backend.calendars import ensure_calendars_for_user
+    beate_c, beate = family["beate"]; kid_c, kid = family["kid"]
+    dirk_c, dirk = login_client(fresh_app, role="platform_admin", name="Dirk", email="d@example.local")
+    S.ensure_personal_space(dirk, "Dirk"); ensure_calendars_for_user(dirk, "Dirk"); S.add_user_to_household(dirk, "write")
+
+    # the child's own task, created by the child: a parent may tick it
+    own = kid_c.post("/api/tasks?role=restricted", json={"title": "Ranzen packen"}).json()["id"]
+    assert beate_c.patch(f"/api/tasks/{own}?role=member", json={"done": True}).status_code == 200
+    # Beate puts one on Dirk's list; Dirk sees and ticks it
+    r = beate_c.post("/api/tasks?role=member", json={"title": "Getränke holen", "assignee_user_ids": [dirk]})
+    assert r.status_code in (200, 201), r.text
+    assert "Getränke holen" in _titles(dirk_c, "platform_admin")
+    # a task between adults is not the other adult's to change
+    mine = dirk_c.post("/api/tasks?role=platform_admin", json={"title": "Steuer"}).json()["id"]
+    assert beate_c.patch(f"/api/tasks/{mine}?role=member", json={"done": True}).status_code in (403, 404)
+    # and a child is nobody's guardian
+    assert kid_c.patch(f"/api/tasks/{mine}?role=restricted", json={"done": True}).status_code in (403, 404)

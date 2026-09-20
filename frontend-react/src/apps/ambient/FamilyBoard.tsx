@@ -8,14 +8,16 @@
  * appears is decided by each person's own "show me on the wall" consent.
  * Ticking needs the active person: on the wall the avatar tap opens the
  * PIN picker (the parent handles that) and the unlock expires; on the
- * /board page the signed-in person ticks their own tiles.
+ * /board page the signed-in person ticks their own tiles. Parents (any
+ * account that is not restricted) also tick the children's tiles and
+ * add a to-do to anyone's column; children add to their own.
  *
  * Look: near-white paper, person colour only as accent (stripe, ring,
  * chip), big legible type (bundled Nunito + Atkinson Hyperlegible), a
  * warm dark palette after 21:00 so the wall does not glow at night.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Backpack, Bed, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Dog, Loader2, Lock, Sparkles, Utensils } from "lucide-react";
+import { Backpack, Bed, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Dog, Loader2, Lock, Plus, Sparkles, Utensils } from "lucide-react";
 import { api } from "@/lib/api";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { cn } from "@/lib/utils";
@@ -23,7 +25,7 @@ import "./board-fonts.css";
 
 export type BoardMode = "board" | "calendar" | "tasks";
 
-interface Person { id: string; name: string; first_name: string; color: string; avatar_url: string | null }
+interface Person { id: string; name: string; first_name: string; color: string; avatar_url: string | null; role?: string }
 interface Ev { id: number; title: string; starts_at: string; ends_at: string | null; all_day: boolean; owner_id: string | null; shared: boolean; location: string | null }
 interface Task { id: number; title: string; due_date: string | null; done: boolean; done_at: string | null; assignee_ids: string[]; person: string; category: string; routine: boolean; estimated_minutes: number | null }
 interface LogRow { title: string; user_id: string; day: string }
@@ -68,9 +70,13 @@ function countdown(fromIso: string, toIso: string): string {
   return m ? `in ${h} Std. ${m} Min.` : `in ${h} Std.`;
 }
 
-export function FamilyBoard({ mode, currentUserId, onNeedSignIn, lockOthers = false }: {
+export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNeedSignIn, lockOthers = false, offerJoin = false }: {
   mode: BoardMode;
   currentUserId: string | null;
+  /** Role of the signed-in / unlocked person; anything but "restricted" is a parent. */
+  currentUserRole?: string | null;
+  /** /board page: tell the signed-in person when they are not on the board. */
+  offerJoin?: boolean;
   onNeedSignIn: (person: Person) => void;
   /** show a lock on tiles that are not the active person's (the wall) */
   lockOthers?: boolean;
@@ -82,6 +88,9 @@ export function FamilyBoard({ mode, currentUserId, onNeedSignIn, lockOthers = fa
   const [now, setNow] = useState(nowIso());
   const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
   const [openDone, setOpenDone] = useState<Record<string, boolean>>({});
+  const [adding, setAdding] = useState<string | null>(null);      // person id whose "+" is open
+  const [draft, setDraft] = useState("");
+  const isParent = !!currentUserId && !!currentUserRole && currentUserRole.toLowerCase() !== "restricted";
   const swipe = useRef<{ x: number; y: number } | null>(null);
 
   const load = useCallback(async () => {
@@ -131,12 +140,27 @@ export function FamilyBoard({ mode, currentUserId, onNeedSignIn, lockOthers = fa
   async function toggle(t: Task, owner: Person) {
     if (!feed) return;
     const mine = currentUserId && t.assignee_ids.includes(currentUserId);
-    if (!mine) { onNeedSignIn(owner); return; }
+    const asParent = isParent && (owner.role || "").toLowerCase() === "restricted";
+    if (!mine && !asParent) { onNeedSignIn(owner); return; }
     setBusy(t.id); setPop(t.id);
     try {
       await api.patch(`/api/tasks/${t.id}`, { done: t.done ? 0 : 1 });
       await load();
     } catch {} finally { setBusy(null); setTimeout(() => setPop(null), 500); }
+  }
+
+  async function addTask(p: Person) {
+    const title = draft.trim();
+    if (!title || !feed) return;
+    setAdding(null); setDraft("");
+    try {
+      await api.post("/api/tasks", { title, due_date: feed.today, assignee_user_ids: [p.id] });
+      await load();
+    } catch {}
+  }
+
+  async function joinBoard() {
+    try { await api.patch("/api/users/me/kiosk-agenda-consent", { consent: true }); await load(); } catch {}
   }
 
   if (!feed) return <div className="absolute inset-0 grid place-items-center" style={{ background: tokens.bg }}><Loader2 className="w-8 h-8 animate-spin" style={{ color: tokens.muted }} /></div>;
@@ -234,6 +258,13 @@ export function FamilyBoard({ mode, currentUserId, onNeedSignIn, lockOthers = fa
           </section>
         )}
 
+        {offerJoin && currentUserId && !feed.people.some(p => p.id === currentUserId) && (
+          <div className="rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap text-[14px]" style={{ background: tokens.card, boxShadow: `inset 0 0 0 1px ${tokens.line}` }}>
+            <span>Du stehst noch nicht auf der Familientafel. Wer hier steht, zeigt dem Haushalt seine Termine und Aufgaben des Tages.</span>
+            <button onClick={joinBoard} className="rounded-full px-4 py-1.5 font-bold text-white" style={{ background: "#1f2430" }}>Mich anzeigen</button>
+          </div>
+        )}
+
         {/* people */}
         {showPeople && (
           <section className={cn("grid gap-4 min-w-0", narrow ? "" : "min-h-0")} style={{ gridTemplateColumns: narrow ? "1fr" : `repeat(${Math.max(1, people.length)}, minmax(0, 1fr))` }}>
@@ -245,6 +276,9 @@ export function FamilyBoard({ mode, currentUserId, onNeedSignIn, lockOthers = fa
               const total = mine.length, finished = mine.filter(t => t.done).length;
               const ratio = total ? finished / total : 0;
               const isMe = currentUserId === p.id;
+              const isChild = (p.role || "").toLowerCase() === "restricted";
+              const mayTick = isMe || (isParent && isChild);
+              const mayAdd = !!currentUserId && (isMe || isParent);
               const myEvents = todayEvents.filter(e => e.owner_id === p.id && !e.all_day);
               const nextEv = myEvents.find(e => e.starts_at.slice(0, 16) >= now.slice(0, 16));
               const busyMin = myEvents.reduce((acc, e) => acc + Math.max(0, Math.min(WORK_END, e.ends_at ? mins(e.ends_at) : mins(e.starts_at) + 60) - Math.max(WORK_START, mins(e.starts_at))), 0);
@@ -270,7 +304,7 @@ export function FamilyBoard({ mode, currentUserId, onNeedSignIn, lockOthers = fa
                           ? <span className="rounded-full px-2 py-0.5" style={{ background: tokens.card, color: tokens.muted }}>{hhmm(nextEv.starts_at)} {nextEv.title}</span>
                           : <span className="rounded-full px-2 py-0.5" style={{ background: tokens.card, color: tokens.muted }}>{freeMin >= WORK_END - WORK_START ? "heute keine Termine" : `${Math.floor(freeMin / 60)} Std. frei`}</span>}
                         {isMe && <span className="rounded-full px-2 py-0.5 font-bold text-white" style={{ background: p.color }}>angemeldet</span>}
-                        {!isMe && lockOthers && <span className="rounded-full px-2 py-0.5 flex items-center gap-1" style={{ background: tokens.card, color: tokens.muted }}><Lock className="w-3 h-3" /> antippen</span>}
+                        {!mayTick && lockOthers && <span className="rounded-full px-2 py-0.5 flex items-center gap-1" style={{ background: tokens.card, color: tokens.muted }}><Lock className="w-3 h-3" /> antippen</span>}
                       </div>
                     </div>
                   </button>
@@ -278,11 +312,26 @@ export function FamilyBoard({ mode, currentUserId, onNeedSignIn, lockOthers = fa
                   <div className={cn("flex flex-col gap-2 pr-0.5", narrow ? "" : "overflow-y-auto fb-scroll min-h-0")}>
                     {routines.length > 0 && <Label muted={tokens.muted}>Routine</Label>}
                     {routines.map(t => (
-                      <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !isMe} onTap={() => toggle(t, p)}
+                      <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !mayTick} onTap={() => toggle(t, p)}
                             today={feed.today} week={thisWeek} log={feed.routine_log} />
                     ))}
                     {open.length > 0 && routines.length > 0 && <Label muted={tokens.muted}>Aufgaben</Label>}
-                    {open.map(t => <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !isMe} onTap={() => toggle(t, p)} today={feed.today} />)}
+                    {open.map(t => <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !mayTick} onTap={() => toggle(t, p)} today={feed.today} />)}
+                    {mayAdd && (adding === p.id ? (
+                      <form onSubmit={e => { e.preventDefault(); void addTask(p); }} className="flex gap-2">
+                        <input autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={() => { if (!draft.trim()) setAdding(null); }}
+                               placeholder={isMe ? "Neue Aufgabe für heute" : `Neue Aufgabe für ${p.first_name || p.name}`}
+                               className="flex-1 min-w-0 rounded-2xl px-3 py-2.5 text-[15px] outline-none select-text"
+                               style={{ background: tokens.card, color: tokens.ink, boxShadow: `inset 0 0 0 2px ${p.color}` }} />
+                        <button type="submit" className="rounded-2xl px-3 font-bold text-white" style={{ background: p.color }}>OK</button>
+                      </form>
+                    ) : (
+                      <button onClick={() => { setAdding(p.id); setDraft(""); }}
+                              className="rounded-2xl px-3 py-2 text-[14px] flex items-center gap-1.5 self-start"
+                              style={{ color: tokens.muted, boxShadow: `inset 0 0 0 1px ${tokens.line}` }}>
+                        <Plus className="w-4 h-4" /> Aufgabe
+                      </button>
+                    ))}
                     {mine.length === 0 && (
                       <div className="rounded-2xl p-4 text-[14px]" style={{ background: tokens.card, color: tokens.muted }}>
                         Nichts offen für heute.{nextEv ? ` Um ${hhmm(nextEv.starts_at)}: ${nextEv.title}.` : " Ein freier Tag."}
@@ -296,7 +345,7 @@ export function FamilyBoard({ mode, currentUserId, onNeedSignIn, lockOthers = fa
                         </button>
                         {openDone[p.id] && (
                           <div className="mt-2 flex flex-col gap-2">
-                            {done.map(t => <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !isMe} onTap={() => toggle(t, p)} today={feed.today} />)}
+                            {done.map(t => <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !mayTick} onTap={() => toggle(t, p)} today={feed.today} />)}
                           </div>
                         )}
                       </div>

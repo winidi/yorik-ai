@@ -36,3 +36,17 @@ Reading needs nobody signed in. To tick a task, tap your own circle; the tablet 
 - The board refreshes itself every minute; ticking updates it at once.
 - Tasks show as overdue in red once their day has passed.
 - After a while of quiet the tablet returns to the mode you chose, not necessarily to the photos.
+
+## Parents and children
+
+Whoever is signed in ticks their own tiles. A parent — any account that
+is not a restricted (child) account — also ticks the children's tiles,
+and the **+ Aufgabe** button under each person adds a to-do for today
+to that person's column: for a child, for the partner, for yourself.
+Children add to their own column only, and cannot delete a to-do
+someone else gave them. On the wall tablet the same applies after the
+parent's PIN sign-in.
+
+If you open /board and are not on it yet, a line at the top offers
+**Mich anzeigen**; it is the same switch as Settings → Profile →
+"Show me on the household wall", and only you can set it.

@@ -420,7 +420,7 @@ export function AmbientApp() {
         </>
       ) : (
         <div className="absolute inset-0 z-10" onPointerDown={e => { e.stopPropagation(); touchBoard(); }} onPointerUp={e => e.stopPropagation()}>
-          <FamilyBoard mode={mode} currentUserId={meId} lockOthers
+          <FamilyBoard mode={mode} currentUserId={meId} currentUserRole={active ? ((auth.user as any)?.role || null) : null} lockOthers
                        onNeedSignIn={(p) => { setBoardSignIn(true); setBoardPerson(p.id); void openPicker(); }} />
         </div>
       )}
