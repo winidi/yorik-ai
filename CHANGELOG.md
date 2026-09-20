@@ -79,6 +79,14 @@ worklist.
   switch.
   Settings → Embeddings has the switch (on/off), the choice of model,
   the index progress per source and a rebuild button.
+- **A task belongs to its assignees too.** Whoever a task is assigned
+  to sees it in their own list, may tick and edit it, and finds it in
+  the search, wherever it was created: a parent puts a to-do on a
+  child's list from the calendar's task dialog or by chat ("task for
+  Yorik: …"). A restricted account cannot delete a task someone else
+  gave it. **Fixed:** assigning in the app failed since user ids
+  became UUIDs (422), the task list by calendar crashed on the same
+  cast, and the calendar share dialog parsed the user id as a number.
 - **Family calendars.** In a family household everybody sees
   everybody's calendar, read only, as ordinary per-area sharing each
   person can untick (Settings → You → Sharing). New accounts join the

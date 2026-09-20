@@ -2723,7 +2723,7 @@ class TaskIn(BaseModel):
     # Wave: real-user assignees. Pass user_ids; "everyone" expands to
     # all enabled users (resolved server-side). If both `person` (legacy
     # role label) and assignee_user_ids are passed, assignees wins.
-    assignee_user_ids: Optional[List[int]] = None
+    assignee_user_ids: Optional[List[str]] = None   # user ids are UUIDs
     assign_everyone: bool = False
     # Subtask / recurring (migration 023).
     parent_task_id: Optional[int] = None
@@ -2756,7 +2756,7 @@ class TaskPatch(BaseModel):
     estimated_minutes: Optional[int] = None
     # When provided, replaces the assignee set entirely. Omit to leave
     # assignees unchanged. Pass [] to clear.
-    assignee_user_ids: Optional[List[int]] = None
+    assignee_user_ids: Optional[List[str]] = None   # user ids are UUIDs
     assign_everyone: Optional[bool] = None
     # Subtask / recurring (migration 023). Pass empty string to clear.
     parent_task_id: Optional[int] = None
@@ -3603,8 +3603,8 @@ def delete_event(
     return Response(status_code=204)
 
 
-def _resolve_assignees(assignee_user_ids: Optional[List[int]],
-                        assign_everyone: bool) -> List[int]:
+def _resolve_assignees(assignee_user_ids: Optional[List[str]],
+                        assign_everyone: bool) -> List[str]:
     """Turn the API's assignee_user_ids + assign_everyone flag into a
     deduped list of real user ids. 'everyone' expands to every enabled
     user_profile.id."""
@@ -3613,20 +3613,20 @@ def _resolve_assignees(assignee_user_ids: Optional[List[int]],
             rows = conn.execute(
                 "SELECT id FROM user_profiles WHERE disabled=0"
             ).fetchall()
-        return sorted({r["id"] for r in rows})
+        return sorted({str(r["id"]) for r in rows})
     if assignee_user_ids is None:
         return []
-    return sorted({int(x) for x in assignee_user_ids if x is not None})
+    return sorted({str(x) for x in assignee_user_ids if x})
 
 
 def _replace_task_assignees(task_id: int, assignee_ids: List[int]) -> tuple[List[int], List[int]]:
     """Replace the assignee set for a task. Returns (added_ids, removed_ids)
     so the caller can decide who to notify."""
     with conn_ctx(DB_PATH) as conn:
-        existing = {r["user_id"] for r in conn.execute(
+        existing = {str(r["user_id"]) for r in conn.execute(
             "SELECT user_id FROM task_assignees WHERE task_id=?", (task_id,),
         ).fetchall()}
-        target = set(assignee_ids)
+        target = {str(x) for x in assignee_ids}
         added   = target - existing
         removed = existing - target
         for uid in removed:
@@ -3820,7 +3820,12 @@ def delete_task(
     role: str = Depends(_auth.current_role),
     user: dict[str, Any] = Depends(_auth.current_user_optional),
 ) -> Response:
-    _ensure_row_writable("tasks", task_id, role, user=user)
+    row = _ensure_row_writable("tasks", task_id, role, user=user)
+    # Being assigned a task lets you tick and edit it, not make it
+    # disappear: a child cannot delete the chore a parent gave them.
+    if user and normalize_role(role) == "restricted" and \
+            str(row.get("created_by_user_id") or "") != str(user.get("id")):
+        raise HTTPException(status_code=403, detail="only the person who created this task can delete it")
     with conn_ctx(DB_PATH) as conn:
         conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
     return Response(status_code=204)
@@ -4048,13 +4053,13 @@ def list_tasks(
             # (b) the creator owns the calendar (covers tasks you made
             # without assigning anyone — they still belong on your view).
             from . import calendars as _cal
-            owner_ids: set[int] = set()
+            owner_ids: set[str] = set()
             include_unassigned = False
             for cid in ids:
                 cal = _cal.get(cid)
                 if not cal:
                     continue
-                owner_ids.add(int(cal["owner_user_id"]))
+                owner_ids.add(str(cal["owner_user_id"]))
                 if cal["kind"] == "shared":
                     include_unassigned = True
             sub_parts: list[str] = []
@@ -4096,19 +4101,12 @@ def list_tasks(
     # scoped to spaces in workspaces they own — otherwise an admin from
     # one workspace would see every other workspace's tasks (this leak
     # was caught when WS3 admin Jane saw 7 WS1+WS2 tasks).
-    if True:  # every role, the operator included, is scoped by space visibility
-        from . import spaces as _sp
-        uid = user.get("id") if user else None
-        visible_spaces = _sp.user_visible_space_ids(uid, role, area="tasks") if uid else []
-        if visible_spaces:
-            placeholders = ",".join("?" * len(visible_spaces))
-            where_clauses.append(f"(tasks.space_id IN ({placeholders}) OR tasks.created_by_user_id = ?)")
-            params_list.extend(visible_spaces)
-            params_list.append(uid)
-        else:
-            # Logged-out caller (shouldn't happen — require_role gates
-            # above) or member with no spaces: return nothing.
-            where_clauses.append("1=0")
+    # One rule for every reader of tasks (spaces.row_filter): own, in a
+    # visible space, shared by row, or assigned to you.
+    from . import spaces as _sp
+    _frag, _frag_params = _sp.row_filter(user.get("id") if user else None, role, "tasks")
+    where_clauses.append(_frag)
+    params_list.extend(_frag_params)
 
     if where_clauses:
         base += " WHERE " + " AND ".join(where_clauses)

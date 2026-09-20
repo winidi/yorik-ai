@@ -4132,7 +4132,7 @@ function ShareCalendarModal({
   // Users not yet shared with — exclude the calendar owner too.
   const sharedUserIds = new Set(shares.map(s => s.user_id));
   const available = users.filter(u => !sharedUserIds.has(u.id) && u.id !== calendar.owner_user_id);
-  const [pendingUserId, setPendingUserId] = useState<number | null>(null);
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);   // user ids are UUIDs
   const [pendingLevel,  setPendingLevel]  = useState<"free_busy" | "read" | "write">("free_busy");
   const [saving, setSaving] = useState(false);
 
@@ -4237,7 +4237,7 @@ function ShareCalendarModal({
               <div className="flex gap-2">
                 <select
                   value={pendingUserId || ""}
-                  onChange={e => setPendingUserId(parseInt(e.target.value, 10) || null)}
+                  onChange={e => setPendingUserId(e.target.value || null)}
                   className="flex-1 h-9 px-2 bg-muted border border-border rounded-md text-sm focus:outline-none"
                 >
                   <option value="">Pick a member…</option>

@@ -214,6 +214,17 @@ def _resolve_row_space_id(table: str, row: dict[str, Any]) -> Optional[int]:
     return None
 
 
+def _is_assignee(user_id, table: str, row: dict[str, Any]) -> bool:
+    """A task belongs to the people it is assigned to as well: they see
+    it and may tick or change it, whoever's space it was created in.
+    That is how a parent puts a to-do on a child's list."""
+    if table != "tasks" or row.get("id") is None:
+        return False
+    with conn_ctx() as c:
+        return c.execute("SELECT 1 FROM task_assignees WHERE task_id = ? AND user_id = ?",
+                         (int(row["id"]), user_id)).fetchone() is not None
+
+
 def can_view_row(
     user_id: Optional[int], role: Optional[str], table: str, row: dict[str, Any],
 ) -> bool:
@@ -227,6 +238,8 @@ def can_view_row(
         return True
     space_id = _resolve_row_space_id(table, row)
     if space_id is not None and space_id in user_visible_space_ids(user_id, role, area=TABLE_AREA.get(table)):
+        return True
+    if _is_assignee(user_id, table, row):
         return True
     # Per-row share
     row_id = row.get("id")
@@ -260,6 +273,8 @@ def can_write_row(
         level = user_space_level(user_id, space_id, role, area=TABLE_AREA.get(table))
         if has_level(level, "write"):
             return True
+    if _is_assignee(user_id, table, row):
+        return True
     row_id = row.get("id")
     if row_id is not None:
         with conn_ctx() as c:
@@ -317,6 +332,10 @@ def row_filter(
         placeholders = ",".join("?" * len(spaces))
         parts.append(f"{t}.space_id IN ({placeholders})")
         params.extend(spaces)
+
+    if table == "tasks":
+        parts.append(f"{t}.id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)")
+        params.append(user_id)
 
     parts.append(
         f"{t}.id IN (SELECT row_id FROM row_shares "
