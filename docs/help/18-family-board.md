@@ -50,3 +50,13 @@ parent's PIN sign-in.
 If you open /board and are not on it yet, a line at the top offers
 **Mich anzeigen**; it is the same switch as Settings → Profile →
 "Show me on the household wall", and only you can set it.
+
+## Whose calendar
+
+The names at the top right are the calendar picker. Tap a name and the
+week shows that person's appointments; tap a second name for a joint
+view of the two; **Alle** shows everybody again. Picked names are
+filled in the person's colour with a tick, the others fade. Household
+appointments (the shared calendar) stay visible in every selection.
+The choice is kept per device. The columns are in a fixed order: the
+head of the household on the left, the other adults, then the children.

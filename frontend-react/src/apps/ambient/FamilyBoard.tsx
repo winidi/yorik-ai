@@ -88,6 +88,19 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
   const [now, setNow] = useState(nowIso());
   const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 760);
   const [openDone, setOpenDone] = useState<Record<string, boolean>>({});
+  // Whose calendar the week shows: tap names in the legend to pick one
+  // or several, "Alle" for everybody. Empty = everybody. Kept per device.
+  const [picked, setPicked] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("yorik:board:calendars") || "[]") as string[]); } catch { return new Set(); }
+  });
+  function pickCalendar(id: string | null) {
+    setPicked(prev => {
+      const n = new Set(id === null ? [] : prev);
+      if (id !== null) { if (n.has(id)) n.delete(id); else n.add(id); }
+      try { localStorage.setItem("yorik:board:calendars", JSON.stringify([...n])); } catch {}
+      return n;
+    });
+  }
   const [adding, setAdding] = useState<string | null>(null);      // person id whose "+" is open
   const [draft, setDraft] = useState("");
   const isParent = !!currentUserId && !!currentUserRole && currentUserRole.toLowerCase() !== "restricted";
@@ -114,10 +127,16 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
   const days = useMemo(() => feed ? Array.from({ length: 7 }, (_, i) => addDays(feed.week_start, weekOffset * 7 + i)) : [], [feed, weekOffset]);
   const eventsByDay = useMemo(() => {
     const m = new Map<string, Ev[]>();
-    for (const e of feed?.events || []) { const k = dayOf(e.starts_at); m.set(k, [...(m.get(k) || []), e]); }
+    // picked people who left the board do not hide everything
+    const active = new Set([...picked].filter(id => (feed?.people || []).some(p => p.id === id)));
+    for (const e of feed?.events || []) {
+      // household events ("Alle") concern whoever is picked
+      if (active.size && !e.shared && !(e.owner_id && active.has(e.owner_id))) continue;
+      const k = dayOf(e.starts_at); m.set(k, [...(m.get(k) || []), e]);
+    }
     for (const list of m.values()) list.sort((a, b) => Number(b.all_day) - Number(a.all_day) || a.starts_at.localeCompare(b.starts_at));
     return m;
-  }, [feed]);
+  }, [feed, picked]);
   const people = useMemo(() => {
     // The same order on every big screen: the head of the household on
     // the left, the other adults next, the children to the right (the
@@ -190,7 +209,7 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
 
         {/* header: date, next up, legend, clock — and, in every mode, the
             offer to a signed-in person who is not on the board yet */}
-        <div className="grid gap-3 min-w-0">
+        <div className="grid gap-3 min-w-0" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
         {offerJoin && currentUserId && !feed.people.some(p => p.id === currentUserId) && (
           <div className="rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap text-[14px]" style={{ background: tokens.card, boxShadow: `inset 0 0 0 1px ${tokens.line}` }}>
             <span className="text-[15px]"><b>Du stehst noch nicht auf der Familientafel.</b> Wer hier steht, zeigt dem Haushalt seine Termine und Aufgaben des Tages.</span>
@@ -213,14 +232,38 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
             )}
           </div>
           <div className="flex items-center gap-5 flex-wrap">
-            <div className="flex gap-3 text-[13px] flex-wrap" style={{ color: tokens.muted }}>
-              {feed.people.map(p => (
-                <span key={p.id} className="flex items-center gap-1.5">
-                  <PersonAvatar name={p.name} color={p.color} avatarUrl={p.avatar_url} size={26} />
-                  {p.first_name || p.name}
-                </span>
-              ))}
-              <span className="flex items-center gap-1.5"><i className="w-2.5 h-2.5 rounded-full" style={{ background: SHARED }} />Alle</span>
+            {/* legend = calendar picker: tap a name for that person's week,
+                several for a joint view, "Alle" for everybody */}
+            <div className="flex gap-1.5 text-[13px] flex-wrap items-center" role="group" aria-label="Kalender auswählen">
+              {(() => {
+                const active = people.filter(p => picked.has(p.id));
+                const all = active.length === 0;
+                return (
+                  <>
+                    {people.map(p => {
+                      const on = picked.has(p.id);
+                      return (
+                        <button key={p.id} onClick={() => pickCalendar(p.id)} aria-pressed={on}
+                                title={on ? `${p.first_name || p.name} ausblenden` : `Kalender von ${p.first_name || p.name} zeigen`}
+                                className="flex items-center gap-1.5 rounded-full pl-1 pr-3 py-1 transition"
+                                style={on
+                                  ? { background: `color-mix(in srgb, ${p.color} ${dim ? 30 : 18}%, ${tokens.card})`, boxShadow: `inset 0 0 0 2px ${p.color}`, color: tokens.ink, fontWeight: 800 }
+                                  : { background: "transparent", boxShadow: `inset 0 0 0 1px ${tokens.line}`, color: tokens.muted, opacity: all ? 1 : 0.5 }}>
+                          <PersonAvatar name={p.name} color={p.color} avatarUrl={p.avatar_url} size={26} />
+                          {p.first_name || p.name}
+                          {on && <Check className="w-3.5 h-3.5" strokeWidth={3} style={{ color: p.color }} />}
+                        </button>
+                      );
+                    })}
+                    <button onClick={() => pickCalendar(null)} aria-pressed={all} title="Alle Kalender zeigen"
+                            className="flex items-center gap-1.5 rounded-full px-3 py-1 transition" style={{ minHeight: 34,
+                              ...(all ? { background: tokens.ink, color: tokens.bg, fontWeight: 800 }
+                                      : { boxShadow: `inset 0 0 0 1px ${tokens.line}`, color: tokens.muted }) }}>
+                      <i className="w-2.5 h-2.5 rounded-full" style={{ background: all ? tokens.bg : SHARED }} />Alle
+                    </button>
+                  </>
+                );
+              })()}
             </div>
             <div className="text-[40px] leading-none font-bold tabular-nums" style={{ fontFamily: DISPLAY }}>{now.slice(11, 16)}</div>
           </div>
@@ -233,7 +276,8 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
                    onPointerDown={e => { swipe.current = { x: e.clientX, y: e.clientY }; }}
                    onPointerUp={e => { const s = swipe.current; swipe.current = null; if (!s) return; const dx = e.clientX - s.x; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(e.clientY - s.y)) setWeekOffset(o => dx < 0 ? Math.min(1, o + 1) : Math.max(0, o - 1)); }}>
             <div className="flex items-center justify-between mb-1.5 text-[12px] font-bold tracking-[.08em] uppercase" style={{ color: tokens.muted }}>
-              <span>{weekOffset === 0 ? "Diese Woche" : "Nächste Woche"} · {fmtDay(days[0])} – {fmtDay(days[6])}</span>
+              <span>{weekOffset === 0 ? "Diese Woche" : "Nächste Woche"} · {fmtDay(days[0])} – {fmtDay(days[6])}
+                {people.some(p => picked.has(p.id)) && <span className="normal-case tracking-normal"> · nur {people.filter(p => picked.has(p.id)).map(p => p.first_name || p.name).join(" + ")}</span>}</span>
               <span className="flex gap-1">
                 <button onClick={() => setWeekOffset(0)} disabled={weekOffset === 0} className="p-1 rounded-full disabled:opacity-30" style={{ background: tokens.soft }} aria-label="Diese Woche"><ChevronLeft className="w-4 h-4" /></button>
                 <button onClick={() => setWeekOffset(1)} disabled={weekOffset === 1} className="p-1 rounded-full disabled:opacity-30" style={{ background: tokens.soft }} aria-label="Nächste Woche"><ChevronRight className="w-4 h-4" /></button>
