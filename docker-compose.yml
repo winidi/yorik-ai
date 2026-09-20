@@ -299,7 +299,7 @@ services:
     command: >
       -m /models/${YORIK_SEARCH_EMBED_FILE:-Qwen3-Embedding-4B-Q4_K_M.gguf}
       --embedding --pooling last
-      -ngl ${YORIK_SEARCH_EMBED_NGL:-0} -t ${YORIK_SEARCH_EMBED_THREADS:-8}
+      -ngl ${YORIK_SEARCH_EMBED_NGL:-0} -t ${YORIK_SEARCH_EMBED_THREADS:-8} -tb ${YORIK_SEARCH_EMBED_THREADS_BATCH:-16}
       -c 8192 -np 4 -b 2048 -ub 2048
       --host 0.0.0.0 --port 8080
 

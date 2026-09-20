@@ -54,8 +54,9 @@ QUERY_PREFIX = os.getenv(
     "Instruct: Given a search query, retrieve relevant passages that answer the query\nQuery: ",
 ).replace("\\n", "\n")
 # Small requests: the server has no priorities, so a search query waits
-# behind whatever the indexer has queued. Four texts are one per slot.
-EMBED_BATCH = 4
+# behind whatever the indexer has in flight. On a CPU the work is
+# compute-bound, so bigger batches would not be faster anyway.
+EMBED_BATCH = 2
 QUERY_TIMEOUT_S = 2.5      # then the search answers by keyword only
 
 
@@ -103,6 +104,11 @@ def _now() -> str:
 def _clean(*parts: Any) -> str:
     text = "\n".join(str(p).strip() for p in parts if p and str(p).strip())
     text = text.replace("\x00", "")          # Postgres text cannot hold NUL; some mails do
+    # A link says where it points, the rest is tracking noise that costs
+    # the embedder hundreds of tokens: keep the host. Same for unbroken
+    # runs of characters (base64, ids).
+    text = re.sub(r"https?://(?:www\.)?([^/\s?#>\])]+)[^\s>\])]*", r"\1", text)
+    text = re.sub(r"\S{60,}", " ", text)
     return re.sub(r"[ \t]+", " ", text).strip()
 
 
