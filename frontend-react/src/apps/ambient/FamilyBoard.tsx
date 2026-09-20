@@ -175,13 +175,22 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
       <style>{`
         .fb-pop { animation: fb-pop .45s cubic-bezier(.2,.9,.3,1.4); }
         @keyframes fb-pop { 0% { transform: scale(1); } 40% { transform: scale(1.04); } 100% { transform: scale(1); } }
-        .fb-scroll { scrollbar-width: thin; scrollbar-color: ${tokens.line} transparent; }
+        .fb-scroll { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, ${tokens.muted} 55%, transparent) transparent; }
+        .fb-title { overflow-wrap: anywhere; hyphens: auto; text-wrap: pretty; }
         @media (prefers-reduced-motion: reduce) { .fb-pop { animation: none; } }
       `}</style>
       <div className={cn("grid gap-4", narrow ? "p-3 pb-32 content-start" : "h-full p-5 min-w-0")}
            style={narrow ? undefined : { gridTemplateColumns: "minmax(0, 1fr)", gridTemplateRows: showWeek && showPeople ? "auto auto minmax(0, 1fr)" : "auto minmax(0, 1fr)" }}>
 
-        {/* header: date, next up, legend, clock */}
+        {/* header: date, next up, legend, clock — and, in every mode, the
+            offer to a signed-in person who is not on the board yet */}
+        <div className="grid gap-3 min-w-0">
+        {offerJoin && currentUserId && !feed.people.some(p => p.id === currentUserId) && (
+          <div className="rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap text-[14px]" style={{ background: tokens.card, boxShadow: `inset 0 0 0 1px ${tokens.line}` }}>
+            <span className="text-[15px]"><b>Du stehst noch nicht auf der Familientafel.</b> Wer hier steht, zeigt dem Haushalt seine Termine und Aufgaben des Tages.</span>
+            <button onClick={joinBoard} className="rounded-full px-5 py-2 text-[15px] font-bold text-white" style={{ background: "#2f9e64" }}>Mich anzeigen</button>
+          </div>
+        )}
         <header className="flex items-start justify-between gap-4 flex-wrap min-w-0">
           <div className="min-w-0">
             <h1 className="text-[34px] leading-none font-extrabold tracking-tight" style={{ fontFamily: DISPLAY }}>
@@ -210,6 +219,7 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
             <div className="text-[40px] leading-none font-bold tabular-nums" style={{ fontFamily: DISPLAY }}>{now.slice(11, 16)}</div>
           </div>
         </header>
+        </div>
 
         {/* week strip: this week and next, arrows or a swipe */}
         {showWeek && (
@@ -258,13 +268,6 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
           </section>
         )}
 
-        {offerJoin && currentUserId && !feed.people.some(p => p.id === currentUserId) && (
-          <div className="rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap text-[14px]" style={{ background: tokens.card, boxShadow: `inset 0 0 0 1px ${tokens.line}` }}>
-            <span>Du stehst noch nicht auf der Familientafel. Wer hier steht, zeigt dem Haushalt seine Termine und Aufgaben des Tages.</span>
-            <button onClick={joinBoard} className="rounded-full px-4 py-1.5 font-bold text-white" style={{ background: "#1f2430" }}>Mich anzeigen</button>
-          </div>
-        )}
-
         {/* people */}
         {showPeople && (
           <section className={cn("grid gap-4 min-w-0", narrow ? "" : "min-h-0")} style={{ gridTemplateColumns: narrow ? "1fr" : `repeat(${Math.max(1, people.length)}, minmax(0, 1fr))` }}>
@@ -309,7 +312,7 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
                     </div>
                   </button>
 
-                  <div className={cn("flex flex-col gap-2 pr-0.5", narrow ? "" : "overflow-y-auto fb-scroll min-h-0")}>
+                  <div className={cn("flex flex-col gap-2 pr-1", narrow ? "" : "flex-1 min-h-0 overflow-y-auto overscroll-contain fb-scroll")} style={{ touchAction: "pan-y" }}>
                     {routines.length > 0 && <Label muted={tokens.muted}>Routine</Label>}
                     {routines.map(t => (
                       <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !mayTick} onTap={() => toggle(t, p)}
@@ -382,7 +385,7 @@ function Card({ t, p, tokens, dim, busy, pop, locked, onTap, today, week, log }:
     : null;
   return (
     <button onClick={onTap} disabled={busy}
-            className={cn("relative grid items-center gap-3 rounded-[16px] text-left overflow-hidden", pop && "fb-pop", t.done && "opacity-80")}
+            className={cn("relative grid items-center gap-3 rounded-[16px] text-left overflow-hidden shrink-0", pop && "fb-pop", t.done && "opacity-80")}
             style={{ gridTemplateColumns: "34px minmax(0, 1fr) auto", padding: "12px 12px 12px 14px", background: tokens.card,
                      border: `1px solid color-mix(in srgb, ${p.color} ${dim ? 35 : 25}%, ${tokens.line})`,
                      boxShadow: dim ? "0 1px 0 rgba(0,0,0,.3)" : "0 1px 2px rgba(31,36,48,.05), 0 8px 20px -14px rgba(31,36,48,.35)" }}>
@@ -392,7 +395,7 @@ function Card({ t, p, tokens, dim, busy, pop, locked, onTap, today, week, log }:
         {busy ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: tokens.muted }} /> : t.done ? <Check className="w-[18px] h-[18px]" strokeWidth={3} /> : locked ? <Lock className="w-3.5 h-3.5" style={{ color: tokens.muted }} /> : null}
       </span>
       <span className="min-w-0">
-        <span className={cn("block text-[17px] leading-tight font-bold", t.done && "line-through")} style={{ color: t.done ? tokens.muted : tokens.ink }}>
+        <span lang="de" className={cn("fb-title block font-bold", t.title.length > 48 ? "text-[15px] leading-snug" : "text-[17px] leading-tight", t.done && "line-through")} style={{ color: t.done ? tokens.muted : tokens.ink }}>
           {Icon && <Icon className="inline w-4 h-4 mr-1.5 -mt-0.5" style={{ color: p.color }} />}{t.title}
         </span>
         <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px]" style={{ color: tokens.muted }}>

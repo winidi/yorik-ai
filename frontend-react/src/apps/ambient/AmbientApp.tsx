@@ -409,7 +409,7 @@ export function AmbientApp() {
 
   return (
     <div
-      className="fixed inset-0 z-40 bg-black overflow-hidden touch-none"
+      className={cn("fixed inset-0 z-40 bg-black overflow-hidden", mode === "photos" && "touch-none")}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
     >
