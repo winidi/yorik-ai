@@ -119,10 +119,16 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
     return m;
   }, [feed]);
   const people = useMemo(() => {
-    const list = [...(feed?.people || [])];
-    if (currentUserId) list.sort((a, b) => Number(b.id === currentUserId) - Number(a.id === currentUserId));
+    // The same order on every big screen: the head of the household on
+    // the left, the other adults next, the children to the right (the
+    // feed is by account age within a rank). Only the phone, where the
+    // board is one long page, starts with the signed-in person.
+    const rank = (p: Person) => ({ platform_admin: 0, admin: 1, member: 2 } as Record<string, number>)[(p.role || "").toLowerCase()] ?? 3;
+    const list = (feed?.people || []).map((p, i) => ({ p, i }))
+      .sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map(x => x.p);
+    if (narrow && currentUserId) list.sort((a, b) => Number(b.id === currentUserId) - Number(a.id === currentUserId));
     return list;
-  }, [feed, currentUserId]);
+  }, [feed, currentUserId, narrow]);
 
   // "Als Nächstes": the next timed event of today, else the first due task
   const next = useMemo(() => {
