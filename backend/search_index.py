@@ -99,6 +99,7 @@ def _now() -> str:
 
 def _clean(*parts: Any) -> str:
     text = "\n".join(str(p).strip() for p in parts if p and str(p).strip())
+    text = text.replace("\x00", "")          # Postgres text cannot hold NUL; some mails do
     return re.sub(r"[ \t]+", " ", text).strip()
 
 
@@ -200,15 +201,35 @@ def vec_literal(vec: list[float]) -> str:
     return "[" + ",".join(repr(float(x)) for x in vec) + "]"
 
 
+def _post_embeddings(texts: list[str]) -> list[list[float]]:
+    import requests
+    r = requests.post(f"{EMBED_URL}/embeddings", json={"model": EMBED_MODEL, "input": texts}, timeout=120)
+    r.raise_for_status()
+    data = sorted(r.json()["data"], key=lambda d: d.get("index", 0))
+    return [_l2(d["embedding"]) for d in data]
+
+
 def _embed_external(texts: list[str]) -> list[list[float]]:
+    """Batches; when the server refuses a batch (a text of links and
+    base64 can exceed its token window) the texts go one by one, each
+    cut shorter until it fits."""
     import requests
     out: list[list[float]] = []
     for i in range(0, len(texts), EMBED_BATCH):
-        r = requests.post(f"{EMBED_URL}/embeddings",
-                          json={"model": EMBED_MODEL, "input": texts[i:i + EMBED_BATCH]}, timeout=120)
-        r.raise_for_status()
-        data = sorted(r.json()["data"], key=lambda d: d.get("index", 0))
-        out.extend(_l2(d["embedding"]) for d in data)
+        batch = texts[i:i + EMBED_BATCH]
+        try:
+            out.extend(_post_embeddings(batch))
+            continue
+        except requests.HTTPError:
+            pass
+        for text in batch:
+            for cut in (len(text), len(text) // 2, len(text) // 4, 100):
+                try:
+                    out.extend(_post_embeddings([text[:cut]]))
+                    break
+                except requests.HTTPError:
+                    if cut == 100:
+                        raise
     return out
 
 
@@ -241,6 +262,33 @@ def embed_query(text: str) -> Optional[str]:
 # ─── indexing ────────────────────────────────────────────────────────
 
 def _write_rows(src: Source, rows: list[Any]) -> int:
+    """A batch; when it fails, row by row, and a row that cannot be
+    indexed gets an empty chunk so it never blocks its source."""
+    try:
+        return _write_batch(src, rows)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("search index: %s batch failed (%s), retrying row by row", src.name, exc)
+    done = 0
+    for r in rows:
+        try:
+            if len(rows) == 1:
+                raise RuntimeError("failed on its own")
+            done += _write_batch(src, [r])
+        except Exception as exc:  # noqa: BLE001
+            log.warning("search index: %s row %s skipped: %s", src.name, r["id"], exc)
+            with get_conn() as conn:
+                conn.execute("DELETE FROM search_chunks WHERE source = ? AND row_id = ?", (src.name, int(r["id"])))
+                conn.execute(
+                    "INSERT INTO search_chunks (source, row_id, chunk_no, text, content_hash, embedding, model, indexed_at) "
+                    "VALUES (?, ?, 0, '', ?, NULL, ?, ?)",
+                    (src.name, int(r["id"]), hashlib.sha1(src.text(r).encode("utf-8")).hexdigest(),
+                     model_tag(), _now()))
+                conn.commit()
+            done += 1
+    return done
+
+
+def _write_batch(src: Source, rows: list[Any]) -> int:
     """Chunk, embed and store a batch of source rows. A row without
     usable text gets one empty chunk, so it is not picked up again."""
     pending: list[tuple[int, int, str, str]] = []     # row_id, chunk_no, text, hash

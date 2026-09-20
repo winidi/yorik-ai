@@ -32,6 +32,7 @@ def house(fresh_app, monkeypatch):
     from backend import search_index, spaces as S
     from backend.calendars import ensure_calendars_for_user
     monkeypatch.setattr(search_index, "embed_many", _fake_embed_many)
+    monkeypatch.setattr(search_index, "EMBED_URL", "")      # whatever the box's config.env says
     dirk_c, dirk = login_client(fresh_app, role="platform_admin", name="Dirk", email="d@example.local")
     beate_c, beate = login_client(fresh_app, role="member", name="Beate", email="b@example.local")
     S.ensure_workspace_exists(dirk, "Dirk")
@@ -190,3 +191,21 @@ def test_switch_in_the_settings(house):
 
     assert dirk_c.put("/api/search/index", json={"embedder": "service"}).status_code == 400   # none installed
     assert dirk_c.post("/api/search/index/rebuild").json()["dropped"] >= 2
+
+
+def test_one_bad_row_does_not_block_its_source(house, monkeypatch):
+    from backend import search_index
+    _, dirk = house["dirk"]
+    _add_task(dirk, "Abschlag Stadtwerke überweisen")
+    _add_task(dirk, "GIFTIG diese Zeile mag der Embedder nicht")
+
+    def picky(texts):
+        if any("GIFTIG" in t for t in texts):
+            raise RuntimeError("request exceeds the available context size")
+        return _fake_embed_many(texts)
+
+    monkeypatch.setattr(search_index, "embed_many", picky)
+    assert search_index.sweep()["tasks"] == 2
+    assert search_index.sweep()["tasks"] == 0                        # the bad one is parked, not retried forever
+    dirk_c, _ = house["dirk"]
+    assert _hits(dirk_c, "Stromrechnung", "tasks") == ["Abschlag Stadtwerke überweisen"]
