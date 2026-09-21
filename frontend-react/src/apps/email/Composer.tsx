@@ -387,7 +387,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
     return (
       <button
         onClick={() => setMinimized(false)}
-        className="fixed bottom-4 right-4 z-40 bg-card border border-border rounded-t-md px-4 py-2 text-sm font-medium shadow-lg flex items-center gap-2 hover:bg-muted"
+        className="fixed bottom-[var(--dock-clearance)] right-4 z-40 bg-card border border-border rounded-md px-4 py-2 text-sm font-medium shadow-lg flex items-center gap-2 hover:bg-muted max-w-[calc(100vw-2rem)]"
       >
         <Send className="w-3.5 h-3.5" />
         {subject || "(no subject)"} ↑
@@ -412,12 +412,16 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
         void addFiles(e.dataTransfer.files);
       }}
       className={cn(
-        "fixed z-40 bg-card border flex flex-col transition",
+        "fixed bg-card border flex flex-col transition",
         // Mobile: full-screen — small floating cards don't survive
-        // the keyboard opening or thumb-typing in cramped fields.
-        "inset-0 w-full h-full rounded-none pb-[env(safe-area-inset-bottom)]",
-        // Desktop: original floating card bottom-right.
-        "md:inset-auto md:bottom-4 md:right-4 md:w-[640px] md:max-w-[calc(100vw-2rem)] md:max-h-[85vh] md:rounded-lg md:shadow-2xl md:pb-0",
+        // the keyboard opening or thumb-typing in cramped fields. It
+        // owns the screen, so it sits ABOVE the Dock (z-50): the Send
+        // row at its bottom edge must never end up behind the tiles.
+        "z-[60] inset-0 w-full h-full rounded-none pb-[env(safe-area-inset-bottom)]",
+        // Desktop: floating card bottom-right, lifted clear of the Dock
+        // (which is centred and wide enough to reach under the card on
+        // anything narrower than a 2K screen), so both stay usable.
+        "md:z-40 md:inset-auto md:bottom-[var(--dock-clearance)] md:right-4 md:w-[640px] md:max-w-[calc(100vw-2rem)] md:max-h-[calc(100vh-var(--dock-clearance)-2rem)] md:rounded-lg md:shadow-2xl md:pb-0",
         dragOver ? "border-amber-500/60 ring-2 ring-amber-500/30" : "border-border",
       )}
     >

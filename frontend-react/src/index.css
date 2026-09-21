@@ -13,6 +13,11 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Height the floating Dock occupies at the bottom of every screen
+     (tiles + its offset). Anything fixed to the bottom edge — the mail
+     composer, a minimised pill — sits above this line, so the Dock
+     never covers a button. */
+  --dock-clearance: 5rem;
   color-scheme: light;
   --background:           oklch(1 0 0);
   --foreground:           oklch(0.145 0 0);
