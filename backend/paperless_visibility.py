@@ -374,6 +374,8 @@ _CONSUME_FOLDER_TRIGGER = {
     "type":    1,      # Consumption Started — the only trigger type whose
                        # `sources` filter Paperless evaluates.
     "sources": [1],    # Consume Folder only — see the docstring below.
+    "filter_filename": "*",   # Paperless insists on a name/path/mail-rule
+                              # filter for this trigger; "*" matches all.
 }
 
 
