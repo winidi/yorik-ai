@@ -197,6 +197,56 @@ async def describe_image(row: Dict[str, Any], question: Optional[str] = None) ->
     return (result.get("content") or "").strip()
 
 
+SCAN_MAX_PAGES = 8      # a letter or an invoice; more pages → file it, Paperless runs OCR
+SCAN_DPI = 150
+
+
+def _render_pdf_pages(pdf_path: str, tmpdir: str, last: int) -> list[str]:
+    import glob
+    import subprocess
+    prefix = os.path.join(tmpdir, "page")
+    try:
+        subprocess.run(["pdftoppm", "-png", "-r", str(SCAN_DPI), "-f", "1", "-l", str(last), pdf_path, prefix],
+                       capture_output=True, timeout=90)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        log.warning("chat attachment: pdftoppm failed for %s: %s", pdf_path, exc)
+        return []
+    return sorted(glob.glob(f"{prefix}-*.png"))
+
+
+async def read_scanned_pdf(row: Dict[str, Any]) -> tuple[str, int, int]:
+    """A PDF without a text layer (a scan): render the first pages and
+    let the vision model transcribe them. Returns (text, pages_read,
+    pages_total). The transcript is kept on the row, so it is read once."""
+    import tempfile
+    from .agent.llm import LlmClient
+    try:
+        from pypdf import PdfReader
+        total = len(PdfReader(row["path"]).pages)
+    except Exception:  # noqa: BLE001
+        total = SCAN_MAX_PAGES
+    last = min(total, SCAN_MAX_PAGES)
+    client = LlmClient(model=os.getenv("HOMEOS_MODEL", "qwen3.5-9b"),
+                       base_url=os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1"), request_timeout=240)
+    parts: list[str] = []
+    with tempfile.TemporaryDirectory(prefix="yca-") as tmpdir:
+        pages = await asyncio.to_thread(_render_pdf_pages, row["path"], tmpdir, last)
+        for n, png in enumerate(pages, start=1):
+            b64 = base64.b64encode(Path(png).read_bytes()).decode()
+            content = [{"type": "text", "text": "Gib den gesamten Text dieser Seite wörtlich und vollständig wieder, in "
+                                                "Lesereihenfolge, Tabellen zeilenweise. Keine Kommentare, keine Zusammenfassung."},
+                       {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}]
+            result = await asyncio.to_thread(client.chat, [{"role": "user", "content": content}],
+                                             max_tokens=1800, temperature=0.0)
+            parts.append(f"[Seite {n}]\n{(result.get('content') or '').strip()}")
+    text = "\n\n".join(parts).strip()
+    if text:
+        with get_conn() as conn:
+            conn.execute("UPDATE chat_attachments SET text = ? WHERE id = ?", (text, row["id"]))
+            conn.commit()
+    return text, len(parts), total
+
+
 # ─── scheduler ───────────────────────────────────────────────────────
 
 _task = None

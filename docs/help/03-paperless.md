@@ -116,5 +116,6 @@ stays a card in that conversation and nowhere else: it is deleted with
 the conversation, with the **Löschen** button, or after 30 days
 (`YORIK_CHAT_ATTACHMENT_DAYS`). Only you can open your attachments.
 
-A scanned PDF without a text layer cannot be read in the chat; file it
-and Paperless runs OCR on it.
+A scanned PDF without a text layer is read by the vision model too, page
+by page (the first eight pages, a few seconds each, once per file).
+Longer scans are better filed: Paperless runs OCR over all pages.

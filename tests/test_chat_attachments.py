@@ -87,3 +87,30 @@ def test_gone_with_the_conversation_and_after_the_retention(two):
     assert beate_c.get(f"/api/chat/attachments/{b['id']}").status_code == 404
     c = _upload(beate_c)
     assert beate_c.delete(f"/api/chat/attachments/{c['id']}").status_code == 204
+
+
+def test_a_scanned_pdf_is_read_by_the_vision_model_once(two, monkeypatch):
+    from backend import chat_attachments as A
+    from backend.skills.registry import Registry, SkillContext
+    from backend.skills.read_attachment.skill import execute as read
+    beate_c, beate = two["beate"]
+    att = _upload(beate_c, "scan.pdf", b"%PDF-1.4 no text layer", "application/pdf")
+    assert att["has_text"] is False
+    calls = []
+
+    async def fake_scan(row):
+        calls.append(row["id"])
+        text = "[Seite 1]\\nStadtwerke Celle, Rechnung 4711, 84,00 EUR"
+        from backend.database import get_conn
+        with get_conn() as conn:
+            conn.execute("UPDATE chat_attachments SET text = ? WHERE id = ?", (text, row["id"]))
+            conn.commit()
+        return text, 1, 3
+
+    monkeypatch.setattr(A, "read_scanned_pdf", fake_scan)
+    ctx = SkillContext(Registry(), role="member", user_id=beate)
+    out = asyncio.run(read(ctx, attachment_id=att["id"]))
+    assert out["source"] == "vision" and "Rechnung 4711" in out["text"]
+    assert "first 1 of 3 pages" in out["_llm_hint"] and "file it in Paperless" in out["_llm_hint"]
+    asyncio.run(read(ctx, attachment_id=att["id"]))
+    assert calls == [att["id"]]                                        # the transcript is kept

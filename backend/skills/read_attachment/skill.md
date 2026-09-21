@@ -21,11 +21,11 @@ outputs:
     type: string
   text:
     type: string
-    description: The extracted text, or for a picture what the vision model read (cut at 40000 characters).
+    description: The extracted text; for a picture or a scanned PDF what the vision model read (cut at 40000 characters).
   filed:
     type: boolean
     description: True when the attachment already went to Paperless.
-cost: instant for text and PDF, a few seconds for a picture
+cost: instant for text and PDF, a few seconds for a picture, a few seconds per page for a scanned PDF (first read only)
 permissions: [admin, member, restricted]
 side_effects: none
 tags: [chat, documents, read]
