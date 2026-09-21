@@ -81,3 +81,28 @@ def render_pdf(body_html: str, *,
     except requests.RequestException as exc:
         log.warning("gotenberg unreachable at %s: %s", GOTENBERG_URL, exc)
         return None
+
+
+def render_html_pdf(html: str, *, footer_html: Optional[str] = None, pdfa: Optional[str] = None,
+                    filename: str = "document.pdf") -> Optional[bytes]:
+    """A complete HTML page → PDF, as it is: the page brings its own
+    @page size and margins (the "Schreiben" layouts do). `footer_html`
+    is printed into the bottom margin of every page; `pdfa` ("PDF/A-3b")
+    makes Gotenberg convert the result — an e-invoice must be PDF/A-3,
+    a plain Chromium PDF is not."""
+    files = {"index.html": ("index.html", html, "text/html")}
+    if footer_html:
+        files["footer.html"] = ("footer.html", footer_html, "text/html")
+    data = {"preferCssPageSize": "true", "printBackground": "true"}
+    if pdfa:
+        data["pdfa"] = pdfa
+    try:
+        r = requests.post(f"{GOTENBERG_URL}/forms/chromium/convert/html", files=files, data=data, timeout=TIMEOUT_S)
+        if not r.ok:
+            log.warning("gotenberg %s: %s", r.status_code, r.text[:200])
+            return None
+        return r.content
+    except requests.RequestException as exc:
+        log.warning("gotenberg unreachable at %s: %s", GOTENBERG_URL, exc)
+        return None
+

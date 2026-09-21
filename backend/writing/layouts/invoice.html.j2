@@ -1,0 +1,24 @@
+{% extends "_frame.html.j2" %}
+{% block body %}
+<h1 class="doc-title">{{ 'Angebot' if kind == 'quote' else 'Rechnung' }}{% if c.number %} {{ c.number }}{% endif %}</h1>
+{% if c.subject %}<h1 class="subject">{{ c.subject }}</h1>{% endif %}
+{% if c.intro_html %}<div class="text note">{{ c.intro_html | safe }}</div>{% endif %}
+<table class="lines">
+  <thead><tr><th class="pos">Pos.</th><th>Beschreibung</th><th class="n">Menge</th><th class="n">Einzelpreis</th><th class="n">Gesamt</th></tr></thead>
+  <tbody>
+  {% for l in c.lines %}<tr><td class="pos">{{ loop.index }}</td><td class="desc">{{ l.text }}</td><td class="n">{{ l.qty_text }}{% if l.unit %} {{ l.unit }}{% endif %}</td><td class="n">{{ l.unit_price_text }}</td><td class="n">{{ l.net_text }}</td></tr>
+  {% else %}<tr><td class="pos"></td><td colspan="4">{{ missing('Noch keine Positionen') }}</td></tr>{% endfor %}
+  </tbody>
+</table>
+<table class="sums">
+  <tr><td>Nettobetrag</td><td>{{ c.totals.net_text }}</td></tr>
+  {% for v in c.totals.vat_rows %}<tr><td>zzgl. {{ v.rate_text }} % USt.</td><td>{{ v.vat_text }}</td></tr>{% endfor %}
+  <tr class="total"><td>{{ 'Angebotssumme' if kind == 'quote' else 'Rechnungsbetrag' }}</td><td>{{ c.totals.gross_text }}</td></tr>
+</table>
+<div class="note">
+  {% if lh.small_business %}<p>{{ lh.small_business_text }}</p>{% endif %}
+  {% if c.closing_html %}<div class="text">{{ c.closing_html | safe }}</div>{% endif %}
+  {% if kind == 'invoice' and c.payment_text %}<p>{{ c.payment_text }}</p>{% endif %}
+  {% if kind == 'quote' and c.valid_until_text %}<p>Dieses Angebot ist gültig bis zum {{ c.valid_until_text }}.</p>{% endif %}
+</div>
+{% endblock %}

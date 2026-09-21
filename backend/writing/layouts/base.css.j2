@@ -1,0 +1,55 @@
+/* One sheet of A4 after DIN 5008 (form B): address window 45 mm from the
+   top, text from 98 mm, footer in the bottom margin. Print gets the
+   margins from @page; the screen preview draws the sheet itself. */
+@page { size: A4; margin: 20mm 20mm 32mm 25mm; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: {{ font_css | safe }}; font-size: 10.5pt; line-height: 1.45; color: #1a1a1a;
+       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.head { height: 25mm; display: flex; align-items: flex-start; gap: 6mm;
+        justify-content: {{ {'right': 'space-between', 'left': 'flex-start', 'center': 'center'}[lh.logo_place] }}; }
+.head.place-right .who { order: 1; } .head.place-right .logo { order: 2; }
+.head.place-center { flex-direction: column; align-items: center; gap: 1mm; text-align: center; }
+.head .logo img { max-height: 22mm; max-width: 70mm; display: block; }
+.head.place-center .logo img { max-height: 15mm; }
+.head .who { font-size: 15pt; font-weight: 700; color: {{ lh.accent }}; line-height: 1.15; }
+.head .who small { display: block; font-size: 9pt; font-weight: 400; color: #52525b; margin-top: 1mm; }
+.zone { display: flex; justify-content: space-between; gap: 10mm; height: 45mm; margin-left: -5mm; }
+.window { width: 85mm; height: 45mm; padding-left: 5mm; overflow: hidden; }
+.window .return { font-size: 7pt; color: #52525b; height: 5mm; line-height: 5mm; white-space: nowrap; overflow: hidden;
+                  border-bottom: 0.2mm solid #a1a1aa; margin-bottom: 3mm; }
+.window .to { font-size: 10.5pt; line-height: 1.35; }
+.missing { background: #fff3c4; outline: 0.3mm dashed #d4a514; padding: 0 1mm; color: #7a5b00; }
+.info { width: 70mm; font-size: 9pt; line-height: 1.5; padding-top: 5mm; }
+.info table { border-collapse: collapse; margin-left: auto; }
+.info td { padding: 0 0 0 4mm; vertical-align: top; }
+.info td:first-child { color: #52525b; padding-left: 0; white-space: nowrap; }
+.body { margin-top: 8.46mm; }
+h1.subject { font-size: 11.5pt; font-weight: 700; margin: 0 0 6mm; }
+h1.doc-title { font-size: 17pt; font-weight: 700; margin: 0 0 1mm; color: {{ lh.accent }}; }
+.text p { margin: 0 0 3.2mm; } .text ul, .text ol { margin: 0 0 3.2mm; padding-left: 6mm; }
+.text h2 { font-size: 11.5pt; margin: 5mm 0 2mm; } .text h3 { font-size: 10.5pt; margin: 4mm 0 2mm; }
+.text table { width: 100%; border-collapse: collapse; margin: 3mm 0; font-size: 10pt; }
+.text th, .text td { border: 0.2mm solid #d4d4d8; padding: 1.5mm 2.5mm; text-align: left; vertical-align: top; }
+.closing { margin-top: 8mm; break-inside: avoid; } .closing .sig { margin-top: 14mm; }
+table.lines { width: 100%; border-collapse: collapse; margin: 5mm 0 0; font-size: 10pt; }
+table.lines th { text-align: left; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .04em; color: #fff;
+                 background: {{ lh.accent }}; padding: 2mm 2.5mm; font-weight: 700; }
+table.lines td { padding: 2.2mm 2.5mm; border-bottom: 0.2mm solid #e4e4e7; vertical-align: top; }
+table.lines tr { break-inside: avoid; }
+table.lines .n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+table.lines .desc { white-space: pre-line; } table.lines .pos { width: 8mm; } table.lines td.pos { color: #71717a; }
+table.sums { margin: 3mm 0 0 auto; border-collapse: collapse; font-size: 10pt; break-inside: avoid; min-width: 70mm; }
+table.sums td { padding: 1.2mm 2.5mm; } table.sums td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+table.sums tr.total td { font-weight: 700; font-size: 11.5pt; border-top: 0.4mm solid {{ lh.accent }}; padding-top: 2mm; }
+.note { margin-top: 6mm; } .note p { margin: 0 0 2.5mm; }
+.footer { font-size: 7.5pt; line-height: 1.45; color: #52525b; display: flex; gap: 6mm; justify-content: space-between;
+          border-top: 0.2mm solid {{ lh.accent }}; padding-top: 2mm; }
+.footer div { flex: 1; } .footer b { color: #27272a; font-weight: 700; }
+{% if preview %}
+html { background: #d9d9de; }
+body { padding: 8mm 0; }
+.sheet { position: relative; width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff;
+         padding: 20mm 20mm 32mm 25mm; box-shadow: 0 2mm 8mm rgba(0,0,0,.25); }
+.sheet > .footer { position: absolute; left: 25mm; right: 20mm; bottom: 9mm; }
+{% endif %}

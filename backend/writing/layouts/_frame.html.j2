@@ -1,0 +1,23 @@
+{#- The sheet every document shares: head, address window, info block. -#}
+{% macro missing(label) %}<span class="missing">{{ label }}</span>{% endmacro %}
+<!doctype html>
+<html lang="{{ 'de' if lh.country in ('DE', 'AT', 'CH') else 'en' }}">
+<head><meta charset="utf-8"><title>{{ title }}</title><style>{{ css }}</style></head>
+<body>
+{% if preview %}<div class="sheet">{% endif %}
+<div class="head place-{{ lh.logo_place }}">
+  <div class="who">{{ lh.business_name or lh.sender_name }}{% if lh.business_name and lh.sender_name %}<small>{{ lh.sender_name }}</small>{% endif %}</div>
+  {% if logo %}<div class="logo"><img src="{{ logo }}" alt=""></div>{% endif %}
+</div>
+<div class="zone">
+  <div class="window">
+    <div class="return">{{ [lh.business_name or lh.sender_name, lh.street, (lh.postcode ~ ' ' ~ lh.city).strip()] | select | join(' · ') }}</div>
+    <div class="to">{% if to.name %}{{ to.name }}{% else %}{{ missing('Empfänger fehlt') }}{% endif %}<br>
+      {%- for line in to.address_lines %}{{ line }}<br>{% else %}{{ missing('Adresse fehlt') }}{% endfor %}</div>
+  </div>
+  <div class="info"><table>{% for label, value in info %}{% if value %}<tr><td>{{ label }}</td><td>{{ value }}</td></tr>{% endif %}{% endfor %}</table></div>
+</div>
+<div class="body">{% block body %}{% endblock %}</div>
+{% if preview %}<div class="footer">{% include "_footer_cols.html.j2" %}</div></div>{% endif %}
+</body>
+</html>

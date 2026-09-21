@@ -1,0 +1,4 @@
+{#- The footer's columns, shared by the preview sheet and the PDF footer. -#}
+<div><b>{{ lh.business_name or lh.sender_name }}</b><br>{{ lh.street }}<br>{{ lh.postcode }} {{ lh.city }}{% if lh.register %}<br>{{ lh.register }}{% endif %}</div>
+<div>{% if lh.phone %}Tel. {{ lh.phone }}<br>{% endif %}{% if lh.email %}{{ lh.email }}<br>{% endif %}{% if lh.website %}{{ lh.website }}{% endif %}</div>
+{% if lh.iban or lh.tax_id or lh.vat_id %}<div>{% if lh.bank_name %}{{ lh.bank_name }}<br>{% endif %}{% if lh.iban %}IBAN {{ lh.iban }}<br>{% endif %}{% if lh.bic %}BIC {{ lh.bic }}<br>{% endif %}{% if lh.vat_id %}USt-IdNr. {{ lh.vat_id }}{% elif lh.tax_id %}Steuernr. {{ lh.tax_id }}{% endif %}</div>{% endif %}

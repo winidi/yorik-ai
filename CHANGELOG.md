@@ -13,6 +13,14 @@ worklist.
 
 ### Added
 
+- **Letterhead (first stage of "Schreiben").** Settings → You → Your
+  letterhead: logo, accent colour, font, sender, footer with bank and
+  tax numbers, standard sentences, with a live preview of a letter, an
+  invoice and a quote and a sample PDF. Started from the profile; each
+  person has their own. It is the look of the small documents app that
+  will replace Compose (`docs/plans/2026-09-21-dokumente-neubau.md`);
+  Compose is untouched. The PDF function can now ask for PDF/A-3b, which
+  an e-invoice needs.
 - **Family board: timetable, to-do details, appointment details.** A
   fourth view shows the children's school timetables, filled in on the
   board by a parent or the child. "+ Aufgabe" asks for the day; a double

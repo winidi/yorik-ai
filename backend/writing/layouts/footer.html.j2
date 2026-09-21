@@ -1,0 +1,7 @@
+{#- Gotenberg prints this into the bottom margin of every page. Chromium
+    gives header/footer templates no page styles: everything inline. -#}
+<html><head><style>
+  body { margin: 0; font-family: {{ font_css | safe }}; font-size: 7.5pt; line-height: 1.45; color: #52525b; -webkit-print-color-adjust: exact; }
+  .f { margin: 0 20mm 0 25mm; width: 165mm; display: flex; gap: 6mm; justify-content: space-between; border-top: 0.2mm solid {{ lh.accent }}; padding-top: 2mm; }
+  .f div { flex: 1; } b { color: #27272a; } .pg { flex: 0 0 auto !important; text-align: right; white-space: nowrap; }
+</style></head><body><div class="f">{{ cols | safe }}<div class="pg">Seite <span class="pageNumber"></span>/<span class="totalPages"></span></div></div></body></html>

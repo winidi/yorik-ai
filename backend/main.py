@@ -112,6 +112,8 @@ from . import push as _push
 app.include_router(_push.router)
 from . import sharing_routes as _sharing_routes
 app.include_router(_sharing_routes.router)
+from .writing import routes as _writing_routes
+app.include_router(_writing_routes.router)
 from . import recordings as _recordings
 app.include_router(_recordings.router)
 from . import people as _people
