@@ -24,6 +24,8 @@ from email.message import EmailMessage
 from email.utils import formataddr, make_msgid, formatdate
 from typing import Any, Optional
 
+import re
+
 from . import credential_store
 from .database import get_conn
 
@@ -53,13 +55,28 @@ def send(
     if not pw:
         return {"ok": False, "error": "no SMTP password in credential store"}
 
+    # A header is one line. A subject taken over from a received mail can
+    # carry the line breaks of a folded header ("Re: Einladung …\n Alessandro"),
+    # and Python refuses such a value outright (that was an HTTP 500 on
+    # send); a line break in an address or a name would be header
+    # injection. Collapse them everywhere.
+    def _h(value: Any) -> str:
+        return re.sub(r"\s*[\r\n]+\s*", " ", str(value or "")).strip()
+
+    subject = _h(subject)
+    to = [_h(a) for a in (to or []) if _h(a)]
+    cc = [_h(a) for a in (cc or []) if _h(a)]
+    bcc = [_h(a) for a in (bcc or []) if _h(a)]
+    in_reply_to = _h(in_reply_to) or None
+    references = [_h(r) for r in (references or []) if _h(r)]
+
     msg = EmailMessage()
-    from_display = cfg.get("display_name") or cfg["email"].split("@")[0]
+    from_display = _h(cfg.get("display_name")) or cfg["email"].split("@")[0]
     msg["From"] = formataddr((from_display, cfg["email"]))
     msg["To"] = ", ".join(to)
     if cc:
         msg["Cc"] = ", ".join(cc)
-    msg["Subject"] = subject or "(no subject)"
+    msg["Subject"] = _h(subject) or "(no subject)"
     msg["Date"] = formatdate(localtime=True)
     message_id = make_msgid(domain=cfg["email"].split("@", 1)[1])
     msg["Message-ID"] = message_id

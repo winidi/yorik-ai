@@ -519,7 +519,8 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
         body_text = _re.sub(r"\s+", " ", body_text).strip()
     snippet = (body_text or "")[:SNIPPET_LEN].replace("\n", " ").strip()
 
-    subject = parsed.subject or ""
+    # a long subject arrives folded over several header lines; store it as the one line it is
+    subject = _re.sub(r"\s*[\r\n]+\s*", " ", parsed.subject or "").strip()
     has_attachments = 1 if parsed.attachments else 0
     size_bytes = data.get(b"RFC822.SIZE", 0)
 

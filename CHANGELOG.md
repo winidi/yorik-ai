@@ -79,6 +79,20 @@ worklist.
   switch.
   Settings → Embeddings has the switch (on/off), the choice of model,
   the index progress per source and a rebuild button.
+- **Mail: sending a reply no longer fails on a long subject.** Subjects
+  were stored with the line breaks of folded headers (550 mails on the
+  maintainer's box); "Re: …" on such a mail made Python refuse the
+  header and the send answered HTTP 500. Every header value is
+  flattened to one line before sending (which also rules out header
+  injection through an address), new mails are stored unfolded, a
+  migration cleans the stored ones.
+- **Mail drafts survive.** The composer saves what you type 1.5 s after
+  the last change and when the window goes away — body text too
+  (typing alone never triggered the old autosave) and replies too, one
+  slot per mail being answered. Kept on the device until sent or
+  discarded; a failed send keeps everything.
+- **Mail list** shows sender and subject; two preview lines are a
+  toggle. **Composer** sits above the Dock instead of under it.
 - **Documents for the parents only.** A fourth visibility, "parents":
   the adults of the household see the document, the children's
   accounts do not. Backed by a Paperless group "parents" that follows

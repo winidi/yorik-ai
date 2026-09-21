@@ -17,7 +17,7 @@
  *   - ⌘/Ctrl+Enter sends.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   X, Send, Loader2, Minus, AlertCircle, UsersRound,
   Bold as BoldIcon, Italic as ItalicIcon, Underline as UnderlineIcon,
@@ -97,6 +97,12 @@ interface Props {
 // Autosave bucket — replies are keyed by inReplyTo so the user can
 // have multiple drafts in flight without overwriting each other.
 const AUTOSAVE_KEY = "yorik_email_compose_draft";
+/** One autosave slot for the new mail, one per mail being answered:
+ *  what you typed survives closing the window, a reload and a failed
+ *  send, on this device, until it is sent or discarded. */
+function autosaveKey(inReplyTo?: string | null): string {
+  return inReplyTo ? `${AUTOSAVE_KEY}:reply:${inReplyTo}` : AUTOSAVE_KEY;
+}
 const MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 interface ContactSuggestion {
@@ -164,19 +170,19 @@ function fileToBase64(file: File): Promise<string> {
 export function Composer({ accounts, initial, onClose, onSent }: Props) {
   const defaultAccount = accounts.find(a => a.is_default) || accounts[0];
 
-  // Restore an autosaved draft when opening a NEW compose (no inReplyTo).
-  // Replies always use the freshly-prefilled `initial` — we don't want
-  // an old draft for a different thread leaking in.
+  // Restore what was typed last time: the new-mail slot, or the slot of
+  // exactly this mail when answering (so a draft never leaks into
+  // another thread).
+  const saveKey = autosaveKey(initial.inReplyTo);
   const restored = useMemo(() => {
-    if (initial.inReplyTo) return null;
     try {
-      const raw = localStorage.getItem(AUTOSAVE_KEY);
+      const raw = localStorage.getItem(saveKey);
       if (!raw) return null;
       const d = JSON.parse(raw) as ComposeDraft & { bodyHtml?: string };
       if ((d.to || d.subject || d.body || d.bodyHtml || d.cc || "").trim()) return d;
       return null;
     } catch { return null; }
-  }, [initial.inReplyTo]);
+  }, [saveKey]);
 
   const [accountId, setAccountId] = useState<number>(
     restored?.accountId || initial.accountId || defaultAccount?.id || 0
@@ -231,22 +237,39 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
     },
   });
 
-  // Autosave every 3s of inactivity, BUT only for the new-compose
-  // path (reply drafts would clobber each other on this single key).
-  // We store HTML in `body` so the restore round-trips cleanly.
+  // Autosave 1.5 s after the last change — to a field OR to the body
+  // (the editor object never changes, so typing has to bump a counter;
+  // before, body text alone was never saved). HTML in `body` so the
+  // restore round-trips cleanly.
+  const sentRef = useRef(false);       // sent or discarded: nothing left to save
+  const [bodyRev, setBodyRev] = useState(0);
   useEffect(() => {
-    if (initial.inReplyTo) return;
     if (!editor) return;
-    const handle = window.setTimeout(() => {
-      try {
-        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
-          accountId, to, cc, subject,
-          body: editor.getHTML(),
-        }));
-      } catch {}
-    }, 3000);
+    const bump = () => setBodyRev(n => n + 1);
+    editor.on("update", bump);
+    return () => { editor.off("update", bump); };
+  }, [editor]);
+  const save = useCallback(() => {
+    if (!editor || sentRef.current) return;
+    try {
+      const body = editor.getHTML();
+      const empty = !editor.getText().trim() && !to.trim() && !subject.trim();
+      // an untouched reply (only the quoted original) is not a draft worth restoring
+      if (empty || (initial.inReplyTo && bodyRev === 0)) return;
+      localStorage.setItem(saveKey, JSON.stringify({ accountId, to, cc, subject, body }));
+    } catch {}
+  }, [editor, saveKey, accountId, to, cc, subject, bodyRev, initial.inReplyTo]);
+  useEffect(() => {
+    const handle = window.setTimeout(save, 1500);
     return () => window.clearTimeout(handle);
-  }, [accountId, to, cc, subject, editor, initial.inReplyTo]);
+  }, [save]);
+  // …and at once when the window goes away (close, minimise, reload, tab switch).
+  useEffect(() => {
+    const onHide = () => save();
+    window.addEventListener("pagehide", onHide);
+    document.addEventListener("visibilitychange", onHide);
+    return () => { window.removeEventListener("pagehide", onHide); document.removeEventListener("visibilitychange", onHide); save(); };
+  }, [save]);
 
   async function addFiles(
     files: FileList | File[],
@@ -361,7 +384,8 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
         })),
       });
       // Clear the autosave so the next blank compose doesn't restore.
-      try { localStorage.removeItem(AUTOSAVE_KEY); } catch {}
+      try { localStorage.removeItem(saveKey); } catch {}
+      sentRef.current = true;
       onSent();
       onClose();
     } catch (e: any) {
@@ -372,7 +396,8 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
   }
 
   function discardDraft() {
-    try { localStorage.removeItem(AUTOSAVE_KEY); } catch {}
+    sentRef.current = true;          // the unmount save must not bring it back
+    try { localStorage.removeItem(saveKey); } catch {}
     onClose();
   }
 
