@@ -13,6 +13,19 @@ worklist.
 
 ### Added
 
+- **Schreiben: invoices, quotes and a valid e-invoice (third stage).**
+  Line items as data (any number of them), sums in `Decimal` by the
+  app, never by the model; § 14 UStG checklist beside the sheet;
+  "Fertigstellen" takes the number (per person, made on first use) only
+  after the PDF and the e-invoice have worked, so a failure leaves no
+  gap; quote → invoice in one click; chat skill `write_invoice`.
+  E-invoices are PDF/A-3b with Factur-X EN 16931 XML from the same
+  figures, checked before delivery (XSD plus the sums re-added from the
+  XML) and confirmed with the Mustang reference validator for standard,
+  two-rate and small-business invoices (`scripts/validate_einvoice.sh`).
+  The old Compose path never produced a valid one (no PDF/A-3, profile
+  label mismatch, silent fallback); facturx's own schematron check
+  silently skips without a Saxon server and is not relied on.
 - **Schreiben: letters (second stage).** A small app at `/r/write`,
   switched on under Settings → Apps. The chat skill `write_letter`
   writes the whole letter as a draft and never asks back; the address

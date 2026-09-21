@@ -64,8 +64,8 @@ def test_a_letter_is_yours_is_edited_and_becomes_final_when_it_leaves(fresh_app,
     dirk_c, _ = login_client(fresh_app, role="platform_admin", name="Dirk", email="d@example.local")
     kid_c, _ = login_client(fresh_app, role="restricted", name="Yorik", email="k@example.local")
 
-    assert beate_c.get("/api/writing").json() == {"documents": [], "kinds": ["letter"]}
-    assert beate_c.post("/api/writing", json={"kind": "invoice"}).status_code == 403          # stage 3
+    assert beate_c.get("/api/writing").json() == {"documents": [], "kinds": ["letter", "invoice", "quote"]}
+    assert kid_c.get("/api/writing").json()["kinds"] == ["letter"] and kid_c.post("/api/writing", json={"kind": "invoice"}).status_code == 403
     assert beate_c.post("/api/writing", json={"kind": "poster"}).status_code == 400
     assert kid_c.post("/api/writing", json={"kind": "letter", "content": {"text": "Liebe Oma"}}).status_code == 201
 

@@ -1758,7 +1758,7 @@ function MessageBubble({
         {!isUser && message.ui_actions && message.ui_actions
           .filter(a => a.type === "writing_draft_created")
           .map((a: any) => (
-            <WritingDraftCard key={a.document_id} documentId={a.document_id} recipient={a.recipient || ""} subject={a.subject || ""}
+            <WritingDraftCard key={a.document_id} documentId={a.document_id} kind={a.kind} recipient={a.recipient || ""} subject={a.subject || ""}
                               preview={a.preview || ""} missing={a.missing || []} />
           ))}
         {/* Template picker — the LLM called compose_draft with a vague

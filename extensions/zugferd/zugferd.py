@@ -125,6 +125,19 @@ def build_xml(invoice: Dict[str, Any]) -> bytes:
         # For VAT IDs the scheme is "VA" and the id is the actual number.
         tr.id = ("VA", _s(s["vat_id"]))
         doc.trade.agreement.seller.tax_registrations.add(tr)
+    if s.get("tax_id"):
+        # The tax number (Steuernummer), scheme "FC": what a small business
+        # without a VAT ID identifies itself with (BR-CO-26).
+        from drafthorse.models.party import TaxRegistration
+        tr = TaxRegistration()
+        tr.id = ("FC", _s(s["tax_id"]))
+        doc.trade.agreement.seller.tax_registrations.add(tr)
+        if not s.get("vat_id"):
+            # BR-CO-26 wants a seller identifier, a legal registration or a
+            # VAT ID; the tax number as registration ("FC") does not count.
+            # Without a VAT ID the tax number also serves as the seller
+            # identifier (BT-29).
+            doc.trade.agreement.seller.id = _s(s["tax_id"])
 
     # Buyer
     b = invoice.get("buyer") or {}

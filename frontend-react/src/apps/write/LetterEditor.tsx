@@ -4,43 +4,36 @@
  * typed is saved a moment later; the preview follows the saved state.
  * A final letter is shown, not edited.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Underline } from "@tiptap/extension-underline";
 import { Placeholder } from "@tiptap/extension-placeholder";
-import { ArrowLeft, Bold, Check, Eye, FileDown, FolderInput, Italic, List, ListOrdered, Loader2, Redo2, Search, Send, Sparkles, Underline as UnderlineIcon, Undo2, X } from "lucide-react";
+import { ArrowLeft, Bold, Check, Eye, FileDown, FolderInput, Italic, List, ListOrdered, Loader2, Redo2, Send, Sparkles, Underline as UnderlineIcon, Undo2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { FileDialog, SendDialog } from "./LetterDialogs";
-import type { Recipient, WrittenDoc } from "./types";
-
-const SHEET_PX = 794 + 60;
-type ContactHit = { id: number; display_name: string; legal_name?: string | null; kind?: string };
+import { PagePreview } from "./PagePreview";
+import { RecipientFields, recipientOf, recipientPayload, type RecipientValue } from "./RecipientFields";
+import type { WrittenDoc } from "./types";
 
 export function LetterEditor({ doc, onChanged, onBack, say, extra }: {
   doc: WrittenDoc; onChanged: (d: WrittenDoc) => void; onBack: () => void;
   say: (text: string, bad?: boolean) => void; extra?: React.ReactNode;
 }) {
   const final = doc.status === "final";
-  const [name, setName] = useState(doc.recipient?.name || "");
-  const [address, setAddress] = useState((doc.recipient?.address_lines || []).join("\n"));
-  const [email, setEmail] = useState(doc.recipient?.email || "");
-  const [contactId, setContactId] = useState<number | null>(doc.recipient?.contact_id ?? null);
+  const [to, setTo] = useState<RecipientValue>(() => recipientOf(doc));
   const [subject, setSubject] = useState(doc.content.subject || "");
   const [closing, setClosing] = useState(!!doc.content.add_closing);
   const [saving, setSaving] = useState<"idle" | "dirty" | "saving" | "saved" | "failed">("idle");
   const [html, setHtml] = useState("");
   const [showPreview, setShowPreview] = useState(false);          // phone: the preview takes the editor's place
   const [dialog, setDialog] = useState<"send" | "file" | null>(null);
-  const [hits, setHits] = useState<ContactHit[] | null>(null);
   const [wish, setWish] = useState("");
   const [rewriting, setRewriting] = useState(false);
-  const boxRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.5);
   const timer = useRef<number | null>(null);
-  const latest = useRef({ name, address, email, contactId, subject, closing });
-  latest.current = { name, address, email, contactId, subject, closing };
+  const latest = useRef({ to, subject, closing });
+  latest.current = { to, subject, closing };
 
   const editor = useEditor({
     extensions: [StarterKit, Underline, Placeholder.configure({ placeholder: "Sehr geehrte Damen und Herren, …" })],
@@ -63,7 +56,7 @@ export function LetterEditor({ doc, onChanged, onBack, say, extra }: {
     setSaving("saving");
     try {
       const out = await api.patch<WrittenDoc>(`/api/writing/${doc.id}`, {
-        recipient: { contact_id: v.contactId, name: v.name, address_lines: v.address.split("\n"), email: v.email },
+        recipient: recipientPayload(v.to),
         content: { ...doc.content, subject: v.subject, text_html: editor.getHTML(), add_closing: v.closing },
       });
       onChanged(out); setSaving("saved"); void loadPreview();
@@ -80,36 +73,6 @@ export function LetterEditor({ doc, onChanged, onBack, say, extra }: {
   }
   useEffect(() => () => { if (timer.current) { window.clearTimeout(timer.current); void saveRef.current(); } }, []);
   async function flush() { if (timer.current) { window.clearTimeout(timer.current); timer.current = null; await saveRef.current(); } }
-
-  useLayoutEffect(() => {
-    const el = boxRef.current;
-    if (!el) return;
-    const fit = () => { if (el.clientWidth) setScale(Math.min(1, el.clientWidth / SHEET_PX)); };
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [showPreview]);
-
-  // recipient from the contacts: type a name, pick a hit, the address comes along
-  useEffect(() => {
-    if (final || contactId || name.trim().length < 2) { setHits(null); return; }
-    const t = window.setTimeout(async () => {
-      try { setHits((await api.get<ContactHit[]>(`/api/contacts?q=${encodeURIComponent(name.trim())}&limit=6`)).slice(0, 6)); } catch { setHits(null); }
-    }, 300);
-    return () => window.clearTimeout(t);
-  }, [name, contactId, final]);
-
-  async function pick(c: ContactHit) {
-    setHits(null);
-    try {
-      const out = await api.patch<WrittenDoc>(`/api/writing/${doc.id}`, { contact_id: c.id });
-      const r = out.recipient as Recipient;
-      setName(r.name || ""); setAddress((r.address_lines || []).join("\n")); setEmail(r.email || ""); setContactId(r.contact_id ?? null);
-      onChanged(out); void loadPreview();
-      if (!r.address_lines?.length) say("Für diesen Kontakt ist keine Adresse hinterlegt. Du kannst sie hier eintragen.");
-    } catch (e: any) { say(`Kontakt übernehmen hat nicht geklappt: ${e?.message || e}`, true); }
-  }
 
   async function rewrite() {
     if (!editor || !wish.trim()) return;
@@ -129,12 +92,11 @@ export function LetterEditor({ doc, onChanged, onBack, say, extra }: {
     finally { setRewriting(false); }
   }
 
-  const missing = [!name.trim() && "Empfänger", !address.trim() && "Adresse"].filter(Boolean) as string[];
+  const missing = [!to.name.trim() && "Empfänger", !to.address.trim() && "Adresse"].filter(Boolean) as string[];
   const Tool = ({ on, active, label, children }: { on: () => void; active?: boolean; label: string; children: React.ReactNode }) => (
     <button type="button" onMouseDown={e => e.preventDefault()} onClick={on} title={label} aria-label={label} aria-pressed={active}
             className={cn("p-1.5 rounded-md", active ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-muted")}>{children}</button>
   );
-  const input = "rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary disabled:opacity-70";
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -161,32 +123,8 @@ export function LetterEditor({ doc, onChanged, onBack, say, extra }: {
       <div className="flex-1 min-h-0 grid xl:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
         <div className={cn("min-h-0 overflow-y-auto p-4 md:p-6", showPreview && "hidden xl:block")}>
           <div className="mx-auto max-w-[720px] grid gap-4">
-            <section className="grid gap-2 sm:grid-cols-2">
-              <div className="relative grid gap-1">
-                <label className="text-[11px] text-muted-foreground" htmlFor="w-name">An</label>
-                <div className="relative">
-                  <input id="w-name" disabled={final} value={name} onChange={e => { setName(e.target.value); setContactId(null); touch(); }} placeholder="Name oder Firma" autoComplete="off" className={cn(input, "w-full pr-8")} />
-                  {contactId ? <Check className="absolute right-2.5 top-2.5 w-4 h-4 text-emerald-500" aria-label="Aus den Kontakten" /> : <Search className="absolute right-2.5 top-2.5 w-4 h-4 text-muted-foreground" />}
-                </div>
-                {hits && hits.length > 0 && (
-                  <ul className="absolute z-20 top-full mt-1 w-full rounded-lg border border-border bg-card shadow-xl overflow-hidden">
-                    {hits.map(c => (
-                      <li key={c.id}><button onMouseDown={e => e.preventDefault()} onClick={() => pick(c)} className="w-full text-left px-3 py-2 text-sm hover:bg-muted">
-                        {c.display_name}{c.legal_name && c.legal_name !== c.display_name ? <span className="text-muted-foreground"> · {c.legal_name}</span> : null}
-                      </button></li>
-                    ))}
-                    <li><button onMouseDown={e => e.preventDefault()} onClick={() => setHits(null)} className="w-full text-left px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted flex items-center gap-1"><X className="w-3 h-3" /> keiner davon</button></li>
-                  </ul>
-                )}
-                <label className="text-[11px] text-muted-foreground mt-1" htmlFor="w-mail">E-Mail (für „Senden“)</label>
-                <input id="w-mail" disabled={final} value={email} onChange={e => { setEmail(e.target.value); touch(); }} placeholder="optional" className={input} />
-              </div>
-              <div className="grid gap-1 content-start">
-                <label className="text-[11px] text-muted-foreground" htmlFor="w-addr">Adresse (eine Zeile pro Teil)</label>
-                <textarea id="w-addr" disabled={final} value={address} onChange={e => { setAddress(e.target.value); touch(); }} rows={4} placeholder={"Straße und Hausnummer\nPLZ Ort"}
-                          className={cn(input, "resize-none", !final && !address.trim() && "border-amber-500/50")} />
-              </div>
-            </section>
+            <RecipientFields docId={doc.id} value={to} disabled={final} say={say} onChange={v => { setTo(v); touch(); }}
+                             onPicked={d => { setTo(recipientOf(d)); onChanged(d); void loadPreview(); }} />
 
             <div className="rounded-xl bg-white shadow-lg ring-1 ring-black/10 px-6 py-5 md:px-10 md:py-8">
               <input disabled={final} value={subject} onChange={e => { setSubject(e.target.value); touch(); }} placeholder="Betreff" aria-label="Betreff"
@@ -226,16 +164,11 @@ export function LetterEditor({ doc, onChanged, onBack, say, extra }: {
         </div>
 
         <div className={cn("min-h-0 overflow-y-auto border-l border-border bg-muted/30 p-4", showPreview ? "block" : "hidden xl:block")}>
-          <div ref={boxRef} className="mx-auto max-w-[620px] rounded-lg overflow-hidden bg-[#d9d9de]" style={{ height: Math.round(1190 * scale) }}>
-            {/* the page brings its own styles and no scripts; the frame allows none */}
-            <iframe title="Vorschau" sandbox="" srcDoc={html} tabIndex={-1}
-                    style={{ width: SHEET_PX, height: 1190, border: 0, transform: `scale(${scale})`, transformOrigin: "top left", pointerEvents: "none" }} />
-          </div>
-          <p className="mt-2 text-center text-[11px] text-muted-foreground">So wird die erste Seite gedruckt. Das Aussehen kommt aus deinem Briefpapier.</p>
+          <PagePreview html={html} />
         </div>
       </div>
 
-      {dialog === "send" && <SendDialog doc={doc} to={email} subject={subject} onClose={() => setDialog(null)} onDone={d => { setDialog(null); onChanged(d); say("Verschickt. Der Brief ist jetzt fertig und liegt unter „Verschickt und abgelegt“."); }} />}
+      {dialog === "send" && <SendDialog doc={doc} to={to.email} subject={subject} onClose={() => setDialog(null)} onDone={d => { setDialog(null); onChanged(d); say("Verschickt. Der Brief ist jetzt fertig und liegt unter „Verschickt und abgelegt“."); }} />}
       {dialog === "file" && <FileDialog doc={doc} onClose={() => setDialog(null)} onDone={d => { setDialog(null); onChanged(d); say("In Paperless abgelegt. Der Brief ist jetzt fertig."); }} />}
     </div>
   );

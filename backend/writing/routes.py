@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFil
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from . import layouts, letterhead as lh_mod, recipient as rcp_mod, store
+from . import einvoice, invoice as inv_mod, layouts, letterhead as lh_mod, recipient as rcp_mod, store
 
 router = APIRouter(tags=["writing"])
 
@@ -112,9 +112,8 @@ def sample_pdf(letterhead_id: int, kind: str = "letter", user: Dict[str, Any] = 
 
 # ── documents ───────────────────────────────────────────────────────────
 
-# Invoices and quotes join in stage 3 (arithmetic is there, numbering,
-# mandatory fields and the e-invoice are not): until then, letters.
-ENABLED_KINDS = ("letter",)
+ENABLED_KINDS = ("letter", "invoice", "quote")
+SERIES_KINDS = {"invoice": ("rechnung", "invoice", "faktura"), "quote": ("angebot", "quote")}
 PDF_DIR_ENV = "YORIK_WRITTEN_DIR"
 
 
@@ -175,7 +174,27 @@ def _clean_content(kind: str, raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             if raw.get(k):
                 out[k] = str(raw[k]).strip()[:40]
         return out
-    return raw
+    # invoice / quote: data, never a look. Numbers stay as typed ("2,5");
+    # the arithmetic reads them, the person sees what they wrote.
+    lines = []
+    for l in (raw.get("lines") if isinstance(raw.get("lines"), list) else [])[:inv_mod.MAX_LINES]:
+        if isinstance(l, dict):
+            lines.append({"text": str(l.get("text") or "")[:2000], "qty": str(l.get("qty") if l.get("qty") not in (None, "") else "1")[:20],
+                          "unit": str(l.get("unit") or "")[:20], "unit_price": str(l.get("unit_price") or "")[:20],
+                          "vat_percent": str(l.get("vat_percent") if l.get("vat_percent") not in (None, "") else "")[:6]})
+    out = {"subject": str(raw.get("subject") or "").strip()[:200], "lines": lines,
+           "intro_html": layouts.sanitise(raw.get("intro_html")) or layouts.text_to_html(raw.get("intro")),
+           "closing_html": layouts.sanitise(raw.get("closing_html")) or layouts.text_to_html(raw.get("closing"))}
+    for k in ("date", "service_from", "service_to", "due_date", "valid_until"):
+        v = str(raw.get(k) or "").strip()[:10]
+        if v:
+            import re
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+                out[k] = v
+    for k in ("customer_no", "vat_percent"):
+        if raw.get(k) not in (None, ""):
+            out[k] = str(raw[k]).strip()[:40]
+    return out
 
 
 def _render(doc: Dict[str, Any], uid: str, *, preview: bool) -> Dict[str, str]:
@@ -194,9 +213,13 @@ def make_pdf(doc: Dict[str, Any], uid: str) -> bytes:
 
 
 def _finalise(doc: Dict[str, Any], uid: str, blob: Optional[bytes] = None) -> Dict[str, Any]:
-    """Freeze the document as its PDF. Idempotent."""
+    """Freeze the document as its PDF. Idempotent. A letter becomes final
+    by leaving; an invoice or a quote gets its number first, in
+    finalise_doc, and nothing here hands one out by accident."""
     if doc["status"] == "final":
         return doc
+    if doc["kind"] != "letter":
+        raise HTTPException(status_code=409, detail="erst fertigstellen: die Nummer wird beim Fertigstellen vergeben")
     blob = blob or make_pdf(doc, uid)
     path = _pdf_dir() / f"{int(doc['id'])}.pdf"
     path.write_bytes(blob)
@@ -213,7 +236,9 @@ def _final_pdf(doc: Dict[str, Any], uid: str) -> bytes:
 
 def _filename(doc: Dict[str, Any]) -> str:
     import re
-    base = re.sub(r"[^\w .-]+", "", doc["title"] or doc["content"].get("subject") or "Brief", flags=re.UNICODE).strip()[:80] or "Brief"
+    label = {"invoice": "Rechnung", "quote": "Angebot"}.get(doc["kind"], "Brief")
+    name = f"{label} {doc['number']}" if doc.get("number") else (doc["title"] or doc["content"].get("subject") or label)
+    base = re.sub(r"[^\w .-]+", "", name, flags=re.UNICODE).strip()[:80] or label
     return f"{base}.pdf"
 
 
@@ -309,6 +334,8 @@ def file_doc(doc_id: int, body: FileIn, user: Dict[str, Any] = Depends(_user()))
     """Into Paperless through the person's own token, like an upload in
     the Documents app. Filing makes the document final."""
     doc = _doc_or_404(doc_id, user)
+    if doc["kind"] != "letter" and doc["status"] != "final":
+        raise HTTPException(status_code=409, detail="erst fertigstellen: die Nummer wird beim Fertigstellen vergeben")
     uid = _signed_in(user)
     blob = _final_pdf(doc, uid)
     from .. import main as _main, chat_attachments as _att
@@ -338,6 +365,8 @@ def send_doc(doc_id: int, body: SendIn, user: Dict[str, Any] = Depends(_user()))
     """The PDF as an attachment, from one of the person's own mail
     accounts. Sending makes the document final."""
     doc = _doc_or_404(doc_id, user)
+    if doc["kind"] != "letter" and doc["status"] != "final":
+        raise HTTPException(status_code=409, detail="erst fertigstellen: die Nummer wird beim Fertigstellen vergeben")
     uid = _signed_in(user)
     from ..database import conn_ctx
     with conn_ctx() as conn:
@@ -384,4 +413,136 @@ def rewrite(body: RewriteIn, user: Dict[str, Any] = Depends(_user())) -> Dict[st
     if not out:
         raise HTTPException(status_code=502, detail="the model returned nothing; try another wording")
     return {"text": out}
+
+
+# ── invoices and quotes: what is missing, the number, the e-invoice ─────
+
+def _series_for(kind: str, uid: str, country: str) -> Optional[Dict[str, Any]]:
+    """The person's number series for invoices or quotes; on first use
+    the usual set for their country is created, so nobody has to set
+    anything up before the first invoice."""
+    from ..compose import series as series_mod
+    for k in SERIES_KINDS[kind]:
+        s = series_mod.default_for_kind(k, owner_user_id=uid)  # type: ignore[arg-type]
+        if s:
+            return s
+    series_mod.install_preset("de" if country in ("DE", "AT", "CH") else "us", owner_user_id=uid)  # type: ignore[arg-type]
+    for k in SERIES_KINDS[kind]:
+        s = series_mod.default_for_kind(k, owner_user_id=uid)  # type: ignore[arg-type]
+        if s:
+            return s
+    return None
+
+
+def _state(doc: Dict[str, Any], uid: str) -> Dict[str, Any]:
+    lh = _letterhead_of(doc, uid)["data"]
+    out: Dict[str, Any] = {"missing": [], "next_number": None, "e_invoice": None}
+    if doc["kind"] == "letter":
+        return out
+    out["missing"] = inv_mod.missing(doc["kind"], lh, doc["recipient"], doc["content"])
+    calc = inv_mod.compute(doc["content"].get("lines"), small_business=lh["small_business"], default_vat=doc["content"].get("vat_percent", "19"))
+    t = calc["totals"]
+    out["totals"] = {"net": inv_mod.money(t["net"], lh["country"]), "gross": inv_mod.money(t["gross"], lh["country"]),
+                     "vat_rows": [{"rate": inv_mod.number(v["rate"], lh["country"]), "vat": inv_mod.money(v["vat"], lh["country"])} for v in t["vat_rows"]],
+                     "lines": [inv_mod.money(l["net"], lh["country"]) for l in calc["lines"]], "small_business": lh["small_business"]}
+    if doc["status"] == "draft":
+        from ..compose import series as series_mod
+        ser = _series_for(doc["kind"], uid, lh["country"])
+        out["next_number"] = series_mod.preview_next(ser["id"])["formatted"] if ser else None
+    if doc["kind"] == "invoice":
+        out["e_invoice"] = {"wanted": lh["country"] == "DE", "available": einvoice.available(),
+                            "result": doc["content"].get("e_invoice")}
+    return out
+
+
+@router.get("/api/writing/{doc_id}/state")
+def state_doc(doc_id: int, user: Dict[str, Any] = Depends(_user())) -> Dict[str, Any]:
+    """What the sheet shows beside an invoice or quote: what is still
+    missing, the sums, the number it would get, whether it becomes an
+    e-invoice."""
+    return _state(_doc_or_404(doc_id, user), str(user["id"]))
+
+
+class FinaliseIn(BaseModel):
+    without_e_invoice: bool = False      # the person's explicit choice when the e-invoice cannot be made
+
+
+@router.post("/api/writing/{doc_id}/finalise")
+def finalise_doc(doc_id: int, body: FinaliseIn, user: Dict[str, Any] = Depends(_user())) -> Dict[str, Any]:
+    """Give the invoice or quote its number and freeze it. The number is
+    consumed only when everything else has worked: the mandatory fields
+    are there, the PDF is rendered and, for an invoice in Germany, the
+    e-invoice is built and checked. A failure costs no number."""
+    doc = _doc_or_404(doc_id, user)
+    uid = _signed_in(user)
+    if doc["status"] == "final":
+        return {"document": doc, "state": _state(doc, uid)}
+    if doc["kind"] == "letter":
+        return {"document": _finalise(doc, uid), "state": _state(doc, uid)}
+    lh = _letterhead_of(doc, uid)["data"]
+    gaps = inv_mod.missing(doc["kind"], lh, doc["recipient"], doc["content"])
+    if gaps:
+        raise HTTPException(status_code=422, detail={"message": "Es fehlt noch etwas", "missing": gaps})
+    from datetime import date as _date, datetime as _dt, timedelta as _td
+    from ..compose import pdf as pdf_mod, series as series_mod
+    ser = _series_for(doc["kind"], uid, lh["country"])
+    if not ser:
+        raise HTTPException(status_code=500, detail="no number series could be made")
+    number = series_mod.preview_next(ser["id"])["formatted"]
+    issue = doc["content"].get("date") or _date.today().isoformat()
+    due = doc["content"].get("due_date") or (_dt.fromisoformat(issue).date() + _td(days=lh["payment_days"])).isoformat()
+    content = {**doc["content"], "number": number, "date": issue, "due_date": due}
+    want_e = doc["kind"] == "invoice" and lh["country"] == "DE" and not body.without_e_invoice
+    if want_e and not einvoice.available():
+        raise HTTPException(status_code=409, detail={"message": "Die E-Rechnung kann hier noch nicht erzeugt werden: die Erweiterung „ZUGFeRD“ ist nicht installiert (Settings → Extensions).",
+                                                     "can_continue_without": True})
+    numbered = {**doc, "content": content, "number": number}
+    page = _render(numbered, uid, preview=False)
+    blob = pdf_mod.render_html_pdf(page["html"], footer_html=page["footer_html"], pdfa="PDF/A-3b" if doc["kind"] == "invoice" else None)
+    if not blob:
+        raise HTTPException(status_code=502, detail="PDF render failed (Gotenberg unreachable?)")
+    e_result = None
+    if want_e:
+        made = einvoice.make(blob, inv_mod.einvoice_payload(lh, doc["recipient"], content, number=number, issue_date=issue, due_date=due))
+        if not made["ok"]:
+            raise HTTPException(status_code=422, detail={"message": "Die E-Rechnung hat die Prüfung nicht bestanden; es wurde keine Nummer vergeben.",
+                                                         "problems": made["problems"], "can_continue_without": True})
+        blob, e_result = made["pdf"], {"format": "Factur-X / ZUGFeRD 2 (EN 16931)", "checked": True}
+    elif doc["kind"] == "invoice":
+        e_result = {"format": None, "checked": False}
+    # everything worked: now, and only now, the number is taken
+    alloc = series_mod.consume(ser["id"], consumed_by_user_id=uid, title=doc["title"] or content.get("subject") or "", pdf_bytes=blob)  # type: ignore[arg-type]
+    if alloc.get("formatted") != number:
+        # somebody took that number in between; this one is ours now, the page must say so
+        number = alloc["formatted"]
+        content["number"] = number
+        page = _render({**doc, "content": content, "number": number}, uid, preview=False)
+        blob = pdf_mod.render_html_pdf(page["html"], footer_html=page["footer_html"], pdfa="PDF/A-3b" if doc["kind"] == "invoice" else None) or blob
+        if want_e:
+            again = einvoice.make(blob, inv_mod.einvoice_payload(lh, doc["recipient"], content, number=number, issue_date=issue, due_date=due))
+            blob = again["pdf"] or blob
+    if e_result is not None:
+        content["e_invoice"] = e_result
+    store.update(doc["id"], uid, content=content)
+    path = _pdf_dir() / f"{int(doc['id'])}.pdf"
+    path.write_bytes(blob)
+    final = store.finalise(doc["id"], uid, pdf_path=str(path), number=number, doc_date=issue)
+    return {"document": final, "state": _state(final, uid)}  # type: ignore[arg-type]
+
+
+@router.post("/api/writing/{doc_id}/to-invoice", status_code=201)
+def quote_to_invoice(doc_id: int, user: Dict[str, Any] = Depends(_user())) -> Dict[str, Any]:
+    """The accepted quote becomes a draft invoice: same customer, same
+    lines, its own number later."""
+    doc = _doc_or_404(doc_id, user)
+    if doc["kind"] != "quote":
+        raise HTTPException(status_code=400, detail="only a quote becomes an invoice")
+    if "invoice" not in _kinds(user):
+        raise HTTPException(status_code=403, detail="cannot write an invoice")
+    uid = str(user["id"])
+    keep = {k: v for k, v in doc["content"].items() if k in ("subject", "lines", "customer_no", "vat_percent", "closing_html")}
+    if doc.get("number"):
+        keep["intro_html"] = layouts.text_to_html(f"gemäß unserem Angebot {doc['number']} berechnen wir:")
+    return store.create(uid, "invoice", title=doc["title"], recipient=doc["recipient"], content=keep,
+                        letterhead_id=doc["letterhead_id"], source_document_id=doc["id"])
 

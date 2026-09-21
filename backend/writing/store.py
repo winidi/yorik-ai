@@ -138,7 +138,7 @@ def duplicate(doc_id: int, user_id: str) -> Optional[Dict[str, Any]]:
     src = get(doc_id, user_id)
     if not src:
         return None
-    content = {k: v for k, v in src["content"].items() if k not in ("number", "date")}
+    content = {k: v for k, v in src["content"].items() if k not in ("number", "date", "due_date", "e_invoice")}
     return create(user_id, src["kind"], title=src["title"], recipient=src["recipient"], content=content,
                   letterhead_id=src["letterhead_id"])
 
