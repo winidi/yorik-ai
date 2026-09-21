@@ -370,6 +370,47 @@ def _backfill_ownerless_documents(
 
 
 _DEFAULT_OWNER_WORKFLOW_NAME = "Yorik: assign default owner to consume-folder docs"
+_CONSUME_FOLDER_TRIGGER = {
+    "type":    1,      # Consumption Started — the only trigger type whose
+                       # `sources` filter Paperless evaluates.
+    "sources": [1],    # Consume Folder only — see the docstring below.
+}
+
+
+def _workflow_trigger_ok(workflow: Dict[str, Any]) -> bool:
+    """True when every trigger of the workflow is "Consumption Started"
+    restricted to the consume folder."""
+    triggers = workflow.get("triggers") or []
+    if not triggers:
+        return False
+    for t in triggers:
+        if int(t.get("type") or 0) != _CONSUME_FOLDER_TRIGGER["type"]:
+            return False
+        if sorted(int(x) for x in (t.get("sources") or [])) != _CONSUME_FOLDER_TRIGGER["sources"]:
+            return False
+    return True
+
+
+def _repair_workflow_trigger(base: str, headers: Dict[str, str], wid: int, owner_id: int) -> bool:
+    """Rewrite the workflow's triggers (and re-assert its action) so an
+    install that registered the "Document Added" trigger stops taking
+    ownership of member uploads."""
+    try:
+        r = requests.patch(
+            f"{base}/api/workflows/{wid}/",
+            headers={**headers, "Content-Type": "application/json"},
+            json={"triggers": [_CONSUME_FOLDER_TRIGGER],
+                  "actions": [{"type": 1, "assign_owner": owner_id}]},
+            timeout=TIMEOUT_S,
+        )
+        if r.ok:
+            log.info("paperless_visibility: repaired default-owner workflow id=%d "
+                     "(trigger → consumption started, consume folder only)", wid)
+            return True
+        log.warning("repair workflow %d failed: HTTP %d %s", wid, r.status_code, r.text[:200])
+    except requests.RequestException as exc:
+        log.warning("repair workflow %d: %s", wid, exc)
+    return False
 
 
 def _ensure_default_owner_workflow(
@@ -384,24 +425,30 @@ def _ensure_default_owner_workflow(
     Scope deliberately limited to source=1 (Consume Folder). API uploads
     (source=2), Mail Fetch (source=3), and Web UI (source=4) all set
     owner from the requesting user's session, so applying a workflow to
-    them would silently STEAL ownership from member uploads."""
+    them would silently STEAL ownership from member uploads.
+
+    The trigger must be "Consumption Started" (type 1): Paperless checks
+    `sources` only for that trigger type. Until 2026-09-22 the workflow
+    was registered as "Document Added" (type 2), where the source filter
+    is ignored, so every upload through a member's own token (Beate's
+    mail attachment, her chat attachment) lost its owner to the admin
+    user a few milliseconds after creation. An existing workflow with
+    the old trigger is repaired in place."""
     try:
         r = requests.get(f"{base}/api/workflows/",
                          headers=headers, timeout=TIMEOUT_S)
         if r.ok:
             for w in (r.json() or {}).get("results") or []:
                 if w.get("name") == _DEFAULT_OWNER_WORKFLOW_NAME:
-                    return int(w["id"])
+                    wid = int(w["id"])
+                    if not _workflow_trigger_ok(w):
+                        _repair_workflow_trigger(base, headers, wid, owner_id)
+                    return wid
         payload = {
             "name":    _DEFAULT_OWNER_WORKFLOW_NAME,
             "order":   0,
             "enabled": True,
-            "triggers": [{
-                "type":    2,      # Document Added — fires AFTER the doc
-                                   # is created, so assign_owner has
-                                   # something to write to.
-                "sources": [1],    # Consume Folder only — see docstring.
-            }],
+            "triggers": [_CONSUME_FOLDER_TRIGGER],
             "actions": [{
                 "type":         1,         # Assignment
                 "assign_owner": owner_id,

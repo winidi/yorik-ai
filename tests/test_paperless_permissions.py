@@ -56,3 +56,28 @@ def test_parents_group_holds_the_adults_only(monkeypatch, fresh_app):
     monkeypatch.setattr(pv.requests, "patch", lambda url, **kw: calls.append(kw["json"]) or _Resp())
     assert pv.apply_document_permissions(7, "parents")
     assert calls[0]["set_permissions"]["view"]["groups"] == [5]
+
+
+def test_default_owner_workflow_fires_on_consumption_only(monkeypatch):
+    """The "Document Added" trigger ignores `sources`, so the old workflow
+    took Beate's uploads away from her (seen on the live box 2026-09-22).
+    A new install registers "Consumption Started"; an old one is repaired."""
+    posted, patched = [], []
+    monkeypatch.setattr(pv.requests, "get", lambda url, **kw: _Resp(data={"results": []}))
+    monkeypatch.setattr(pv.requests, "post", lambda url, **kw: posted.append(kw["json"]) or _Resp(data={"id": 9}))
+    monkeypatch.setattr(pv.requests, "patch", lambda url, **kw: patched.append((url, kw["json"])) or _Resp())
+    assert pv._ensure_default_owner_workflow("http://p", {}, 3) == 9
+    assert posted[0]["triggers"] == [{"type": 1, "sources": [1]}]
+    assert posted[0]["actions"] == [{"type": 1, "assign_owner": 3}]
+
+    old = {"id": 1, "name": pv._DEFAULT_OWNER_WORKFLOW_NAME,
+           "triggers": [{"type": 2, "sources": [1]}], "actions": [{"type": 1, "assign_owner": 3}]}
+    monkeypatch.setattr(pv.requests, "get", lambda url, **kw: _Resp(data={"results": [old]}))
+    assert pv._ensure_default_owner_workflow("http://p", {}, 3) == 1
+    assert patched == [("http://p/api/workflows/1/",
+                        {"triggers": [{"type": 1, "sources": [1]}], "actions": [{"type": 1, "assign_owner": 3}]})]
+
+    good = dict(old, triggers=[{"type": 1, "sources": [1]}])
+    monkeypatch.setattr(pv.requests, "get", lambda url, **kw: _Resp(data={"results": [good]}))
+    assert pv._ensure_default_owner_workflow("http://p", {}, 3) == 1
+    assert len(patched) == 1                                   # a correct workflow is left alone
