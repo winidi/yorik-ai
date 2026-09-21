@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import logging
 import os
 import socket
@@ -514,13 +515,12 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
     if not body_text and body_html:
         # Strip tags for a snippet — full text/html stripping is
         # better but for snippet purposes this is fine.
-        import re as _re
-        body_text = _re.sub(r"<[^>]+>", " ", body_html)
-        body_text = _re.sub(r"\s+", " ", body_text).strip()
+        body_text = re.sub(r"<[^>]+>", " ", body_html)
+        body_text = re.sub(r"\s+", " ", body_text).strip()
     snippet = (body_text or "")[:SNIPPET_LEN].replace("\n", " ").strip()
 
     # a long subject arrives folded over several header lines; store it as the one line it is
-    subject = _re.sub(r"\s*[\r\n]+\s*", " ", parsed.subject or "").strip()
+    subject = re.sub(r"\s*[\r\n]+\s*", " ", parsed.subject or "").strip()
     has_attachments = 1 if parsed.attachments else 0
     size_bytes = data.get(b"RFC822.SIZE", 0)
 
