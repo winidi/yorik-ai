@@ -1,7 +1,7 @@
 # Plan: Dokumente — schlanker Neubau neben Compose
 
-Stand 2026-09-21. Noch nichts gebaut; mit Dirk besprochen, Richtung
-steht ("Neubau daneben").
+Stand 2026-09-21. Noch nichts gebaut; mit Dirk besprochen, Richtung und
+die vier offenen Fragen sind entschieden ("Neubau daneben").
 
 ## Ausgangslage
 
@@ -32,7 +32,7 @@ als Zahl, stiller Rückfall auf ein normales PDF.
 
 ## Ziel
 
-Eine kleine App "Dokumente" für drei Dinge: **Brief, Rechnung,
+Eine kleine App "Schreiben" für drei Dinge: **Brief, Rechnung,
 Angebot**. Der Chat legt immer sofort einen Entwurf an und fragt nie
 nach. Jedes Dokument eines Nutzers sieht gleich aus (sein Briefpapier),
 jeder Nutzer kann seines anpassen. Rechnungen sind in Deutschland
@@ -121,13 +121,11 @@ und deren Installation, `compose_extract_args`,
 Textvorlagen für Kündigungen. E-Mails schreibt der Mail-Composer
 (`email_draft`), nicht mehr Compose.
 
-## Offene Fragen an Dirk
+## Entschieden (Dirk, 2026-09-21)
 
-1. Mehrere Briefpapiere pro Person (privat und Firma) von Anfang an,
-   oder erst eines?
-2. Angebot → Rechnung mit einem Klick umwandeln: gleich mitbauen (klein,
-   weil gleiche Daten) oder später?
-3. Dürfen eingeschränkte Konten (Kinder) Dokumente schreiben? Vorschlag:
-   Briefe ja, Rechnungen nein.
-4. Name der App: "Dokumente" kollidiert mit der Paperless-App
-   "Documents". Vorschlag: **"Schreiben"**.
+1. Datenmodell für mehrere Briefpapiere pro Person, die Oberfläche
+   zeigt vorerst eines.
+2. "Angebot → Rechnung" mit einem Klick gehört zu Stufe 3.
+3. Eingeschränkte Konten (Kinder): Briefe ja, Rechnungen und Angebote
+   nein.
+4. Die App heißt **"Schreiben"** (`/write`, Code unter `documents`).
