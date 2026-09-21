@@ -94,15 +94,16 @@ def render(kind: str, letterhead: Dict[str, Any], recipient: Optional[Dict[str, 
         except ValueError:
             base = today
         due = content.get("due_date") or (base + timedelta(days=lh["payment_days"])).isoformat()
-        c["payment_text"] = lh["payment_text"].replace("{faellig}", _date_text(due, country)).replace("{betrag}", c["totals"]["gross_text"])
+        # nothing to pay, nothing to ask for
+        c["payment_text"] = "" if t["gross"] <= 0 else lh["payment_text"].replace("{faellig}", _date_text(due, country)).replace("{betrag}", c["totals"]["gross_text"])
         c["valid_until_text"] = _date_text(content.get("valid_until") or (base + timedelta(days=30)).isoformat(), country)
         service = _date_text(content.get("service_from"), country)
         if content.get("service_to") and content.get("service_to") != content.get("service_from"):
             service = f"{service} – {_date_text(content.get('service_to'), country)}" if service else _date_text(content.get("service_to"), country)
         info = [("Angebotsnr." if kind == "quote" else "Rechnungsnr.", c["number"] or ("Entwurf" if kind == "invoice" else "")),
                 ("Datum", _date_text(doc_date, country)), ("Kundennr.", content.get("customer_no")),
-                ("Leistungszeitraum" if kind == "invoice" else "", service if kind == "invoice" else ""),
-                ("Fällig am" if kind == "invoice" else "", _date_text(due, country) if kind == "invoice" else "")]
+                (("Leistungszeitraum" if "–" in service else "Leistungsdatum") if kind == "invoice" else "", service if kind == "invoice" else ""),
+                ("Fällig am" if kind == "invoice" and t["gross"] > 0 else "", _date_text(due, country) if kind == "invoice" else "")]
         title = f"{'Angebot' if kind == 'quote' else 'Rechnung'} {c['number']}".strip()
 
     font_css = FONTS[lh["font"]]["css"]

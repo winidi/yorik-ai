@@ -175,3 +175,12 @@ def test_the_chat_hands_over_data_and_the_app_computes(shop):
     kid = SkillContext(Registry(), role="restricted", user_id=uid, conversation_id="c2")
     with pytest.raises(ValueError):
         asyncio.run(execute(kid, kind="invoice", customer="x", lines=[]))
+
+
+def test_an_invoice_over_nothing_asks_for_no_payment_and_a_single_day_is_a_date():
+    from backend.writing import layouts as L, letterhead as H
+    lh = H.clean(SELLER)
+    free = L.render("invoice", lh, CUSTOMER, {"lines": [{"text": "Test", "qty": "1", "unit_price": "0"}], "service_from": "2026-09-22"})["html"]
+    assert "überweisen" not in free and "Fällig am" not in free and "Leistungsdatum" in free and "Leistungszeitraum" not in free
+    paid = L.render("invoice", lh, CUSTOMER, {"lines": LINES, "service_from": "2026-09-01", "service_to": "2026-09-12"})["html"]
+    assert "überweisen" in paid and "Fällig am" in paid and "Leistungszeitraum" in paid
