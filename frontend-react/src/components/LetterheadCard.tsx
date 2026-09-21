@@ -68,7 +68,11 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
   useLayoutEffect(() => {
     const el = boxRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setScale(Math.min(1, el.clientWidth / SHEET_PX)));
+    // measured at once as well: an observer reports only when the page
+    // is being painted, and the sheet must fit from the first frame
+    const fit = () => { if (el.clientWidth) setScale(Math.min(1, el.clientWidth / SHEET_PX)); };
+    fit();
+    const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
   }, [lhId]);
