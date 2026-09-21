@@ -18,6 +18,7 @@ import {
   Mail, Folder, FileEdit, ShieldAlert, Clock, MessageSquare, Sparkles,
   MailX, Menu, ArrowLeft, Mic, Square, X,
   Bell, Calendar, Newspaper, Receipt, Users,
+  AlignJustify,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -379,6 +380,10 @@ export function EmailApp() {
 
   // Search state — when non-empty, replaces the folder-filtered list.
   const [search, setSearch] = useState("");
+  // List density: sender + subject by default, the body preview on request (kept per device).
+  const [showPreview, setShowPreview] = useState<boolean>(() => {
+    try { return localStorage.getItem("yorik_email_preview") === "1"; } catch { return false; }
+  });
   const searchApi = useApi<EmailMessageRow[]>(
     search.trim().length >= 2 ? `/api/email/search?q=${encodeURIComponent(search)}` : null,
     [],
@@ -742,6 +747,14 @@ export function EmailApp() {
             </button>
           ) : null}
           <button
+            onClick={() => setShowPreview(v => { try { localStorage.setItem("yorik_email_preview", v ? "0" : "1"); } catch {} return !v; })}
+            className={cn("p-2 rounded-md hover:bg-muted", showPreview ? "text-foreground bg-muted" : "text-muted-foreground")}
+            title={showPreview ? "Hide the text preview (sender and subject only)" : "Show two lines of each mail"}
+            aria-pressed={showPreview}
+          >
+            <AlignJustify className="w-4 h-4" />
+          </button>
+          <button
             onClick={() => (search ? searchApi.refetch() : listApi.refetch())}
             disabled={listApi.loading || searchApi.loading}
             className="p-2 rounded-md hover:bg-muted text-muted-foreground"
@@ -752,6 +765,7 @@ export function EmailApp() {
         </div>
         <MessageList
           messages={visibleMessages}
+          showPreview={showPreview}
           selectedId={selectedId}
           onSelect={setSelectedId}
           loading={search ? searchApi.loading : listApi.loading}
@@ -1053,9 +1067,13 @@ function SidebarItem({
 }
 
 function MessageList({
-  messages, selectedId, onSelect, loading, error, empty,
+  messages, selectedId, onSelect, loading, error, empty, showPreview = false,
   onQuickAction, hasMoreInDb, onLoadMore, onLoadOlderFromImap, backfilling,
 }: {
+  /** Two lines of the body under each subject. Off by default: sender
+   *  and subject are what a list is scanned by, and half of all
+   *  previews are boilerplate ("View in browser", CSS). */
+  showPreview?: boolean;
   messages: EmailMessageRow[];
   selectedId: number | null;
   onSelect: (id: number) => void;
@@ -1216,9 +1234,11 @@ function MessageList({
                 )}
                 {m.is_starred && <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />}
               </div>
-              <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                {m.snippet}
-              </div>
+              {showPreview && (
+                <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                  {m.snippet}
+                </div>
+              )}
               <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
                 {m.needs_reply && (
                   <span
