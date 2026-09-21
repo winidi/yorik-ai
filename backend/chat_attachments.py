@@ -52,11 +52,24 @@ def _public(row: Dict[str, Any]) -> Dict[str, Any]:
         "is_image": is_image, "has_text": bool((row.get("text") or "").strip()),
         "conversation_id": row["conversation_id"], "created_at": row["created_at"], "expires_at": row["expires_at"],
         "filed": bool(row["filed_at"]), "filed_at": row["filed_at"], "visibility": row["visibility"],
+        "paperless_doc_id": row.get("paperless_doc_id"),
         # A PDF or an office file is almost always a record; a picture is
         # usually something shown in passing.
         "suggest": "keep" if is_image else "file",
+        "default_visibility": _default_visibility(str(row["owner_user_id"])),
         "raw_url": f"/api/chat/attachments/{row['id']}/raw",
     }
+
+
+def _default_visibility(user_id: str) -> str:
+    """The person's own default for new documents, else the household's, else private."""
+    with get_conn() as conn:
+        prof = conn.execute("SELECT default_doc_visibility FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
+    vis = (prof["default_doc_visibility"] if prof else None) or ""
+    if vis not in ("private", "business", "shared"):
+        from .household_settings import get_setting
+        vis = get_setting("documents_default_visibility", default="private")
+    return vis if vis in ("private", "business", "shared") else "private"
 
 
 def get(attachment_id: int, user_id: str) -> Optional[Dict[str, Any]]:
@@ -161,14 +174,7 @@ def file_in_paperless(attachment_id: int, user_id: str, visibility: Optional[str
         return {"ok": False, "error": "the file is gone (retention) — upload it again"}
     vis = (visibility or "").strip().lower()
     if vis not in ("private", "business", "shared"):
-        with get_conn() as conn:
-            prof = conn.execute("SELECT default_doc_visibility FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
-        vis = (prof["default_doc_visibility"] if prof else None) or ""
-        if vis not in ("private", "business", "shared"):
-            from .household_settings import get_setting
-            vis = get_setting("documents_default_visibility", default="private")
-            if vis not in ("private", "business", "shared"):
-                vis = "private"
+        vis = _default_visibility(user_id)
     from . import main as _main        # the write-through lives next to the upload route
     result = _main._push_to_paperless(
         path.read_bytes(), filename=row["filename"], title=title or Path(row["filename"]).stem,
@@ -179,6 +185,17 @@ def file_in_paperless(attachment_id: int, user_id: str, visibility: Optional[str
         conn.execute("UPDATE chat_attachments SET filed_at = ?, paperless_task_id = ?, visibility = ? WHERE id = ?",
                      (_now(), str(result.get("task_id") or ""), vis, row["id"]))
         conn.commit()
+
+    def _remember(doc_id: int, att_id: int = int(row["id"])) -> None:
+        with get_conn() as conn:
+            conn.execute("UPDATE chat_attachments SET paperless_doc_id = ? WHERE id = ?", (int(doc_id), att_id))
+            conn.commit()
+
+    # _push_to_paperless already applies a non-private visibility after
+    # the consume; for a private one we still want the document's id.
+    if vis == "private" and result.get("task_id"):
+        from . import paperless_visibility as _pv
+        _pv.apply_after_consume(str(result["task_id"]), "private", on_document=_remember)
     return {"ok": True, "filed_at": _now(), "visibility": vis}
 
 

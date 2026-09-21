@@ -272,8 +272,8 @@ def set_document_space(paperless_doc_id: int, space_id: int) -> bool:
             return False
         r = _patch(s, f"/api/documents/{paperless_doc_id}/", {
             "owner": int(pid["paperless_user_id"]),
-            "permissions": {"view": {"users": [], "groups": []},
-                            "change": {"users": [], "groups": []}},
+            "set_permissions": {"view": {"users": [], "groups": []},
+                                "change": {"users": [], "groups": []}},
         })
         return r.status_code in (200, 202)
     # Shared: clear owner, set view+change groups to this space's group.
@@ -282,7 +282,7 @@ def set_document_space(paperless_doc_id: int, space_id: int) -> bool:
         return False
     r = _patch(s, f"/api/documents/{paperless_doc_id}/", {
         "owner": None,
-        "permissions": {
+        "set_permissions": {     # the write key; "permissions" is read-only in Paperless and was ignored
             "view":   {"users": [], "groups": [group_id]},
             "change": {"users": [], "groups": [group_id]},
         },

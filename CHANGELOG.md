@@ -79,6 +79,14 @@ worklist.
   switch.
   Settings → Embeddings has the switch (on/off), the choice of model,
   the index progress per source and a rebuild button.
+- **"Shared" documents are really shared.** In Paperless a tag does not
+  grant access to the documents carrying it, so a document filed as
+  "shared" or "business" was visible to its owner only. The visibility
+  now sets the household (or business) group's view permission on the
+  document itself — after the consume for new uploads, at once when
+  changed later — and space pinning uses the key Paperless accepts.
+  Filing a chat attachment always asks who may see it (card buttons
+  "nur mich" / "die Familie").
 - **Bring your Google calendar.** Calendar sidebar → "Google & Co.
   übernehmen": subscribe to a secret iCal address as a read-only
   mirror that follows its source every 15 minutes (address stored

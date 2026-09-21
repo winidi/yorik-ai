@@ -21,6 +21,8 @@ async def execute(ctx, attachment_id: int, visibility: Optional[str] = None,
              "reason": "attachment filed in Paperless"})
     if result.get("already_filed"):
         return {"ok": True, "already_filed": True, "_llm_hint": "It was already filed in Paperless. Say so in one line."}
+    who = {"private": "only the user", "shared": "everyone in the household",
+           "business": "the business group"}.get(result.get("visibility") or "", "only the user")
     return {"ok": True, "visibility": result.get("visibility"),
-            "_llm_hint": "Filed. Tell the user in one line that it is in Paperless now (searchable in about a "
-                         "minute, after OCR) and who can see it. Nothing to confirm."}
+            "_llm_hint": f"Filed; visible to {who}. Tell the user in one line that it is in Paperless now "
+                         f"(searchable in about a minute, after OCR) and who can see it. Nothing to confirm."}

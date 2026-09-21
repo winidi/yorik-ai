@@ -51,8 +51,10 @@ async def execute(ctx, attachment_id: int, question: Optional[str] = None) -> Di
                 "filing in Paperless only if it is clearly a document (a letter, an invoice, a certificate).")
     else:
         hint = ("Say in one or two sentences what this document is (kind, sender, date, amount if any). Then ask "
-                "once, in the user's language: shall I file it in Paperless? Tell them that otherwise it stays with "
-                "this conversation and is deleted after 30 days. If they say yes, call file_attachment.")
+                "once, in the user's language: shall I file it in Paperless, and who should see it there — only "
+                "you, or the whole family? Tell them that otherwise it stays with this conversation and is deleted "
+                "after 30 days. When they answer, call file_attachment with visibility 'private' (only them) or "
+                "'shared' (the family). Do not guess the visibility; if they only say yes, ask who should see it.")
     return {"ok": True, "attachment_id": row["id"], "filename": row["filename"], "mime_type": row["mime_type"],
             "source": source, "text": text[:A.TEXT_CAP], "truncated": truncated, "filed": filed,
             "expires_at": row["expires_at"], "_llm_hint": hint + pages_note, "_full_output": True}

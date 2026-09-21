@@ -12477,6 +12477,10 @@ def _push_to_paperless(
         )
         if not r.ok:
             return {"ok": False, "error": f"paperless HTTP {r.status_code}: {r.text[:150]}"}
+        # The tag only labels the document; who may open it is set on the
+        # document itself once Paperless has consumed the file.
+        if visibility != "private":
+            _pv.apply_after_consume(r.text.strip().strip('"'), visibility)
         return {
             "ok": True,
             "task_id": r.text.strip().strip('"'),

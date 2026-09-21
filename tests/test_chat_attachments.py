@@ -22,6 +22,8 @@ def two(fresh_app, tmp_path, monkeypatch):
 
     from backend import main
     monkeypatch.setattr(main, "_push_to_paperless", fake_push)
+    from backend import paperless_visibility
+    monkeypatch.setattr(paperless_visibility, "apply_after_consume", lambda *a, **k: None)
     dirk_c, dirk = login_client(fresh_app, role="platform_admin", name="Dirk", email="d@example.local")
     beate_c, beate = login_client(fresh_app, role="member", name="Beate", email="b@example.local")
     return {"dirk": (dirk_c, dirk), "beate": (beate_c, beate), "pushed": pushed}
@@ -52,6 +54,10 @@ def test_filing_goes_to_paperless_once(two):
     assert r.status_code == 200 and r.json()["filed"] is True
     assert beate_c.post(f"/api/chat/attachments/{att['id']}/file").status_code == 200
     assert len(two["pushed"]) == 1 and two["pushed"][0]["user_id"] == beate and two["pushed"][0]["visibility"] == "private"
+    shared = _upload(beate_c, "kobra.txt")
+    assert shared["default_visibility"] == "private"
+    r = beate_c.post(f"/api/chat/attachments/{shared['id']}/file?visibility=shared")
+    assert r.json()["visibility"] == "shared" and two["pushed"][1]["visibility"] == "shared"
 
 
 def test_skills_read_then_file(two):
@@ -63,11 +69,13 @@ def test_skills_read_then_file(two):
     ctx = SkillContext(Registry(), role="member", user_id=beate, conversation_id="conv-7")
     out = asyncio.run(read(ctx, attachment_id=att["id"]))
     assert "Stadtwerke" in out["text"] and "file it in Paperless" in out["_llm_hint"]
+    assert "who should see it" in out["_llm_hint"]
     assert beate_c.get(f"/api/chat/attachments/{att['id']}").json()["conversation_id"] == "conv-7"
     other = asyncio.run(read(SkillContext(Registry(), role="platform_admin", user_id=dirk), attachment_id=att["id"]))
     assert other["ok"] is False
-    done = asyncio.run(file_it(ctx, attachment_id=att["id"], title="Stadtwerke Rechnung"))
+    done = asyncio.run(file_it(ctx, attachment_id=att["id"], title="Stadtwerke Rechnung", visibility="shared"))
     assert done["ok"] and two["pushed"][0]["title"] == "Stadtwerke Rechnung"
+    assert two["pushed"][0]["visibility"] == "shared" and "everyone in the household" in done["_llm_hint"]
     again = asyncio.run(read(ctx, attachment_id=att["id"]))
     assert again["filed"] is True and "do not ask about filing" in again["_llm_hint"]
 

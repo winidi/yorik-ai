@@ -6,14 +6,17 @@
  * Backend: backend/chat_attachments.py.
  */
 import { useCallback, useEffect, useState } from "react";
-import { Archive, Check, FileText, Image as ImageIcon, Loader2, Trash2 } from "lucide-react";
+import { Check, FileText, Image as ImageIcon, Loader2, Lock, Trash2, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface Attachment {
   id: number; filename: string; mime_type: string; bytes: number; is_image: boolean;
   expires_at: string; filed: boolean; visibility: string | null; suggest: "file" | "keep"; raw_url: string;
+  default_visibility: "private" | "shared" | "business";
 }
+
+const WHO: Record<string, string> = { private: "nur für dich sichtbar", shared: "für die ganze Familie sichtbar", business: "für die Firma sichtbar" };
 
 /** Attachment numbers named in a chat message. */
 export function attachmentIdsIn(text: string | null | undefined): number[] {
@@ -29,7 +32,7 @@ function size(bytes: number): string {
 export function AttachmentCard({ id }: { id: number }) {
   const [att, setAtt] = useState<Attachment | null>(null);
   const [gone, setGone] = useState(false);
-  const [busy, setBusy] = useState<"file" | "delete" | null>(null);
+  const [busy, setBusy] = useState<"private" | "shared" | "delete" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -43,9 +46,11 @@ export function AttachmentCard({ id }: { id: number }) {
     return () => window.removeEventListener("yorik-ui-action", on);
   }, [load]);
 
-  async function fileIt() {
-    setBusy("file"); setError(null);
-    try { setAtt(await api.post<Attachment>(`/api/chat/attachments/${id}/file`, {})); }
+  // Filing always says who may see the document in Paperless: only
+  // the person, or the whole household.
+  async function fileIt(visibility: "private" | "shared") {
+    setBusy(visibility); setError(null);
+    try { setAtt(await api.post<Attachment>(`/api/chat/attachments/${id}/file?visibility=${visibility}`, {})); }
     catch (e: any) { setError(e?.message || "Paperless hat die Datei nicht angenommen."); }
     finally { setBusy(null); }
   }
@@ -75,21 +80,27 @@ export function AttachmentCard({ id }: { id: number }) {
       <div className="px-3 pb-3">
         {att.filed ? (
           <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-            <Check className="w-3.5 h-3.5" /> In Paperless abgelegt{att.visibility ? ` (${att.visibility})` : ""} ·{" "}
+            <Check className="w-3.5 h-3.5" /> In Paperless abgelegt{att.visibility ? `, ${WHO[att.visibility] || att.visibility}` : ""} ·{" "}
             <a href="/r/documents" className="underline">Dokumente öffnen</a>
           </div>
         ) : (
           <>
             <div className="text-[11px] text-muted-foreground mb-2">Nur in diesem Gespräch · wird am {until} gelöscht</div>
-            <div className="flex gap-2">
-              <button onClick={fileIt} disabled={!!busy}
-                      className={cn("inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-60",
-                                    att.suggest === "file" ? "bg-primary text-primary-foreground" : "border border-border hover:bg-muted")}>
-                {busy === "file" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
-                In Paperless ablegen
-              </button>
+            <div className="text-[11px] font-medium mb-1">In Paperless ablegen, sichtbar für</div>
+            <div className="flex flex-wrap gap-2">
+              {(["private", "shared"] as const).map(v => {
+                const primary = att.suggest === "file" && att.default_visibility === v;
+                return (
+                  <button key={v} onClick={() => fileIt(v)} disabled={!!busy}
+                          className={cn("inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-60",
+                                        primary ? "bg-primary text-primary-foreground" : "border border-border hover:bg-muted")}>
+                    {busy === v ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : v === "private" ? <Lock className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
+                    {v === "private" ? "nur mich" : "die Familie"}
+                  </button>
+                );
+              })}
               <button onClick={remove} disabled={!!busy} title="Anhang jetzt löschen"
-                      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition disabled:opacity-60">
+                      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition disabled:opacity-60 ml-auto">
                 {busy === "delete" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                 Löschen
               </button>

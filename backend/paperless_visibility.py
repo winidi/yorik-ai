@@ -535,10 +535,89 @@ def change_document_visibility(
         )
         if not pr.ok:
             return {"ok": False, "error": f"Paperless PATCH failed: HTTP {pr.status_code}"}
+        # the tag is the label; the document's own permissions are the access
+        if not apply_document_permissions(paperless_doc_id, visibility):
+            return {"ok": False, "error": "the visibility tag was set, but Paperless refused the permissions"}
         return {"ok": True, "paperless_doc_id": paperless_doc_id,
                 "visibility": visibility, "tag_ids": sorted(new_tags)}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def apply_document_permissions(paperless_doc_id: int, visibility: str) -> bool:
+    """What actually lets other people open a document. In Paperless a
+    tag does not grant access to the documents carrying it: a document
+    is seen by its owner and by the users and groups in its own view
+    permissions. So "shared" gives the household group view on the
+    document, "business" the business group, "private" nobody but the
+    owner. The owner stays who uploaded it. (Verified 2026-09-21: with
+    only the tag, a household member saw nothing.)"""
+    visibility = (visibility or "private").lower()
+    s = _settings()
+    if not s.get("api_key"):
+        return False
+    base, headers = s["base_url"], _admin_headers()
+    groups: list[int] = []
+    if visibility in GROUPS:
+        gid = _ensure_groups(base, headers).get(GROUPS[visibility])
+        if gid is None:
+            return False
+        groups = [int(gid)]
+    try:
+        r = requests.patch(
+            f"{base}/api/documents/{int(paperless_doc_id)}/", headers=headers, timeout=TIMEOUT_S,
+            json={"set_permissions": {"view": {"users": [], "groups": groups},
+                                      "change": {"users": [], "groups": []}}})
+        if not r.ok:
+            log.warning("apply_document_permissions doc=%s: HTTP %s %s", paperless_doc_id, r.status_code, r.text[:150])
+        return r.ok
+    except Exception as exc:  # noqa: BLE001
+        log.warning("apply_document_permissions doc=%s failed: %s", paperless_doc_id, exc)
+        return False
+
+
+def document_id_for_task(task_id: str) -> Optional[int]:
+    """The document a post_document task produced; None while Paperless
+    is still consuming it (or when it failed / was a duplicate)."""
+    s = _settings()
+    if not s.get("api_key") or not task_id:
+        return None
+    try:
+        r = requests.get(f"{s['base_url']}/api/tasks/", params={"task_id": task_id},
+                         headers=_admin_headers(), timeout=TIMEOUT_S)
+        items = r.json() if r.ok else []
+        items = items if isinstance(items, list) else items.get("results", [])
+        rd = items[0].get("related_document") if items else None
+        return int(rd) if rd else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def apply_after_consume(task_id: str, visibility: str, on_document: Any = None) -> None:
+    """post_document only queues the file; permissions can be set once
+    Paperless has consumed it. Waits in a background thread (up to five
+    minutes), then applies the visibility and tells `on_document(doc_id)`."""
+    if not task_id:
+        return
+
+    def _wait() -> None:
+        import time
+        for _ in range(60):
+            time.sleep(5)
+            doc_id = document_id_for_task(task_id)
+            if doc_id:
+                if (visibility or "private").lower() != "private":
+                    apply_document_permissions(doc_id, visibility)
+                if on_document:
+                    try:
+                        on_document(doc_id)
+                    except Exception as exc:  # noqa: BLE001
+                        log.debug("apply_after_consume callback failed: %s", exc)
+                return
+        log.warning("paperless task %s did not produce a document within five minutes; "
+                    "visibility %r not applied", task_id, visibility)
+
+    threading.Thread(target=_wait, name=f"paperless-perms-{task_id[:8]}", daemon=True).start()
 
 
 def visibility_of(doc_tag_ids: list[int]) -> str:
