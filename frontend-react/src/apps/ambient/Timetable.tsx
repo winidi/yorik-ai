@@ -7,6 +7,10 @@
  * every child on the wall has one, empty to begin with. A parent or the
  * child itself fills it in right here ("Bearbeiten"): subject and room
  * per cell, the times per period, periods added or taken away at the end.
+ *
+ * An empty timetable has no card (a child not yet at school), only a
+ * line for whoever may start it. With several timetables, the names in
+ * the board's legend pick whose to show (`picked`, kept by the board).
  */
 import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, Minus, Pencil, Plus } from "lucide-react";
@@ -31,11 +35,15 @@ function tint(subject: string): string {
   return TINTS[h % TINTS.length];
 }
 
-export function Timetable({ tokens, dim, narrow, today, now, currentUserId, isParent }: {
+export function Timetable({ tokens, dim, narrow, today, now, currentUserId, isParent, picked, onFilled }: {
   tokens: DialogTokens; dim: boolean; narrow: boolean;
   /** YYYY-MM-DD and YYYY-MM-DDTHH:MM of the board's clock */
   today: string; now: string;
   currentUserId: string | null; isParent: boolean;
+  /** whose timetable to show; empty = all that are filled in */
+  picked: Set<string>;
+  /** tells the board who has a timetable, for its legend */
+  onFilled: (ids: string[]) => void;
 }) {
   const [children, setChildren] = useState<Child[] | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -47,6 +55,8 @@ export function Timetable({ tokens, dim, narrow, today, now, currentUserId, isPa
     try { setChildren((await api.get<{ people: Child[] }>("/api/ambient/timetable")).people); } catch { setChildren(c => c || []); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  const filledKey = (children || []).filter(c => c.filled).map(c => c.id).join(",");
+  useEffect(() => { onFilled(filledKey ? filledKey.split(",") : []); }, [filledKey]);   // eslint-disable-line react-hooks/exhaustive-deps
   // keep the wall fresh, but never under someone's hands
   useEffect(() => { if (editing) return; const t = setInterval(load, 5 * 60_000); return () => clearInterval(t); }, [load, editing]);
 
@@ -81,12 +91,24 @@ export function Timetable({ tokens, dim, narrow, today, now, currentUserId, isPa
   );
 
   const field = { background: tokens.card, color: tokens.ink, boxShadow: `inset 0 0 0 1px ${tokens.line}` };
+  const mayEditOf = (c: Child) => !!currentUserId && (currentUserId === c.id || isParent);
+  // a picked child without a timetable (any more) does not hide everything
+  const chosen = children.filter(c => c.filled && picked.has(c.id));
+  const shown = children.filter(c => editing === c.id || (c.filled && (chosen.length === 0 || chosen.includes(c))));
+  const toStart = children.filter(c => !c.filled && editing !== c.id && mayEditOf(c));
   return (
-    <section className={cn("grid gap-4 min-w-0", narrow ? "" : "min-h-0")} style={{ gridTemplateColumns: narrow ? "minmax(0, 1fr)" : `repeat(${children.length}, minmax(0, 1fr))` }}>
-      {children.map(c => {
+    <div className={cn("grid gap-3 min-w-0", narrow ? "" : "min-h-0")} style={{ gridTemplateColumns: "minmax(0, 1fr)", gridTemplateRows: narrow ? undefined : "minmax(0, 1fr) auto" }}>
+    {shown.length === 0 && (
+      <div className="rounded-[24px] border border-dashed p-6 text-[14px] self-start" style={{ borderColor: tokens.line, color: tokens.muted }}>
+        Noch kein Stundenplan eingetragen.{toStart.length ? " Unten legst du einen an." : " Eltern oder das Schulkind selbst legen ihn nach dem Anmelden an."}
+      </div>
+    )}
+    {shown.length > 0 && (
+    <section className={cn("grid gap-4 min-w-0", narrow ? "" : "min-h-0")} style={{ gridTemplateColumns: narrow ? "minmax(0, 1fr)" : `repeat(${shown.length}, minmax(0, 1fr))` }}>
+      {shown.map(c => {
         const edit = editing === c.id && !!draft;
         const plan = edit ? draft! : c.timetable;
-        const mayEdit = !!currentUserId && (currentUserId === c.id || isParent);
+        const mayEdit = mayEditOf(c);
         const subjects = [...new Set(Object.values(plan.cells).map(x => x.subject).filter(Boolean))].sort();
         return (
           <div key={c.id} className={cn("rounded-[24px] flex flex-col gap-3 min-w-0", narrow ? "" : "min-h-0")}
@@ -162,11 +184,21 @@ export function Timetable({ tokens, dim, narrow, today, now, currentUserId, isPa
                   <datalist id={`fb-subjects-${c.id}`}>{subjects.map(s => <option key={s} value={s} />)}</datalist>
                 </div>
               )}
-              {!edit && !c.filled && <div className="mt-3 text-[14px]" style={{ color: tokens.muted }}>Noch leer.{mayEdit ? " Mit „Ausfüllen“ trägst du Fächer, Räume und Zeiten ein." : " Eltern oder das Kind selbst füllen ihn nach dem Anmelden aus."}</div>}
             </div>
           </div>
         );
       })}
     </section>
+    )}
+    {toStart.length > 0 && !editing && (
+      <div className="flex gap-2 flex-wrap">
+        {toStart.map(c => (
+          <button key={c.id} onClick={() => startEdit(c)} className="rounded-full pl-1 pr-4 py-1 text-[14px] flex items-center gap-2" style={{ color: tokens.muted, boxShadow: `inset 0 0 0 1px ${tokens.line}` }}>
+            <PersonAvatar name={c.name} color={c.color} avatarUrl={c.avatar_url} size={26} /><Plus className="w-4 h-4" /> Stundenplan für {c.first_name || c.name} anlegen
+          </button>
+        ))}
+      </div>
+    )}
+    </div>
   );
 }

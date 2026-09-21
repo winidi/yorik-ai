@@ -108,3 +108,11 @@ fields: subject and room per cell (subjects already used are offered),
 start and end per period, **+ Stunde** and **− letzte Stunde** for the
 length of the day; **Speichern** keeps it. A parent fills in any child's
 timetable, a child its own; on the wall tablet after the PIN sign-in.
+
+A child without a timetable has no card — a little one who is not at
+school yet does not take half the screen. Whoever may fill it in finds
+**+ Stundenplan für … anlegen** at the bottom. Once two children have
+one, their names appear at the top right: tap a name for that child's
+timetable only, **Alle** for both. The choice is kept per device (the
+wall tablet can show one child, your phone both) and is separate from
+the calendar choice.

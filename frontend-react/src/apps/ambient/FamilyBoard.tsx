@@ -100,6 +100,21 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
       return n;
     });
   }
+  // The timetable view has its own choice (whose timetable), so that
+  // "only Yorik's timetable" does not hide the parents' appointments.
+  const [ttFilled, setTtFilled] = useState<string[]>([]);
+  const [ttPicked, setTtPicked] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("yorik:board:timetables") || "[]") as string[]); } catch { return new Set(); }
+  });
+  function pickTimetable(id: string | null) {
+    setTtPicked(prev => {
+      const n = new Set(id === null ? [] : prev);
+      if (id !== null) { if (n.has(id)) n.delete(id); else n.add(id); }
+      try { localStorage.setItem("yorik:board:timetables", JSON.stringify([...n])); } catch {}
+      return n;
+    });
+  }
+  const calPicked = picked, pickCal = pickCalendar;
   const [adding, setAdding] = useState<string | null>(null);      // person id whose "+" is open
   const [draft, setDraft] = useState("");
   const [draftDay, setDraftDay] = useState("");                   // "" = today
@@ -153,6 +168,7 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
     if (narrow && currentUserId) list.sort((a, b) => Number(b.id === currentUserId) - Number(a.id === currentUserId));
     return list;
   }, [feed, currentUserId, narrow]);
+  const allPeople = people;
 
   async function toggle(t: Task, owner: Person) {
     if (!feed) return;
@@ -304,8 +320,14 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
           <div className="flex items-center gap-5 flex-wrap">
             {/* legend = calendar picker: tap a name for that person's week,
                 several for a joint view, "Alle" for everybody */}
-            <div className="flex gap-1.5 text-[13px] flex-wrap items-center" role="group" aria-label="Kalender auswählen">
+            <div className="flex gap-1.5 text-[13px] flex-wrap items-center" role="group" aria-label={mode === "timetable" ? "Stundenplan auswählen" : "Kalender auswählen"}>
               {(() => {
+                // in the timetable view the names pick whose timetable; one timetable needs no picker
+                const tt = mode === "timetable";
+                const people = tt ? allPeople.filter(p => ttFilled.includes(p.id)) : allPeople;
+                if (tt && people.length < 2) return null;
+                const picked = tt ? ttPicked : calPicked;
+                const pickCalendar = tt ? pickTimetable : pickCal;
                 const active = people.filter(p => picked.has(p.id));
                 const all = active.length === 0;
                 return (
@@ -314,7 +336,7 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
                       const on = picked.has(p.id);
                       return (
                         <button key={p.id} onClick={() => pickCalendar(p.id)} aria-pressed={on}
-                                title={on ? `${p.first_name || p.name} ausblenden` : `Kalender von ${p.first_name || p.name} zeigen`}
+                                title={on ? `${p.first_name || p.name} ausblenden` : `${tt ? "Stundenplan" : "Kalender"} von ${p.first_name || p.name} zeigen`}
                                 className="flex items-center gap-1.5 rounded-full pl-1 pr-3 py-1 transition"
                                 style={on
                                   ? { background: `color-mix(in srgb, ${p.color} ${dim ? 30 : 18}%, ${tokens.card})`, boxShadow: `inset 0 0 0 2px ${p.color}`, color: tokens.ink, fontWeight: 800 }
@@ -325,7 +347,7 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
                         </button>
                       );
                     })}
-                    <button onClick={() => pickCalendar(null)} aria-pressed={all} title="Alle Kalender zeigen"
+                    <button onClick={() => pickCalendar(null)} aria-pressed={all} title={tt ? "Alle Stundenpläne zeigen" : "Alle Kalender zeigen"}
                             className="flex items-center gap-1.5 rounded-full px-3 py-1 transition" style={{ minHeight: 34,
                               ...(all ? { background: tokens.ink, color: tokens.bg, fontWeight: 800 }
                                       : { boxShadow: `inset 0 0 0 1px ${tokens.line}`, color: tokens.muted }) }}>
@@ -389,7 +411,7 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
           </section>
         )}
 
-        {mode === "timetable" && <Timetable tokens={tokens} dim={dim} narrow={narrow} today={feed.today} now={now} currentUserId={currentUserId} isParent={isParent} />}
+        {mode === "timetable" && <Timetable tokens={tokens} dim={dim} narrow={narrow} today={feed.today} now={now} currentUserId={currentUserId} isParent={isParent} picked={ttPicked} onFilled={setTtFilled} />}
 
         {/* people */}
         {showPeople && (
