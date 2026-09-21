@@ -12,12 +12,13 @@ The tablet on the wall can show more than photos: the week with everyone's appoi
 
 ## Switching what the wall shows
 
-Tap the small button bottom right on the tablet. It cycles through four modes and remembers the choice for this tablet:
+Tap the small button bottom right on the tablet. It cycles through five modes and remembers the choice for this tablet:
 
 - **Fotos** — the photo wall, as before.
 - **Tafel** — the week on top, the people below (the family board).
 - **Kalender** — the week, full screen.
 - **Aufgaben** — the people and their tasks, full screen.
+- **Stundenplan** — the children's school timetables.
 
 ## Who appears on the wall
 
@@ -71,13 +72,39 @@ person: starting a task stops that person's other one), so the evening
 review compares estimate and reality for everyone. Parents can start
 and stop a child's timer.
 
-## Your own order, and rewording a to-do
+## Your own order
 
 Every tile you may tick has a small grip on its right edge. Drag a tile
 by the grip, up or down, and let go: that is the order of the column
 from now on, on every screen. To-dos and routines are sorted among
-themselves; a new to-do lands at the end. A **double tap** on a tile
-opens its title for rewording: OK or Enter saves, the cross or Esc
-leaves it as it was. Because of the double tap, a single tap ticks a
-tile a moment later than it used to. Parents sort and reword in the
-children's columns too; between adults everyone keeps their own.
+themselves; a new to-do lands at the end. Parents sort the children's
+columns too; between adults everyone keeps their own.
+
+## A to-do's day, details and repetition
+
+**+ Aufgabe** asks for when: **Heute**, **Morgen** or any day from the
+date field. A **double tap** on a tile opens the to-do: title, day
+("ohne Datum" takes the day away) and **Wiederholen** — einmalig,
+täglich, werktags, wöchentlich, alle 2 Wochen, monatlich, jährlich. A
+repeating to-do sits under "Routine" with a week of ticks; when it is
+ticked, the next one appears by itself for the same person, at the same
+place in the column, and waits for its day. Because of the double tap,
+a single tap ticks a tile a moment later than it used to.
+
+## Appointment details
+
+Tap an entry in the week and a small window shows the appointment: whose
+it is, the day, the time, the place and the notes. It is for reading;
+appointments are changed in the Calendar app.
+
+## The children's timetable
+
+The fourth view, **Stundenplan** (the mode button on the tablet, the
+bar at the bottom right on /board), shows the school week of every
+child on the board: Monday to Friday by period, each subject always in
+the same tint, today's column marked and the running period ringed.
+**Ausfüllen** / **Bearbeiten** on a child's card turns the grid into
+fields: subject and room per cell (subjects already used are offered),
+start and end per period, **+ Stunde** and **− letzte Stunde** for the
+length of the day; **Speichern** keeps it. A parent fills in any child's
+timetable, a child its own; on the wall tablet after the PIN sign-in.

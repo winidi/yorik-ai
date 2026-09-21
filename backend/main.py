@@ -1189,7 +1189,7 @@ def auth_voice_login(
 # The mode is a per-device preference (photos | board | calendar | tasks),
 # switched on the tablet itself or later in Settings → Devices, stored in
 # app_settings keyed by the wall device id (or the kiosk session id).
-_KIOSK_MODES = ("photos", "board", "calendar", "tasks")
+_KIOSK_MODES = ("photos", "board", "calendar", "tasks", "timetable")
 
 
 def _kiosk_device_key(request: Request) -> str:
@@ -1347,6 +1347,80 @@ def ambient_board_order(body: BoardOrderIn,
             conn.execute("INSERT INTO task_board_order (user_id, task_id, position) VALUES (?, ?, ?)", (target, tid, pos))
         conn.commit()
     return {"user_id": target, "task_ids": ids}
+
+
+_TIMETABLE_DEFAULT_PERIODS = [("08:00", "08:45"), ("08:50", "09:35"), ("09:55", "10:40"),
+                              ("10:45", "11:30"), ("11:45", "12:30"), ("12:35", "13:20")]
+
+
+def _clean_timetable(raw: Any) -> Dict[str, Any]:
+    """Whatever comes in, what is stored is a small, well-formed plan:
+    up to 12 periods with HH:MM times, cells for Mon–Fri only."""
+    import re as _re
+    raw = raw if isinstance(raw, dict) else {}
+    hhmm = _re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+    periods = []
+    for p in (raw.get("periods") or [])[:12]:
+        p = p if isinstance(p, dict) else {}
+        start, end = str(p.get("start") or ""), str(p.get("end") or "")
+        periods.append({"start": start if hhmm.match(start) else "", "end": end if hhmm.match(end) else ""})
+    cells: Dict[str, Dict[str, str]] = {}
+    for key, c in (raw.get("cells") or {}).items() if isinstance(raw.get("cells"), dict) else []:
+        m = _re.fullmatch(r"([0-4])-(\d{1,2})", str(key))
+        if not m or int(m.group(2)) >= len(periods) or not isinstance(c, dict):
+            continue
+        subject = str(c.get("subject") or "").strip()[:40]
+        room = str(c.get("room") or "").strip()[:20]
+        if subject or room:
+            cells[f"{m.group(1)}-{int(m.group(2))}"] = {"subject": subject, "room": room}
+    return {"periods": periods, "cells": cells}
+
+
+@app.get("/api/ambient/timetable", tags=["kiosk"])
+def ambient_timetable(request: Request) -> Dict[str, Any]:
+    """The children's timetables for the family board: every child
+    (restricted account) who is on the wall, with their plan or an empty
+    one with the usual six periods. Same gate as the board feed."""
+    import json as _json
+    from . import people as _people_mod
+    _kiosk_or_session(request)
+    with conn_ctx(DB_PATH) as conn:
+        allowed = {str(r["id"]) for r in conn.execute(
+            "SELECT id FROM user_profiles WHERE kiosk_agenda_consent = 1 AND (disabled = 0 OR disabled IS NULL) "
+            "AND lower(role) = 'restricted'").fetchall()}
+        stored = {str(r["user_id"]): r["data"] for r in conn.execute("SELECT user_id, data FROM timetables").fetchall()}
+    out = []
+    for p in _people_mod.household():
+        if p["id"] not in allowed:
+            continue
+        try:
+            plan = _clean_timetable(_json.loads(stored[p["id"]])) if p["id"] in stored else None
+        except ValueError:
+            plan = None
+        out.append({**p, "timetable": plan or {"periods": [{"start": a, "end": b} for a, b in _TIMETABLE_DEFAULT_PERIODS], "cells": {}},
+                    "filled": bool(plan and plan["cells"])})
+    return {"people": out}
+
+
+@app.put("/api/ambient/timetable/{user_id}", tags=["kiosk"])
+def ambient_timetable_save(user_id: str, body: Dict[str, Any],
+                           actor: Dict[str, Any] = Depends(_auth.current_user)) -> Dict[str, Any]:
+    """Save a child's timetable: the child itself, or a parent (any
+    account that is not restricted)."""
+    import json as _json
+    with conn_ctx(DB_PATH) as conn:
+        row = conn.execute("SELECT role FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
+        if not row or (row["role"] or "").lower() != "restricted":
+            raise HTTPException(404, "no such child")
+        parent = (actor.get("role") or "").lower() in ("member", "admin", "platform_admin")
+        if str(actor["id"]) != str(user_id) and not parent:
+            raise HTTPException(403, "not your timetable")
+        plan = _clean_timetable(body)
+        conn.execute("DELETE FROM timetables WHERE user_id = ?", (user_id,))
+        conn.execute("INSERT INTO timetables (user_id, data, updated_by) VALUES (?, ?, ?)",
+                     (user_id, _json.dumps(plan, ensure_ascii=False), str(actor["id"])))
+        conn.commit()
+    return {"user_id": str(user_id), "timetable": plan}
 
 
 @app.get("/api/auth/pin-pickable", tags=["auth"])

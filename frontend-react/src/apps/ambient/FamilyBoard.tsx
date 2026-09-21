@@ -1,8 +1,9 @@
 /**
  * FamilyBoard — the family planner on the wall: the week in person colours on
  * top, today per person below, routines with a week of ticks, tap to
- * tick. Three layouts driven by `mode`: "board" (week + people),
- * "calendar" (the week, full screen), "tasks" (the people, full screen).
+ * tick. Four layouts driven by `mode`: "board" (week + people),
+ * "calendar" (the week, full screen), "tasks" (the people, full screen),
+ * "timetable" (the children's school week, see Timetable.tsx).
  *
  * Data: GET /api/ambient/board (kiosk gate or a signed-in member). Who
  * appears is decided by each person's own "show me on the wall" consent.
@@ -25,9 +26,10 @@ import { api } from "@/lib/api";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { cn } from "@/lib/utils";
 import { EventDetails, TaskDialog, repeatLabel } from "./BoardDialogs";
+import { Timetable } from "./Timetable";
 import "./board-fonts.css";
 
-export type BoardMode = "board" | "calendar" | "tasks";
+export type BoardMode = "board" | "calendar" | "tasks" | "timetable";
 
 interface Person { id: string; name: string; first_name: string; color: string; avatar_url: string | null; role?: string }
 interface Ev { id: number; title: string; starts_at: string; ends_at: string | null; all_day: boolean; owner_id: string | null; shared: boolean; location: string | null; notes?: string; calendar?: string }
@@ -262,8 +264,8 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
 
   if (!feed) return <div className="absolute inset-0 grid place-items-center" style={{ background: tokens.bg }}><Loader2 className="w-8 h-8 animate-spin" style={{ color: tokens.muted }} /></div>;
 
-  const showWeek = mode !== "tasks";
-  const showPeople = mode !== "calendar";
+  const showWeek = mode === "board" || mode === "calendar";
+  const showPeople = mode === "board" || mode === "tasks";
   const todayEvents = eventsByDay.get(feed.today) || [];
   const thisWeek = Array.from({ length: 7 }, (_, i) => addDays(feed.week_start, i));
 
@@ -386,6 +388,8 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
             </div>
           </section>
         )}
+
+        {mode === "timetable" && <Timetable tokens={tokens} dim={dim} narrow={narrow} today={feed.today} now={now} currentUserId={currentUserId} isParent={isParent} />}
 
         {/* people */}
         {showPeople && (

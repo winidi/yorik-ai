@@ -25,7 +25,7 @@ import { AvatarPinFallback, type PickableUser } from "./AvatarPinFallback";
 import { AgendaPane } from "./AgendaPane";
 import { RecordingStartDialog } from "@/components/RecordingStartDialog";
 import { getRecorderState, subscribeRecorder } from "@/components/RecorderDock";
-import { Mic, Images, LayoutGrid, CalendarDays, ListChecks } from "lucide-react";
+import { Mic, Images, LayoutGrid, CalendarDays, ListChecks, GraduationCap } from "lucide-react";
 import { FamilyBoard, type BoardMode } from "./FamilyBoard";
 
 // Pointer-gesture thresholds. Picked for a wall-mounted tablet —
@@ -89,6 +89,7 @@ export function AmbientApp() {
     { id: "board", label: "Tafel", Icon: LayoutGrid },
     { id: "calendar", label: "Kalender", Icon: CalendarDays },
     { id: "tasks", label: "Aufgaben", Icon: ListChecks },
+    { id: "timetable", label: "Stundenplan", Icon: GraduationCap },
   ];
   useEffect(() => {
     api.get<{ mode: WallMode }>("/api/ambient/mode").then(r => setMode(r.mode)).catch(() => {});

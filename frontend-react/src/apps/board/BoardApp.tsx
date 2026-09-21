@@ -4,7 +4,7 @@
  * person ticks their own tiles directly, no PIN picker needed here.
  */
 import { useState } from "react";
-import { CalendarDays, LayoutGrid, ListChecks } from "lucide-react";
+import { CalendarDays, GraduationCap, LayoutGrid, ListChecks } from "lucide-react";
 import { useAuth } from "@/components/AuthGate";
 import { Dock } from "@/components/Dock";
 import { FamilyBoard, type BoardMode } from "@/apps/ambient/FamilyBoard";
@@ -14,6 +14,7 @@ const MODES: Array<{ id: BoardMode; label: string; Icon: typeof LayoutGrid }> = 
   { id: "board", label: "Tafel", Icon: LayoutGrid },
   { id: "calendar", label: "Kalender", Icon: CalendarDays },
   { id: "tasks", label: "Aufgaben", Icon: ListChecks },
+  { id: "timetable", label: "Stundenplan", Icon: GraduationCap },
 ];
 
 export function BoardApp() {
@@ -36,7 +37,7 @@ export function BoardApp() {
           <button key={m.id} onClick={() => pick(m.id)} title={m.label}
                   className={cn("flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold",
                                 mode === m.id ? "bg-[#1f2430] text-white" : "text-[#1f2430] hover:bg-[#f1efe9]")}>
-            <m.Icon className="w-3.5 h-3.5" /> {m.label}
+            <m.Icon className="w-3.5 h-3.5" /> <span className={cn(mode !== m.id && "hidden sm:inline")}>{m.label}</span>
           </button>
         ))}
       </div>

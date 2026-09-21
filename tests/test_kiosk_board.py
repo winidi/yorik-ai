@@ -75,3 +75,29 @@ def test_board_feed_answers_a_signed_in_member_too(fresh_app):
     client, uid = login_client(fresh_app, role="member", name="Beate")
     assert client.get("/api/ambient/board").json()["people"] == []          # signed in, nobody consented yet
     assert TestClient(fresh_app).get("/api/ambient/board").status_code in (401, 403)
+
+
+def test_timetable_is_for_children_and_kept_by_parents_and_the_child(fresh_app):
+    from fastapi.testclient import TestClient
+    from tests.conftest import login_client
+    from backend.database import get_conn
+    mum_c, mum = login_client(fresh_app, role="member", name="Beate", email="b@example.local")
+    kid_c, kid = login_client(fresh_app, role="restricted", name="Yorik", email="k@example.local")
+    bro_c, bro = login_client(fresh_app, role="restricted", name="Yarik", email="y@example.local")
+    with get_conn() as conn:
+        conn.execute("UPDATE user_profiles SET kiosk_agenda_consent = 1"); conn.commit()
+    people = mum_c.get("/api/ambient/timetable").json()["people"]
+    assert {p["name"] for p in people} == {"Yorik", "Yarik"}                  # children only
+    assert len(people[0]["timetable"]["periods"]) == 6 and people[0]["filled"] is False
+    plan = {"periods": [{"start": "08:00", "end": "08:45"}, {"start": "nonsense", "end": "09:35"}],
+            "cells": {"0-0": {"subject": "Mathe", "room": "R 12"}, "4-1": {"subject": " Sport "}, "5-0": {"subject": "Samstag"}, "0-7": {"subject": "zu spät"}, "1-1": {"subject": ""}}}
+    r = mum_c.put(f"/api/ambient/timetable/{kid}", json=plan)
+    assert r.status_code == 200, r.text
+    saved = {p["id"]: p for p in kid_c.get("/api/ambient/timetable").json()["people"]}[kid]
+    assert saved["filled"] and saved["timetable"]["cells"] == {"0-0": {"subject": "Mathe", "room": "R 12"}, "4-1": {"subject": "Sport", "room": ""}}
+    assert saved["timetable"]["periods"][1] == {"start": "", "end": "09:35"}
+    assert kid_c.put(f"/api/ambient/timetable/{kid}", json=plan).status_code == 200      # the child keeps its own
+    assert kid_c.put(f"/api/ambient/timetable/{bro}", json=plan).status_code == 403      # not the brother's
+    assert mum_c.put(f"/api/ambient/timetable/{mum}", json=plan).status_code == 404      # adults have none
+    assert TestClient(fresh_app).get("/api/ambient/timetable").status_code in (401, 403)
+    assert TestClient(fresh_app).put(f"/api/ambient/timetable/{kid}", json=plan).status_code in (401, 403)

@@ -13,6 +13,14 @@ worklist.
 
 ### Added
 
+- **Family board: timetable, to-do details, appointment details.** A
+  fourth view shows the children's school timetables, filled in on the
+  board by a parent or the child. "+ Aufgabe" asks for the day; a double
+  tap opens a to-do (title, day, repetition: daily, weekdays, weekly …);
+  a tap on a calendar entry shows the appointment. The "Als Nächstes"
+  line is gone. Fixed on the way: the next instance of a repeating task
+  lost its assignees, equally named routines of two people blocked each
+  other, and a task's repetition or day could not be cleared.
 - **Family board: sort and reword.** A tile in a column you may tick
   has a grip on the right: drag it to put the to-dos (or the routines)
   in your own order; the order is kept per person, new to-dos land at
