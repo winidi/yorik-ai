@@ -138,7 +138,8 @@ export function LetterEditor({ doc, onChanged, onBack, say, extra }: {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <header className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-border">
+      {/* room on the right: the notification bell floats over the top corner */}
+      <header className="flex items-center gap-2 flex-wrap pl-4 pr-16 py-3 border-b border-border">
         <button onClick={onBack} className="md:hidden p-1.5 rounded-md hover:bg-muted" aria-label="Zur Liste"><ArrowLeft className="w-5 h-5" /></button>
         <div className="min-w-0 mr-auto">
           <div className="font-semibold truncate">{subject || "Ohne Betreff"}</div>
