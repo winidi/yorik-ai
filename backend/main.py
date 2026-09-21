@@ -1276,6 +1276,7 @@ def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
             routine_log: list = []
             for r in conn.execute(
                 f"SELECT t.id, t.title, t.due_date, t.done, t.done_at, t.person, t.category, t.recurrence_rule, t.estimated_minutes, "
+                f"       t.started_at, t.actual_minutes, "
                 f"       t.created_by_user_id, COALESCE(string_agg(a.user_id::text, ','), '') AS assignee_ids "
                 f"FROM tasks t LEFT JOIN task_assignees a ON a.task_id = t.id "
                 f"WHERE t.parent_task_id IS NULL AND ("
@@ -1298,7 +1299,8 @@ def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
                 tasks.append({"id": r["id"], "title": r["title"], "due_date": r["due_date"], "done": bool(r["done"]),
                               "done_at": r["done_at"], "assignee_ids": mine, "person": r["person"] or "",
                               "category": r["category"] or "", "routine": routine,
-                              "estimated_minutes": r["estimated_minutes"]})
+                              "estimated_minutes": r["estimated_minutes"],
+                              "started_at": r["started_at"], "actual_minutes": r["actual_minutes"]})
     return {"today": today.isoformat(), "week_start": week_start.isoformat(), "days": days,
             "people": people, "events": events, "tasks": tasks, "routine_log": routine_log if ids else []}
 
@@ -3785,10 +3787,18 @@ def start_task(
     user_id = actor.get("id") if actor else None
     with conn_ctx(DB_PATH) as conn:
         if user_id is not None:
+            # One running timer per person: starting a task stops the
+            # other running tasks of the people it is assigned to (a
+            # parent who starts a child's task stops the child's other
+            # timer, not their own); an unassigned task counts for its
+            # creator.
             others = conn.execute(
-                "SELECT id FROM tasks "
-                "WHERE created_by_user_id = ? AND started_at IS NOT NULL AND id != ?",
-                (user_id, task_id),
+                "SELECT t.id FROM tasks t WHERE t.started_at IS NOT NULL AND t.id != ? AND ("
+                "  t.id IN (SELECT a2.task_id FROM task_assignees a2 WHERE a2.user_id IN "
+                "           (SELECT a1.user_id FROM task_assignees a1 WHERE a1.task_id = ?)) "
+                "  OR (NOT EXISTS (SELECT 1 FROM task_assignees a3 WHERE a3.task_id = ?) "
+                "      AND t.created_by_user_id = ?))",
+                (task_id, task_id, task_id, user_id),
             ).fetchall()
             for r in others:
                 _fold_elapsed_into_actual(conn, int(r["id"]))

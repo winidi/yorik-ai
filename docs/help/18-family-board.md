@@ -60,3 +60,13 @@ filled in the person's colour with a tick, the others fade. Household
 appointments (the shared calendar) stay visible in every selection.
 The choice is kept per device. The columns are in a fixed order: the
 head of the household on the left, the other adults, then the children.
+
+## Timing a task
+
+Press a tile for half a second and its timer starts; press long again
+and it stops. A running tile has a border in the person's colour and
+counts minutes and seconds against the estimate; afterwards it says how
+long the task took. It is the same timer as in the Tasks app (one per
+person: starting a task stops that person's other one), so the evening
+review compares estimate and reality for everyone. Parents can start
+and stop a child's timer.

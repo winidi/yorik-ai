@@ -76,3 +76,19 @@ def test_parent_ticks_a_childs_task_but_not_another_adults(family, fresh_app):
     assert beate_c.patch(f"/api/tasks/{mine}?role=member", json={"done": True}).status_code in (403, 404)
     # and a child is nobody's guardian
     assert kid_c.patch(f"/api/tasks/{mine}?role=restricted", json={"done": True}).status_code in (403, 404)
+
+
+def test_timer_on_an_assigned_task_and_in_the_board_feed(family):
+    beate_c, _ = family["beate"]; kid_c, kid = family["kid"]
+    a = beate_c.post("/api/tasks?role=member", json={"title": "Vokabeln", "assignee_user_ids": [kid]}).json()["id"]
+    b = beate_c.post("/api/tasks?role=member", json={"title": "Mathe", "assignee_user_ids": [kid]}).json()["id"]
+    assert kid_c.post(f"/api/tasks/{a}/start?role=restricted").status_code == 200      # the child times its own to-do
+    r = beate_c.post(f"/api/tasks/{b}/start?role=member")                              # a parent starts the next one
+    assert r.status_code == 200 and r.json()["started_at"]
+    rows = {t["id"]: t for t in kid_c.get("/api/tasks?role=restricted").json()}
+    assert rows[a]["started_at"] is None and rows[b]["started_at"]                     # one timer per person
+    kid_c.patch("/api/users/me/kiosk-agenda-consent", json={"consent": True})
+    feed = kid_c.get("/api/ambient/board").json()
+    card = next(t for t in feed["tasks"] if t["id"] == b)
+    assert card["started_at"] and "actual_minutes" in card
+    assert kid_c.post(f"/api/tasks/{b}/stop?role=restricted").json()["started_at"] is None

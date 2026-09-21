@@ -17,7 +17,7 @@
  * warm dark palette after 21:00 so the wall does not glow at night.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Backpack, Bed, BookOpen, Check, ChevronDown, ChevronLeft, ChevronRight, Dog, Loader2, Lock, Plus, Sparkles, Utensils } from "lucide-react";
+import { Backpack, Bed, BookOpen, Check, Timer, ChevronDown, ChevronLeft, ChevronRight, Dog, Loader2, Lock, Plus, Sparkles, Utensils } from "lucide-react";
 import { api } from "@/lib/api";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { cn } from "@/lib/utils";
@@ -27,7 +27,7 @@ export type BoardMode = "board" | "calendar" | "tasks";
 
 interface Person { id: string; name: string; first_name: string; color: string; avatar_url: string | null; role?: string }
 interface Ev { id: number; title: string; starts_at: string; ends_at: string | null; all_day: boolean; owner_id: string | null; shared: boolean; location: string | null }
-interface Task { id: number; title: string; due_date: string | null; done: boolean; done_at: string | null; assignee_ids: string[]; person: string; category: string; routine: boolean; estimated_minutes: number | null }
+interface Task { id: number; title: string; due_date: string | null; done: boolean; done_at: string | null; assignee_ids: string[]; person: string; category: string; routine: boolean; estimated_minutes: number | null; started_at?: string | null; actual_minutes?: number | null }
 interface LogRow { title: string; user_id: string; day: string }
 interface Feed { today: string; week_start: string; days: number; people: Person[]; events: Ev[]; tasks: Task[]; routine_log: LogRow[] }
 interface Tokens { bg: string; card: string; ink: string; muted: string; line: string; soft: string }
@@ -174,6 +174,18 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
     } catch {} finally { setBusy(null); setTimeout(() => setPop(null), 500); }
   }
 
+  // Long press: start or stop the task's timer, as in the Tasks app.
+  async function toggleTimer(t: Task, owner: Person) {
+    const mine = currentUserId && t.assignee_ids.includes(currentUserId);
+    const asParent = isParent && (owner.role || "").toLowerCase() === "restricted";
+    if (!mine && !asParent) { onNeedSignIn(owner); return; }
+    if (t.done) return;
+    try {
+      await api.post(`/api/tasks/${t.id}/${t.started_at ? "stop" : "start"}`, {});
+      await load();
+    } catch {}
+  }
+
   async function addTask(p: Person) {
     const title = draft.trim();
     if (!title || !feed) return;
@@ -201,6 +213,9 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
         .fb-pop { animation: fb-pop .45s cubic-bezier(.2,.9,.3,1.4); }
         @keyframes fb-pop { 0% { transform: scale(1); } 40% { transform: scale(1.04); } 100% { transform: scale(1); } }
         .fb-scroll { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, ${tokens.muted} 55%, transparent) transparent; }
+        .fb-running { animation: fb-run 2.4s ease-in-out infinite; }
+        @keyframes fb-run { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 18%, transparent); } }
+        @media (prefers-reduced-motion: reduce) { .fb-running { animation: none; } }
         .fb-title { overflow-wrap: anywhere; hyphens: auto; text-wrap: pretty; }
         @media (prefers-reduced-motion: reduce) { .fb-pop { animation: none; } }
       `}</style>
@@ -365,11 +380,11 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
                   <div className={cn("flex flex-col gap-2 pr-1", narrow ? "" : "flex-1 min-h-0 overflow-y-auto overscroll-contain fb-scroll")} style={{ touchAction: "pan-y" }}>
                     {routines.length > 0 && <Label muted={tokens.muted}>Routine</Label>}
                     {routines.map(t => (
-                      <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !mayTick} onTap={() => toggle(t, p)}
+                      <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !mayTick} onTap={() => toggle(t, p)} onHold={() => toggleTimer(t, p)}
                             today={feed.today} week={thisWeek} log={feed.routine_log} />
                     ))}
                     {open.length > 0 && routines.length > 0 && <Label muted={tokens.muted}>Aufgaben</Label>}
-                    {open.map(t => <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !mayTick} onTap={() => toggle(t, p)} today={feed.today} />)}
+                    {open.map(t => <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !mayTick} onTap={() => toggle(t, p)} onHold={() => toggleTimer(t, p)} today={feed.today} />)}
                     {mayAdd && (adding === p.id ? (
                       <form onSubmit={e => { e.preventDefault(); void addTask(p); }} className="flex gap-2">
                         <input autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={() => { if (!draft.trim()) setAdding(null); }}
@@ -398,7 +413,7 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
                         </button>
                         {openDone[p.id] && (
                           <div className="mt-2 flex flex-col gap-2">
-                            {done.map(t => <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !mayTick} onTap={() => toggle(t, p)} today={feed.today} />)}
+                            {done.map(t => <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !mayTick} onTap={() => toggle(t, p)} onHold={() => toggleTimer(t, p)} today={feed.today} />)}
                           </div>
                         )}
                       </div>
@@ -423,10 +438,28 @@ function Label({ children, muted }: { children: React.ReactNode; muted: string }
   return <div className="text-[11.5px] tracking-[.08em] uppercase font-bold mt-1" style={{ color: muted }}>{children}</div>;
 }
 
-function Card({ t, p, tokens, dim, busy, pop, locked, onTap, today, week, log }: {
-  t: Task; p: Person; tokens: Tokens; dim: boolean; busy: boolean; pop: boolean; locked: boolean; onTap: () => void; today: string;
+function Card({ t, p, tokens, dim, busy, pop, locked, onTap, onHold, today, week, log }: {
+  t: Task; p: Person; tokens: Tokens; dim: boolean; busy: boolean; pop: boolean; locked: boolean; onTap: () => void; onHold: () => void; today: string;
   week?: string[]; log?: LogRow[];
 }) {
+  // Timer: started_at is naive UTC (as in the Tasks app); minutes so far
+  // = what earlier runs folded into actual_minutes + the live run.
+  const running = !!t.started_at && !t.done;
+  const [tick, setTick] = useState(0);
+  useEffect(() => { if (!running) return; const i = setInterval(() => setTick(x => x + 1), 1000); return () => clearInterval(i); }, [running]);
+  void tick;
+  const startedMs = t.started_at ? new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(t.started_at) ? t.started_at : t.started_at.replace(" ", "T") + "Z").getTime() : 0;
+  const liveSec = running ? Math.max(0, Math.floor((Date.now() - startedMs) / 1000)) : 0;
+  const totalMin = (t.actual_minutes || 0) + liveSec / 60;
+  const clock = `${Math.floor(totalMin)}:${String(Math.floor((totalMin % 1) * 60)).padStart(2, "0")}`;
+  // Long press (500 ms) toggles the timer; a moved finger is a scroll.
+  const lp = useRef<{ timer: number | null; fired: boolean; x: number; y: number }>({ timer: null, fired: false, x: 0, y: 0 });
+  const lpCancel = () => { if (lp.current.timer) { clearTimeout(lp.current.timer); lp.current.timer = null; } };
+  const lpDown = (e: React.PointerEvent) => {
+    lp.current = { timer: window.setTimeout(() => { lp.current.fired = true; lp.current.timer = null; try { (navigator as any).vibrate?.(15); } catch {} onHold(); }, 500), fired: false, x: e.clientX, y: e.clientY };
+  };
+  const lpMove = (e: React.PointerEvent) => { if (lp.current.timer && (Math.abs(e.clientX - lp.current.x) > 10 || Math.abs(e.clientY - lp.current.y) > 10)) lpCancel(); };
+  const tap = () => { if (lp.current.fired) { lp.current.fired = false; return; } onTap(); };
   const due = !!t.due_date && t.due_date <= today && !t.done;
   const overdue = !!t.due_date && t.due_date < today && !t.done;
   const Icon = t.routine ? routineIcon(t.title) : null;
@@ -434,10 +467,13 @@ function Card({ t, p, tokens, dim, busy, pop, locked, onTap, today, week, log }:
     ? week.map(d => ({ d, on: (log || []).some(l => l.title === t.title && l.user_id === p.id && l.day === d) || (d === today && t.done), future: d > today }))
     : null;
   return (
-    <button onClick={onTap} disabled={busy}
-            className={cn("relative grid items-center gap-3 rounded-[16px] text-left overflow-hidden shrink-0", pop && "fb-pop", t.done && "opacity-80")}
+    <button onClick={tap} disabled={busy}
+            onPointerDown={lpDown} onPointerMove={lpMove} onPointerUp={lpCancel} onPointerLeave={lpCancel} onPointerCancel={lpCancel}
+            onContextMenu={e => e.preventDefault()}
+            title={t.done ? undefined : running ? "Lange drücken: Zeit stoppen" : "Lange drücken: Zeit starten"}
+            className={cn("relative grid items-center gap-3 rounded-[16px] text-left overflow-hidden shrink-0", pop && "fb-pop", t.done && "opacity-80", running && "fb-running")}
             style={{ gridTemplateColumns: "34px minmax(0, 1fr) auto", padding: "12px 12px 12px 14px", background: tokens.card,
-                     border: `1px solid color-mix(in srgb, ${p.color} ${dim ? 35 : 25}%, ${tokens.line})`,
+                     border: running ? `2px solid ${p.color}` : `1px solid color-mix(in srgb, ${p.color} ${dim ? 35 : 25}%, ${tokens.line})`,
                      boxShadow: dim ? "0 1px 0 rgba(0,0,0,.3)" : "0 1px 2px rgba(31,36,48,.05), 0 8px 20px -14px rgba(31,36,48,.35)" }}>
       <span className="absolute left-0 top-0 bottom-0 w-[5px]" style={{ background: t.done ? "#2f9e64" : p.color }} />
       <span className={cn("w-[30px] h-[30px] rounded-[10px] border-[2.5px] grid place-items-center text-white transition-colors", t.done && "bg-[#2f9e64] border-[#2f9e64]")}
@@ -450,7 +486,12 @@ function Card({ t, p, tokens, dim, busy, pop, locked, onTap, today, week, log }:
         </span>
         <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px]" style={{ color: tokens.muted }}>
           {t.category && <span className="rounded-full px-1.5 py-[1px] font-semibold" style={{ background: tokens.soft }}>{t.category}</span>}
-          {t.estimated_minutes ? <span>{t.estimated_minutes} Min.</span> : null}
+          {running
+            ? <span className="flex items-center gap-1 rounded-full px-2 py-[1px] font-bold tabular-nums text-white" style={{ background: p.color }}><Timer className="w-3 h-3" />{clock}{t.estimated_minutes ? ` / ${t.estimated_minutes} Min.` : ""}</span>
+            : <>
+                {t.estimated_minutes ? <span>{t.estimated_minutes} Min.</span> : null}
+                {(t.actual_minutes || 0) > 0 && <span className="flex items-center gap-1 tabular-nums"><Timer className="w-3 h-3" />{Math.round(t.actual_minutes || 0)} Min. gebraucht</span>}
+              </>}
           {overdue && <span className="flex items-center gap-1 font-bold" style={{ color: "#e0486b" }}><i className="w-1.5 h-1.5 rounded-full" style={{ background: "#e0486b" }} />überfällig seit {fmtDay(t.due_date!)}</span>}
           {dots && (
             <span className="flex items-center gap-1 ml-auto" title="Diese Woche">

@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { Dock } from "@/components/Dock";
+import { useAuth } from "@/components/AuthGate";
 import type { Task } from "../calendar/types";
 import { toast } from "@/components/Toast";
 
@@ -86,7 +87,22 @@ interface AskResponse {
 
 export function TasksApp() {
   const tasksApi = useApi<ExtendedTask[]>(`/api/tasks?role=${ROLE}`, []);
-  const tasks = tasksApi.data || [];
+  // The list is yours: tasks assigned to you, and unassigned ones you
+  // created. What others shared with you, and what you handed to
+  // someone else, shows with "Others" (off by default, kept per device).
+  const auth = useAuth();
+  const meId = String((auth.user as any)?.id || "");
+  const [showOthers, setShowOthers] = useState<boolean>(() => {
+    try { return localStorage.getItem("yorik_tasks_show_others") === "1"; } catch { return false; }
+  });
+  const allTasks = tasksApi.data || [];
+  const isMine = useCallback((t: ExtendedTask) => {
+    const who = (t.assignees || []).map(a => String(a.user_id));
+    if (who.length) return who.includes(meId);
+    return String((t as any).created_by_user_id || "") === meId || !(t as any).created_by_user_id;
+  }, [meId]);
+  const othersCount = useMemo(() => meId ? allTasks.filter(t => !isMine(t) && !t.done).length : 0, [allTasks, isMine, meId]);
+  const tasks = useMemo(() => (showOthers || !meId) ? allTasks : allTasks.filter(isMine), [allTasks, showOthers, isMine, meId]);
 
   const [view, setView] = useState<ViewMode>("today");
   const [showDone, setShowDone] = useState(false);
@@ -806,6 +822,22 @@ export function TasksApp() {
             {showDone ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
             Done ({doneCount})
           </button>
+          {(othersCount > 0 || showOthers) && (
+            <button
+              onClick={() => setShowOthers(v => { try { localStorage.setItem("yorik_tasks_show_others", v ? "0" : "1"); } catch {} return !v; })}
+              className={cn(
+                "text-xs h-10 md:h-7 px-2.5 rounded-full border transition flex items-center gap-1",
+                showOthers
+                  ? "bg-violet-500/10 border-violet-500/30 text-violet-700 dark:text-violet-300"
+                  : "bg-card border-border text-muted-foreground hover:text-foreground",
+              )}
+              title={showOthers ? "Show only my tasks" : "Also show tasks of other household members"}
+              aria-pressed={showOthers}
+            >
+              {showOthers ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+              Others ({othersCount})
+            </button>
+          )}
           {!magicResult && (
             <div className="relative">
               <select

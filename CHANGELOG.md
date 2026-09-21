@@ -79,6 +79,12 @@ worklist.
   switch.
   Settings → Embeddings has the switch (on/off), the choice of model,
   the index progress per source and a rebuild button.
+- **Tasks app shows your own tasks.** Tasks of people who share
+  their tasks with you, and tasks you handed to someone else, are
+  behind "Others (n)", off by default and kept per device.
+- **Timer on the family board.** A long press on a tile starts and
+  stops the task's timer, as in the Tasks app; one running timer per
+  person, counted by assignee.
 - **Family board for parents.** A parent ticks the children's tiles
   and adds a to-do to anyone's column with "+ Aufgabe" (children add
   to their own). The /board page offers "Mich anzeigen" to a person
