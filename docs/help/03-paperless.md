@@ -99,3 +99,22 @@ partner and they see what you are up to, while your documents stay
 yours; they do the same for you. For a child's account the admin sets
 the boxes on the child's behalf.
 \n
+
+## Showing Yorik a file in the chat
+
+Attach a file with the paperclip next to the message box, drop it on
+the chat, or paste it (a screenshot from the clipboard). Yorik reads it
+— PDFs, Word and text files directly, photos and screenshots with the
+vision model — tells you in a sentence what it is, and asks once
+whether to file it in Paperless.
+
+Paperless is the one place documents live. "Ja, ablegen" (or the
+**In Paperless ablegen** button on the card under your message) sends
+the file there under your own account, with your default visibility
+unless you name another ("für alle sichtbar"). Anything you do not file
+stays a card in that conversation and nowhere else: it is deleted with
+the conversation, with the **Löschen** button, or after 30 days
+(`YORIK_CHAT_ATTACHMENT_DAYS`). Only you can open your attachments.
+
+A scanned PDF without a text layer cannot be read in the chat; file it
+and Paperless runs OCR on it.

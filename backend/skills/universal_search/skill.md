@@ -1,6 +1,6 @@
 ---
 name: universal_search
-description: "Search everything the user may see in one query - email, WhatsApp, documents, photos, calendar, tasks, contacts, recordings, letters - by keyword and by meaning."
+description: "Search everything the user may see in one query, by keyword and by meaning."
 when_to_use: |
   - User asks "find anything about X" without specifying a source
   - User mentions a person/topic that could be in any channel

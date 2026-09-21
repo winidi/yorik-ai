@@ -1,0 +1,50 @@
+"""read_attachment — the text of a file the user attached in the chat."""
+
+from __future__ import annotations
+
+from typing import Any, Dict, Optional
+
+
+async def execute(ctx, attachment_id: int, question: Optional[str] = None) -> Dict[str, Any]:
+    from backend import chat_attachments as A
+    user_id = getattr(ctx, "user_id", None)
+    if not user_id:
+        raise ValueError("read_attachment needs a signed-in user")
+    row = A.get(int(attachment_id), str(user_id))
+    if not row:
+        return {"ok": False, "_llm_hint": "REJECTED: there is no attachment with this number for this user. "
+                                          "Ask them to attach the file again."}
+    conv = getattr(ctx, "conversation_id", None)
+    if conv and not row.get("conversation_id"):
+        A.bind_conversation(row["id"], str(user_id), str(conv))
+
+    is_image = (row["mime_type"] or "").startswith("image/")
+    text = (row.get("text") or "").strip()
+    source = "text"
+    if is_image or (not text and row["mime_type"] == "application/pdf"):
+        if is_image:
+            try:
+                text = await A.describe_image(row, question)
+                source = "vision"
+            except Exception as exc:  # noqa: BLE001
+                return {"ok": False, "filename": row["filename"],
+                        "_llm_hint": f"The picture could not be read ({type(exc).__name__}). Say so in one line."}
+        else:
+            source = "empty"
+    truncated = len(text) > A.TEXT_CAP
+    filed = bool(row["filed_at"])
+    if source == "empty":
+        hint = ("This PDF has no text layer (a scan). Say that you cannot read it here, and offer to file it in "
+                "Paperless, where it gets OCR and becomes searchable (file_attachment).")
+    elif filed:
+        hint = "Already filed in Paperless. Say what the file is in one or two sentences; do not ask about filing."
+    elif is_image:
+        hint = ("Say in one or two sentences what the picture shows. It stays with this conversation only; mention "
+                "filing in Paperless only if it is clearly a document (a letter, an invoice, a certificate).")
+    else:
+        hint = ("Say in one or two sentences what this document is (kind, sender, date, amount if any). Then ask "
+                "once, in the user's language: shall I file it in Paperless? Tell them that otherwise it stays with "
+                "this conversation and is deleted after 30 days. If they say yes, call file_attachment.")
+    return {"ok": True, "attachment_id": row["id"], "filename": row["filename"], "mime_type": row["mime_type"],
+            "source": source, "text": text[:A.TEXT_CAP], "truncated": truncated, "filed": filed,
+            "expires_at": row["expires_at"], "_llm_hint": hint, "_full_output": True}

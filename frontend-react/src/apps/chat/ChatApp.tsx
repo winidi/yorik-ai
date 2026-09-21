@@ -35,6 +35,7 @@ import { MentionPopover, type MentionPick } from "./MentionPopover";
 import {
   AttachmentStashTray, useAttachmentStash, type StashItem,
 } from "./AttachmentStashTray";
+import { AttachmentCard, attachmentIdsIn } from "./AttachmentCard";
 import {
   useTriPane, MobileTopBar, MobileBackdrop,
   mobileAsideLeft,
@@ -1254,6 +1255,10 @@ function Thread({
                 el.style.height = Math.min(160, Math.max(40, el.scrollHeight)) + "px";
               }}
               onKeyDown={onKeyDown}
+              onPaste={e => {
+                const f = e.clipboardData?.files?.[0];
+                if (f) { e.preventDefault(); handleDroppedFile(f); }
+              }}
               onSelect={e => {
                 const t = e.currentTarget;
                 detectMentionTrigger(t.value, t.selectionStart ?? 0);
@@ -1277,7 +1282,7 @@ function Thread({
             <input
               ref={fileInputRef}
               type="file"
-              accept=".vcf,.pdf,.ics,image/*"
+              accept=".vcf,.pdf,.docx,.txt,.md,.ics,image/*"
               className="hidden"
               onChange={e => {
                 const f = e.target.files?.[0];
@@ -1290,11 +1295,11 @@ function Thread({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={sending}
-              title="Attach a file"
+              title="Attach a file (or drop / paste it here)"
               aria-label="Attach a file"
-              className="md:hidden w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition disabled:opacity-50"
+              className="w-11 h-11 md:w-9 md:h-9 rounded-full flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition disabled:opacity-50"
             >
-              <Upload className="w-5 h-5" />
+              <Upload className="w-5 h-5 md:w-4 md:h-4" />
             </button>
             <button
               type="button"
@@ -1376,7 +1381,7 @@ function Thread({
                || file.type === "text/vcard"
                || file.type === "text/x-vcard";
     const isPdf = /\.pdf$/i.test(name) || file.type === "application/pdf";
-    const isDoc = /\.(docx?|odt|rtf)$/i.test(name);
+    const isDoc = /\.(docx|txt|md)$/i.test(name);
     const isImg = file.type.startsWith("image/") || /\.(png|jpg|jpeg|heic|webp|gif)$/i.test(name);
     const isIcs = /\.ics$/i.test(name) || file.type === "text/calendar";
 
@@ -1397,26 +1402,29 @@ function Thread({
     window.setTimeout(() => setUploadToast(null), 3500);
   }
 
+  // A file shown to Yorik is an attachment of this conversation, not a
+  // library entry: it is stored, named in a message ("Anhang #12") so
+  // the assistant reads it, and filed in Paperless only on the user's
+  // yes (card under the message, or "ja, leg das ab").
   async function uploadDocument(file: File) {
-    setUploadToast({ kind: "ok", text: `Uploading ${file.name}…` });
+    setUploadToast({ kind: "ok", text: `${file.name} wird hochgeladen…` });
     try {
       const fd = new FormData();
       fd.append("file", file);
-      // The existing endpoint /api/documents/upload handles MIME +
-      // role acl; no extra metadata required for an ad-hoc chat drop.
-      const r = await fetch("/api/documents/upload", {
-        method: "POST",
-        credentials: "include",
-        body: fd,
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      setUploadToast({ kind: "ok", text: `Added to your library: ${file.name}` });
+      const q = conversationId ? `?conversation_id=${encodeURIComponent(conversationId)}` : "";
+      const r = await fetch(`/api/chat/attachments${q}`, { method: "POST", credentials: "include", body: fd });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({} as any));
+        throw new Error(j.detail || `HTTP ${r.status}`);
+      }
+      const att = await r.json() as { id: number; filename: string };
+      setUploadToast(null);
+      const note = text.trim();
+      window.dispatchEvent(new CustomEvent("yorik:chat-seed-and-send", {
+        detail: { seed: `${note ? note + "\n\n" : ""}Ich habe „${att.filename}“ angehängt (Anhang #${att.id}).` },
+      }));
     } catch (err: any) {
-      setUploadToast({
-        kind: "err",
-        text: `Upload failed: ${err?.message || err}`,
-      });
-    } finally {
+      setUploadToast({ kind: "err", text: `Upload fehlgeschlagen: ${err?.message || err}` });
       window.setTimeout(() => setUploadToast(null), 4500);
     }
   }
@@ -1613,6 +1621,8 @@ function MessageBubble({
             ? message.content
             : <AssistantMarkdown>{message.content}</AssistantMarkdown>}
         </div>
+
+        {isUser && attachmentIdsIn(message.content).map(id => <AttachmentCard key={id} id={id} />)}
 
         {/* Tool-trace summary — one-line ambient hint of what tools
             ran for this turn, shown on every assistant bubble that

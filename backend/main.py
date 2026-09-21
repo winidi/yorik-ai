@@ -129,6 +129,8 @@ app.include_router(_email_routes.router)
 # + Immich + calendar. One endpoint, ⌘K palette in the React shell.
 from . import search_routes as _search_routes
 app.include_router(_search_routes.router)
+from . import chat_attachments as _chat_attachments
+app.include_router(_chat_attachments.router)
 
 # Unified person view — resolve email/phone/jid to one human and
 # return their cross-channel context (recent emails, WA, events, docs).
@@ -2583,6 +2585,8 @@ def _startup() -> None:
     # events, recordings and drafts (first run, then every few minutes).
     from . import search_index as _search_index
     _search_index.start_scheduler(_aio.get_event_loop())
+    # Chat attachments that were not filed in Paperless go after 30 days.
+    _chat_attachments.start_scheduler(_aio.get_event_loop())
     # Voice acks: pre-synthesize the "klar Moment / on it / ..." pool
     # so the streaming voice endpoint can emit an instant audio reply
     # the moment STT finishes (masking LLM latency). Run in a thread
@@ -8874,6 +8878,11 @@ def delete_conversation(conversation_id: str, role: str = Depends(_auth.current_
             raise HTTPException(status_code=403, detail="not yours to delete")
         conn.execute("DELETE FROM agent_conversations WHERE id = ?", (conversation_id,))
         conn.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
+    # Files shown in this chat go with it (what was filed lives in Paperless).
+    try:
+        _chat_attachments.delete_for_conversation(conversation_id)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("chat attachments of %s not removed: %s", conversation_id, exc)
     return Response(status_code=204)
 
 

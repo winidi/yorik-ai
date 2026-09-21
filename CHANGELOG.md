@@ -79,6 +79,14 @@ worklist.
   switch.
   Settings → Embeddings has the switch (on/off), the choice of model,
   the index progress per source and a rebuild button.
+- **Show Yorik a file in the chat.** Paperclip on every screen, drop
+  or paste; Yorik reads PDFs, Word, text and (with the vision model)
+  photos, says what it is and asks whether to file it in Paperless.
+  Filing happens on your yes, by card button or in words (skills
+  `read_attachment`, `file_attachment`). What is not filed belongs to
+  the conversation only and goes with it or after 30 days; there is no
+  second document library. Before, a drop went straight into Paperless
+  unasked and the conversation never learned about it.
 - **Tasks app shows your own tasks.** Tasks of people who share
   their tasks with you, and tasks you handed to someone else, are
   behind "Others (n)", off by default and kept per device.
