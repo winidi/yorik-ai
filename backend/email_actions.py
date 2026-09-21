@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import ssl
 from contextlib import contextmanager
-from typing import Optional
+from typing import Any, Optional
 
 from imapclient import IMAPClient
 
@@ -287,6 +287,7 @@ def delete_messages_bulk(message_ids: list[int], user_id: str) -> dict:
                     c.delete_messages(uids_in_group)
                     c.expunge()
                     with get_conn() as conn:
+                        drop_attachment_files(msg_ids_in_group)
                         conn.execute(
                             f"DELETE FROM email_messages WHERE id IN ({','.join(['?'] * len(msg_ids_in_group))})",
                             tuple(msg_ids_in_group),
@@ -445,6 +446,7 @@ def delete_message(message_id: int, user_id: str) -> bool:
             c.delete_messages([msg["uid"]])
             c.expunge()
         with get_conn() as conn:
+            drop_attachment_files([message_id])
             conn.execute("DELETE FROM email_messages WHERE id=?", (message_id,))
             conn.commit()
         # EXPUNGE removed the message from source on the server;
@@ -466,6 +468,7 @@ def delete_message(message_id: int, user_id: str) -> bool:
     # behaviour. Better than refusing the delete and leaving the user
     # with no way to remove a message from their Yorik mailbox.
     with get_conn() as conn:
+        drop_attachment_files([message_id])
         conn.execute("DELETE FROM email_messages WHERE id=?", (message_id,))
         conn.commit()
     # Server refused every IMAP op — message stays on the server in
@@ -528,17 +531,124 @@ def archive_message(message_id: int, user_id: str) -> bool:
 
 # ───────────────────────── attachment fetch ────────────────────────
 
+# One mail, fetched once. The reader asks for every inline image and
+# every attachment of a mail at the same moment; each request used to
+# open its own IMAP connection and pull the whole message again
+# (fifteen parallel downloads for one dunning letter — most of them
+# timed out after 20 s and answered 404). The raw message is now
+# fetched once per mail, under a lock, and kept for a few minutes.
+_RAW_CACHE: "dict[int, tuple[float, bytes]]" = {}
+_RAW_LOCKS: "dict[int, Any]" = {}
+_RAW_GUARD = __import__("threading").Lock()
+_RAW_TTL_S = 300
+_RAW_MAX_BYTES = 120 * 1024 * 1024
+# …and one login at a time per account. Providers answer a burst of
+# logins with a tarpit (freenet: every login hangs for 20 s+ for
+# minutes afterwards), which is how one opened mail broke all of them.
+_ACCOUNT_LOCKS: "dict[int, Any]" = {}
+
+
+def _raw_message(message_id: int, account_id: int, folder_name: str, uid: int) -> bytes:
+    import threading
+    import time
+    now = time.time()
+    with _RAW_GUARD:
+        for k in [k for k, (t, _) in _RAW_CACHE.items() if now - t > _RAW_TTL_S]:
+            _RAW_CACHE.pop(k, None)
+        hit = _RAW_CACHE.get(message_id)
+        if hit:
+            return hit[1]
+        lock = _RAW_LOCKS.setdefault(message_id, threading.Lock())
+    with lock:
+        with _RAW_GUARD:
+            hit = _RAW_CACHE.get(message_id)
+        if hit:
+            return hit[1]
+        with _RAW_GUARD:
+            account_lock = _ACCOUNT_LOCKS.setdefault(int(account_id), threading.Lock())
+        with account_lock, imap_for_account(account_id) as c:
+            try:
+                c._imap.sock.settimeout(90)      # a mail with scans is megabytes; 20 s is for commands, not for this
+            except Exception:  # noqa: BLE001
+                pass
+            c.select_folder(folder_name, readonly=True)
+            fetched = c.fetch([uid], [b"BODY.PEEK[]"])
+            data = fetched.get(uid) or {}
+            raw = data.get(b"BODY[]") or data.get(b"BODY.PEEK[]") or b""
+        if raw:
+            with _RAW_GUARD:
+                while _RAW_CACHE and sum(len(v[1]) for v in _RAW_CACHE.values()) + len(raw) > _RAW_MAX_BYTES:
+                    _RAW_CACHE.pop(min(_RAW_CACHE, key=lambda k: _RAW_CACHE[k][0]))
+                _RAW_CACHE[message_id] = (time.time(), raw)
+        return raw
+
+
+def _attachment_dir() -> "Any":
+    import os
+    from pathlib import Path
+    return Path(os.getenv("YORIK_DATA_DIR", Path(__file__).resolve().parent.parent / "data")) / "email_attachments"
+
+
+def drop_attachment_files(message_ids) -> None:
+    """A deleted mail takes its kept attachments along."""
+    import shutil
+    for mid in message_ids or []:
+        shutil.rmtree(_attachment_dir() / str(int(mid)), ignore_errors=True)
+
+
+def _store_attachment(attachment_id: int, message_id: int, content: bytes) -> None:
+    """Keep a fetched attachment (real ones; inline images are re-read
+    from the cached message). Best-effort."""
+    try:
+        folder = _attachment_dir() / str(message_id)
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / str(attachment_id)
+        path.write_bytes(content)
+        with get_conn() as conn:
+            conn.execute("UPDATE email_attachments SET local_path = ?, size_bytes = ? WHERE id = ?",
+                         (str(path), len(content), attachment_id))
+            conn.commit()
+    except Exception as exc:  # noqa: BLE001
+        log.debug("attachment %s not cached: %s", attachment_id, exc)
+
+
+def _cached_attachment(row) -> Optional[dict]:
+    from pathlib import Path
+    with get_conn() as conn:
+        r = conn.execute("SELECT local_path FROM email_attachments WHERE id = ?", (row["id"],)).fetchone()
+    path = Path(r["local_path"]) if r and r["local_path"] else None
+    if not path or not path.is_file():
+        return None
+    return {"filename": row["filename"] or "attachment",
+            "mimetype": effective_mimetype(row["filename"], row["mimetype"]),
+            "content": path.read_bytes()}
+
+
+def effective_mimetype(filename: Optional[str], stored: Optional[str]) -> str:
+    """Senders label attachments carelessly ("2. Mahnung.PDF" as
+    application/octet-stream). With a generic label the file name
+    decides, case-insensitively — otherwise the browser downloads a PDF
+    instead of showing it."""
+    import mimetypes
+    stored = (stored or "").strip().lower()
+    if stored and stored not in ("application/octet-stream", "binary/octet-stream", "application/x-download",
+                                 "application/force-download", "application/unknown"):
+        return stored
+    guessed, _ = mimetypes.guess_type((filename or "").lower())
+    return guessed or stored or "application/octet-stream"
+
+
 def fetch_attachment_binary(attachment_id: int, user_id: str) -> Optional[dict]:
     """Fetch the actual bytes for an attachment. We don't pre-download
     on initial sync (saves disk for the 90% nobody opens). When the
-    UI requests one, we re-fetch the whole message from IMAP and
-    extract the matching MIME part.
+    UI requests one, the message is fetched from IMAP (once per mail,
+    see _raw_message) and the matching MIME part extracted.
 
     Returns {filename, mimetype, content} or None if not found / failed.
     """
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT a.id, a.filename, a.mimetype, a.content_id, a.is_inline, "
+            "SELECT a.id, a.message_id, a.filename, a.mimetype, a.content_id, a.is_inline, "
             "       m.account_id, m.folder_id, m.uid, m.owner_user_id, "
             "       f.name AS folder_name "
             "FROM email_attachments a "
@@ -547,18 +657,20 @@ def fetch_attachment_binary(attachment_id: int, user_id: str) -> Optional[dict]:
             "WHERE a.id=? AND m.owner_user_id=?",
             (attachment_id, user_id),
         ).fetchone()
-    if not row or not row["folder_name"]:
+    if not row:
+        return None
+
+    # Opened once, kept on disk: the second look at a dunning letter must
+    # not depend on the mail server being in the mood.
+    cached = _cached_attachment(row)
+    if cached is not None:
+        return cached
+    if not row["folder_name"]:
         return None
 
     try:
         import mailparser as _mp
-        with imap_for_account(row["account_id"]) as c:
-            c.select_folder(row["folder_name"])
-            fetched = c.fetch([row["uid"]], [b"BODY.PEEK[]"])
-            data = fetched.get(row["uid"])
-            if not data:
-                return None
-            raw = data.get(b"BODY[]") or data.get(b"BODY.PEEK[]") or b""
+        raw = _raw_message(int(row["message_id"]), row["account_id"], row["folder_name"], row["uid"])
         if not raw:
             return None
         parsed = _mp.parse_from_bytes(raw)
@@ -580,9 +692,10 @@ def fetch_attachment_binary(attachment_id: int, user_id: str) -> Optional[dict]:
                         raw_bytes = payload.encode("utf-8", "replace")
                 else:
                     continue
+                _store_attachment(int(row["id"]), int(row["message_id"]), raw_bytes)
                 return {
                     "filename": row["filename"] or "attachment",
-                    "mimetype": row["mimetype"] or att.get("mail_content_type") or "application/octet-stream",
+                    "mimetype": effective_mimetype(row["filename"], row["mimetype"] or att.get("mail_content_type")),
                     "content":  raw_bytes,
                 }
         return None

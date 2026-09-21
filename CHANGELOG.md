@@ -86,6 +86,15 @@ worklist.
   flattened to one line before sending (which also rules out header
   injection through an address), new mails are stored unfolded, a
   migration cleans the stored ones.
+- **Mail attachments open reliably.** Opening a mail asked for every
+  inline image and attachment at once, and each request logged in to
+  the mail server and pulled the whole message again — fifteen logins
+  for one letter, which providers answer with a login tarpit (most
+  requests ended in 404 after 20 s). The message is now fetched once
+  per mail, one login at a time per account, real attachments are kept
+  on disk after the first open (removed with the mail), and an
+  attachment labelled application/octet-stream is served by its file
+  name ("2. Mahnung.PDF" shows as a PDF instead of downloading).
 - **Mail drafts survive.** The composer saves what you type 1.5 s after
   the last change and when the window goes away — body text too
   (typing alone never triggered the old autosave) and replies too, one
