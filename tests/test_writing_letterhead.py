@@ -23,11 +23,11 @@ def test_letterhead_starts_from_the_profile_and_is_yours_alone(fresh_app):
     beate_c, beate = login_client(fresh_app, role="member", name="Beate", email="b@example.local")
     with get_conn() as conn:
         conn.execute("UPDATE user_profiles SET address_street='Beispielweg 1', address_postcode='01067', address_city='Dresden', "
-                     "business_name='Winiecki Media', iban='DE89 3704 0044 0532 0130 00' WHERE id = ?", (dirk,)); conn.commit()
+                     "business_name='Beispiel Werkstatt', iban='DE89 3704 0044 0532 0130 00' WHERE id = ?", (dirk,)); conn.commit()
     got = dirk_c.get("/api/letterheads").json()
     assert len(got["letterheads"]) == 1 and len(got["fonts"]) >= 4
     mine = got["letterheads"][0]
-    assert mine["is_default"] and mine["data"]["postcode"] == "01067" and mine["data"]["business_name"] == "Winiecki Media"
+    assert mine["is_default"] and mine["data"]["postcode"] == "01067" and mine["data"]["business_name"] == "Beispiel Werkstatt"
     assert dirk_c.get("/api/letterheads").json()["letterheads"][0]["id"] == mine["id"]          # asked twice, made once
 
     r = dirk_c.patch(f"/api/letterheads/{mine['id']}", json={"data": {"accent": "#b43c5a", "font": "carlito", "payment_days": 999, "nonsense": "x"}})

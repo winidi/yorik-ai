@@ -34,24 +34,24 @@ def test_the_chat_writes_a_draft_and_marks_what_is_missing(fresh_app, tmp_path, 
     client, uid = login_client(fresh_app, role="member", name="Beate", email="b@example.local")
     cid = C.create(display_name="Hausverwaltung Müller", kind="business", created_by_user_id=uid)
     cid = cid["id"] if isinstance(cid, dict) else cid
-    C.add_address(int(cid), kind="work", line1="Lindenallee 4", postcode="31224", city="Peine", country="DE")
+    C.add_address(int(cid), kind="work", line1="Lindenallee 4", postcode="12345", city="Beispielstadt", country="DE")
 
     out = asyncio.run(execute(_ctx(uid), recipient="Hausverwaltung Müller", subject="Heizung defekt",
                               text="Sehr geehrte Damen und Herren,\n\ndie Heizung ist seit Montag kalt.\n\nMit freundlichen Grüßen\nBeate"))
     assert out["missing"] == [] and "do not ask" not in out["_llm_hint"]
     doc = client.get(f"/api/writing/{out['document_id']}").json()
     assert doc["status"] == "draft" and doc["kind"] == "letter" and doc["title"] == "Heizung defekt"
-    assert doc["recipient"]["address_lines"] == ["Lindenallee 4", "31224 Peine"] and doc["recipient"]["contact_id"] == int(cid)
+    assert doc["recipient"]["address_lines"] == ["Lindenallee 4", "12345 Beispielstadt"] and doc["recipient"]["contact_id"] == int(cid)
     assert doc["content"]["text_html"].startswith("<p>Sehr geehrte Damen und Herren,</p><p>die Heizung")
     card = [a for a in ui_tools.get_ui_actions() if a.get("type") == "writing_draft_created"] if hasattr(ui_tools, "get_ui_actions") else []
     assert not card or card[-1]["document_id"] == out["document_id"]
 
     # somebody the contacts do not know: a draft all the same, the address marked on the sheet
-    out2 = asyncio.run(execute(_ctx(uid), recipient="Finanzamt Peine", subject="Einspruch", text="Sehr geehrte Damen und Herren,\n\nich lege Einspruch ein."))
+    out2 = asyncio.run(execute(_ctx(uid), recipient="Finanzamt Beispielstadt", subject="Einspruch", text="Sehr geehrte Damen und Herren,\n\nich lege Einspruch ein."))
     assert out2["missing"] == ["Adresse"] and "do not ask" in out2["_llm_hint"]
     assert "Adresse fehlt" in client.get(f"/api/writing/{out2['document_id']}/preview").json()["html"]
     # a change to the same draft, not a second one
-    out3 = asyncio.run(execute(_ctx(uid), recipient="Finanzamt Peine", subject="Einspruch gegen den Bescheid", text="Neu.", document_id=out2["document_id"]))
+    out3 = asyncio.run(execute(_ctx(uid), recipient="Finanzamt Beispielstadt", subject="Einspruch gegen den Bescheid", text="Neu.", document_id=out2["document_id"]))
     assert out3["document_id"] == out2["document_id"] and len(client.get("/api/writing").json()["documents"]) == 2
     with pytest.raises(ValueError):
         asyncio.run(execute(_ctx(uid), recipient="x", subject="y", text="  "))
@@ -69,11 +69,11 @@ def test_a_letter_is_yours_is_edited_and_becomes_final_when_it_leaves(fresh_app,
     assert beate_c.post("/api/writing", json={"kind": "poster"}).status_code == 400
     assert kid_c.post("/api/writing", json={"kind": "letter", "content": {"text": "Liebe Oma"}}).status_code == 201
 
-    r = beate_c.post("/api/writing", json={"kind": "letter", "recipient": {"name": "Stadtwerke", "address_lines": "Am Markt 1\n31224 Peine", "email": "kunden@stadtwerke.example"},
+    r = beate_c.post("/api/writing", json={"kind": "letter", "recipient": {"name": "Stadtwerke", "address_lines": "Am Markt 1\n12345 Beispielstadt", "email": "kunden@stadtwerke.example"},
                                            "content": {"subject": "Zählerstand", "text_html": '<p onclick="x()">Guten Tag</p><script>1</script>'}})
     assert r.status_code == 201, r.text
     doc = r.json(); did = doc["id"]
-    assert doc["title"] == "Zählerstand" and doc["recipient"]["address_lines"] == ["Am Markt 1", "31224 Peine"]
+    assert doc["title"] == "Zählerstand" and doc["recipient"]["address_lines"] == ["Am Markt 1", "12345 Beispielstadt"]
     assert "onclick" not in doc["content"]["text_html"] and "script" not in doc["content"]["text_html"]
     for other in (dirk_c, kid_c):                                                              # no admin exception for seeing
         assert other.get(f"/api/writing/{did}").status_code == 404

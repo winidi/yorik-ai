@@ -71,7 +71,7 @@ def number(d: Decimal, country: str = "DE") -> str:
 # ── what an invoice must say (§ 14 UStG) ────────────────────────────────
 
 def split_address(lines: Any) -> Dict[str, str]:
-    """["Lindenallee 4", "31224 Peine"] → street, postcode, city. The
+    """["Lindenallee 4", "12345 Beispielstadt"] → street, postcode, city. The
     e-invoice wants them apart; a person types them as lines."""
     import re
     lines = [str(x).strip() for x in (lines or []) if str(x).strip()]

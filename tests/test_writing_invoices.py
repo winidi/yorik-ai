@@ -13,7 +13,7 @@ from tests.conftest import login_client
 LINES = [{"text": "Wartung Heizungsanlage", "qty": "1", "unit": "pauschal", "unit_price": "180"},
          {"text": "Arbeitszeit", "qty": "2,5", "unit": "Std.", "unit_price": "68"}]
 CUSTOMER = {"name": "Mustermann GmbH", "address_lines": ["Hauptstraße 99", "10115 Berlin"]}
-SELLER = {"sender_name": "Dirk Winiecki", "business_name": "Winiecki Media", "street": "Beispielweg 1", "postcode": "01067", "city": "Dresden",
+SELLER = {"sender_name": "Dirk Beispiel", "business_name": "Beispiel Werkstatt", "street": "Beispielweg 1", "postcode": "01067", "city": "Dresden",
           "vat_id": "DE123456789", "iban": "DE89 3704 0044 0532 0130 00"}
 
 
