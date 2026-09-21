@@ -212,6 +212,18 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
     await load();
   }
 
+  async function deleteTask(t: Task): Promise<string | null> {
+    try { await api.delete(`/api/tasks/${t.id}`); }
+    catch (e: any) {
+      return e?.status === 403 ? "Diese Aufgabe hat dir jemand anderes gegeben. Löschen kann sie nur, wer sie angelegt hat, oder deine Eltern."
+                               : "Das Löschen hat nicht geklappt.";
+    }
+    setEditing(null);
+    setFeed(f => f && { ...f, tasks: f.tasks.filter(x => x.id !== t.id) });
+    await load();
+    return null;
+  }
+
   // A column in its hand-made order; tiles nobody placed yet follow in
   // the feed's order (by due date).
   function ordered(list: Task[], pid: string, group?: Group): Task[] {
@@ -535,7 +547,7 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
       {(() => {
         const t = editing && feed.tasks.find(x => x.id === editing.id);
         const p = editing && byId.get(editing.pid);
-        return t && p ? <TaskDialog task={t} person={p} today={feed.today} tokens={tokens} onSave={c => saveTask(t, c)} onClose={() => setEditing(null)} /> : null;
+        return t && p ? <TaskDialog task={t} person={p} today={feed.today} tokens={tokens} onSave={c => saveTask(t, c)} onDelete={() => deleteTask(t)} onClose={() => setEditing(null)} /> : null;
       })()}
     </div>
   );

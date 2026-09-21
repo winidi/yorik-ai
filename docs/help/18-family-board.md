@@ -91,6 +91,12 @@ ticked, the next one appears by itself for the same person, at the same
 place in the column, and waits for its day. Because of the double tap,
 a single tap ticks a tile a moment later than it used to.
 
+**Löschen** in the same window removes the to-do; it asks a second time
+("Wirklich löschen?") so that nothing vanishes from the wall by
+accident. Deleting a repeating to-do ends the repetition. A child
+deletes what it created itself; a to-do someone else gave it can only
+be deleted by that person or a parent.
+
 ## Appointment details
 
 Tap an entry in the week and a small window shows the appointment: whose

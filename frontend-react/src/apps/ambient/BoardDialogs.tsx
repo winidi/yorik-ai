@@ -5,7 +5,7 @@
  * the board's tokens so they follow the day and the night palette.
  */
 import { useEffect, useState } from "react";
-import { CalendarDays, Clock, MapPin, Repeat, StickyNote, X } from "lucide-react";
+import { CalendarDays, Clock, MapPin, Repeat, StickyNote, Trash2, X } from "lucide-react";
 import { PersonAvatar } from "@/components/PersonAvatar";
 
 export interface DialogTokens { bg: string; card: string; ink: string; muted: string; line: string; soft: string }
@@ -47,13 +47,22 @@ function Sheet({ tokens, accent, onClose, children, label }: { tokens: DialogTok
   );
 }
 
-export function TaskDialog({ task, person, today, tokens, onSave, onClose }: {
+export function TaskDialog({ task, person, today, tokens, onSave, onDelete, onClose }: {
   task: { id: number; title: string; due_date: string | null; recurrence_rule?: string };
   person: PersonLook; today: string; tokens: DialogTokens;
   /** only what was changed is handed over */
   onSave: (changes: { title?: string; due_date?: string; recurrence_rule?: string }) => void;
+  /** resolves to a sentence for the person when the to-do could not be deleted */
+  onDelete: () => Promise<string | null>;
   onClose: () => void;
 }) {
+  // Deleting takes a second tap: on the wall a to-do must not vanish by accident.
+  const [sure, setSure] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
+  async function remove() {
+    if (!sure) { setSure(true); return; }
+    setRefused(await onDelete()); setSure(false);
+  }
   const [title, setTitle] = useState(task.title);
   const [due, setDue] = useState((task.due_date || "").slice(0, 10));
   const [rule, setRule] = useState(task.recurrence_rule || "");
@@ -98,7 +107,12 @@ export function TaskDialog({ task, person, today, tokens, onSave, onClose }: {
           </div>
           {rule && <span className="font-normal text-[12.5px]">Nach dem Abhaken erscheint die nächste von selbst.</span>}
         </div>
-        <div className="flex justify-end gap-2 pt-1">
+        {refused && <div className="text-[13.5px] font-bold" style={{ color: "#e0486b" }}>{refused}</div>}
+        <div className="flex justify-end gap-2 pt-1 flex-wrap">
+          <button type="button" onClick={remove} onBlur={() => setSure(false)} className="mr-auto rounded-2xl px-4 py-2.5 text-[15px] font-bold flex items-center gap-1.5"
+                  style={sure ? { background: "#e0486b", color: "#fff" } : { ...field, color: "#e0486b" }}>
+            <Trash2 className="w-4 h-4" /> {sure ? (task.recurrence_rule ? "Wirklich? Endet die Wiederholung" : "Wirklich löschen?") : "Löschen"}
+          </button>
           <button type="button" onClick={onClose} className="rounded-2xl px-4 py-2.5 text-[15px] font-bold" style={field}>Abbrechen</button>
           <button type="submit" className="rounded-2xl px-5 py-2.5 text-[15px] font-bold text-white" style={{ background: person.color }}>Speichern</button>
         </div>
