@@ -70,3 +70,14 @@ long the task took. It is the same timer as in the Tasks app (one per
 person: starting a task stops that person's other one), so the evening
 review compares estimate and reality for everyone. Parents can start
 and stop a child's timer.
+
+## Your own order, and rewording a to-do
+
+Every tile you may tick has a small grip on its right edge. Drag a tile
+by the grip, up or down, and let go: that is the order of the column
+from now on, on every screen. To-dos and routines are sorted among
+themselves; a new to-do lands at the end. A **double tap** on a tile
+opens its title for rewording: OK or Enter saves, the cross or Esc
+leaves it as it was. Because of the double tap, a single tap ticks a
+tile a moment later than it used to. Parents sort and reword in the
+children's columns too; between adults everyone keeps their own.

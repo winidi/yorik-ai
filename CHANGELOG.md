@@ -13,6 +13,11 @@ worklist.
 
 ### Added
 
+- **Family board: sort and reword.** A tile in a column you may tick
+  has a grip on the right: drag it to put the to-dos (or the routines)
+  in your own order; the order is kept per person, new to-dos land at
+  the end. A double tap on a tile rewords the to-do in place. Parents
+  do both in the children's columns.
 - **Family board on the wall.** The kiosk tablet has four modes per
   device (photos, board, calendar, tasks), switched with a button on
   the tablet: the week in everyone's colour and photo, today's tasks

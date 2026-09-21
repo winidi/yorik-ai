@@ -10,14 +10,16 @@
  * PIN picker (the parent handles that) and the unlock expires; on the
  * /board page the signed-in person ticks their own tiles. Parents (any
  * account that is not restricted) also tick the children's tiles and
- * add a to-do to anyone's column; children add to their own.
+ * add a to-do to anyone's column; children add to their own. Whoever
+ * may tick a column may also sort it (drag the grip on a tile) and
+ * reword a to-do (double tap).
  *
  * Look: near-white paper, person colour only as accent (stripe, ring,
  * chip), big legible type (bundled Nunito + Atkinson Hyperlegible), a
  * warm dark palette after 21:00 so the wall does not glow at night.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Backpack, Bed, BookOpen, Check, Timer, ChevronDown, ChevronLeft, ChevronRight, Dog, Loader2, Lock, Plus, Sparkles, Utensils } from "lucide-react";
+import { Backpack, Bed, BookOpen, Check, Timer, ChevronDown, ChevronLeft, ChevronRight, Dog, GripVertical, Loader2, Lock, Plus, Sparkles, Utensils, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { cn } from "@/lib/utils";
@@ -27,9 +29,11 @@ export type BoardMode = "board" | "calendar" | "tasks";
 
 interface Person { id: string; name: string; first_name: string; color: string; avatar_url: string | null; role?: string }
 interface Ev { id: number; title: string; starts_at: string; ends_at: string | null; all_day: boolean; owner_id: string | null; shared: boolean; location: string | null }
-interface Task { id: number; title: string; due_date: string | null; done: boolean; done_at: string | null; assignee_ids: string[]; person: string; category: string; routine: boolean; estimated_minutes: number | null; started_at?: string | null; actual_minutes?: number | null }
+interface Task { id: number; title: string; due_date: string | null; done: boolean; done_at: string | null; assignee_ids: string[]; person: string; category: string; routine: boolean; estimated_minutes: number | null; started_at?: string | null; actual_minutes?: number | null; positions?: Record<string, number> }
 interface LogRow { title: string; user_id: string; day: string }
 interface Feed { today: string; week_start: string; days: number; people: Person[]; events: Ev[]; tasks: Task[]; routine_log: LogRow[] }
+type Group = "routine" | "open";
+interface Grip { onPointerDown: (e: React.PointerEvent) => void }
 interface Tokens { bg: string; card: string; ink: string; muted: string; line: string; soft: string }
 
 const SHARED = "#6b7a8f";
@@ -103,6 +107,10 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
   }
   const [adding, setAdding] = useState<string | null>(null);      // person id whose "+" is open
   const [draft, setDraft] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);    // "person:task" being reworded
+  // Sorting a column: the tile under the finger moves through the list
+  // while it is dragged by its grip; the order is saved on release.
+  const [drag, setDrag] = useState<{ pid: string; group: Group; id: number; ids: number[] } | null>(null);
   const isParent = !!currentUserId && !!currentUserRole && currentUserRole.toLowerCase() !== "restricted";
   const swipe = useRef<{ x: number; y: number } | null>(null);
 
@@ -196,6 +204,77 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
     } catch {}
   }
 
+  async function rename(t: Task, title: string) {
+    setEditing(null);
+    title = title.trim();
+    if (!title || title === t.title) return;
+    setFeed(f => f && { ...f, tasks: f.tasks.map(x => x.id === t.id ? { ...x, title } : x) });
+    try { await api.patch(`/api/tasks/${t.id}`, { title }); } catch {}
+    await load();
+  }
+
+  // A column in its hand-made order; tiles nobody placed yet follow in
+  // the feed's order (by due date).
+  function ordered(list: Task[], pid: string, group?: Group): Task[] {
+    if (group && drag && drag.pid === pid && drag.group === group) {
+      const at = new Map(drag.ids.map((id, i) => [id, i]));
+      return [...list].sort((a, b) => (at.get(a.id) ?? 1e9) - (at.get(b.id) ?? 1e9));
+    }
+    return list.map((t, i) => ({ t, i }))
+      .sort((a, b) => (a.t.positions?.[pid] ?? 1e9) - (b.t.positions?.[pid] ?? 1e9) || a.i - b.i).map(x => x.t);
+  }
+
+  function grip(pid: string, group: Group, t: Task, ids: number[]): Grip {
+    return { onPointerDown: e => { e.stopPropagation(); /* not a tap, not a long press */ setDrag({ pid, group, id: t.id, ids }); } };
+  }
+
+  // The drag is followed on the window, not on the grip: React moves the
+  // dragged tile in the DOM while it travels, and a moved node loses its
+  // pointer capture.
+  const dragRef = useRef(drag); dragRef.current = drag;
+  const dropRef = useRef<() => void>(() => {});
+  const dragOn = !!drag;
+  useEffect(() => {
+    if (!dragOn) return;
+    const move = (e: PointerEvent) => {
+      const d = dragRef.current;
+      const list = d && document.querySelector<HTMLElement>(`[data-fb-col="${d.pid}"]`);
+      if (!d || !list) return;
+      // the tile's new place: after every other tile whose middle is above the finger
+      const others = [...list.querySelectorAll<HTMLElement>(`[data-fb-tile="${d.group}"]`)].filter(el => el.dataset.fbId !== String(d.id));
+      const to = others.filter(el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2 < e.clientY; }).length;
+      const rest = d.ids.filter(id => id !== d.id);
+      const next = [...rest.slice(0, to), d.id, ...rest.slice(to)];
+      if (next.some((id, i) => id !== d.ids[i])) setDrag({ ...d, ids: next });
+      const box = list.getBoundingClientRect();                   // a long column scrolls along
+      if (e.clientY < box.top + 48) list.scrollBy({ top: -14 });
+      else if (e.clientY > box.bottom - 48) list.scrollBy({ top: 14 });
+    };
+    const up = () => dropRef.current();
+    const cancel = () => setDrag(null);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", cancel); };
+  }, [dragOn]);
+
+  async function dropTile() {
+    const d = drag;
+    setDrag(null);
+    if (!d || !feed) return;
+    const col = feed.tasks.filter(t => t.assignee_ids.includes(d.pid));
+    const part = (g: Group | "done") => ordered(col.filter(t => g === "routine" ? t.routine : g === "done" ? !t.routine && t.done : !t.routine && !t.done), d.pid).map(t => t.id);
+    const before = [...part("routine"), ...part("open"), ...part("done")];
+    const ids = [...(d.group === "routine" ? d.ids : part("routine")), ...(d.group === "open" ? d.ids : part("open")), ...part("done")];
+    if (ids.every((id, i) => id === before[i])) return;
+    const at = new Map(ids.map((id, i) => [id, i]));
+    setFeed(f => f && { ...f, tasks: f.tasks.map(t => at.has(t.id) ? { ...t, positions: { ...t.positions, [d.pid]: at.get(t.id)! } } : t) });
+    try { await api.put("/api/ambient/board/order", { user_id: d.pid, task_ids: ids }); } catch {}
+    await load();
+  }
+
+  dropRef.current = () => { void dropTile(); };
+
   async function joinBoard() {
     try { await api.patch("/api/users/me/kiosk-agenda-consent", { consent: true }); await load(); } catch {}
   }
@@ -216,6 +295,8 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
         .fb-running { animation: fb-run 2.4s ease-in-out infinite; }
         @keyframes fb-run { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 18%, transparent); } }
         @media (prefers-reduced-motion: reduce) { .fb-running { animation: none; } }
+        .fb-grip { touch-action: none; cursor: grab; }
+        .fb-dragging { z-index: 2; transform: scale(1.02); cursor: grabbing; }
         .fb-title { overflow-wrap: anywhere; hyphens: auto; text-wrap: pretty; }
         @media (prefers-reduced-motion: reduce) { .fb-pop { animation: none; } }
       `}</style>
@@ -338,15 +419,22 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
           <section className={cn("grid gap-4 min-w-0", narrow ? "" : "min-h-0")} style={{ gridTemplateColumns: narrow ? "1fr" : `repeat(${Math.max(1, people.length)}, minmax(0, 1fr))` }}>
             {people.map(p => {
               const mine = feed.tasks.filter(t => t.assignee_ids.includes(p.id));
-              const routines = mine.filter(t => t.routine);
-              const open = mine.filter(t => !t.routine && !t.done);
-              const done = mine.filter(t => !t.routine && t.done);
+              const routines = ordered(mine.filter(t => t.routine), p.id, "routine");
+              const open = ordered(mine.filter(t => !t.routine && !t.done), p.id, "open");
+              const done = ordered(mine.filter(t => !t.routine && t.done), p.id);
               const total = mine.length, finished = mine.filter(t => t.done).length;
               const ratio = total ? finished / total : 0;
               const isMe = currentUserId === p.id;
               const isChild = (p.role || "").toLowerCase() === "restricted";
               const mayTick = isMe || (isParent && isChild);
               const mayAdd = !!currentUserId && (isMe || isParent);
+              const tile = (t: Task, group?: Group, ids?: number[]) => ({
+                t, p, tokens, dim, busy: busy === t.id, pop: pop === t.id, locked: lockOthers && !mayTick, today: feed.today,
+                onTap: () => toggle(t, p), onHold: () => toggleTimer(t, p),
+                canEdit: mayTick, editing: editing === `${p.id}:${t.id}`, onEdit: () => setEditing(`${p.id}:${t.id}`), onRename: (title: string) => rename(t, title),
+                group, dragging: drag?.id === t.id && drag.pid === p.id,
+                grip: mayTick && group && ids && ids.length > 1 ? grip(p.id, group, t, ids) : undefined,
+              });
               const myEvents = todayEvents.filter(e => e.owner_id === p.id && !e.all_day);
               const nextEv = myEvents.find(e => e.starts_at.slice(0, 16) >= now.slice(0, 16));
               const busyMin = myEvents.reduce((acc, e) => acc + Math.max(0, Math.min(WORK_END, e.ends_at ? mins(e.ends_at) : mins(e.starts_at) + 60) - Math.max(WORK_START, mins(e.starts_at))), 0);
@@ -377,14 +465,13 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
                     </div>
                   </button>
 
-                  <div className={cn("flex flex-col gap-2 pr-1", narrow ? "" : "flex-1 min-h-0 overflow-y-auto overscroll-contain fb-scroll")} style={{ touchAction: "pan-y" }}>
+                  <div data-fb-col={p.id} className={cn("flex flex-col gap-2 pr-1", narrow ? "" : "flex-1 min-h-0 overflow-y-auto overscroll-contain fb-scroll")} style={{ touchAction: "pan-y" }}>
                     {routines.length > 0 && <Label muted={tokens.muted}>Routine</Label>}
                     {routines.map(t => (
-                      <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !mayTick} onTap={() => toggle(t, p)} onHold={() => toggleTimer(t, p)}
-                            today={feed.today} week={thisWeek} log={feed.routine_log} />
+                      <Card key={t.id} {...tile(t, "routine", routines.map(x => x.id))} week={thisWeek} log={feed.routine_log} />
                     ))}
                     {open.length > 0 && routines.length > 0 && <Label muted={tokens.muted}>Aufgaben</Label>}
-                    {open.map(t => <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !mayTick} onTap={() => toggle(t, p)} onHold={() => toggleTimer(t, p)} today={feed.today} />)}
+                    {open.map(t => <Card key={t.id} {...tile(t, "open", open.map(x => x.id))} />)}
                     {mayAdd && (adding === p.id ? (
                       <form onSubmit={e => { e.preventDefault(); void addTask(p); }} className="flex gap-2">
                         <input autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={() => { if (!draft.trim()) setAdding(null); }}
@@ -413,7 +500,7 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
                         </button>
                         {openDone[p.id] && (
                           <div className="mt-2 flex flex-col gap-2">
-                            {done.map(t => <Card key={t.id} t={t} p={p} tokens={tokens} dim={dim} busy={busy === t.id} pop={pop === t.id} locked={lockOthers && !mayTick} onTap={() => toggle(t, p)} onHold={() => toggleTimer(t, p)} today={feed.today} />)}
+                            {done.map(t => <Card key={t.id} {...tile(t)} />)}
                           </div>
                         )}
                       </div>
@@ -438,9 +525,13 @@ function Label({ children, muted }: { children: React.ReactNode; muted: string }
   return <div className="text-[11.5px] tracking-[.08em] uppercase font-bold mt-1" style={{ color: muted }}>{children}</div>;
 }
 
-function Card({ t, p, tokens, dim, busy, pop, locked, onTap, onHold, today, week, log }: {
+function Card({ t, p, tokens, dim, busy, pop, locked, onTap, onHold, today, week, log, canEdit, editing, onEdit, onRename, group, dragging, grip }: {
   t: Task; p: Person; tokens: Tokens; dim: boolean; busy: boolean; pop: boolean; locked: boolean; onTap: () => void; onHold: () => void; today: string;
   week?: string[]; log?: LogRow[];
+  /** double tap rewords the to-do; a single tap then waits a moment for the second one */
+  canEdit: boolean; editing: boolean; onEdit: () => void; onRename: (title: string) => void;
+  /** the grip sorts the tile within its group */
+  group?: Group; dragging: boolean; grip?: Grip;
 }) {
   // Timer: started_at is naive UTC (as in the Tasks app); minutes so far
   // = what earlier runs folded into actual_minutes + the live run.
@@ -459,22 +550,52 @@ function Card({ t, p, tokens, dim, busy, pop, locked, onTap, onHold, today, week
     lp.current = { timer: window.setTimeout(() => { lp.current.fired = true; lp.current.timer = null; try { (navigator as any).vibrate?.(15); } catch {} onHold(); }, 500), fired: false, x: e.clientX, y: e.clientY };
   };
   const lpMove = (e: React.PointerEvent) => { if (lp.current.timer && (Math.abs(e.clientX - lp.current.x) > 10 || Math.abs(e.clientY - lp.current.y) > 10)) lpCancel(); };
-  const tap = () => { if (lp.current.fired) { lp.current.fired = false; return; } onTap(); };
+  const single = useRef<number | null>(null);
+  useEffect(() => () => { if (single.current) clearTimeout(single.current); }, []);
+  // letting go of the grip over the tile is a click on the tile: not a tick
+  const justDragged = useRef(false);
+  useEffect(() => {
+    if (dragging) { justDragged.current = true; return; }
+    const i = setTimeout(() => { justDragged.current = false; }, 350);
+    return () => clearTimeout(i);
+  }, [dragging]);
+  const tap = () => {
+    if (lp.current.fired) { lp.current.fired = false; return; }
+    if (justDragged.current) return;
+    if (!canEdit) { onTap(); return; }
+    if (single.current) { clearTimeout(single.current); single.current = null; onEdit(); return; }
+    single.current = window.setTimeout(() => { single.current = null; onTap(); }, 280);
+  };
+  const [text, setText] = useState(t.title);
+  useEffect(() => { if (editing) setText(t.title); }, [editing]);   // eslint-disable-line react-hooks/exhaustive-deps
   const due = !!t.due_date && t.due_date <= today && !t.done;
   const overdue = !!t.due_date && t.due_date < today && !t.done;
   const Icon = t.routine ? routineIcon(t.title) : null;
   const dots = t.routine && week
     ? week.map(d => ({ d, on: (log || []).some(l => l.title === t.title && l.user_id === p.id && l.day === d) || (d === today && t.done), future: d > today }))
     : null;
+  if (editing) return (
+    <form onSubmit={e => { e.preventDefault(); onRename(text); }} data-fb-tile={group} data-fb-id={t.id}
+          className="relative flex items-center gap-2 rounded-[16px] overflow-hidden shrink-0"
+          style={{ padding: "8px 8px 8px 14px", background: tokens.card, border: `2px solid ${p.color}` }}>
+      <input autoFocus value={text} onChange={e => setText(e.target.value)} onFocus={e => e.currentTarget.select()}
+             onBlur={() => onRename(text)} onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); onRename(t.title); } }}
+             aria-label="Aufgabe umbenennen" className="flex-1 min-w-0 bg-transparent py-2 text-[17px] font-bold outline-none select-text" style={{ color: tokens.ink }} />
+      {/* pointerdown is swallowed so the field keeps the focus and blur does not save first */}
+      <button type="button" onPointerDown={e => e.preventDefault()} onClick={() => onRename(t.title)} aria-label="Abbrechen"
+              className="rounded-xl p-2" style={{ color: tokens.muted, background: tokens.soft }}><X className="w-4 h-4" /></button>
+      <button type="submit" onPointerDown={e => e.preventDefault()} className="rounded-xl px-3 py-2 font-bold text-white" style={{ background: p.color }}>OK</button>
+    </form>
+  );
   return (
-    <button onClick={tap} disabled={busy}
+    <button onClick={tap} disabled={busy} data-fb-tile={group} data-fb-id={t.id}
             onPointerDown={lpDown} onPointerMove={lpMove} onPointerUp={lpCancel} onPointerLeave={lpCancel} onPointerCancel={lpCancel}
             onContextMenu={e => e.preventDefault()}
-            title={t.done ? undefined : running ? "Lange drücken: Zeit stoppen" : "Lange drücken: Zeit starten"}
-            className={cn("relative grid items-center gap-3 rounded-[16px] text-left overflow-hidden shrink-0", pop && "fb-pop", t.done && "opacity-80", running && "fb-running")}
-            style={{ gridTemplateColumns: "34px minmax(0, 1fr) auto", padding: "12px 12px 12px 14px", background: tokens.card,
-                     border: running ? `2px solid ${p.color}` : `1px solid color-mix(in srgb, ${p.color} ${dim ? 35 : 25}%, ${tokens.line})`,
-                     boxShadow: dim ? "0 1px 0 rgba(0,0,0,.3)" : "0 1px 2px rgba(31,36,48,.05), 0 8px 20px -14px rgba(31,36,48,.35)" }}>
+            title={[canEdit ? "Doppeltipp: umbenennen" : "", t.done ? "" : running ? "Lange drücken: Zeit stoppen" : "Lange drücken: Zeit starten"].filter(Boolean).join(" · ") || undefined}
+            className={cn("relative grid items-center gap-3 rounded-[16px] text-left overflow-hidden shrink-0", pop && "fb-pop", t.done && "opacity-80", running && "fb-running", dragging && "fb-dragging")}
+            style={{ gridTemplateColumns: grip ? "34px minmax(0, 1fr) auto 28px" : "34px minmax(0, 1fr) auto", padding: grip ? "12px 4px 12px 14px" : "12px 12px 12px 14px", background: tokens.card,
+                     border: running || dragging ? `2px solid ${p.color}` : `1px solid color-mix(in srgb, ${p.color} ${dim ? 35 : 25}%, ${tokens.line})`,
+                     boxShadow: dragging ? "0 14px 30px -12px rgba(31,36,48,.55)" : dim ? "0 1px 0 rgba(0,0,0,.3)" : "0 1px 2px rgba(31,36,48,.05), 0 8px 20px -14px rgba(31,36,48,.35)" }}>
       <span className="absolute left-0 top-0 bottom-0 w-[5px]" style={{ background: t.done ? "#2f9e64" : p.color }} />
       <span className={cn("w-[30px] h-[30px] rounded-[10px] border-[2.5px] grid place-items-center text-white transition-colors", t.done && "bg-[#2f9e64] border-[#2f9e64]")}
             style={t.done ? undefined : { borderColor: locked ? tokens.line : p.color, background: locked ? tokens.soft : "transparent" }}>
@@ -503,6 +624,12 @@ function Card({ t, p, tokens, dim, busy, pop, locked, onTap, onHold, today, week
       <span className="text-[18px] font-bold tabular-nums whitespace-nowrap" style={{ fontFamily: DISPLAY, color: t.done ? "#2f9e64" : due ? "#e0486b" : tokens.muted }}>
         {t.done ? (t.done_at ? hhmm(t.done_at) : "✓") : due ? "heute" : t.due_date ? fmtDay(t.due_date) : ""}
       </span>
+      {grip && (
+        <span {...grip} onClick={e => e.stopPropagation()} role="img" aria-label="Ziehen, um die Reihenfolge zu ändern" title="Ziehen: Reihenfolge ändern"
+              className="fb-grip self-stretch grid place-items-center -my-3" style={{ color: tokens.muted }}>
+          <GripVertical className="w-5 h-5" />
+        </span>
+      )}
     </button>
   );
 }

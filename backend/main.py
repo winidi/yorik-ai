@@ -1278,6 +1278,10 @@ def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
                                "shared": r["cal_kind"] == "shared", "location": r["location"]})
             week_ago = (today - _td(days=6)).isoformat()
             routine_log: list = []
+            # the hand-made order of each column: {task_id: {user_id: position}}
+            positions: Dict[int, Dict[str, int]] = {}
+            for r in conn.execute(f"SELECT task_id, user_id, position FROM task_board_order WHERE user_id IN ({ph})", ids).fetchall():
+                positions.setdefault(r["task_id"], {})[str(r["user_id"])] = r["position"]
             for r in conn.execute(
                 f"SELECT t.id, t.title, t.due_date, t.done, t.done_at, t.person, t.category, t.recurrence_rule, t.estimated_minutes, "
                 f"       t.started_at, t.actual_minutes, "
@@ -1302,11 +1306,46 @@ def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
                     continue
                 tasks.append({"id": r["id"], "title": r["title"], "due_date": r["due_date"], "done": bool(r["done"]),
                               "done_at": r["done_at"], "assignee_ids": mine, "person": r["person"] or "",
+                              "positions": positions.get(r["id"], {}),
                               "category": r["category"] or "", "routine": routine,
                               "estimated_minutes": r["estimated_minutes"],
                               "started_at": r["started_at"], "actual_minutes": r["actual_minutes"]})
     return {"today": today.isoformat(), "week_start": week_start.isoformat(), "days": days,
             "people": people, "events": events, "tasks": tasks, "routine_log": routine_log if ids else []}
+
+
+class BoardOrderIn(BaseModel):
+    user_id: str
+    task_ids: List[int]
+
+
+@app.put("/api/ambient/board/order", tags=["kiosk"])
+def ambient_board_order(body: BoardOrderIn,
+                        actor: Dict[str, Any] = Depends(_auth.current_user)) -> Dict[str, Any]:
+    """Save the order of one person's column on the family board. Your
+    own column, or as a parent (any account that is not restricted) a
+    child's. Only tasks that really sit in that column are taken."""
+    target = str(body.user_id)
+    with conn_ctx(DB_PATH) as conn:
+        if str(actor["id"]) != target:
+            row = conn.execute("SELECT role FROM user_profiles WHERE id = ?", (target,)).fetchone()
+            parent = (actor.get("role") or "").lower() in ("member", "admin", "platform_admin")
+            if not (row and parent and (row["role"] or "").lower() == "restricted"):
+                raise HTTPException(403, "not your column")
+        ids = list(dict.fromkeys(int(x) for x in body.task_ids))[:500]
+        if ids:
+            ph = ",".join("?" * len(ids))
+            ok = {r["id"] for r in conn.execute(
+                f"SELECT t.id FROM tasks t WHERE t.id IN ({ph}) AND ("
+                f"  EXISTS (SELECT 1 FROM task_assignees a WHERE a.task_id = t.id AND a.user_id = ?) "
+                f"  OR (t.created_by_user_id = ? AND NOT EXISTS (SELECT 1 FROM task_assignees a WHERE a.task_id = t.id)))",
+                (*ids, target, target)).fetchall()}
+            ids = [i for i in ids if i in ok]
+        conn.execute("DELETE FROM task_board_order WHERE user_id = ?", (target,))
+        for pos, tid in enumerate(ids):
+            conn.execute("INSERT INTO task_board_order (user_id, task_id, position) VALUES (?, ?, ?)", (target, tid, pos))
+        conn.commit()
+    return {"user_id": target, "task_ids": ids}
 
 
 @app.get("/api/auth/pin-pickable", tags=["auth"])

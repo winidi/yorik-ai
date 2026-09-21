@@ -92,3 +92,28 @@ def test_timer_on_an_assigned_task_and_in_the_board_feed(family):
     card = next(t for t in feed["tasks"] if t["id"] == b)
     assert card["started_at"] and "actual_minutes" in card
     assert kid_c.post(f"/api/tasks/{b}/stop?role=restricted").json()["started_at"] is None
+
+
+def test_board_column_order_is_per_person_and_parents_sort_for_children(family, fresh_app):
+    from backend.database import get_conn
+    beate_c, beate = family["beate"]; kid_c, kid = family["kid"]; other_c, other = family["other"]
+    with get_conn() as conn:
+        conn.execute("UPDATE user_profiles SET kiosk_agenda_consent = 1"); conn.commit()
+    a = beate_c.post("/api/tasks?role=member", json={"title": "Zimmer", "assignee_user_ids": [kid]}).json()["id"]
+    b = beate_c.post("/api/tasks?role=member", json={"title": "Lesen", "assignee_user_ids": [kid, other]}).json()["id"]
+    hers = beate_c.post("/api/tasks?role=member", json={"title": "Steuer"}).json()["id"]
+
+    # the child sorts its own column; a task that is not in it is dropped
+    r = kid_c.put("/api/ambient/board/order", json={"user_id": kid, "task_ids": [b, a, hers]})
+    assert r.status_code == 200 and r.json()["task_ids"] == [b, a]
+    feed = {t["id"]: t for t in kid_c.get("/api/ambient/board").json()["tasks"]}
+    assert feed[b]["positions"] == {kid: 0} and feed[a]["positions"] == {kid: 1}      # Yarik's column untouched
+    # a parent sorts a child's column, a child nobody else's, an adult not another adult's
+    assert beate_c.put("/api/ambient/board/order", json={"user_id": kid, "task_ids": [a, b]}).status_code == 200
+    assert kid_c.put("/api/ambient/board/order", json={"user_id": other, "task_ids": [b]}).status_code == 403
+    assert kid_c.put("/api/ambient/board/order", json={"user_id": beate, "task_ids": [hers]}).status_code == 403
+    feed = {t["id"]: t for t in kid_c.get("/api/ambient/board").json()["tasks"]}
+    assert feed[a]["positions"] == {kid: 0} and feed[hers]["positions"] == {}
+    # rewording a child's to-do is the ordinary task PATCH
+    assert beate_c.patch(f"/api/tasks/{a}?role=member", json={"title": "Zimmer aufräumen"}).status_code == 200
+    assert kid_c.patch(f"/api/tasks/{a}?role=restricted", json={"title": "Zimmer (später)"}).status_code == 200
