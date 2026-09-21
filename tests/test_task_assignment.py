@@ -117,3 +117,21 @@ def test_board_column_order_is_per_person_and_parents_sort_for_children(family, 
     # rewording a child's to-do is the ordinary task PATCH
     assert beate_c.patch(f"/api/tasks/{a}?role=member", json={"title": "Zimmer aufräumen"}).status_code == 200
     assert kid_c.patch(f"/api/tasks/{a}?role=restricted", json={"title": "Zimmer (später)"}).status_code == 200
+
+
+def test_a_repeating_task_stays_with_the_child_it_was_given_to(family):
+    beate_c, beate = family["beate"]; kid_c, kid = family["kid"]; other_c, other = family["other"]
+    a = beate_c.post("/api/tasks?role=member", json={"title": "Zähne putzen", "assignee_user_ids": [kid], "recurrence_rule": "daily"}).json()["id"]
+    b = beate_c.post("/api/tasks?role=member", json={"title": "Zähne putzen", "assignee_user_ids": [other], "recurrence_rule": "daily"}).json()["id"]
+    assert kid_c.put("/api/ambient/board/order", json={"user_id": kid, "task_ids": [a]}).status_code == 200
+    # the brother's open task of the same name does not swallow the next one
+    assert kid_c.patch(f"/api/tasks/{a}?role=restricted", json={"done": True}).status_code == 200
+    mine = [t for t in kid_c.get("/api/tasks?role=restricted").json() if t["title"] == "Zähne putzen" and not t["done"]]
+    assert len(mine) == 1 and mine[0]["id"] not in (a, b)
+    assert [x["user_id"] for x in mine[0]["assignees"]] == [kid]
+    # ticking twice does not stack a second one
+    kid_c.patch(f"/api/tasks/{a}?role=restricted", json={"done": False}); kid_c.patch(f"/api/tasks/{a}?role=restricted", json={"done": True})
+    assert len([t for t in kid_c.get("/api/tasks?role=restricted").json() if t["title"] == "Zähne putzen" and not t["done"]]) == 1
+    # the board can set and clear the rule
+    assert beate_c.patch(f"/api/tasks/{b}?role=member", json={"recurrence_rule": "every Mon,Tue,Wed,Thu,Fri"}).json()["recurrence_rule"] == "every Mon,Tue,Wed,Thu,Fri"
+    assert beate_c.patch(f"/api/tasks/{b}?role=member", json={"recurrence_rule": ""}).json()["recurrence_rule"] is None

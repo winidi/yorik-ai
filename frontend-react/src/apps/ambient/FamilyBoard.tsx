@@ -12,24 +12,26 @@
  * account that is not restricted) also tick the children's tiles and
  * add a to-do to anyone's column; children add to their own. Whoever
  * may tick a column may also sort it (drag the grip on a tile) and
- * reword a to-do (double tap).
+ * open a to-do (double tap: title, day, repetition). A tap on a
+ * calendar entry shows the appointment.
  *
  * Look: near-white paper, person colour only as accent (stripe, ring,
  * chip), big legible type (bundled Nunito + Atkinson Hyperlegible), a
  * warm dark palette after 21:00 so the wall does not glow at night.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Backpack, Bed, BookOpen, Check, Timer, ChevronDown, ChevronLeft, ChevronRight, Dog, GripVertical, Loader2, Lock, Plus, Sparkles, Utensils, X } from "lucide-react";
+import { Backpack, Bed, BookOpen, Check, Timer, ChevronDown, ChevronLeft, ChevronRight, Dog, GripVertical, Loader2, Repeat, Lock, Plus, Sparkles, Utensils } from "lucide-react";
 import { api } from "@/lib/api";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { cn } from "@/lib/utils";
+import { EventDetails, TaskDialog, repeatLabel } from "./BoardDialogs";
 import "./board-fonts.css";
 
 export type BoardMode = "board" | "calendar" | "tasks";
 
 interface Person { id: string; name: string; first_name: string; color: string; avatar_url: string | null; role?: string }
-interface Ev { id: number; title: string; starts_at: string; ends_at: string | null; all_day: boolean; owner_id: string | null; shared: boolean; location: string | null }
-interface Task { id: number; title: string; due_date: string | null; done: boolean; done_at: string | null; assignee_ids: string[]; person: string; category: string; routine: boolean; estimated_minutes: number | null; started_at?: string | null; actual_minutes?: number | null; positions?: Record<string, number> }
+interface Ev { id: number; title: string; starts_at: string; ends_at: string | null; all_day: boolean; owner_id: string | null; shared: boolean; location: string | null; notes?: string; calendar?: string }
+interface Task { id: number; title: string; due_date: string | null; done: boolean; done_at: string | null; assignee_ids: string[]; person: string; category: string; routine: boolean; estimated_minutes: number | null; started_at?: string | null; actual_minutes?: number | null; positions?: Record<string, number>; recurrence_rule?: string }
 interface LogRow { title: string; user_id: string; day: string }
 interface Feed { today: string; week_start: string; days: number; people: Person[]; events: Ev[]; tasks: Task[]; routine_log: LogRow[] }
 type Group = "routine" | "open";
@@ -98,7 +100,9 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
   }
   const [adding, setAdding] = useState<string | null>(null);      // person id whose "+" is open
   const [draft, setDraft] = useState("");
-  const [editing, setEditing] = useState<string | null>(null);    // "person:task" being reworded
+  const [draftDay, setDraftDay] = useState("");                   // "" = today
+  const [shownEvent, setShownEvent] = useState<Ev | null>(null);
+  const [editing, setEditing] = useState<{ pid: string; id: number } | null>(null);   // the to-do whose details are open
   // Sorting a column: the tile under the finger moves through the list
   // while it is dragged by its grip; the order is saved on release.
   const [drag, setDrag] = useState<{ pid: string; group: Group; id: number; ids: number[] } | null>(null);
@@ -177,17 +181,16 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
     if (!title || !feed) return;
     setAdding(null); setDraft("");
     try {
-      await api.post("/api/tasks", { title, due_date: feed.today, assignee_user_ids: [p.id] });
+      await api.post("/api/tasks", { title, due_date: draftDay || feed.today, assignee_user_ids: [p.id] });
       await load();
     } catch {}
   }
 
-  async function rename(t: Task, title: string) {
+  async function saveTask(t: Task, changes: { title?: string; due_date?: string; recurrence_rule?: string }) {
     setEditing(null);
-    title = title.trim();
-    if (!title || title === t.title) return;
-    setFeed(f => f && { ...f, tasks: f.tasks.map(x => x.id === t.id ? { ...x, title } : x) });
-    try { await api.patch(`/api/tasks/${t.id}`, { title }); } catch {}
+    if (!Object.keys(changes).length) return;
+    setFeed(f => f && { ...f, tasks: f.tasks.map(x => x.id === t.id ? { ...x, ...changes, due_date: changes.due_date === undefined ? x.due_date : (changes.due_date || null) } : x) });
+    try { await api.patch(`/api/tasks/${t.id}`, changes); } catch {}
     await load();
   }
 
@@ -367,12 +370,13 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
                         const p = e.owner_id ? byId.get(e.owner_id) : undefined;
                         const c = e.shared ? SHARED : (p?.color || SHARED);
                         return (
-                          <span key={e.id} className="flex items-center gap-1.5 text-[12.5px] leading-tight rounded-lg pl-2 pr-1.5 py-1 tabular-nums"
+                          <button key={e.id} onClick={() => setShownEvent(e)} title="Antippen: Termin ansehen"
+                                className="flex items-center gap-1.5 text-left text-[12.5px] leading-tight rounded-lg pl-2 pr-1.5 py-1 tabular-nums shrink-0"
                                 style={{ borderLeft: `4px solid ${c}`, background: `color-mix(in srgb, ${c} ${dim ? 22 : 13}%, ${tokens.card})` }}>
                             {!e.all_day && <b className="shrink-0">{hhmm(e.starts_at)}</b>}
                             <span className="truncate">{e.title}</span>
                             {p && !e.shared && <span className="ml-auto shrink-0"><PersonAvatar name={p.name} color={p.color} avatarUrl={p.avatar_url} size={16} /></span>}
-                          </span>
+                          </button>
                         );
                       })}
                     </div>
@@ -388,7 +392,9 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
           <section className={cn("grid gap-4 min-w-0", narrow ? "" : "min-h-0")} style={{ gridTemplateColumns: narrow ? "1fr" : `repeat(${Math.max(1, people.length)}, minmax(0, 1fr))` }}>
             {people.map(p => {
               const mine = feed.tasks.filter(t => t.assignee_ids.includes(p.id));
-              const routines = ordered(mine.filter(t => t.routine), p.id, "routine");
+              // a ticked routine already has its next instance: that one waits for its day
+              const tickedToday = new Set(mine.filter(t => t.routine && t.done).map(t => t.title));
+              const routines = ordered(mine.filter(t => t.routine && !(!t.done && tickedToday.has(t.title) && !!t.due_date && t.due_date > feed.today)), p.id, "routine");
               const open = ordered(mine.filter(t => !t.routine && !t.done), p.id, "open");
               const done = ordered(mine.filter(t => !t.routine && t.done), p.id);
               const total = mine.length, finished = mine.filter(t => t.done).length;
@@ -400,7 +406,7 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
               const tile = (t: Task, group?: Group, ids?: number[]) => ({
                 t, p, tokens, dim, busy: busy === t.id, pop: pop === t.id, locked: lockOthers && !mayTick, today: feed.today,
                 onTap: () => toggle(t, p), onHold: () => toggleTimer(t, p),
-                canEdit: mayTick, editing: editing === `${p.id}:${t.id}`, onEdit: () => setEditing(`${p.id}:${t.id}`), onRename: (title: string) => rename(t, title),
+                canEdit: mayTick, onEdit: () => setEditing({ pid: p.id, id: t.id }),
                 group, dragging: drag?.id === t.id && drag.pid === p.id,
                 grip: mayTick && group && ids && ids.length > 1 ? grip(p.id, group, t, ids) : undefined,
               });
@@ -442,15 +448,28 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
                     {open.length > 0 && routines.length > 0 && <Label muted={tokens.muted}>Aufgaben</Label>}
                     {open.map(t => <Card key={t.id} {...tile(t, "open", open.map(x => x.id))} />)}
                     {mayAdd && (adding === p.id ? (
-                      <form onSubmit={e => { e.preventDefault(); void addTask(p); }} className="flex gap-2">
-                        <input autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={() => { if (!draft.trim()) setAdding(null); }}
-                               placeholder={isMe ? "Neue Aufgabe für heute" : `Neue Aufgabe für ${p.first_name || p.name}`}
-                               className="flex-1 min-w-0 rounded-2xl px-3 py-2.5 text-[15px] outline-none select-text"
-                               style={{ background: tokens.card, color: tokens.ink, boxShadow: `inset 0 0 0 2px ${p.color}` }} />
-                        <button type="submit" className="rounded-2xl px-3 font-bold text-white" style={{ background: p.color }}>OK</button>
+                      <form onSubmit={e => { e.preventDefault(); void addTask(p); }} className="grid gap-2 shrink-0"
+                            onBlur={e => { if (!draft.trim() && !e.currentTarget.contains(e.relatedTarget as Node | null)) setAdding(null); }}>
+                        <div className="flex gap-2">
+                          <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
+                                 placeholder={isMe ? "Neue Aufgabe" : `Neue Aufgabe für ${p.first_name || p.name}`}
+                                 className="flex-1 min-w-0 rounded-2xl px-3 py-2.5 text-[15px] outline-none select-text"
+                                 style={{ background: tokens.card, color: tokens.ink, boxShadow: `inset 0 0 0 2px ${p.color}` }} />
+                          <button type="submit" className="rounded-2xl px-3 font-bold text-white" style={{ background: p.color }}>OK</button>
+                        </div>
+                        {/* for when: today, tomorrow or any day */}
+                        <div className="flex gap-1.5 flex-wrap items-center text-[13px]" role="group" aria-label="Für wann">
+                          {[{ d: "", l: "Heute" }, { d: addDays(feed.today, 1), l: "Morgen" }].map(o => {
+                            const on = (draftDay || "") === o.d || (o.d === "" && draftDay === feed.today);
+                            return <button key={o.l} type="button" aria-pressed={on} onClick={() => setDraftDay(o.d)} className="rounded-full px-3 py-1.5 font-bold"
+                                           style={on ? { background: p.color, color: "#fff" } : { background: tokens.card, color: tokens.muted, boxShadow: `inset 0 0 0 1px ${tokens.line}` }}>{o.l}</button>;
+                          })}
+                          <input type="date" value={draftDay || feed.today} min={feed.today} onChange={e => setDraftDay(e.target.value)} aria-label="Datum"
+                                 className="rounded-full px-3 py-1.5 outline-none" style={{ background: tokens.card, color: tokens.ink, boxShadow: `inset 0 0 0 1px ${draftDay && draftDay !== feed.today && draftDay !== addDays(feed.today, 1) ? p.color : tokens.line}` }} />
+                        </div>
                       </form>
                     ) : (
-                      <button onClick={() => { setAdding(p.id); setDraft(""); }}
+                      <button onClick={() => { setAdding(p.id); setDraft(""); setDraftDay(""); }}
                               className="rounded-2xl px-3 py-2 text-[14px] flex items-center gap-1.5 self-start"
                               style={{ color: tokens.muted, boxShadow: `inset 0 0 0 1px ${tokens.line}` }}>
                         <Plus className="w-4 h-4" /> Aufgabe
@@ -486,6 +505,12 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
           </section>
         )}
       </div>
+      {shownEvent && <EventDetails ev={shownEvent} person={shownEvent.shared || !shownEvent.owner_id ? undefined : byId.get(shownEvent.owner_id)} shared={SHARED} tokens={tokens} onClose={() => setShownEvent(null)} />}
+      {(() => {
+        const t = editing && feed.tasks.find(x => x.id === editing.id);
+        const p = editing && byId.get(editing.pid);
+        return t && p ? <TaskDialog task={t} person={p} today={feed.today} tokens={tokens} onSave={c => saveTask(t, c)} onClose={() => setEditing(null)} /> : null;
+      })()}
     </div>
   );
 }
@@ -494,11 +519,11 @@ function Label({ children, muted }: { children: React.ReactNode; muted: string }
   return <div className="text-[11.5px] tracking-[.08em] uppercase font-bold mt-1" style={{ color: muted }}>{children}</div>;
 }
 
-function Card({ t, p, tokens, dim, busy, pop, locked, onTap, onHold, today, week, log, canEdit, editing, onEdit, onRename, group, dragging, grip }: {
+function Card({ t, p, tokens, dim, busy, pop, locked, onTap, onHold, today, week, log, canEdit, onEdit, group, dragging, grip }: {
   t: Task; p: Person; tokens: Tokens; dim: boolean; busy: boolean; pop: boolean; locked: boolean; onTap: () => void; onHold: () => void; today: string;
   week?: string[]; log?: LogRow[];
-  /** double tap rewords the to-do; a single tap then waits a moment for the second one */
-  canEdit: boolean; editing: boolean; onEdit: () => void; onRename: (title: string) => void;
+  /** double tap opens the to-do; a single tap then waits a moment for the second one */
+  canEdit: boolean; onEdit: () => void;
   /** the grip sorts the tile within its group */
   group?: Group; dragging: boolean; grip?: Grip;
 }) {
@@ -535,32 +560,17 @@ function Card({ t, p, tokens, dim, busy, pop, locked, onTap, onHold, today, week
     if (single.current) { clearTimeout(single.current); single.current = null; onEdit(); return; }
     single.current = window.setTimeout(() => { single.current = null; onTap(); }, 280);
   };
-  const [text, setText] = useState(t.title);
-  useEffect(() => { if (editing) setText(t.title); }, [editing]);   // eslint-disable-line react-hooks/exhaustive-deps
   const due = !!t.due_date && t.due_date <= today && !t.done;
   const overdue = !!t.due_date && t.due_date < today && !t.done;
   const Icon = t.routine ? routineIcon(t.title) : null;
   const dots = t.routine && week
     ? week.map(d => ({ d, on: (log || []).some(l => l.title === t.title && l.user_id === p.id && l.day === d) || (d === today && t.done), future: d > today }))
     : null;
-  if (editing) return (
-    <form onSubmit={e => { e.preventDefault(); onRename(text); }} data-fb-tile={group} data-fb-id={t.id}
-          className="relative flex items-center gap-2 rounded-[16px] overflow-hidden shrink-0"
-          style={{ padding: "8px 8px 8px 14px", background: tokens.card, border: `2px solid ${p.color}` }}>
-      <input autoFocus value={text} onChange={e => setText(e.target.value)} onFocus={e => e.currentTarget.select()}
-             onBlur={() => onRename(text)} onKeyDown={e => { if (e.key === "Escape") { e.preventDefault(); onRename(t.title); } }}
-             aria-label="Aufgabe umbenennen" className="flex-1 min-w-0 bg-transparent py-2 text-[17px] font-bold outline-none select-text" style={{ color: tokens.ink }} />
-      {/* pointerdown is swallowed so the field keeps the focus and blur does not save first */}
-      <button type="button" onPointerDown={e => e.preventDefault()} onClick={() => onRename(t.title)} aria-label="Abbrechen"
-              className="rounded-xl p-2" style={{ color: tokens.muted, background: tokens.soft }}><X className="w-4 h-4" /></button>
-      <button type="submit" onPointerDown={e => e.preventDefault()} className="rounded-xl px-3 py-2 font-bold text-white" style={{ background: p.color }}>OK</button>
-    </form>
-  );
   return (
     <button onClick={tap} disabled={busy} data-fb-tile={group} data-fb-id={t.id}
             onPointerDown={lpDown} onPointerMove={lpMove} onPointerUp={lpCancel} onPointerLeave={lpCancel} onPointerCancel={lpCancel}
             onContextMenu={e => e.preventDefault()}
-            title={[canEdit ? "Doppeltipp: umbenennen" : "", t.done ? "" : running ? "Lange drücken: Zeit stoppen" : "Lange drücken: Zeit starten"].filter(Boolean).join(" · ") || undefined}
+            title={[canEdit ? "Doppeltipp: bearbeiten" : "", t.done ? "" : running ? "Lange drücken: Zeit stoppen" : "Lange drücken: Zeit starten"].filter(Boolean).join(" · ") || undefined}
             className={cn("relative grid items-center gap-3 rounded-[16px] text-left overflow-hidden shrink-0", pop && "fb-pop", t.done && "opacity-80", running && "fb-running", dragging && "fb-dragging")}
             style={{ gridTemplateColumns: grip ? "34px minmax(0, 1fr) auto 28px" : "34px minmax(0, 1fr) auto", padding: grip ? "12px 4px 12px 14px" : "12px 12px 12px 14px", background: tokens.card,
                      border: running || dragging ? `2px solid ${p.color}` : `1px solid color-mix(in srgb, ${p.color} ${dim ? 35 : 25}%, ${tokens.line})`,
@@ -576,6 +586,7 @@ function Card({ t, p, tokens, dim, busy, pop, locked, onTap, onHold, today, week
         </span>
         <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px]" style={{ color: tokens.muted }}>
           {t.category && <span className="rounded-full px-1.5 py-[1px] font-semibold" style={{ background: tokens.soft }}>{t.category}</span>}
+          {t.recurrence_rule && <span className="flex items-center gap-1"><Repeat className="w-3 h-3" />{repeatLabel(t.recurrence_rule)}</span>}
           {running
             ? <span className="flex items-center gap-1 rounded-full px-2 py-[1px] font-bold tabular-nums text-white" style={{ background: p.color }}><Timer className="w-3 h-3" />{clock}{t.estimated_minutes ? ` / ${t.estimated_minutes} Min.` : ""}</span>
             : <>

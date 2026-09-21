@@ -161,15 +161,20 @@ def materialise_next_instance(
     if nxt is None:
         return None
 
-    # Idempotency — if there's already an open task with the SAME
-    # title + recurrence_rule (and not done), don't stack another one.
-    existing = conn.execute(
-        "SELECT id FROM tasks "
+    # Idempotency — if the same people already have an open task with
+    # the SAME title + recurrence_rule, don't stack another one. Same
+    # people, because two children each have their own "Zähne putzen".
+    def _assignees(tid: int) -> set[str]:
+        return {str(r["user_id"]) for r in conn.execute(
+            "SELECT user_id FROM task_assignees WHERE task_id = ?", (tid,)).fetchall()}
+    mine = _assignees(task_id)
+    for other in conn.execute(
+        "SELECT id, created_by_user_id FROM tasks "
         "WHERE title = ? AND recurrence_rule = ? AND done = 0 AND id != ?",
         (row["title"], rule, task_id),
-    ).fetchone()
-    if existing:
-        return None
+    ).fetchall():
+        if _assignees(other["id"]) == mine and str(other["created_by_user_id"]) == str(row["created_by_user_id"]):
+            return None
 
     cur = conn.execute(
         "INSERT INTO tasks (title, due_date, done, person, category, notes, "
@@ -183,4 +188,12 @@ def materialise_next_instance(
             row["created_by_user_id"], rule, row["parent_task_id"],
         ),
     )
-    return int(cur.lastrowid)
+    new_id = int(cur.lastrowid)
+    # The next instance stays with the people it was given to, at the
+    # same place in their column on the family board.
+    for uid in mine:
+        conn.execute("INSERT INTO task_assignees (task_id, user_id) VALUES (?, ?)", (new_id, uid))
+    conn.execute(
+        "INSERT INTO task_board_order (user_id, task_id, position) "
+        "SELECT user_id, ?, position FROM task_board_order WHERE task_id = ?", (new_id, task_id))
+    return new_id

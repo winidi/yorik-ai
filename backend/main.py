@@ -1268,14 +1268,15 @@ def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
         if ids:
             ph = ",".join("?" * len(ids))
             for r in conn.execute(
-                f"SELECT e.id, e.title, e.starts_at, e.ends_at, e.all_day, e.owner_user_id, e.location, c.kind AS cal_kind "
+                f"SELECT e.id, e.title, e.starts_at, e.ends_at, e.all_day, e.owner_user_id, e.location, e.notes, c.kind AS cal_kind, c.name AS cal_name "
                 f"FROM events e LEFT JOIN calendars c ON c.id = e.calendar_id "
                 f"WHERE e.starts_at >= ? AND e.starts_at < ? AND (e.owner_user_id IN ({ph}) OR c.kind = 'shared') "
                 f"ORDER BY e.starts_at",
                 (week_start.isoformat(), end.isoformat(), *ids)).fetchall():
                 events.append({"id": r["id"], "title": r["title"], "starts_at": r["starts_at"], "ends_at": r["ends_at"],
                                "all_day": bool(r["all_day"]), "owner_id": str(r["owner_user_id"]) if r["owner_user_id"] else None,
-                               "shared": r["cal_kind"] == "shared", "location": r["location"]})
+                               "shared": r["cal_kind"] == "shared", "location": r["location"],
+                               "notes": r["notes"] or "", "calendar": r["cal_name"] or ""})
             week_ago = (today - _td(days=6)).isoformat()
             routine_log: list = []
             # the hand-made order of each column: {task_id: {user_id: position}}
@@ -1306,7 +1307,7 @@ def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
                     continue
                 tasks.append({"id": r["id"], "title": r["title"], "due_date": r["due_date"], "done": bool(r["done"]),
                               "done_at": r["done_at"], "assignee_ids": mine, "person": r["person"] or "",
-                              "positions": positions.get(r["id"], {}),
+                              "positions": positions.get(r["id"], {}), "recurrence_rule": r["recurrence_rule"] or "",
                               "category": r["category"] or "", "routine": routine,
                               "estimated_minutes": r["estimated_minutes"],
                               "started_at": r["started_at"], "actual_minutes": r["actual_minutes"]})
@@ -3746,6 +3747,13 @@ def update_task(
     if "recurrence_rule" in fields and isinstance(fields["recurrence_rule"], str) \
             and not fields["recurrence_rule"].strip():
         fields["recurrence_rule"] = None
+    if "due_date" in fields and isinstance(fields["due_date"], str) and not fields["due_date"].strip():
+        fields["due_date"] = None
+    # _apply_patch leaves None alone ("not given"); these two can be cleared.
+    cleared = [k for k in ("recurrence_rule", "due_date") if k in fields and fields[k] is None]
+    if cleared:
+        with conn_ctx(DB_PATH) as conn:
+            conn.execute(f"UPDATE tasks SET {', '.join(k + ' = NULL' for k in cleared)} WHERE id = ?", (task_id,))
     result = _apply_patch("tasks", task_id, fields)
 
     # Assignees update (only when explicitly passed).
