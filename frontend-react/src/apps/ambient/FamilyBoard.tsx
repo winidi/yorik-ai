@@ -65,15 +65,6 @@ function routineIcon(title: string) {
   return Sparkles;
 }
 
-function countdown(fromIso: string, toIso: string): string {
-  const diff = (new Date(toIso).getTime() - new Date(fromIso).getTime()) / 60000;
-  if (diff < -5) return "läuft";
-  if (diff < 1) return "jetzt";
-  if (diff < 60) return `in ${Math.round(diff)} Min.`;
-  const h = Math.floor(diff / 60), m = Math.round(diff % 60);
-  return m ? `in ${h} Std. ${m} Min.` : `in ${h} Std.`;
-}
-
 export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNeedSignIn, lockOthers = false, offerJoin = false }: {
   mode: BoardMode;
   currentUserId: string | null;
@@ -156,19 +147,6 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
     if (narrow && currentUserId) list.sort((a, b) => Number(b.id === currentUserId) - Number(a.id === currentUserId));
     return list;
   }, [feed, currentUserId, narrow]);
-
-  // "Als Nächstes": the next timed event of today, else the first due task
-  const next = useMemo(() => {
-    if (!feed) return null;
-    const todays = (eventsByDay.get(feed.today) || []).filter(e => !e.all_day && e.starts_at.slice(0, 16) >= now.slice(0, 16));
-    if (todays.length) {
-      const e = todays[0]; const p = e.owner_id ? byId.get(e.owner_id) : undefined;
-      return { text: e.title, who: e.shared ? "Alle" : (p?.first_name || p?.name || ""), when: countdown(now, e.starts_at), color: e.shared ? SHARED : (p?.color || SHARED) };
-    }
-    const due = feed.tasks.find(t => !t.done && !!t.due_date && t.due_date <= feed.today);
-    if (due) { const p = byId.get(due.assignee_ids[0]); return { text: due.title, who: p?.first_name || p?.name || "", when: "heute fällig", color: p?.color || SHARED }; }
-    return null;
-  }, [feed, eventsByDay, now, byId]);
 
   async function toggle(t: Task, owner: Person) {
     if (!feed) return;
@@ -317,15 +295,6 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
             <h1 className="text-[34px] leading-none font-extrabold tracking-tight" style={{ fontFamily: DISPLAY }}>
               {new Date(feed.today + "T00:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })}
             </h1>
-            {next && (
-              <div className="mt-2 flex items-center gap-2 text-[15px] flex-wrap">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ background: next.color }} />
-                <span style={{ color: tokens.muted }}>Als Nächstes</span>
-                <b>{next.text}</b>
-                {next.who && <span style={{ color: tokens.muted }}>· {next.who}</span>}
-                <span className="rounded-full px-2 py-0.5 text-[13px] font-bold" style={{ background: tokens.soft }}>{next.when}</span>
-              </div>
-            )}
           </div>
           <div className="flex items-center gap-5 flex-wrap">
             {/* legend = calendar picker: tap a name for that person's week,
