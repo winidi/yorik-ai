@@ -71,6 +71,8 @@ export interface EmailAttachment {
   is_inline: number;
   paperless_id?: number | null;
   paperless_state?: PaperlessState;
+  /** Who may see the document in Paperless once filed ("nur mich / die Eltern / die Familie"). */
+  paperless_visibility?: "private" | "parents" | "shared" | "business" | null;
   immich_id?: string | null;
 }
 

@@ -603,7 +603,7 @@ def get_message(msg_id: int, user: dict = Depends(current_user)):
             raise HTTPException(404, "message not found")
         atts = conn.execute(
             "SELECT id, filename, mimetype, size_bytes, content_id, is_inline, "
-            "       paperless_id, paperless_state, paperless_task_id, immich_id "
+            "       paperless_id, paperless_state, paperless_task_id, paperless_visibility, immich_id "
             "FROM email_attachments WHERE message_id=?",
             (msg_id,),
         ).fetchall()
@@ -1303,12 +1303,15 @@ async def unsubscribe_route(msg_id: int, user: dict = Depends(current_user)):
 
 
 @router.post("/attachments/{att_id}/paperless")
-async def file_attachment_to_paperless(att_id: int, user: dict = Depends(current_user)):
+async def file_attachment_to_paperless(att_id: int, visibility: Optional[str] = Query(None),
+                                       user: dict = Depends(current_user)):
     """Tier-2 confirmation: user clicked 'File to Paperless' on a
     'suggested' attachment. Fetches the binary on demand (same path as
     /download), then runs the same uploader the fetcher uses but tags
     the row 'filed' (vs 'auto_filed') so the UI knows it was a user
-    decision."""
+    decision. `visibility` is the answer to "sichtbar für": private,
+    parents or shared (business too); without it the person's default
+    applies."""
     with get_conn() as conn:
         row = conn.execute(
             "SELECT a.id, a.filename, a.mimetype, a.paperless_state, m.from_email, m.from_name, m.subject "
@@ -1333,11 +1336,13 @@ async def file_attachment_to_paperless(att_id: int, user: dict = Depends(current
         {"bytes": blob["content"], "filename": row["filename"] or "document.pdf",
          "mimetype": row["mimetype"] or "application/pdf"},
         user["id"], sender_label, row["subject"] or "",
-        "filed",
+        "filed", visibility,
     )
     if not ok:
         raise HTTPException(502, "Paperless upload failed — check Paperless is reachable + the per-user token is set")
-    return {"ok": True, "state": "filed"}
+    with get_conn() as conn:
+        vis_row = conn.execute("SELECT paperless_visibility FROM email_attachments WHERE id=?", (att_id,)).fetchone()
+    return {"ok": True, "state": "filed", "visibility": vis_row["paperless_visibility"] if vis_row else None}
 
 
 @router.post("/attachments/{att_id}/paperless/undo")

@@ -872,25 +872,40 @@ def _is_paperless_route(mimetype: str, filename: str) -> bool:
     return fn.endswith((".pdf", ".docx", ".doc", ".xlsx", ".xls", ".rtf", ".csv"))
 
 
+VISIBILITY_LEVELS = ("private", "parents", "business", "shared")
+
+
 def _file_to_paperless(att_id: int, blob: dict, user_id: str,
                         sender_label: str, subject: str,
-                        new_state: str = "auto_filed") -> bool:
+                        new_state: str = "auto_filed",
+                        visibility: Optional[str] = None) -> bool:
     """Upload one attachment to Paperless using the per-user token.
     On success, marks the attachment row with paperless_id=0 (sentinel
     meaning "uploaded, real doc id will be backfilled by webhook") and
     paperless_state=new_state ('auto_filed' for Tier 1 fetcher path,
     'filed' for Tier 2 user-confirm). On any failure, sets
     paperless_state='failed' so the UI can offer a retry.
+
+    `visibility` says who may see the document in Paperless (the chat
+    card's "nur mich / die Eltern / die Familie"); the user answers it
+    on Tier 2, Tier 1 takes the person's default. It is applied to the
+    document once Paperless has consumed it, as the chat does.
     Returns True iff the upload succeeded."""
     from .external_users import get_user_paperless_creds
     creds = get_user_paperless_creds(user_id)
     if not creds or not creds.get("api_key"):
         return False  # Paperless not configured for this user — leave state untouched
     import requests as _rq
+    vis = (visibility or "").strip().lower()
+    if vis not in VISIBILITY_LEVELS:
+        from .chat_attachments import _default_visibility
+        vis = _default_visibility(user_id)
     headers = {"Authorization": f"Token {creds['api_key']}"}
     files = {"document": (blob["filename"], blob["bytes"], blob["mimetype"])}
     title = f"Email · {sender_label} · {subject[:60] if subject else blob['filename']}"
     data = {"title": title}
+    from . import paperless_visibility as _pv
+    _pv.apply_visibility_to_payload(vis, data)
     failure_reason: Optional[str] = None
     task_id: Optional[str] = None
     try:
@@ -908,9 +923,9 @@ def _file_to_paperless(att_id: int, blob: dict, user_id: str,
         if failure_reason is None:
             conn.execute(
                 "UPDATE email_attachments "
-                "SET paperless_id=0, paperless_state=?, paperless_task_id=? "
+                "SET paperless_id=0, paperless_state=?, paperless_task_id=?, paperless_visibility=? "
                 "WHERE id=?",
-                (new_state, task_id, att_id),
+                (new_state, task_id, vis, att_id),
             )
         else:
             conn.execute(
@@ -919,8 +934,12 @@ def _file_to_paperless(att_id: int, blob: dict, user_id: str,
             )
         conn.commit()
     if failure_reason is None:
-        log.info("email att %d → Paperless (task=%s, state=%s) from %s",
-                 att_id, task_id, new_state, sender_label)
+        # The tag alone lets nobody open the document; the group's view
+        # permission does, and that can only be set once it exists.
+        if vis != "private" and task_id:
+            _pv.apply_after_consume(task_id, vis)
+        log.info("email att %d → Paperless (task=%s, state=%s, %s) from %s",
+                 att_id, task_id, new_state, vis, sender_label)
         return True
     return False
 

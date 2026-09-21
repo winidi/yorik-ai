@@ -17,7 +17,7 @@ import {
   RefreshCw, Settings as SettingsIcon, AlertTriangle, Loader2,
   Mail, Folder, FileEdit, ShieldAlert, Clock, MessageSquare, Sparkles,
   MailX, Menu, ArrowLeft, Mic, Square, X,
-  Bell, Calendar, Newspaper, Receipt, Users,
+  Bell, Calendar, Newspaper, Receipt, Users, Lock, UserCheck,
   AlignJustify,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -1771,6 +1771,19 @@ function AppointmentBanner({ messageId }: { messageId: number }) {
 // to Paperless. Inline state hint stays in the row so the user can
 // tell the status of each attachment at a glance without opening the
 // modal.
+// Who may see a filed document in Paperless — the same three answers
+// as the attachment card in the chat (AttachmentCard.tsx).
+type FileAs = "private" | "parents" | "shared";
+const FILE_AS: Array<{ v: FileAs; label: string; hint: string; Icon: typeof Lock }> = [
+  { v: "private", label: "nur mich", hint: "Nur du siehst das Dokument in Paperless.", Icon: Lock },
+  { v: "parents", label: "die Eltern", hint: "Die Erwachsenen im Haushalt, nicht die Konten der Kinder.", Icon: UserCheck },
+  { v: "shared", label: "die Familie", hint: "Alle im Haushalt, auch die Konten der Kinder.", Icon: Users },
+];
+const WHO_SEES: Record<string, string> = {
+  private: "nur für dich sichtbar", parents: "für die Eltern sichtbar",
+  shared: "für die ganze Familie sichtbar", business: "für die Firma sichtbar",
+};
+
 function AttachmentRow({
   att, onActionDone,
 }: {
@@ -1855,6 +1868,7 @@ function AttachmentPreviewModal({
   // click without waiting on the parent's refetch. parent still refetches
   // (via onActionDone) so the source-of-truth converges.
   const [localState, setLocalState] = useState<typeof att.paperless_state>(att.paperless_state ?? null);
+  const [localVis, setLocalVis] = useState<string | null>(att.paperless_visibility ?? null);
 
   const inlineUrl = `/api/email/attachments/${att.id}/inline`;
   const downloadUrl = `/api/email/attachments/${att.id}/download`;
@@ -1865,12 +1879,15 @@ function AttachmentPreviewModal({
   const isText = mt.startsWith("text/") || fnLower.endsWith(".txt") || fnLower.endsWith(".csv");
   const canPreview = isPdf || isImage || isText;
 
-  async function call(action: "file" | "discard" | "undo") {
+  // Filing always says who may see the document in Paperless — the
+  // same question as the attachment card in the chat.
+  async function call(action: "file" | "discard" | "undo", visibility?: FileAs) {
     setBusy(true); setErr(null);
     try {
       if (action === "file") {
-        await api.post(`/api/email/attachments/${att.id}/paperless`);
-        setLocalState("filed");
+        const r = await api.post<{ visibility?: string | null }>(
+          `/api/email/attachments/${att.id}/paperless${visibility ? `?visibility=${visibility}` : ""}`);
+        setLocalState("filed"); setLocalVis(r?.visibility ?? visibility ?? null);
       } else if (action === "discard") {
         await api.delete(`/api/email/attachments/${att.id}/paperless-suggestion`);
         setLocalState("discarded");
@@ -1969,10 +1986,10 @@ function AttachmentPreviewModal({
           {/* Left: status text. */}
           <div className="text-xs flex-1 min-w-0">
             {localState === "auto_filed" && (
-              <span className="text-emerald-600 dark:text-emerald-500">✓ Filed to Paperless · auto (trusted sender)</span>
+              <span className="text-emerald-600 dark:text-emerald-500">✓ Filed to Paperless · auto (trusted sender){localVis ? ` · ${WHO_SEES[localVis] || localVis}` : ""}</span>
             )}
             {localState === "filed" && (
-              <span className="text-emerald-600 dark:text-emerald-500">✓ Filed to Paperless</span>
+              <span className="text-emerald-600 dark:text-emerald-500">✓ Filed to Paperless{localVis ? ` · ${WHO_SEES[localVis] || localVis}` : ""}</span>
             )}
             {localState === "suggested" && (
               <span className="text-sky-600 dark:text-sky-500">📎 This looks like a document worth keeping. File it to Paperless?</span>
@@ -2007,13 +2024,18 @@ function AttachmentPreviewModal({
                   Discard
                 </button>
               )}
-              <button
-                onClick={() => call("file")}
-                disabled={busy}
-                className="px-3 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 text-sm disabled:opacity-50"
-              >
-                {localState === "failed" ? "Retry upload" : "Add to Paperless"}
-              </button>
+              <span className="text-xs text-muted-foreground">{localState === "failed" ? "Retry, visible to" : "Add to Paperless, visible to"}</span>
+              {FILE_AS.map(({ v, label, hint, Icon }) => (
+                <button
+                  key={v}
+                  onClick={() => call("file", v)}
+                  disabled={busy}
+                  title={hint}
+                  className="px-3 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 text-sm disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  <Icon className="w-3.5 h-3.5" />{label}
+                </button>
+              ))}
             </>
           )}
 

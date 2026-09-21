@@ -80,12 +80,16 @@ If you need the full Paperless UI (workflows, tags, correspondents, custom field
 
 ## Who sees what
 
-Every document is private, shared with the household, or shared with
-the business. Private is the default for uploads and for mail
-attachments: only the person who owns it sees it, and only their
+Every document is private, for the parents, shared with the household,
+or shared with the business. Filing always asks who may see it: the
+attachment card in the chat and the mail attachment's preview both
+offer "nur mich / die Eltern / die Familie". Your default from
+Settings → You is the highlighted button, and the one that applies
+when a mail attachment from a trusted sender is filed automatically.
+Only the person who owns a private document sees it, and only their
 Yorik searches it. "Teile den Mietvertrag mit der Familie" in the chat
 moves a document to the household; "nur ich soll das sehen" takes it
-back. Settings → You sets your default for new uploads.
+back.
 
 This holds for admins too. Whoever runs the box sees the shared spaces
 and their own, never another member's private documents, tasks or
