@@ -66,10 +66,10 @@ def _default_visibility(user_id: str) -> str:
     with get_conn() as conn:
         prof = conn.execute("SELECT default_doc_visibility FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
     vis = (prof["default_doc_visibility"] if prof else None) or ""
-    if vis not in ("private", "business", "shared"):
+    if vis not in ("private", "parents", "business", "shared"):
         from .household_settings import get_setting
         vis = get_setting("documents_default_visibility", default="private")
-    return vis if vis in ("private", "business", "shared") else "private"
+    return vis if vis in ("private", "parents", "business", "shared") else "private"
 
 
 def get(attachment_id: int, user_id: str) -> Optional[Dict[str, Any]]:
@@ -173,7 +173,7 @@ def file_in_paperless(attachment_id: int, user_id: str, visibility: Optional[str
     if not path.exists():
         return {"ok": False, "error": "the file is gone (retention) — upload it again"}
     vis = (visibility or "").strip().lower()
-    if vis not in ("private", "business", "shared"):
+    if vis not in ("private", "parents", "business", "shared"):
         vis = _default_visibility(user_id)
     from . import main as _main        # the write-through lives next to the upload route
     result = _main._push_to_paperless(

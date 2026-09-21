@@ -3,7 +3,7 @@ name: file_attachment
 description: File a chat attachment in Paperless, the household's document archive.
 when_to_use: |
   The user agreed to file an attachment ("ja, ablegen", "leg das ab", "ab in Paperless") after read_attachment, or asks for it later in the same conversation.
-  Always pass `visibility` from what the user said; "nur ich" / "privat" is private, "für alle" / "Familie" / "wir beide" is shared, "Firma" / "Geschäft" is business.
+  Always pass `visibility` from what the user said; "nur ich" / "privat" is private, "wir beide" / "die Eltern" / "nicht die Kinder" is parents, "für alle" / "die ganze Familie" is shared, "Firma" / "Geschäft" is business.
   If the user agreed to file but did not say who should see it, ask that one question first instead of calling this.
   Pass `title` when the file name says nothing ("scan_0042.pdf") and you know what the document is.
 when_not_to_use: |
@@ -16,7 +16,7 @@ inputs:
   visibility:
     type: string
     required: false
-    description: private (only the user), shared (the whole household) or business (the business group).
+    description: private (only the user), parents (the adults, not the children), shared (the whole household, children included) or business (the business group).
   title:
     type: string
     required: false

@@ -1,10 +1,11 @@
 ---
 name: set_document_visibility
-description: "Change a Paperless document's visibility — private, business, or shared."
+description: "Change who may see a Paperless document - private, parents, business or shared."
 when_not_to_use: |
   Don't use to change a CONTACT's sharing — that's `share_contact` / `update_contact(space=...)`. Don't use to change a calendar event's visibility — that's `update_calendar_event(visibility=...)` for per-event privacy, or move the calendar to a different space. This skill is documents only.
 when_to_use: |
   - User wants to share a document with the household ("teile den Mietvertrag mit der Familie") → visibility="shared".
+  - User wants only the adults to see it ("nur wir Eltern", "nicht für die Kinder") → visibility="parents".
   - User wants to mark a document as business-shared ("die Rechnung ist für alle im Geschäft") → visibility="business".
   - User wants to lock a document back to private ("nur ich soll das sehen") → visibility="private".
 
@@ -19,7 +20,7 @@ inputs:
   visibility:
     type: string
     required: true
-    description: "'private' | 'business' | 'shared'."
+    description: "'private' | 'parents' | 'business' | 'shared'."
 outputs:
   document_id:
     type: integer
@@ -37,6 +38,6 @@ tags: [documents, sharing, write]
 
 # set_document_visibility
 
-Tag-based visibility wrapper. Three levels (private / business / shared) map to Paperless tags + groups (see backend/paperless_visibility.py for the model).
+Tag-based visibility wrapper. Four levels (private / parents / business / shared) map to Paperless tags + groups (see backend/paperless_visibility.py for the model).
 
 Owner-check happens before the Paperless PATCH. If a member tries to change someone else's document, this skill raises a permission error and the chat surfaces it.

@@ -30,3 +30,29 @@ def test_task_lookup(monkeypatch):
     assert pv.document_id_for_task("abc") == 12
     monkeypatch.setattr(pv.requests, "get", lambda url, **kw: _Resp(data=[{"related_document": None}]))
     assert pv.document_id_for_task("abc") is None
+
+
+def test_parents_group_holds_the_adults_only(monkeypatch, fresh_app):
+    from tests.conftest import seed_user
+    from backend.database import get_conn
+    ids = {"dirk": seed_user(name="Dirk", role="platform_admin", email="d@x.local", password="pytestpw123"),
+           "beate": seed_user(name="Beate", role="member", email="b@x.local", password="pytestpw123"),
+           "kid": seed_user(name="Yorik", role="restricted", email="k@x.local", password="pytestpw123")}
+    with get_conn() as conn:
+        for n, (key, uid) in enumerate(ids.items(), start=8):
+            conn.execute("UPDATE user_profiles SET paperless_user_id = ? WHERE id = ?", (n, uid))
+        conn.commit()
+    groups = {8: [2], 9: [2], 10: [2, 5]}                      # the child was (wrongly) in parents=5
+    patched = {}
+    monkeypatch.setattr(pv, "_settings", lambda: {"api_key": "k", "base_url": "http://p"})
+    monkeypatch.setattr(pv.requests, "get", lambda url, **kw: _Resp(data={"groups": groups[int(url.rstrip("/").split("/")[-1])]}))
+    monkeypatch.setattr(pv.requests, "patch", lambda url, **kw: patched.update({int(url.rstrip("/").split("/")[-1]): kw["json"]["groups"]}) or _Resp())
+    assert pv.sync_parents_group(5) == 2
+    assert patched == {8: [2, 5], 9: [2, 5], 10: [2]}          # adults in, child out, household untouched
+
+    calls = []
+    monkeypatch.setattr(pv, "_ensure_groups", lambda base, headers: {"household": 2, "parents": 5})
+    monkeypatch.setattr(pv, "sync_parents_group", lambda gid=None: 2)
+    monkeypatch.setattr(pv.requests, "patch", lambda url, **kw: calls.append(kw["json"]) or _Resp())
+    assert pv.apply_document_permissions(7, "parents")
+    assert calls[0]["set_permissions"]["view"]["groups"] == [5]

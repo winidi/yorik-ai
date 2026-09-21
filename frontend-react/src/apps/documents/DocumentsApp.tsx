@@ -795,11 +795,13 @@ const VISIBILITY_META: Record<DocVisibility, {
   label: string; emoji: string; color: string; desc: string;
 }> = {
   private:  { label: "Private",  emoji: "🔒", color: "bg-red-500/15 text-red-500",
-              desc: "Only you and admin see this." },
+              desc: "Only you see this." },
+  parents:  { label: "Parents",  emoji: "🧑‍🤝‍🧑", color: "bg-violet-500/15 text-violet-500",
+              desc: "Visible to the adults of the household, not to the children's accounts." },
   business: { label: "Business", emoji: "💼", color: "bg-blue-500/15 text-blue-500",
               desc: "Visible to everyone in the business group." },
   shared:   { label: "Shared",   emoji: "👥", color: "bg-emerald-500/15 text-emerald-500",
-              desc: "Visible to the whole household / team." },
+              desc: "Visible to the whole household, the children's accounts included." },
 };
 
 function VisibilityChip({
@@ -856,7 +858,7 @@ function VisibilityChip({
           className="absolute z-30 right-0 top-full mt-1 w-56 rounded-md border border-border bg-popover shadow-lg p-1"
           onClick={(e) => e.stopPropagation()}
         >
-          {(["private", "business", "shared"] as DocVisibility[]).map(v => {
+          {(["private", "parents", "shared", "business"] as DocVisibility[]).map(v => {
             const m = VISIBILITY_META[v];
             return (
               <button

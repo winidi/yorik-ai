@@ -1,6 +1,6 @@
 /** Mirrors backend/main.py /api/documents responses. */
 
-export type DocVisibility = "private" | "business" | "shared";
+export type DocVisibility = "private" | "parents" | "business" | "shared";
 
 export interface YorikDocument {
   id: number;

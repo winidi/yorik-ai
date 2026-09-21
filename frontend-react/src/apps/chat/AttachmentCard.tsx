@@ -6,17 +6,26 @@
  * Backend: backend/chat_attachments.py.
  */
 import { useCallback, useEffect, useState } from "react";
-import { Check, FileText, Image as ImageIcon, Loader2, Lock, Trash2, Users } from "lucide-react";
+import { Check, FileText, Image as ImageIcon, Loader2, Lock, Trash2, UserCheck, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface Attachment {
   id: number; filename: string; mime_type: string; bytes: number; is_image: boolean;
   expires_at: string; filed: boolean; visibility: string | null; suggest: "file" | "keep"; raw_url: string;
-  default_visibility: "private" | "shared" | "business";
+  default_visibility: "private" | "parents" | "shared" | "business";
 }
 
-const WHO: Record<string, string> = { private: "nur für dich sichtbar", shared: "für die ganze Familie sichtbar", business: "für die Firma sichtbar" };
+const WHO: Record<string, string> = {
+  private: "nur für dich sichtbar", parents: "für die Eltern sichtbar",
+  shared: "für die ganze Familie sichtbar", business: "für die Firma sichtbar",
+};
+type FileAs = "private" | "parents" | "shared";
+const FILE_AS: Array<{ v: FileAs; label: string; hint: string }> = [
+  { v: "private", label: "nur mich", hint: "Nur du siehst das Dokument in Paperless." },
+  { v: "parents", label: "die Eltern", hint: "Die Erwachsenen im Haushalt, nicht die Konten der Kinder." },
+  { v: "shared", label: "die Familie", hint: "Alle im Haushalt, auch die Konten der Kinder." },
+];
 
 /** Attachment numbers named in a chat message. */
 export function attachmentIdsIn(text: string | null | undefined): number[] {
@@ -32,7 +41,7 @@ function size(bytes: number): string {
 export function AttachmentCard({ id }: { id: number }) {
   const [att, setAtt] = useState<Attachment | null>(null);
   const [gone, setGone] = useState(false);
-  const [busy, setBusy] = useState<"private" | "shared" | "delete" | null>(null);
+  const [busy, setBusy] = useState<FileAs | "delete" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -48,7 +57,7 @@ export function AttachmentCard({ id }: { id: number }) {
 
   // Filing always says who may see the document in Paperless: only
   // the person, or the whole household.
-  async function fileIt(visibility: "private" | "shared") {
+  async function fileIt(visibility: FileAs) {
     setBusy(visibility); setError(null);
     try { setAtt(await api.post<Attachment>(`/api/chat/attachments/${id}/file?visibility=${visibility}`, {})); }
     catch (e: any) { setError(e?.message || "Paperless hat die Datei nicht angenommen."); }
@@ -88,14 +97,14 @@ export function AttachmentCard({ id }: { id: number }) {
             <div className="text-[11px] text-muted-foreground mb-2">Nur in diesem Gespräch · wird am {until} gelöscht</div>
             <div className="text-[11px] font-medium mb-1">In Paperless ablegen, sichtbar für</div>
             <div className="flex flex-wrap gap-2">
-              {(["private", "shared"] as const).map(v => {
+              {FILE_AS.map(({ v, label, hint }) => {
                 const primary = att.suggest === "file" && att.default_visibility === v;
                 return (
-                  <button key={v} onClick={() => fileIt(v)} disabled={!!busy}
+                  <button key={v} onClick={() => fileIt(v)} disabled={!!busy} title={hint}
                           className={cn("inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-60",
                                         primary ? "bg-primary text-primary-foreground" : "border border-border hover:bg-muted")}>
-                    {busy === v ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : v === "private" ? <Lock className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
-                    {v === "private" ? "nur mich" : "die Familie"}
+                    {busy === v ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : v === "private" ? <Lock className="w-3.5 h-3.5" /> : v === "parents" ? <UserCheck className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
+                    {label}
                   </button>
                 );
               })}

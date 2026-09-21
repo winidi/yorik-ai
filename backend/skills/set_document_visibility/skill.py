@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 
-_VALID = ("private", "business", "shared")
+_VALID = ("private", "parents", "business", "shared")
 
 
 async def execute(

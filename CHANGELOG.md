@@ -79,6 +79,11 @@ worklist.
   switch.
   Settings → Embeddings has the switch (on/off), the choice of model,
   the index progress per source and a rebuild button.
+- **Documents for the parents only.** A fourth visibility, "parents":
+  the adults of the household see the document, the children's
+  accounts do not. Backed by a Paperless group "parents" that follows
+  the roles (every enabled account that is not restricted). In the
+  chat card, the Documents app and the skills.
 - **"Shared" documents are really shared.** In Paperless a tag does not
   grant access to the documents carrying it, so a document filed as
   "shared" or "business" was visible to its owner only. The visibility

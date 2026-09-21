@@ -110,10 +110,12 @@ whether to file it in Paperless.
 
 Paperless is the one place documents live. Filing always says who may
 see the document: Yorik asks "nur du oder die ganze Familie?", and the
-card under your message has the two buttons **nur mich** and **die
-Familie**. The file goes into your own Paperless account either way;
-"die Familie" additionally lets everyone in the household group open it
-(the children's accounts are in that group too). You can change it
+card under your message has the buttons **nur mich**, **die Eltern**
+and **die Familie**. The file goes into your own Paperless account either way;
+"die Eltern" additionally lets the adults of the household open it
+(every account that is not a restricted child account; the Paperless
+group "parents" is kept in step with the roles), "die Familie" everyone
+in the household group, the children's accounts included. You can change it
 later in the Documents app. Anything you do not file
 stays a card in that conversation and nowhere else: it is deleted with
 the conversation, with the **Löschen** button, or after 30 days

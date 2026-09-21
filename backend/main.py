@@ -10784,8 +10784,8 @@ def patch_default_doc_visibility(
     (private / business / shared). Subsequent uploads from this user
     auto-apply the matching Paperless tag unless overridden per-upload."""
     val = (body.get("visibility") or "").strip().lower()
-    if val not in ("private", "business", "shared"):
-        raise HTTPException(400, "visibility must be private | business | shared")
+    if val not in ("private", "parents", "business", "shared"):
+        raise HTTPException(400, "visibility must be private | parents | business | shared")
     with conn_ctx(DB_PATH) as conn:
         conn.execute(
             "UPDATE user_profiles SET default_doc_visibility=? WHERE id=?",
@@ -12253,7 +12253,7 @@ async def upload_document(
     title: Optional[str] = Query(None),
     tags: str = Query("", description="Comma-separated"),
     allowed_roles: str = Query("admin"),
-    visibility: Optional[str] = Query(None, description="private | business | shared. Omit to use the user's default."),
+    visibility: Optional[str] = Query(None, description="private | parents | business | shared. Omit to use the user's default."),
     space: Optional[str] = Query(None, description="Phase B: pin the doc to a Yorik space (slug like 'household' or numeric id). When set, Paperless view/change groups are restricted to that space's group (shared) or the user as owner (personal). Eventually-consistent: takes effect when the Paperless post-consume webhook fires."),
     role: str = Depends(_auth.current_role),
     user: dict[str, Any] = Depends(_auth.current_user_optional),
@@ -12357,14 +12357,14 @@ async def upload_document(
         #   3. household_settings.documents_default_visibility (per-tenant)
         #   4. 'private' hardcoded fallback
         effective_visibility = (visibility or "").strip().lower()
-        if effective_visibility not in ("private", "business", "shared"):
+        if effective_visibility not in ("private", "parents", "business", "shared"):
             with conn_ctx(DB_PATH) as conn:
                 row = conn.execute(
                     "SELECT default_doc_visibility FROM user_profiles WHERE id=?",
                     (user.get("id") if user else None,),
                 ).fetchone() if user else None
             per_user = (row["default_doc_visibility"] if row else None) or ""
-            if per_user in ("private", "business", "shared"):
+            if per_user in ("private", "parents", "business", "shared"):
                 effective_visibility = per_user
             else:
                 from .household_settings import get_setting
@@ -12372,7 +12372,7 @@ async def upload_document(
                     "documents_default_visibility", default="private"
                 )
                 effective_visibility = (
-                    tenant_default if tenant_default in ("private", "business", "shared")
+                    tenant_default if tenant_default in ("private", "parents", "business", "shared")
                     else "private"
                 )
         # Phase B: resolve `space` param to a space_id. Pinning happens

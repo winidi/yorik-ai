@@ -17,6 +17,9 @@ from business from shared. The mapping:
                 For things like the lease agreement, school emergency
                 contacts, kids' insurance — anything every adult in
                 the box should be able to pull up.
+  * parents   → visible to the adults of the household (every account
+                that is not a restricted child account): contracts,
+                finances, the children's reports and medical letters.
 
 Each visibility level corresponds to a Paperless TAG. The tag carries
 view permission to the matching Paperless group. Owner stays the user
@@ -50,14 +53,16 @@ _CACHE_LOCK = threading.Lock()
 # ("household members can see anything tagged shared").
 GROUPS = {
     "business": "business",
+    "parents":  "parents",      # the adults of the household, not the children's accounts
     "shared":   "household",
 }
 
-VISIBILITY_LEVELS = ("private", "business", "shared")
+VISIBILITY_LEVELS = ("private", "parents", "business", "shared")
 VISIBILITY_TAG_NAMES = {
     # "private" intentionally has no tag — Paperless owner-only is the
     # default permission and we don't want a stray tag to widen access.
     "business": "business",
+    "parents":  "parents",
     "shared":   "shared",
 }
 TIMEOUT_S = 15
@@ -121,11 +126,7 @@ def ensure_tags() -> Dict[str, int]:
             # view-by-group for free (Paperless's default propagation).
             # NOTE: this is a tag-level permission, not a per-doc one —
             # cheap to set, applies to every doc using the tag.
-            target_group = (
-                GROUPS["business"] if tag_name == "business"
-                else GROUPS["shared"] if tag_name == "shared"
-                else None
-            )
+            target_group = GROUPS.get(tag_name)
             if target_group and target_group in group_ids:
                 _grant_tag_view_to_group(
                     base, headers, tag_id, group_ids[target_group],
@@ -136,7 +137,45 @@ def ensure_tags() -> Dict[str, int]:
     with _CACHE_LOCK:
         _TAG_ID_CACHE.clear()
         _TAG_ID_CACHE.update(out)
+    sync_parents_group(group_ids.get(GROUPS["parents"]))
     return out
+
+
+def sync_parents_group(group_id: Optional[int] = None) -> int:
+    """Who is in the Paperless group "parents": every enabled household
+    account that is not a restricted (child) account and has a Paperless
+    user. Added and removed to match; other groups of a user are left
+    alone. Returns the number of members. Best-effort."""
+    s = _settings()
+    if not s.get("api_key"):
+        return 0
+    base, headers = s["base_url"], _admin_headers()
+    if group_id is None:
+        group_id = _ensure_groups(base, headers).get(GROUPS["parents"])
+    if group_id is None:
+        return 0
+    try:
+        from .database import get_conn
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT paperless_user_id, lower(role) AS role, disabled FROM user_profiles "
+                "WHERE paperless_user_id IS NOT NULL").fetchall()
+        members = 0
+        for row in rows:
+            should = not row["disabled"] and row["role"] != "restricted"
+            r = requests.get(f"{base}/api/users/{int(row['paperless_user_id'])}/", headers=headers, timeout=TIMEOUT_S)
+            if not r.ok:
+                continue
+            groups = set(r.json().get("groups") or [])
+            wanted = (groups | {int(group_id)}) if should else (groups - {int(group_id)})
+            if wanted != groups:
+                requests.patch(f"{base}/api/users/{int(row['paperless_user_id'])}/", headers=headers,
+                               json={"groups": sorted(wanted)}, timeout=TIMEOUT_S)
+            members += 1 if should else 0
+        return members
+    except Exception as exc:  # noqa: BLE001
+        log.warning("sync_parents_group failed: %s", exc)
+        return 0
 
 
 # Baseline Django permissions every Yorik-created Paperless group must
@@ -513,7 +552,7 @@ def change_document_visibility(
     # Compute the target tag set: remove all visibility tags, add the
     # desired one (private adds none).
     visibility_tag_ids = {
-        v: resolve_visibility_tag_id(v) for v in ("business", "shared")
+        v: resolve_visibility_tag_id(v) for v in ("business", "parents", "shared")
     }
     drop_ids = {tid for tid in visibility_tag_ids.values() if tid is not None}
     add_id = resolve_visibility_tag_id(visibility)
@@ -563,6 +602,8 @@ def apply_document_permissions(paperless_doc_id: int, visibility: str) -> bool:
         if gid is None:
             return False
         groups = [int(gid)]
+        if visibility == "parents":
+            sync_parents_group(int(gid))       # a role may have changed since the start
     try:
         r = requests.patch(
             f"{base}/api/documents/{int(paperless_doc_id)}/", headers=headers, timeout=TIMEOUT_S,
@@ -624,10 +665,8 @@ def visibility_of(doc_tag_ids: list[int]) -> str:
     """Read-back: derive the visibility level from a doc's tag ids.
     Private if no visibility tag present. If both happen to be attached
     (shouldn't, but defensive) the more-public one wins (shared > business)."""
-    shared_id   = resolve_visibility_tag_id("shared")
-    business_id = resolve_visibility_tag_id("business")
-    if shared_id is not None and shared_id in doc_tag_ids:
-        return "shared"
-    if business_id is not None and business_id in doc_tag_ids:
-        return "business"
+    for level in ("shared", "business", "parents"):          # the most public one wins
+        tag_id = resolve_visibility_tag_id(level)
+        if tag_id is not None and tag_id in doc_tag_ids:
+            return level
     return "private"
