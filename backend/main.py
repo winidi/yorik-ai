@@ -10330,8 +10330,17 @@ async def compose_render_pdf(body: ComposeRenderPdfIn, role: str = Depends(_auth
     normalize_role(role)
     from .compose import pdf as pdf_mod
     margins = tuple(body.margins_mm or [20, 18, 25, 18])
+    # A template that becomes an e-invoice needs PDF/A-3 underneath; a
+    # plain Chromium PDF with XML attached is not a valid ZUGFeRD file.
+    wants_einvoice = False
+    if body.template_id:
+        try:
+            from .compose import templates as _tpl
+            wants_einvoice = bool(_tpl.get(body.template_id).get("zugferd"))
+        except Exception:  # noqa: BLE001
+            wants_einvoice = False
     pdf_bytes = pdf_mod.render_pdf(body.body_html, page_size=body.page_size, margins_mm=margins,
-                                   filename=body.filename)
+                                   filename=body.filename, pdfa="PDF/A-3b" if wants_einvoice else None)
     if not pdf_bytes:
         raise HTTPException(status_code=502, detail="PDF render failed (Gotenberg unreachable?)")
 

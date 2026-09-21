@@ -229,9 +229,12 @@ def build_xml(invoice: Dict[str, Any]) -> bytes:
 
 
 def embed_into_pdf(pdf_bytes: bytes, xml_bytes: bytes,
-                    invoice_number: str = "INV", *, profile: str = "BASIC") -> Optional[bytes]:
+                    invoice_number: str = "INV", *, profile: str = "EN16931") -> Optional[bytes]:
     """Embed the ZUGFeRD XML into a PDF, producing PDF/A-3 hybrid bytes.
-    Returns None on failure (we fall back to the plain PDF)."""
+    Returns None on failure (we fall back to the plain PDF). The PDF that
+    comes in must already be PDF/A-3b (the caller asks Gotenberg for it):
+    facturx attaches, it does not convert. The profile label matches what
+    build_xml declares (EN 16931)."""
     try:
         from facturx import generate_from_binary
     except ImportError:

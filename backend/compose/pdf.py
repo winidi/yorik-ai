@@ -65,13 +65,16 @@ def render_pdf(body_html: str, *,
                extra_css: str = "",
                page_size: str = "A4",
                margins_mm=DEFAULT_MARGINS_MM,
-               filename: str = "document.pdf") -> Optional[bytes]:
-    """Send wrapped HTML to Gotenberg's chromium converter, return PDF bytes."""
+               filename: str = "document.pdf",
+               pdfa: Optional[str] = None) -> Optional[bytes]:
+    """Send wrapped HTML to Gotenberg's chromium converter, return PDF bytes.
+    `pdfa` ("PDF/A-3b") for a PDF that is to carry an e-invoice."""
     html = _wrap(body_html, extra_css=extra_css, page_size=page_size, margins_mm=margins_mm)
     try:
         r = requests.post(
             f"{GOTENBERG_URL}/forms/chromium/convert/html",
             files={"index.html": ("index.html", html, "text/html")},
+            data={"pdfa": pdfa} if pdfa else None,
             timeout=TIMEOUT_S,
         )
         if not r.ok:
