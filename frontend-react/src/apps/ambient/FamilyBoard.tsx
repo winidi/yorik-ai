@@ -1,5 +1,5 @@
 /**
- * FamilyBoard — the wall in Dæly style: the week in person colours on
+ * FamilyBoard — the family planner on the wall: the week in person colours on
  * top, today per person below, routines with a week of ticks, tap to
  * tick. Three layouts driven by `mode`: "board" (week + people),
  * "calendar" (the week, full screen), "tasks" (the people, full screen).

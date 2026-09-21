@@ -1,4 +1,4 @@
-# Plan: Familientafel (Wandtablet im Dæly-Stil) als Opt-in-App
+# Plan: Familientafel (Familienplaner auf dem Wandtablet) als Opt-in-App
 
 Stand 2026-09-18. Skizze für Beate: https://claude.ai/artifact/6Cq49J8NGF2uKHxKCBC4Zk
 
@@ -13,7 +13,7 @@ Modi, leicht umschaltbar: Kalender, Aufgaben, gemischt (Skizze).
 Was die Recherche vorgibt (Trustpilot, Wienerin-Test, futurezone):
 Farbe und Foto pro Person; lesbar quer durchs Zimmer; Kinder schauen
 selbst nach; Routinen wiederholen sich sichtbar; kein Abo, EU-Daten.
-Punkte und Essensplan sind auch bei Dæly die schwachen Teile und
+Punkte und Essensplan sind auch bei gekauften Familienplanern die schwachen Teile und
 kommen erst, wenn die Tafel zwei Wochen benutzt wird.
 
 ## Phasen
