@@ -16,6 +16,7 @@ import {
   Loader2, Check, Trash2, X, Clock, MapPin, Car,
   Eye, EyeOff, Share2, ShieldAlert, UsersRound,
   Sparkles, Search, AlertTriangle, Video, Repeat,
+  Download,
 } from "lucide-react";
 
 // ── Travel-time helpers ────────────────────────────────────────────
@@ -43,6 +44,7 @@ import { useApi } from "@/lib/useApi";
 import { Dock } from "@/components/Dock";
 import { useAuth } from "@/components/AuthGate";
 import { toast } from "@/components/Toast";
+import { CalendarImportDialog } from "./CalendarImportDialog";
 import {
   CATEGORY_PALETTE, CATEGORY_ORDER, swatchFor,
   type EventCategory,
@@ -3502,6 +3504,7 @@ function useCanEditEvent() {
     if (e._busy_only || e.all_day) return false;
     if (e.ends_at && e.ends_at.slice(0, 10) !== e.starts_at.slice(0, 10)) return false;
     const cal = e.calendar_id != null ? calendarsById.get(e.calendar_id) : null;
+    if (cal?.read_only) return false;                 // a mirror (Google …) changes at its source
     return !cal || !!cal.you_own || cal.access_level === "write";
   }, [calendarsById]);
 }
@@ -3739,6 +3742,8 @@ function CalendarsSidebar({
     [usersApi.data],
   );
 
+  const [importOpen, setImportOpen] = useState(false);
+
   // Three sections — my, others', household.
   const mine      = calendars.filter(c => c.you_own && c.kind !== "shared");
   const others    = calendars.filter(c => !c.you_own && c.kind !== "shared");
@@ -3776,6 +3781,8 @@ function CalendarsSidebar({
           <Plus className="w-3 h-3" />
         </button>
       </div>
+
+      {importOpen && <CalendarImportDialog calendars={calendars} onClose={() => setImportOpen(false)} onChanged={onRefresh} />}
 
       {/* My calendars */}
       {mine.length > 0 && (
@@ -3836,6 +3843,14 @@ function CalendarsSidebar({
           migration-010 default for legacy events) to your Personal
           calendar. Only useful right after the model change — after
           users move their own events, this becomes a no-op. */}
+      <button
+        onClick={() => setImportOpen(true)}
+        className="w-full h-7 rounded-md text-[11px] font-medium border border-border bg-card text-muted-foreground hover:text-foreground transition flex items-center justify-center gap-1.5"
+        title="Import an .ics file or subscribe to a Google / iCloud / Outlook calendar"
+      >
+        <Download className="w-3 h-3" /> Google &amp; Co. übernehmen
+      </button>
+
       <MoveLegacyEventsButton onMoved={onRefresh} />
     </div>
   );

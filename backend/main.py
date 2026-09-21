@@ -131,6 +131,8 @@ from . import search_routes as _search_routes
 app.include_router(_search_routes.router)
 from . import chat_attachments as _chat_attachments
 app.include_router(_chat_attachments.router)
+from . import calendar_import as _calendar_import
+app.include_router(_calendar_import.router)
 
 # Unified person view — resolve email/phone/jid to one human and
 # return their cross-channel context (recent emails, WA, events, docs).
@@ -2587,6 +2589,8 @@ def _startup() -> None:
     _search_index.start_scheduler(_aio.get_event_loop())
     # Chat attachments that were not filed in Paperless go after 30 days.
     _chat_attachments.start_scheduler(_aio.get_event_loop())
+    # Subscribed calendars (a secret iCal address, e.g. Google) → read-only mirrors.
+    _calendar_import.start_scheduler(_aio.get_event_loop())
     # Voice acks: pre-synthesize the "klar Moment / on it / ..." pool
     # so the streaming voice endpoint can emit an instant audio reply
     # the moment STT finishes (masking LLM latency). Run in a thread
@@ -3499,6 +3503,12 @@ def _ensure_row_writable(
     if row is None:
         raise HTTPException(status_code=404, detail=f"{table[:-1]} id={row_id} not found")
     r = dict(row)
+    if table == "events" and r.get("calendar_id") is not None:
+        with conn_ctx(DB_PATH) as conn:
+            cal = conn.execute("SELECT read_only FROM calendars WHERE id = ?", (r["calendar_id"],)).fetchone()
+        if cal and cal["read_only"]:
+            raise HTTPException(status_code=403, detail="this calendar mirrors another one (e.g. Google); "
+                                                        "change the event there and it follows within minutes")
     if user is None or user.get("id") is None or role == "platform_admin":
         return r
     from . import spaces as _sp

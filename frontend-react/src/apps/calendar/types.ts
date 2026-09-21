@@ -47,7 +47,9 @@ export interface Calendar {
   name: string;
   color: string;
   owner_user_id: number;
-  kind: "personal" | "shared" | "project";
+  kind: "personal" | "shared" | "project" | "plan";
+  /** 1 = a mirror of a subscribed iCal address (e.g. Google): nobody edits it in Yorik. */
+  read_only?: number;
   hide_from_admin: number;        // 0/1
   archived_at: string | null;
   created_at: string;

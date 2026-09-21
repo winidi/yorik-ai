@@ -79,6 +79,13 @@ worklist.
   switch.
   Settings → Embeddings has the switch (on/off), the choice of model,
   the index progress per source and a rebuild button.
+- **Bring your Google calendar.** Calendar sidebar → "Google & Co.
+  übernehmen": subscribe to a secret iCal address as a read-only
+  mirror that follows its source every 15 minutes (address stored
+  encrypted, https only, a failed or empty fetch changes nothing), or
+  import an .ics file once with a preview (re-import updates, never
+  doubles). Series with an end, an interval or exceptions are written
+  out with the exceptions applied. One direction only.
 - **"Add to calendar" on invitation mails.** The button reads the
   invite's ICS first (exact start and end in your time zone, title,
   place, description) and only then the text. The text reader now

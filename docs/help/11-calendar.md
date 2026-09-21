@@ -47,3 +47,32 @@ Chat: *"Wann ist mein nächster Zahnarzt?"* / *"Was ist nächste Woche Dienstag?
 ## Categories + colours
 
 Edit a category → pick a colour. Events from each category get that colour stripe on the left. Settings → Task Categories (categories work for events too).
+
+## Bringing your Google calendar (or iCloud, Outlook, Nextcloud)
+
+Calendar sidebar → **Google & Co. übernehmen**. Two ways, both one
+direction only; nothing ever goes from Yorik to the other side.
+
+**Subscribe (stays current).** Paste the calendar's secret iCal
+address (Google: Settings → your calendar → "Integrate calendar" →
+*Secret address in iCal format*). Yorik creates a read-only mirror
+calendar and refreshes it every 15 minutes: you keep entering
+appointments in Google, and they show up in Yorik, on the family board,
+in the search and in the day planning. The address is a secret and is
+stored encrypted. A fetch that fails or comes back empty changes
+nothing; the dialog shows the state of each subscription, syncs on
+demand and ends a subscription (the mirror and its events go, the
+source is untouched). A mirror follows your calendar sharing like your
+own calendar does.
+
+**Import a file (once).** For moving over: export in Google (Settings →
+Import & export → Export; the ZIP holds one .ics per calendar), choose
+the file and one of your calendars, look at the preview, import. The
+events are yours afterwards. Importing the same file again updates
+instead of doubling.
+
+Series: a plain daily, weekly, chosen-weekdays, monthly or yearly
+series stays one recurring event. A series with an end, a count, a
+longer interval or skipped and moved occurrences is written out as
+single events (one year back, two years ahead), with the exceptions
+applied. Cancelled events are left out.

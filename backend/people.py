@@ -74,7 +74,7 @@ def set_color(user_id: str, color: str) -> str:
     with get_conn() as conn:
         conn.execute("UPDATE user_profiles SET color = ? WHERE id = ?", (color, user_id))
         # the personal calendar carries the person's colour
-        conn.execute("UPDATE calendars SET color = ? WHERE owner_user_id = ? AND kind = 'personal'", (color, user_id))
+        conn.execute("UPDATE calendars SET color = ? WHERE owner_user_id = ? AND kind = 'personal' AND COALESCE(read_only, 0) = 0", (color, user_id))
         conn.commit()
     return color
 

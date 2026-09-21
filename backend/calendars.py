@@ -75,7 +75,7 @@ def list_all(*, include_archived: bool = False) -> List[Dict[str, Any]]:
 def list_personal_for(user_id: str) -> List[Dict[str, Any]]:
     with conn_ctx() as c:
         rows = c.execute(
-            "SELECT * FROM calendars WHERE owner_user_id = ? AND kind = 'personal' "
+            "SELECT * FROM calendars WHERE owner_user_id = ? AND kind = 'personal' AND COALESCE(read_only, 0) = 0 "
             "AND archived_at IS NULL ORDER BY id",
             (user_id,),
         ).fetchall()
@@ -144,7 +144,8 @@ def effective_access(user_id: str, user_role: str, calendar: Dict[str, Any]) -> 
       not a member      → None
     """
     if calendar["owner_user_id"] == user_id:
-        return "write"
+        # a mirror of another calendar (subscribed iCal address) is read-only for its owner too
+        return "read" if calendar.get("read_only") else "write"
     if calendar.get("kind") == "plan":
         return None  # day-planning blocks are nobody else's business
     space_id = calendar.get("space_id")

@@ -162,3 +162,138 @@ def extract_appointment(text: str, today: Optional[_date] = None) -> Dict[str, s
         if len(times) > 1 and times[1] > times[0]:
             out["end_time"] = times[1]
     return out
+
+
+# ─── whole calendars (.ics export, subscribed feeds) ─────────────────
+
+_WEEKDAY_NUM = {"MO": 1, "TU": 2, "WE": 3, "TH": 4, "FR": 5, "SA": 6, "SU": 7}
+
+
+def _vevents(text: str) -> list[Dict[str, list[tuple[str, Dict[str, str]]]]]:
+    """Every VEVENT as {NAME: [(value, params), …]} (EXDATE repeats)."""
+    text = re.sub(r"\r?\n[ \t]", "", text)
+    out = []
+    for block in re.findall(r"BEGIN:VEVENT(.*?)END:VEVENT", text, re.S):
+        block = re.sub(r"BEGIN:VALARM.*?END:VALARM", "", block, flags=re.S)
+        props: Dict[str, list] = {}
+        for line in block.splitlines():
+            if ":" not in line:
+                continue
+            head, value = line.split(":", 1)
+            name, *rest = head.split(";")
+            params = {k.upper(): v.strip('"') for k, v in (p.split("=", 1) for p in rest if "=" in p)}
+            props.setdefault(name.upper(), []).append((value, params))
+        out.append(props)
+    return out
+
+
+def _simple_rule(rrule: str) -> Optional[str]:
+    """Yorik's own recurrence for a rule it can express exactly (no end,
+    no interval, no exceptions); None = expand into single events."""
+    parts = dict(p.split("=", 1) for p in rrule.upper().split(";") if "=" in p)
+    if set(parts) - {"FREQ", "BYDAY", "WKST"} or parts.get("INTERVAL", "1") != "1":
+        return None
+    freq, byday = parts.get("FREQ"), parts.get("BYDAY")
+    if freq == "DAILY" and not byday:
+        return "daily"
+    if freq == "WEEKLY":
+        if not byday:
+            return "weekly"
+        days = byday.split(",")
+        if all(d in _WEEKDAY_NUM for d in days):
+            nums = sorted(_WEEKDAY_NUM[d] for d in days)
+            return "weekly" if len(nums) == 1 else ("weekdays" if nums == [1, 2, 3, 4, 5] else "weekdays:" + ",".join(map(str, nums)))
+        return None
+    if freq in ("MONTHLY", "YEARLY") and not byday:
+        return freq.lower()
+    return None
+
+
+def parse_calendar(data: bytes | str, *, window_start: Optional[datetime] = None,
+                   window_end: Optional[datetime] = None) -> list[Dict[str, Any]]:
+    """All events of an ICS as rows for Yorik: {ical_uid, title,
+    starts_at, ends_at, all_day, location, notes, recurring}.
+
+    A series Yorik can express (daily, weekly, chosen weekdays, monthly,
+    yearly, without end or exceptions) stays one recurring event.
+    Everything else — an end date, a count, every second week, skipped
+    or moved occurrences — is expanded into single events inside the
+    window (default: one year back, two years ahead), exceptions
+    applied. Cancelled events are left out."""
+    from dateutil.rrule import rrulestr
+    text = data.decode("utf-8", errors="replace") if isinstance(data, (bytes, bytearray)) else data
+    now = datetime.now()
+    window_start = window_start or now - timedelta(days=365)
+    window_end = window_end or now + timedelta(days=730)
+
+    def first(props, name):
+        return props.get(name, [("", {})])[0]
+
+    events = _vevents(text)
+    # moved / changed single occurrences of a series: UID → {original start → props}
+    overrides: Dict[str, Dict[str, Any]] = {}
+    for p in events:
+        if "RECURRENCE-ID" in p and "UID" in p:
+            rid, _ = _ics_time(*first(p, "RECURRENCE-ID"))
+            if rid:
+                overrides.setdefault(first(p, "UID")[0], {})[rid.isoformat()] = p
+
+    def row(p, start: datetime, end: Optional[datetime], all_day: bool, uid: str, recurring: Optional[str] = None):
+        if all_day:
+            last = (end - timedelta(days=1)) if end and end > start else start
+            s, e = f"{start:%Y-%m-%d}T00:00:00", f"{last:%Y-%m-%d}T23:59:59"
+        else:
+            s = start.isoformat(timespec="seconds")
+            e = (end or start + timedelta(hours=1)).isoformat(timespec="seconds")
+        return {"ical_uid": uid, "title": _unescape(first(p, "SUMMARY")[0]) or "(ohne Titel)",
+                "starts_at": s, "ends_at": e, "all_day": all_day,
+                "location": _unescape(first(p, "LOCATION")[0]) or None,
+                "notes": _unescape(first(p, "DESCRIPTION")[0])[:1500] or None, "recurring": recurring}
+
+    out: list[Dict[str, Any]] = []
+    for p in events:
+        if "DTSTART" not in p or "RECURRENCE-ID" in p:
+            continue
+        if first(p, "STATUS")[0].upper() == "CANCELLED":
+            continue
+        uid = first(p, "UID")[0] or f"no-uid-{len(out)}"
+        start, all_day = _ics_time(*first(p, "DTSTART"))
+        if not start:
+            continue
+        end = _ics_time(*first(p, "DTEND"))[0] if "DTEND" in p else None
+        duration = (end - start) if end else (timedelta(days=1) if all_day else timedelta(hours=1))
+        rrule = first(p, "RRULE")[0]
+        if not rrule:
+            out.append(row(p, start, end, all_day, uid))
+            continue
+        exdates = set()
+        for value, params in p.get("EXDATE", []):
+            for v in value.split(","):
+                d, _ = _ics_time(v, params)
+                if d:
+                    exdates.add(d.isoformat())
+        simple = _simple_rule(rrule) if not exdates and uid not in overrides else None
+        if simple:
+            out.append(row(p, start, end, all_day, uid, recurring=simple))
+            continue
+        try:
+            # UNTIL in UTC needs an aware DTSTART for dateutil; compare in naive local time instead
+            rule = rrulestr(re.sub(r"(UNTIL=\d{8}T\d{6})Z", r"\1", rrule), dtstart=start, ignoretz=True)
+            occurrences = rule.between(window_start, window_end, inc=True)[:1500]
+        except Exception:  # noqa: BLE001 — an exotic rule: keep at least the first event
+            occurrences = [start]
+        for occ in occurrences:
+            key = occ.isoformat()
+            if key in exdates:
+                continue
+            moved = overrides.get(uid, {}).get(key)
+            if moved is not None:
+                if first(moved, "STATUS")[0].upper() == "CANCELLED":
+                    continue
+                m_start, m_all = _ics_time(*first(moved, "DTSTART"))
+                m_end = _ics_time(*first(moved, "DTEND"))[0] if "DTEND" in moved else None
+                if m_start:
+                    out.append(row(moved, m_start, m_end, m_all, f"{uid}#{key}"))
+                continue
+            out.append(row(p, occ, occ + duration, all_day, f"{uid}#{key}"))
+    return out
