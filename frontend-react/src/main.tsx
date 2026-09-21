@@ -13,6 +13,7 @@ import { CalendarApp } from "./apps/calendar/CalendarApp";
 import { ChatApp } from "./apps/chat/ChatApp";
 import { DocumentsApp } from "./apps/documents/DocumentsApp";
 import { ComposeApp } from "./apps/compose/ComposeApp";
+import { WriteApp } from "./apps/write/WriteApp";
 import { SettingsApp } from "./apps/settings/SettingsApp";
 import { HomeApp } from "./apps/home/HomeApp";
 import { PhotosApp } from "./apps/photos/PhotosApp";
@@ -214,6 +215,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/chat" element={<ErrorBoundary><ChatApp /></ErrorBoundary>} />
             <Route path="/documents" element={<ErrorBoundary><DocumentsApp /></ErrorBoundary>} />
             <Route path="/compose" element={<ErrorBoundary><ComposeApp /></ErrorBoundary>} />
+            <Route path="/write" element={<ErrorBoundary><WriteApp /></ErrorBoundary>} />
             <Route path="/photos" element={<ErrorBoundary><PhotosApp /></ErrorBoundary>} />
             <Route path="/tasks" element={<ErrorBoundary><TasksApp /></ErrorBoundary>} />
             <Route path="/contacts" element={<ErrorBoundary><ContactsApp /></ErrorBoundary>} />

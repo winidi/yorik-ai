@@ -223,7 +223,17 @@ def _skills_of_disabled_apps() -> set[str]:
             off[app_id] = bool(app and app.opt_in and not _apps._is_opt_in_enabled(app_id))
         if off[app_id]:
             names.add(s.name)
+    # Two apps that write letters would have the model guess between two
+    # tools: while the newer one is on, the older one's chat skills rest.
+    for newer, older in _SUPERSEDES.items():
+        app = _apps.get(newer) if hasattr(_apps, "get") else None
+        if app and (not app.opt_in or _apps._is_opt_in_enabled(newer)):
+            names |= {s.name for s in reg.all() if s.name in older}
     return names
+
+
+_SUPERSEDES = {"write": {"compose_draft", "pick_compose_template", "view_compose_template", "list_compose_templates",
+                         "compose_check_recipient", "compose_check_template_args", "compose_extract_args", "delete_compose_draft"}}
 
 
 def _set_disabled_skills(skills: set[str]) -> None:

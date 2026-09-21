@@ -18,7 +18,7 @@ import {
   House, Calendar, ListTodo, MessageSquare, FolderOpen,
   FilePlus, Camera, MessageCircle, Inbox, Contact,
   Newspaper, Settings,
-  Mic, type LucideIcon, LayoutGrid } from "lucide-react";
+  Mic, type LucideIcon, LayoutGrid, PenLine } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -53,6 +53,7 @@ const APP_VISUAL: Record<string, { Icon: LucideIcon; gradient: string; activeGra
   chat:     { Icon: MessageSquare, gradient: "from-violet-500/30 to-blue-500/30",    activeGradient: "from-violet-500/50 to-blue-500/50",    text: "text-violet-500",  ring: "ring-violet-400/40",  activeRing: "ring-violet-400/80" },
   docs:     { Icon: FolderOpen,    gradient: "from-amber-500/30 to-orange-500/30",   activeGradient: "from-amber-500/50 to-orange-500/50",   text: "text-amber-500",   ring: "ring-amber-400/40",   activeRing: "ring-amber-400/80" },
   compose:  { Icon: FilePlus,      gradient: "from-rose-500/30 to-pink-500/30",      activeGradient: "from-rose-500/50 to-pink-500/50",      text: "text-rose-500",    ring: "ring-rose-400/40",    activeRing: "ring-rose-400/80" },
+  write:    { Icon: PenLine,       gradient: "from-indigo-500/30 to-violet-500/30",  activeGradient: "from-indigo-500/50 to-violet-500/50",  text: "text-indigo-500",  ring: "ring-indigo-400/40",  activeRing: "ring-indigo-400/80" },
   photos:   { Icon: Camera,        gradient: "from-emerald-500/30 to-teal-500/30",   activeGradient: "from-emerald-500/50 to-teal-500/50",   text: "text-emerald-500", ring: "ring-emerald-400/40", activeRing: "ring-emerald-400/80" },
   whatsapp: { Icon: MessageCircle, gradient: "from-emerald-500/30 to-green-500/30",  activeGradient: "from-emerald-500/50 to-green-500/50",  text: "text-emerald-500", ring: "ring-emerald-400/40", activeRing: "ring-emerald-400/80" },
   email:    { Icon: Inbox,         gradient: "from-sky-500/30 to-blue-500/30",       activeGradient: "from-sky-500/50 to-blue-500/50",       text: "text-sky-500",     ring: "ring-sky-400/40",     activeRing: "ring-sky-400/80" },

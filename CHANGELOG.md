@@ -13,6 +13,16 @@ worklist.
 
 ### Added
 
+- **Schreiben: letters (second stage).** A small app at `/r/write`,
+  switched on under Settings → Apps. The chat skill `write_letter`
+  writes the whole letter as a draft and never asks back; the address
+  comes from the contacts, what is missing is marked on the sheet.
+  Editor on the sheet with a live page preview, "Yorik, überarbeite"
+  for a marked passage or the whole text, PDF, send from your own mail
+  account, file in Paperless with a visibility; sent or filed letters
+  are final and can be copied into a new draft. While Schreiben is on,
+  Compose's chat skills rest. See
+  [docs/help/19-schreiben.md](docs/help/19-schreiben.md).
 - **Letterhead (first stage of "Schreiben").** Settings → You → Your
   letterhead: logo, accent colour, font, sender, footer with bank and
   tax numbers, standard sentences, with a live preview of a letter, an

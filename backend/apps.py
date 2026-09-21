@@ -236,6 +236,21 @@ register(App(
     aliases=["compose", "write", "draft", "invoice", "rechnung", "quote", "angebot", "letter", "brief"],
 ))
 
+# Schreiben — the small documents app that replaces Compose: letters
+# (invoices and quotes follow) with a letterhead per person. Opt-in
+# while Compose still exists; its skills are tagged app:write, and while
+# it is on, Compose's chat skills step aside (skills/registry.py).
+register(App(
+    id="write",
+    name="Schreiben",
+    icon="🖋️",
+    description="Letters with your own letterhead: Yorik writes the text, you correct it, one click makes the PDF, sends it or files it in Paperless.",
+    view_kind="native",
+    tags=["bundled"],
+    aliases=["schreiben", "brief", "letter", "briefpapier", "letterhead"],
+    opt_in=True,
+))
+
 # Photos is an iframe over a separate Immich instance running on this host.
 # entry_kind="external_iframe" tells the frontend to mount an iframe pointing
 # at the Immich URL (autodetected per-origin: same hostname, port 2283 over

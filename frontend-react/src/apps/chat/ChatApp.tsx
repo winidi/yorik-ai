@@ -29,6 +29,7 @@ import { NeedsInputCard, type NeedsInputAction } from "@/apps/compose/NeedsInput
 import { PhotoPickerCard, type PhotoPickerAction } from "@/apps/compose/PhotoPickerCard";
 import { PeoplePickerCard, type PeoplePickerAction } from "@/components/PeoplePickerCard";
 import { InlineComposeDraft } from "@/apps/chat/InlineComposeDraft";
+import { WritingDraftCard } from "./WritingDraftCard";
 import { AssistantMarkdown } from "@/components/AssistantMarkdown";
 import { VcardImportModal } from "@/components/VcardImportModal";
 import { MentionPopover, type MentionPick } from "./MentionPopover";
@@ -766,6 +767,7 @@ function Thread({
           const STICKS_TO_MESSAGE = new Set([
             "pending_confirmation",
             "compose_draft_created",
+            "writing_draft_created",
             "template_picker",
             "pois_found",
             "contact_picker",
@@ -1751,6 +1753,13 @@ function MessageBubble({
               templateName={a.template_name}
               missingArgs={a.missing_args || []}
             />
+          ))}
+        {/* A letter from the Schreiben app (skill write_letter). */}
+        {!isUser && message.ui_actions && message.ui_actions
+          .filter(a => a.type === "writing_draft_created")
+          .map((a: any) => (
+            <WritingDraftCard key={a.document_id} documentId={a.document_id} recipient={a.recipient || ""} subject={a.subject || ""}
+                              preview={a.preview || ""} missing={a.missing || []} />
           ))}
         {/* Template picker — the LLM called compose_draft with a vague
             body, so the skill emitted picker candidates instead of a

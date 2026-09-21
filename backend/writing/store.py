@@ -103,3 +103,42 @@ def delete(doc_id: int, user_id: str) -> bool:
     with conn_ctx() as conn:
         conn.execute("DELETE FROM written_documents WHERE id = ?", (int(doc_id),))
     return True
+
+
+def finalise(doc_id: int, user_id: str, *, pdf_path: str, number: Optional[str] = None,
+             doc_date: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """The document has left the house (sent, filed, issued): from now
+    on it is what its PDF says."""
+    current = get(doc_id, user_id)
+    if not current:
+        return None
+    if current["status"] == "final":
+        return current
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with conn_ctx() as conn:
+        conn.execute("UPDATE written_documents SET status = 'final', pdf_path = ?, number = COALESCE(?, number), "
+                     "doc_date = ?, finalised_at = ?, updated_at = ? WHERE id = ?",
+                     (pdf_path, number, doc_date or now[:10], now, now, int(doc_id)))
+    return get(doc_id, user_id)
+
+
+def pdf_path_of(doc_id: int, user_id: str) -> Optional[str]:
+    with conn_ctx() as conn:
+        r = conn.execute("SELECT pdf_path FROM written_documents WHERE id = ? AND user_id = ?", (int(doc_id), str(user_id))).fetchone()
+    return r["pdf_path"] if r and r["pdf_path"] else None
+
+
+def set_paperless(doc_id: int, *, paperless_doc_id: Optional[int] = None) -> None:
+    with conn_ctx() as conn:
+        conn.execute("UPDATE written_documents SET paperless_doc_id = ? WHERE id = ?", (paperless_doc_id, int(doc_id)))
+
+
+def duplicate(doc_id: int, user_id: str) -> Optional[Dict[str, Any]]:
+    """A fresh draft with the same recipient and content."""
+    src = get(doc_id, user_id)
+    if not src:
+        return None
+    content = {k: v for k, v in src["content"].items() if k not in ("number", "date")}
+    return create(user_id, src["kind"], title=src["title"], recipient=src["recipient"], content=content,
+                  letterhead_id=src["letterhead_id"])
+
