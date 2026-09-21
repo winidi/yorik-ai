@@ -79,6 +79,12 @@ worklist.
   switch.
   Settings → Embeddings has the switch (on/off), the choice of model,
   the index progress per source and a rebuild button.
+- **"Add to calendar" on invitation mails.** The button reads the
+  invite's ICS first (exact start and end in your time zone, title,
+  place, description) and only then the text. The text reader now
+  knows month names in German and English ("25. Sep. 2026",
+  "Oct 5, 2026"), AM/PM and the end of a range; before, a Google
+  invitation answered "no date could be extracted".
 - **Show Yorik a file in the chat.** Paperclip on every screen, drop
   or paste; Yorik reads PDFs, Word, text and (with the vision model)
   photos, says what it is and asks whether to file it in Paperless.

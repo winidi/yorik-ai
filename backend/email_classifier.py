@@ -249,20 +249,10 @@ def _extract_bill(text: str) -> dict:
 
 
 def _extract_appointment(text: str) -> dict:
-    """Best-effort {date, time} from email text."""
-    out: dict = {}
-    m = _DATE_ISO_RE.search(text)
-    if m:
-        out["date"] = f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
-    elif (m := _DATE_DE_RE.search(text)):
-        d, mo, y = m.group(1), m.group(2), m.group(3) or str(_dt.now().year)
-        if len(y) == 2:
-            y = "20" + y
-        out["date"] = f"{int(y):04d}-{int(mo):02d}-{int(d):02d}"
-    m = _TIME_RE.search(text)
-    if m:
-        out["time"] = f"{int(m.group(1)):02d}:{m.group(2)}"
-    return out
+    """Best-effort {date, time, end_time} from email text (month names,
+    AM/PM and ranges included — see email_invites.extract_appointment)."""
+    from .email_invites import extract_appointment
+    return extract_appointment(text)
 
 
 def _propose_action(message_id: int, category: str, row: dict) -> None:

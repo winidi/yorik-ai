@@ -1440,21 +1440,54 @@ async def add_message_to_calendar(msg_id: int, user: dict = Depends(current_user
     if not row:
         raise HTTPException(404, "message not found")
 
-    from .email_classifier import _extract_appointment
-    text = " ".join(filter(None, [row["subject"], row["body_text"]]))
-    extracted = _extract_appointment(text)
-    date = extracted.get("date")
-    time = extracted.get("time") or "09:00"
-    if not date:
-        raise HTTPException(400, "no date could be extracted from this email")
-    starts_at = f"{date}T{time}:00"
-
     sender_label = row["from_name"] or row["from_email"] or "unknown"
-    skill_args = {
-        "title": row["subject"] or "Appointment",
-        "starts_at": starts_at,
-        "notes": f"With {sender_label}. Imported from email #{msg_id}.",
-    }
+    skill_args: dict = {}
+    extracted: dict = {}
+
+    # 1. An invitation carries an ICS with the exact start, end, title
+    #    and place; that beats reading the prose.
+    from . import email_invites
+    with get_conn() as conn:
+        ics_rows = conn.execute(
+            "SELECT id FROM email_attachments WHERE message_id = ? AND "
+            "(LOWER(filename) LIKE '%.ics' OR LOWER(mimetype) LIKE '%calendar%' OR LOWER(mimetype) LIKE '%/ics') "
+            "ORDER BY id", (msg_id,)).fetchall()
+    for att in ics_rows:
+        try:
+            blob = await asyncio.to_thread(email_actions.fetch_attachment_binary, att["id"], user["id"])
+            event = email_invites.parse_ics(blob["content"]) if blob and blob.get("content") else None
+        except Exception as exc:  # noqa: BLE001 — fall back to the text
+            log.info("invite ics of message %s unreadable: %s", msg_id, exc)
+            event = None
+        if event and not event.get("cancelled"):
+            extracted = {"source": "ics", **{k: v for k, v in event.items() if k != "notes"}}
+            skill_args = {
+                "title": event["title"] or row["subject"] or "Appointment",
+                "starts_at": event["starts_at"], "ends_at": event["ends_at"], "all_day": event["all_day"],
+                "location": event["location"],
+                "notes": f"With {sender_label}. Imported from email #{msg_id}."
+                         + (f"\n\n{event['notes']}" if event.get("notes") else ""),
+            }
+            break
+
+    # 2. No invite file: dates and times from subject and body.
+    if not skill_args:
+        text = " ".join(filter(None, [row["subject"], row["body_text"]]))
+        extracted = {"source": "text", **email_invites.extract_appointment(text)}
+        date = extracted.get("date")
+        if not date:
+            raise HTTPException(400, "no date could be extracted from this email")
+        time = extracted.get("time") or "09:00"
+        skill_args = {
+            "title": row["subject"] or "Appointment",
+            "starts_at": f"{date}T{time}:00",
+            "notes": f"With {sender_label}. Imported from email #{msg_id}.",
+        }
+        if extracted.get("end_time"):
+            skill_args["ends_at"] = f"{date}T{extracted['end_time']}:00"
+    skill_args = {k: v for k, v in skill_args.items() if v is not None}
+    starts_at = skill_args["starts_at"]
+
     from .notification_routes import _run_skill
     result = await _run_skill("add_calendar_event", skill_args, user)
     return {"ok": True, "starts_at": starts_at, "extracted": extracted, "skill_result": result}
