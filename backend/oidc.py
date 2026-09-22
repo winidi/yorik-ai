@@ -106,17 +106,37 @@ def get_client(client_id: str) -> Optional[Dict[str, Any]]:
     return credential_store.get(_CLIENT_STORE.format(client_id=client_id))
 
 
-def ensure_client(client_id: str, redirect_uris: list[str]) -> Dict[str, Any]:
+def ensure_client(client_id: str, redirect_uris: list[str], issuer_url: Optional[str] = None) -> Dict[str, Any]:
     """Create or update a client: keeps an existing secret, replaces the
-    redirect URIs with the given exact list."""
+    redirect URIs with the given exact list. `issuer_url` is the Yorik
+    URL the client was told; the app's CSP lets its iframes navigate
+    there (Immich sends the Photos iframe to it for the login)."""
     if client_id not in KNOWN_CLIENTS:
         raise ValueError(f"unknown client {client_id!r}")
     existing = get_client(client_id) or {}
     record = {"client_id": client_id,
               "client_secret": existing.get("client_secret") or secrets.token_urlsafe(32),
-              "redirect_uris": [u.strip() for u in redirect_uris if u.strip()]}
+              "redirect_uris": [u.strip() for u in redirect_uris if u.strip()],
+              "issuer_url": (issuer_url or existing.get("issuer_url") or "").rstrip("/")}
     credential_store.put(_CLIENT_STORE.format(client_id=client_id), record)
     return record
+
+
+def client_issuer_origins() -> list[str]:
+    """Origins of the issuer URLs the clients were configured with —
+    for the CSP frame-src, so the Photos iframe may follow Immich's
+    login redirect to Yorik even when the browser opened Yorik under
+    another host (localhost vs. the Tailscale name)."""
+    from urllib.parse import urlsplit
+    out: list[str] = []
+    for cid in KNOWN_CLIENTS:
+        try:
+            u = urlsplit((get_client(cid) or {}).get("issuer_url") or "")
+        except Exception:  # noqa: BLE001
+            continue
+        if u.scheme and u.netloc:
+            out.append(f"{u.scheme}://{u.netloc}")
+    return out
 
 
 # ── issuer ──────────────────────────────────────────────────────────

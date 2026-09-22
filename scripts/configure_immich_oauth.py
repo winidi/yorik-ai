@@ -51,7 +51,7 @@ def main() -> int:
             ap.error("--issuer and --immich are required (or --off)")
         issuer = args.issuer.rstrip("/")
         immich = args.immich.rstrip("/")
-        client = oidc.ensure_client("immich", [f"{immich}/auth/login", "app.immich:///oauth-callback"])
+        client = oidc.ensure_client("immich", [f"{immich}/auth/login", "app.immich:///oauth-callback"], issuer_url=issuer)
         config["oauth"].update({
             "enabled": True,
             "issuerUrl": f"{issuer}/.well-known/openid-configuration",

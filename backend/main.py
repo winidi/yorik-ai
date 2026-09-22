@@ -2197,6 +2197,12 @@ def _external_iframe_origins(request) -> str:
         u = urlsplit(raw)
         if u.scheme and u.netloc:
             parts.append(f"{u.scheme}://{u.netloc}")
+    # The Yorik origin Immich sends its iframe to for the login (may
+    # differ from the one the browser used, e.g. localhost vs Tailscale).
+    try:
+        parts.extend(o for o in _oidc.client_issuer_origins() if o not in parts)
+    except Exception:  # noqa: BLE001
+        pass
     return " ".join(parts)
 
 
