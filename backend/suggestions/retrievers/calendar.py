@@ -37,16 +37,22 @@ async def _fetch(ctx: RetrieverContext) -> list[Evidence]:
     start_iso = (now - timedelta(days=WINDOW_DAYS_PAST)).isoformat()
     end_iso   = (now + timedelta(days=WINDOW_DAYS_FUTURE)).isoformat()
 
+    from ...calendars import visible_event_filter
     with get_conn() as conn:
+        # the owner's own calendars and shares, never another person's
+        # private event (audit 2026-09-22, 3.6)
+        role_row = conn.execute("SELECT role FROM user_profiles WHERE id = ?", (ctx.owner_user_id,)).fetchone()
+        ev_sql, ev_params = visible_event_filter(str(ctx.owner_user_id), (role_row["role"] if role_row else "") or "")
         rows = conn.execute(
-            "SELECT DISTINCT e.id, e.title, e.starts_at, e.ends_at "
-            "FROM events e "
-            "LEFT JOIN event_attendees a ON a.event_id = e.id "
-            "WHERE e.starts_at >= ? AND e.starts_at <= ? "
+            "SELECT DISTINCT events.id, events.title, events.starts_at, events.ends_at "
+            "FROM events "
+            "LEFT JOIN event_attendees a ON a.event_id = events.id "
+            "WHERE events.starts_at >= ? AND events.starts_at <= ? "
             "  AND ((LOWER(a.person_name) = LOWER(?)) "
-            "       OR (LOWER(COALESCE(e.person,'')) = LOWER(?))) "
-            "ORDER BY e.starts_at LIMIT 10",
-            (start_iso, end_iso, name, name),
+            "       OR (LOWER(COALESCE(events.person,'')) = LOWER(?))) "
+            f"  AND {ev_sql} AND (events.visibility IS DISTINCT FROM 'private' OR events.owner_user_id = ?) "
+            "ORDER BY events.starts_at LIMIT 10",
+            (start_iso, end_iso, name, name, *ev_params, ctx.owner_user_id),
         ).fetchall()
 
     out: list[Evidence] = []

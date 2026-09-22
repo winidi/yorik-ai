@@ -173,6 +173,10 @@ Als Referenz für die Reparatur, denn hier steht das Muster schon:
   zurück. Paket 8 (2.8): Briefing-Snapshots pro Person (Migration 151,
   Unique auf Template/Datum/Person; der Nachtlauf nimmt jede aktive Person
   auf; Lesen, Datumsliste und manuelles Aufnehmen nur die eigenen).
+  Paket 9 (3.4, 3.6): `wa_chunks.owner_user_id` (Migration 152, Unique auf
+  Chat/Nachricht/Besitzer), semantische WhatsApp-Hinweise nur aus den
+  eigenen Chats; die Vorschlags-Retriever (Mail-Verlauf, Kalender, Aufgaben)
+  lesen die Zeilen des Besitzers.
   Nicht angefasst: 1.7 (`space_id` im Chunk-Index) — durch die Hydration
   über den Token der Person nicht mehr nötig, der Space-Filter bleibt als
   Zusatz. Timetable (2.7) bleibt consent-basiert: der Stundenplan eines Kindes, das

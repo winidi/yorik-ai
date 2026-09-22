@@ -185,7 +185,7 @@ async def execute(
     )
 
     fts_hits = wa._cross_chat_hints(chat_jid, last_inbound, owner_user_id=user_id)
-    sem_hits = wa._semantic_hints(chat_jid, last_inbound)
+    sem_hits = wa._semantic_hints(chat_jid, last_inbound, owner_user_id=user_id)
     pap_hits = wa._paperless_hints(last_inbound, user_id=user_id)
     cross_hits = wa._merge_hints(fts_hits, sem_hits, pap_hits, cap=6)
     calendar = wa._calendar_context(user_id=user_id)

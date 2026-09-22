@@ -49,18 +49,19 @@ def ensure_schema() -> None:
 
 def index_message(msg_id: str, chat_jid: str, text: Optional[str],
                   ts: int, push_name: Optional[str] = None,
-                  from_me: bool = False) -> bool:
-    """Embed + upsert one message. Returns True if indexed, False if
-    skipped (too short, no embedder, already indexed)."""
-    if not text or len(text.strip()) < MIN_TEXT_CHARS:
+                  from_me: bool = False, owner_user_id: Any = None) -> bool:
+    """Embed + upsert one message as `owner_user_id`'s (the person whose
+    WhatsApp session holds it). Returns True if indexed, False if
+    skipped (too short, no embedder, already indexed, no owner)."""
+    if not text or len(text.strip()) < MIN_TEXT_CHARS or owner_user_id is None:
         return False
     text = text.strip()
 
     with conn_ctx_pg("docs") as conn:
         existing = conn.execute(
-            "SELECT id FROM wa_chunks WHERE chat_jid = %s AND msg_id = %s "
+            "SELECT id FROM wa_chunks WHERE chat_jid = %s AND msg_id = %s AND owner_user_id = %s "
             "AND embedding IS NOT NULL",
-            (chat_jid, msg_id),
+            (chat_jid, msg_id, str(owner_user_id)),
         ).fetchone()
     if existing:
         return False
@@ -73,22 +74,25 @@ def index_message(msg_id: str, chat_jid: str, text: Optional[str],
 
     with conn_ctx_pg("docs") as conn:
         conn.execute(
-            "INSERT INTO wa_chunks (chat_jid, msg_id, text, timestamp, push_name, from_me, embedding) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s::vector) "
-            "ON CONFLICT (chat_jid, msg_id) DO UPDATE SET "
+            "INSERT INTO wa_chunks (chat_jid, msg_id, owner_user_id, text, timestamp, push_name, from_me, embedding) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s::vector) "
+            "ON CONFLICT (chat_jid, msg_id, owner_user_id) DO UPDATE SET "
             "  text = EXCLUDED.text, embedding = EXCLUDED.embedding, "
             "  push_name = EXCLUDED.push_name, timestamp = EXCLUDED.timestamp",
-            (chat_jid, msg_id, text, int(ts), push_name, 1 if from_me else 0, _vec_literal(vec)),
+            (chat_jid, msg_id, str(owner_user_id), text, int(ts), push_name, 1 if from_me else 0, _vec_literal(vec)),
         )
     return True
 
 
 def search(query_text: str, k: int = 5,
-           exclude_chat_jid: Optional[str] = None) -> list[dict[str, Any]]:
-    """Semantic search across all WA messages. Returns up to ``k`` results,
-    each {chat_jid, msg_id, text, push_name, timestamp, from_me, distance,
-    chat_name}. ``distance`` is cosine distance; lower = closer."""
-    if not query_text or len(query_text.strip()) < 3:
+           exclude_chat_jid: Optional[str] = None,
+           owner_user_id: Any = None) -> list[dict[str, Any]]:
+    """Semantic search across one person's WA messages. Returns up to
+    ``k`` results, each {chat_jid, msg_id, text, push_name, timestamp,
+    from_me, distance, chat_name}. ``distance`` is cosine distance;
+    lower = closer. Without a person there is nothing to search (until
+    2026-09-22 the index was household-wide — audit 3.4)."""
+    if not query_text or len(query_text.strip()) < 3 or owner_user_id is None:
         return []
     try:
         qvec = _l2_normalize(embed(query_text))
@@ -107,10 +111,10 @@ def search(query_text: str, k: int = 5,
                 "SELECT chat_jid, msg_id, text, push_name, timestamp, from_me, "
                 "       (embedding <=> %s::vector) AS distance "
                 "FROM wa_chunks "
-                "WHERE embedding IS NOT NULL "
+                "WHERE embedding IS NOT NULL AND owner_user_id = %s "
                 "ORDER BY embedding <=> %s::vector "
                 "LIMIT %s",
-                (qlit, qlit, fetch_k),
+                (qlit, str(owner_user_id), qlit, fetch_k),
             )
             rows = list(cur.fetchall())
 
@@ -123,7 +127,8 @@ def search(query_text: str, k: int = 5,
     placeholders = ",".join("?" * len(jids))
     with get_conn() as fam:
         name_rows = fam.execute(
-            f"SELECT jid, name FROM wa_chats WHERE jid IN ({placeholders})", jids
+            f"SELECT jid, name FROM wa_chats WHERE jid IN ({placeholders}) AND owner_user_id = ?",
+            [*jids, str(owner_user_id)],
         ).fetchall()
     names = {r["jid"]: r["name"] for r in name_rows}
 
@@ -154,7 +159,7 @@ def backfill(limit: Optional[int] = None) -> dict[str, Any]:
 
     with get_conn() as conn:
         q = (
-            "SELECT msg_id, chat_jid, COALESCE(text, transcript) AS body, "
+            "SELECT msg_id, chat_jid, owner_user_id, COALESCE(text, transcript) AS body, "
             "       push_name, from_me, timestamp "
             "FROM wa_messages "
             "WHERE (text IS NOT NULL OR transcript IS NOT NULL) "
@@ -166,21 +171,22 @@ def backfill(limit: Optional[int] = None) -> dict[str, Any]:
 
     with conn_ctx_pg("docs") as conn:
         indexed = {
-            (r["chat_jid"], r["msg_id"])
+            (r["chat_jid"], r["msg_id"], str(r["owner_user_id"]))
             for r in conn.execute(
-                "SELECT chat_jid, msg_id FROM wa_chunks WHERE embedding IS NOT NULL"
+                "SELECT chat_jid, msg_id, owner_user_id FROM wa_chunks WHERE embedding IS NOT NULL"
             ).fetchall()
         }
 
     n_indexed = n_skipped = n_errors = 0
     for c in candidates:
-        if (c["chat_jid"], c["msg_id"]) in indexed:
+        if (c["chat_jid"], c["msg_id"], str(c["owner_user_id"])) in indexed:
             n_skipped += 1
             continue
         try:
             ok = index_message(
                 msg_id=c["msg_id"], chat_jid=c["chat_jid"], text=c["body"],
                 ts=c["timestamp"], push_name=c["push_name"], from_me=bool(c["from_me"]),
+                owner_user_id=c["owner_user_id"],
             )
             if ok:
                 n_indexed += 1

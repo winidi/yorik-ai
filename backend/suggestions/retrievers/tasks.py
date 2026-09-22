@@ -28,7 +28,11 @@ async def _fetch(ctx: RetrieverContext) -> list[Evidence]:
         return []
 
     pattern = f"%{name}%"
+    from ... import spaces as _sp
     with get_conn() as conn:
+        # the owner's own tasks and the ones shared with them (audit 2026-09-22, 3.6)
+        role_row = conn.execute("SELECT role FROM user_profiles WHERE id = ?", (ctx.owner_user_id,)).fetchone()
+        vis_sql, vis_params = _sp.row_filter(ctx.owner_user_id, (role_row["role"] if role_row else "") or "", "tasks")
         rows = conn.execute(
             "SELECT id, title, due_date, person "
             "FROM tasks "
@@ -36,8 +40,9 @@ async def _fetch(ctx: RetrieverContext) -> list[Evidence]:
             "  AND (LOWER(title) LIKE LOWER(?) "
             "       OR LOWER(COALESCE(person,'')) = LOWER(?) "
             "       OR LOWER(COALESCE(notes,'')) LIKE LOWER(?)) "
+            f"  AND {vis_sql} "
             "ORDER BY due_date NULLS LAST, id DESC LIMIT 5",
-            (pattern, name, pattern),
+            (pattern, name, pattern, *vis_params),
         ).fetchall()
 
     out: list[Evidence] = []

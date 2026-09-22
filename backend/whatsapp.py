@@ -1578,7 +1578,7 @@ async def generate_draft(body: DraftBody, request: Request) -> dict[str, Any]:
     # the draft sees that contract.
     last_inbound = next((r["text"] for r in reversed(recent) if not r["from_me"] and r["text"]), recent[-1]["text"] or "")
     fts_hits      = _cross_chat_hints(chat_jid, last_inbound, owner_user_id=user_id)
-    semantic_hits = _semantic_hints(chat_jid, last_inbound)
+    semantic_hits = _semantic_hints(chat_jid, last_inbound, owner_user_id=user_id)
     paperless_hits = _paperless_hints(last_inbound, user_id=user_id)
     cross_hits = _merge_hints(fts_hits, semantic_hits, paperless_hits, cap=6)
 
@@ -1650,14 +1650,16 @@ def _cross_chat_hints(current_jid: str, query_text: str, owner_user_id: str = DE
     return out
 
 
-def _semantic_hints(current_jid: str, query_text: str, k: int = 3) -> list[dict[str, Any]]:
-    """Vector-search wa_chunks for top-K semantic matches outside the current
-    chat. Falls back to empty list if the embedder is down."""
-    if not query_text or len(query_text.strip()) < 4:
+def _semantic_hints(current_jid: str, query_text: str, k: int = 3,
+                    owner_user_id: Any = None) -> list[dict[str, Any]]:
+    """Vector-search the person's own wa_chunks for top-K semantic matches
+    outside the current chat. Empty without a person or when the
+    embedder is down."""
+    if not query_text or len(query_text.strip()) < 4 or owner_user_id is None:
         return []
     try:
         from . import whatsapp_semantic as _sem
-        hits = _sem.search(query_text, k=k, exclude_chat_jid=current_jid)
+        hits = _sem.search(query_text, k=k, exclude_chat_jid=current_jid, owner_user_id=owner_user_id)
     except Exception as e:
         log.debug("semantic search failed: %s", e)
         return []

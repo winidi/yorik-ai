@@ -39,12 +39,12 @@ async def _fetch(ctx: RetrieverContext) -> list[Evidence]:
         rows = conn.execute(
             f"SELECT id, subject, snippet, date_received, is_sent "
             f"FROM email_messages "
-            f"WHERE id != ? AND ("
+            f"WHERE id != ? AND owner_user_id = ? AND ("
             f"  LOWER(from_email) IN ({placeholders}) "
             f"  OR ({or_to})"
             f") "
             f"ORDER BY date_received DESC NULLS LAST LIMIT 5",
-            (current_id, *emails, *to_patterns),
+            (current_id, ctx.owner_user_id, *emails, *to_patterns),
         ).fetchall()
 
     out: list[Evidence] = []
