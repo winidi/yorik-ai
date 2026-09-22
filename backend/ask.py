@@ -1560,7 +1560,10 @@ async def _build_user_and_prompt(
 ):
     """Per-call setup shared by streaming and non-streaming paths."""
     from .agent.context import User as _AgentUser
-    user = _AgentUser(id=user_id or 1, role=role, language=user_language, name=identified_name)
+    # No default to user 1: without a person the conversation is not
+    # loaded or saved (conversation_io.owns), which surfaces a missed
+    # pass-through instead of filing the chat under the admin.
+    user = _AgentUser(id=user_id, role=role, language=user_language, name=identified_name)
     _active_role.set(role)
     _active_language.set(user_language)
     _active_identified_name.set(identified_name)

@@ -207,7 +207,7 @@ async def ask(
     audit.reset_turn()
 
     # 3) Build message list ────────────────────────────────────────────
-    history = conversation_io.trim_history(conversation_io.load_messages(conversation_id, role))
+    history = conversation_io.trim_history(conversation_io.load_messages(conversation_id, user.id))
     # Per-conversation entity ledger — see entity_ledger.py. Concatenated
     # onto the main system prompt so the LLM resolves "the appointment
     # I just made" / "make it friendlier" against a compact, explicit
@@ -218,7 +218,7 @@ async def ask(
     # own clear "RECENT ENTITIES …" header so the model still sees a
     # self-contained section.
     from . import entity_ledger as _ledger_mod
-    ledger = conversation_io.load_ledger(conversation_id, role)
+    ledger = conversation_io.load_ledger(conversation_id, user.id)
     ledger_block = _ledger_mod.render_for_llm(ledger)
     sys_content = system_prompt
     if ledger_block:
@@ -832,9 +832,9 @@ async def ask_stream(
     # 3) Build messages — see the block in ask() for why the ledger is
     # concatenated into the main system prompt instead of sent as a
     # second system message.
-    history = conversation_io.trim_history(conversation_io.load_messages(conversation_id, role))
+    history = conversation_io.trim_history(conversation_io.load_messages(conversation_id, user.id))
     from . import entity_ledger as _ledger_mod
-    ledger = conversation_io.load_ledger(conversation_id, role)
+    ledger = conversation_io.load_ledger(conversation_id, user.id)
     ledger_block = _ledger_mod.render_for_llm(ledger)
     sys_content = system_prompt
     if ledger_block:

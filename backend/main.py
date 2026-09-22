@@ -132,6 +132,7 @@ app.include_router(_email_routes.router)
 from . import search_routes as _search_routes
 app.include_router(_search_routes.router)
 from . import chat_attachments as _chat_attachments
+from .agent import conversation_io as _conversation_io
 app.include_router(_chat_attachments.router)
 from . import calendar_import as _calendar_import
 app.include_router(_calendar_import.router)
@@ -8848,10 +8849,11 @@ def list_conversations(
         # NEW table first (preferred — overwrites legacy on collision).
         # `title` (021) + `pinned` (022) are recent columns; tolerate
         # both missing so this endpoint stays alive across upgrades.
-        # WHERE filter: prefer user_id (survives role changes); fall
-        # back to user_role for legacy rows where user_id IS NULL.
-        _owner_where = "WHERE (user_id = ? OR (user_id IS NULL AND user_role = ?))"
-        _owner_params = (user_id, role)
+        # A conversation belongs to one person. Rows without a user_id
+        # (none on the live box since 2026-09-22) are nobody's: listing
+        # them by role showed them to every member of that role.
+        _owner_where = "WHERE user_id = ?"
+        _owner_params = (user_id,)
         new_rows = conn.execute(
             "SELECT id, user_role, messages_json AS messages, title, pinned, "
             "       created_at, updated_at "
@@ -8866,16 +8868,8 @@ def list_conversations(
                  title=r["title"] if has_title_col else None,
                  pinned=bool(r["pinned"]) if has_pinned_col else False)
 
-        # LEGACY table — fill in anything the new one doesn't cover.
-        legacy_rows = conn.execute(
-            "SELECT id, user_role, messages, created_at, updated_at "
-            "FROM conversations WHERE user_role = ? "
-            "ORDER BY updated_at DESC LIMIT ?",
-            (role, limit),
-        ).fetchall()
-        for r in legacy_rows:
-            if r["id"] not in by_id:
-                _add(r, "messages", "user_role")
+        # The legacy `conversations` table has no owner column, only a
+        # role; it is empty on the live box and no longer listed.
 
     out = list(by_id.values())
     out.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
@@ -8883,7 +8877,8 @@ def list_conversations(
 
 
 @app.get("/api/conversations/{conversation_id}")
-def get_conversation(conversation_id: str, role: str = Depends(_auth.current_role)) -> Dict[str, Any]:
+def get_conversation(conversation_id: str, role: str = Depends(_auth.current_role),
+                     user: dict[str, Any] = Depends(_auth.current_user)) -> Dict[str, Any]:
     """Full message history for a single conversation. The Chat app loads this
     when the user clicks a past conversation.
 
@@ -8902,7 +8897,7 @@ def get_conversation(conversation_id: str, role: str = Depends(_auth.current_rol
     with conn_ctx(DB_PATH) as conn:
         # NEW table first. Tolerate `title` column missing (pre-021).
         row = conn.execute(
-            "SELECT id, user_role, messages_json AS messages, title, "
+            "SELECT id, user_id, user_role, messages_json AS messages, title, "
             "       created_at, updated_at "
             "FROM agent_conversations WHERE id = ?",
             (conversation_id,),
@@ -8910,19 +8905,11 @@ def get_conversation(conversation_id: str, role: str = Depends(_auth.current_rol
         if row:
             source = "agent"
             title = row["title"]
-        # Fall back to legacy if not found in new table.
-        if row is None:
-            row = conn.execute(
-                "SELECT id, user_role, messages, created_at, updated_at "
-                "FROM conversations WHERE id = ?",
-                (conversation_id,),
-            ).fetchone()
-            source = "legacy"
 
-    if not row:
+    # Someone else's conversation looks like none at all (no probing by
+    # id), and there is no admin exception: a chat is personal.
+    if not row or not _conversation_io.owns(row, user["id"]):
         raise HTTPException(status_code=404, detail="conversation not found")
-    if row["user_role"] != role and normalize_role(role) not in ("admin", "platform_admin"):
-        raise HTTPException(status_code=403, detail="not yours to view")
 
     try:
         msgs = _json.loads(row["messages"] or "[]")
@@ -8986,31 +8973,20 @@ def get_conversation(conversation_id: str, role: str = Depends(_auth.current_rol
 
 
 @app.delete("/api/conversations/{conversation_id}", status_code=204, response_class=Response)
-def delete_conversation(conversation_id: str, role: str = Depends(_auth.current_role)) -> Response:
+def delete_conversation(conversation_id: str, role: str = Depends(_auth.current_role),
+                        user: dict[str, Any] = Depends(_auth.current_user)) -> Response:
     normalize_role(role)
     with conn_ctx(DB_PATH) as conn:
-        # The active table is `agent_conversations` (since the agent
-        # rebuild). `conversations` is the legacy table the list
-        # endpoint still UNIONs for back-compat; check + delete from
-        # BOTH so a delete works whichever table the row lives in.
-        # The ownership check uses whichever row exists; admin
-        # bypasses the role match either way.
         row = conn.execute(
-            "SELECT user_role FROM agent_conversations WHERE id = ?",
+            "SELECT user_id FROM agent_conversations WHERE id = ?",
             (conversation_id,),
         ).fetchone()
         if row is None:
-            row = conn.execute(
-                "SELECT user_role FROM conversations WHERE id = ?",
-                (conversation_id,),
-            ).fetchone()
-        if row is None:
             # Idempotent: nothing to delete, succeed silently.
             return Response(status_code=204)
-        if row["user_role"] != role and role not in ("platform_admin", "admin"):
-            raise HTTPException(status_code=403, detail="not yours to delete")
+        if not _conversation_io.owns(row, user["id"]):
+            raise HTTPException(status_code=404, detail="conversation not found")
         conn.execute("DELETE FROM agent_conversations WHERE id = ?", (conversation_id,))
-        conn.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
     # Files shown in this chat go with it (what was filed lives in Paperless).
     try:
         _chat_attachments.delete_for_conversation(conversation_id)
@@ -9033,17 +9009,16 @@ def pin_conversation(
     conversation_id: str,
     body: ConversationPinIn,
     role: str = Depends(_auth.current_role),
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
     normalize_role(role)
     with conn_ctx(DB_PATH) as conn:
         row = conn.execute(
-            "SELECT user_role FROM agent_conversations WHERE id = ?",
+            "SELECT user_id FROM agent_conversations WHERE id = ?",
             (conversation_id,),
         ).fetchone()
-        if not row:
+        if not _conversation_io.owns(row, user["id"]):
             raise HTTPException(404, "conversation not found")
-        if row["user_role"] != role and role not in ("platform_admin", "admin"):
-            raise HTTPException(403, "not yours to pin")
         conn.execute(
             "UPDATE agent_conversations SET pinned = ? WHERE id = ?",
             (1 if body.pinned else 0, conversation_id),
@@ -9080,10 +9055,11 @@ def _stash_url_allowed(url: str) -> bool:
 def get_conversation_stash(
     conversation_id: str,
     role: str = Depends(_auth.current_role),
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
     normalize_role(role)
     from .agent.conversation_io import load_stash as _load_stash
-    return {"items": _load_stash(conversation_id, role)}
+    return {"items": _load_stash(conversation_id, user["id"])}
 
 
 @app.post("/api/conversations/{conversation_id}/stash")
@@ -9091,12 +9067,13 @@ def append_conversation_stash(
     conversation_id: str,
     body: StashItemIn,
     role: str = Depends(_auth.current_role),
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
     normalize_role(role)
     if not _stash_url_allowed(body.url):
         raise HTTPException(400, "url must be a Yorik proxy path")
     from .agent.conversation_io import load_stash as _load_stash, save_stash as _save_stash
-    items = _load_stash(conversation_id, role)
+    items = _load_stash(conversation_id, user["id"])
     # Dedupe by (url, filename) — repeat-clicking "Attach" on the same
     # photo shouldn't stack duplicates that all fetch the same bytes.
     new_item = {
@@ -9109,7 +9086,7 @@ def append_conversation_stash(
         for i in items
     ):
         items.append(new_item)
-    _save_stash(conversation_id, role, items)
+    _save_stash(conversation_id, user["id"], items)
     return {"ok": True, "items": items}
 
 
@@ -9118,13 +9095,14 @@ def remove_conversation_stash_item(
     conversation_id: str,
     index: int,
     role: str = Depends(_auth.current_role),
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
     normalize_role(role)
     from .agent.conversation_io import load_stash as _load_stash, save_stash as _save_stash
-    items = _load_stash(conversation_id, role)
+    items = _load_stash(conversation_id, user["id"])
     if 0 <= index < len(items):
         items.pop(index)
-    _save_stash(conversation_id, role, items)
+    _save_stash(conversation_id, user["id"], items)
     return {"ok": True, "items": items}
 
 
@@ -9132,10 +9110,11 @@ def remove_conversation_stash_item(
 def clear_conversation_stash(
     conversation_id: str,
     role: str = Depends(_auth.current_role),
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
     normalize_role(role)
     from .agent.conversation_io import save_stash as _save_stash
-    _save_stash(conversation_id, role, [])
+    _save_stash(conversation_id, user["id"], [])
     return {"ok": True, "items": []}
 
 
@@ -9261,10 +9240,8 @@ async def regenerate_assistant_reply(
             "FROM agent_conversations WHERE id = ?",
             (conversation_id,),
         ).fetchone()
-    if not row:
+    if not row or not _ci.owns(row, user["id"]):
         raise HTTPException(404, "conversation not found")
-    if row["user_role"] != role and role not in ("platform_admin", "admin"):
-        raise HTTPException(403, "not yours")
 
     try:
         msgs = _json.loads(row["messages_json"] or "[]")

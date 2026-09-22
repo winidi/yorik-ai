@@ -41,9 +41,21 @@ DB_PATH = os.getenv("HOMEOS_DB_PATH", DEFAULT_DB_PATH)
 DEFAULT_HISTORY_LIMIT: Optional[int] = None
 
 
+def owns(row: Any, user_id: Any) -> bool:
+    """A conversation belongs to exactly one person: the `user_id` on
+    the row. Until 2026-09-22 every check here compared `user_role`
+    instead, so two members (or two children) could read, overwrite
+    and delete each other's chats, and admins everyone's. No admin
+    exception: there is nothing an admin may see here that is not
+    theirs."""
+    if row is None or user_id is None:
+        return False
+    return str(row["user_id"] or "") == str(user_id)
+
+
 def load_messages(
     conversation_id: str,
-    user_role: str,
+    user_id: Any,
     *,
     limit: Optional[int] = DEFAULT_HISTORY_LIMIT,
 ) -> List[Dict[str, Any]]:
@@ -51,8 +63,8 @@ def load_messages(
 
     Returns an empty list when:
       - the conversation doesn't exist (first turn of a new thread),
-      - the conversation exists but the requesting role doesn't match
-        (access denied — mirrors the legacy store's behaviour).
+      - the conversation exists but belongs to another person
+        (access denied).
 
     The returned list is in chronological order (oldest first) and
     PRESERVES storage extras (photos / documents / ui_actions /
@@ -71,16 +83,14 @@ def load_messages(
         return []
     with conn_ctx(DB_PATH) as conn:
         row = conn.execute(
-            "SELECT user_role, messages_json FROM agent_conversations WHERE id = ?",
+            "SELECT user_id, messages_json FROM agent_conversations WHERE id = ?",
             (conversation_id,),
         ).fetchone()
     if not row:
         return []
-    if row["user_role"] != user_role:
-        logger.debug(
-            "conversation %s belongs to role=%r, refused for role=%r",
-            conversation_id, row["user_role"], user_role,
-        )
+    if not owns(row, user_id):
+        logger.debug("conversation %s belongs to user=%r, refused for user=%r",
+                     conversation_id, row["user_id"], user_id)
         return []
     try:
         msgs = json.loads(row["messages_json"]) or []
@@ -201,8 +211,8 @@ def save_messages(
     """Insert-or-update the message log for this conversation.
 
     Idempotent: callers can pass the full message list every turn and we
-    overwrite. Refuses to clobber a conversation owned by a different
-    role (matches the legacy store).
+    overwrite. Refuses to clobber a conversation owned by another
+    person. `user_role` is kept on the row for display only.
     """
     if not conversation_id:
         return
@@ -220,22 +230,24 @@ def save_messages(
     blob = json.dumps(persisted, ensure_ascii=False, default=str)
     with conn_ctx(DB_PATH) as conn:
         existing = conn.execute(
-            "SELECT user_role FROM agent_conversations WHERE id = ?",
+            "SELECT user_id FROM agent_conversations WHERE id = ?",
             (conversation_id,),
         ).fetchone()
-        if existing and existing["user_role"] != user_role:
+        if existing and not owns(existing, user_id):
             logger.warning(
                 "refused to overwrite conversation %s (owner=%r, attempted by=%r)",
-                conversation_id, existing["user_role"], user_role,
+                conversation_id, existing["user_id"], user_id,
             )
             return
         if existing:
             conn.execute(
                 "UPDATE agent_conversations SET messages_json = ?, "
-                "user_id = COALESCE(?, user_id), "
                 "updated_at = datetime('now') WHERE id = ?",
-                (blob, user_id, conversation_id),
+                (blob, conversation_id),
             )
+        elif user_id is None:
+            logger.warning("refused to create conversation %s without a user", conversation_id)
+            return
         else:
             conn.execute(
                 "INSERT INTO agent_conversations "
@@ -244,11 +256,11 @@ def save_messages(
             )
 
 
-def load_ledger(conversation_id: str, user_role: str) -> Dict[str, Any]:
+def load_ledger(conversation_id: str, user_id: Any) -> Dict[str, Any]:
     """Per-conversation entity ledger (see entity_ledger.py).
 
     Returns an empty dict for new conversations or when the requesting
-    role doesn't own this conversation. Schema-tolerant: works against
+    person doesn't own this conversation. Schema-tolerant: works against
     DBs that haven't run migration 035 yet by treating the column-missing
     error as 'empty ledger'.
     """
@@ -256,10 +268,10 @@ def load_ledger(conversation_id: str, user_role: str) -> Dict[str, Any]:
         return {}
     with conn_ctx(DB_PATH) as conn:
         row = conn.execute(
-            "SELECT user_role, ledger_json FROM agent_conversations WHERE id = ?",
+            "SELECT user_id, ledger_json FROM agent_conversations WHERE id = ?",
             (conversation_id,),
         ).fetchone()
-    if not row or row["user_role"] != user_role:
+    if not owns(row, user_id):
         return {}
     try:
         data = json.loads(row["ledger_json"] or "{}")
@@ -337,17 +349,17 @@ def load_traces_for(conversation_id: str) -> Dict[int, Dict[str, Any]]:
     return out
 
 
-def delete_conversation(conversation_id: str, user_role: str) -> bool:
+def delete_conversation(conversation_id: str, user_id: Any) -> bool:
     """Drop a conversation. Returns True if deleted, False if not found
-    or wrong role."""
+    or not the caller's."""
     if not conversation_id:
         return False
     with conn_ctx(DB_PATH) as conn:
         row = conn.execute(
-            "SELECT user_role FROM agent_conversations WHERE id = ?",
+            "SELECT user_id FROM agent_conversations WHERE id = ?",
             (conversation_id,),
         ).fetchone()
-        if not row or row["user_role"] != user_role:
+        if not owns(row, user_id):
             return False
         conn.execute("DELETE FROM agent_conversations WHERE id = ?", (conversation_id,))
     return True
@@ -366,17 +378,17 @@ def delete_conversation(conversation_id: str, user_role: str) -> bool:
 STASH_MAX_ITEMS = 50
 
 
-def load_stash(conversation_id: str, user_role: str) -> List[Dict[str, Any]]:
+def load_stash(conversation_id: str, user_id: Any) -> List[Dict[str, Any]]:
     """Per-conversation attachment stash. Empty list for new threads,
-    wrong-role accesses, or DBs pre-migration-041."""
+    other people's threads, or DBs pre-migration-041."""
     if not conversation_id:
         return []
     with conn_ctx(DB_PATH) as conn:
         row = conn.execute(
-            "SELECT user_role, attachment_stash FROM agent_conversations WHERE id = ?",
+            "SELECT user_id, attachment_stash FROM agent_conversations WHERE id = ?",
             (conversation_id,),
         ).fetchone()
-    if not row or row["user_role"] != user_role:
+    if not owns(row, user_id):
         return []
     try:
         data = json.loads(row["attachment_stash"] or "[]")
@@ -387,11 +399,11 @@ def load_stash(conversation_id: str, user_role: str) -> List[Dict[str, Any]]:
 
 def save_stash(
     conversation_id: str,
-    user_role: str,
+    user_id: Any,
     stash: List[Dict[str, Any]],
 ) -> None:
     """Replace the stash with a caller-cleaned list. Truncates to the
-    cap and refuses if the caller's role doesn't own the conversation.
+    cap and refuses if the caller doesn't own the conversation.
     """
     if not conversation_id:
         return
@@ -399,7 +411,7 @@ def save_stash(
     blob = json.dumps(capped, ensure_ascii=False)
     with conn_ctx(DB_PATH) as conn:
         row = conn.execute(
-            "SELECT user_role FROM agent_conversations WHERE id = ?",
+            "SELECT user_id FROM agent_conversations WHERE id = ?",
             (conversation_id,),
         ).fetchone()
         if not row:
@@ -407,10 +419,10 @@ def save_stash(
             # saved. Caller (POST /stash) treats this as a 404.
             logger.debug("save_stash: conversation %s not found", conversation_id)
             return
-        if row["user_role"] != user_role:
+        if not owns(row, user_id):
             logger.warning(
                 "refused stash write on conversation %s (owner=%r, by=%r)",
-                conversation_id, row["user_role"], user_role,
+                conversation_id, row["user_id"], user_id,
             )
             return
         conn.execute(
