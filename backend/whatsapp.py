@@ -1579,7 +1579,7 @@ async def generate_draft(body: DraftBody, request: Request) -> dict[str, Any]:
     last_inbound = next((r["text"] for r in reversed(recent) if not r["from_me"] and r["text"]), recent[-1]["text"] or "")
     fts_hits      = _cross_chat_hints(chat_jid, last_inbound, owner_user_id=user_id)
     semantic_hits = _semantic_hints(chat_jid, last_inbound)
-    paperless_hits = _paperless_hints(last_inbound)
+    paperless_hits = _paperless_hints(last_inbound, user_id=user_id)
     cross_hits = _merge_hints(fts_hits, semantic_hits, paperless_hits, cap=6)
 
     sources = [{"kind": "thread", "ref": chat_jid, "snippet": f"{len(recent)} recent messages"}]
@@ -1590,7 +1590,7 @@ async def generate_draft(body: DraftBody, request: Request) -> dict[str, Any]:
         is_group=bool(chat_row["is_group"]),
         recent=recent,
         cross_hits=cross_hits,
-        calendar=_calendar_context(),
+        calendar=_calendar_context(user_id=user_id),
         extra=body.extra_instructions,
     )
 
@@ -1672,15 +1672,21 @@ def _semantic_hints(current_jid: str, query_text: str, k: int = 3) -> list[dict[
     ]
 
 
-def _paperless_hints(query_text: str, k: int = 3) -> list[dict[str, Any]]:
-    """Semantic-search Paperless docs (vector index already maintained
-    by the existing paperless_ingest pipeline). Surfaces relevant
-    documents the user has filed so the draft can reference them."""
+def _paperless_hints(query_text: str, k: int = 3, user_id: Any = None) -> list[dict[str, Any]]:
+    """Semantic-search the person's Paperless docs (vector index already
+    maintained by the existing paperless_ingest pipeline). Surfaces
+    relevant documents they have filed so the draft can reference them.
+    Without a person (or their Paperless account) there are no hints:
+    until 2026-09-22 this searched the whole household with the admin
+    token and put other people's documents into the draft (audit 3.5)."""
     if not query_text or len(query_text.strip()) < 4:
         return []
     try:
         from . import paperless_ingest as _pi
-        hits = _pi.search(query_text, k=k)
+        creds = _pi.user_creds(user_id)
+        if not creds:
+            return []
+        hits = _pi.search(query_text, k=k, creds_override=creds)
     except Exception as e:
         log.debug("paperless semantic search failed: %s", e)
         return []
@@ -1696,21 +1702,29 @@ def _paperless_hints(query_text: str, k: int = 3) -> list[dict[str, Any]]:
     return out
 
 
-def _calendar_context(days_ahead: int = 7) -> list[dict[str, Any]]:
-    """Pull upcoming events from family.db as draft context. Always
+def _calendar_context(days_ahead: int = 7, user_id: Any = None) -> list[dict[str, Any]]:
+    """Pull the person's upcoming events as draft context. Always
     included in the prompt — the LLM picks it up when scheduling
     questions arrive ('can we meet Thursday?', 'are you around next
-    week?') and ignores otherwise. Cheap, no extra LLM call."""
+    week?') and ignores otherwise. Cheap, no extra LLM call. Their own
+    calendars and shares, never another person's private event; no
+    person, no context (audit 2026-09-22, 3.5)."""
+    if user_id is None:
+        return []
     try:
+        from . import calendars as _cal
         now = datetime.now()
         end = now + timedelta(days=days_ahead)
         with get_conn() as conn:
+            role_row = conn.execute("SELECT role FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
+            ev_sql, ev_params = _cal.visible_event_filter(str(user_id), (role_row["role"] if role_row else "") or "")
             rows = conn.execute(
                 "SELECT title, starts_at, ends_at, all_day, person "
                 "FROM events "
-                "WHERE starts_at >= ? AND starts_at <= ? "
+                f"WHERE starts_at >= ? AND starts_at <= ? AND {ev_sql} "
+                "AND (events.visibility IS DISTINCT FROM 'private' OR events.owner_user_id = ?) "
                 "ORDER BY starts_at ASC LIMIT 25",
-                (now.isoformat(), end.isoformat()),
+                (now.isoformat(), end.isoformat(), *ev_params, user_id),
             ).fetchall()
         if not rows:
             return []

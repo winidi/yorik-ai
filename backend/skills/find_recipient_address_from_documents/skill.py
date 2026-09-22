@@ -36,15 +36,14 @@ _TAIL_CHARS = 2000
 _MAX_DOCS_HARD = 10
 
 
-def _paperless_settings() -> Optional[dict[str, str]]:
-    """Lazy peek at credentials so we can fail fast with a clear hint
-    when Paperless isn't configured."""
+def _paperless_settings(ctx=None) -> Optional[dict[str, str]]:
+    """The calling person's own Paperless token — their documents are
+    the ones to look through. None without a Paperless account (until
+    2026-09-22 this was the admin token and the skill mined everyone's
+    documents — audit 1.10)."""
     try:
-        from backend.connectors.paperless import _settings
-        s = _settings()
-        if not s.get("api_key"):
-            return None
-        return s
+        from backend.paperless_ingest import user_creds
+        return user_creds(getattr(ctx, "user_id", None))
     except Exception:  # noqa: BLE001
         return None
 
@@ -69,7 +68,8 @@ def _fetch_doc_full(doc_id: int, settings: dict[str, str]) -> Optional[dict[str,
         return None
 
 
-def _find_relevant_docs(contact: dict[str, Any], max_docs: int) -> list[dict[str, Any]]:
+def _find_relevant_docs(contact: dict[str, Any], max_docs: int,
+                        settings: Optional[dict[str, str]] = None) -> list[dict[str, Any]]:
     """Find Paperless docs likely to mention this contact's postal
     address. Two passes:
       1. Documents where the contact is the Paperless `correspondent`
@@ -85,7 +85,8 @@ def _find_relevant_docs(contact: dict[str, Any], max_docs: int) -> list[dict[str
     # Pass 1 — correspondent match.
     try:
         r = pl_call(op="by_correspondent",
-                    correspondent=contact["display_name"], limit=max_docs)
+                    correspondent=contact["display_name"], limit=max_docs,
+                    creds_override=settings)
         for d in r.get("documents") or []:
             did = d.get("id")
             if did and did not in seen:
@@ -99,7 +100,8 @@ def _find_relevant_docs(contact: dict[str, Any], max_docs: int) -> list[dict[str
         try:
             r = pl_call(op="search",
                         query=contact["display_name"],
-                        limit=max_docs - len(out))
+                        limit=max_docs - len(out),
+                        creds_override=settings)
             for d in r.get("documents") or []:
                 did = d.get("id")
                 if did and did not in seen:
@@ -161,11 +163,11 @@ def _write_paperless_cache(contact_id: int, candidates: list[dict[str, Any]]) ->
         conn.commit()
 
 
-def _decorate_cached(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _decorate_cached(rows: list[dict[str, Any]], ctx=None) -> list[dict[str, Any]]:
     """Cached rows lack the source_doc_title since we only saved the
     doc id. Add a best-effort title via a Paperless lookup. Failures
     return the raw row — the doc id is still useful to the user."""
-    settings = _paperless_settings()
+    settings = _paperless_settings(ctx)
     out: list[dict[str, Any]] = []
     for r in rows:
         doc_id = None
@@ -318,7 +320,7 @@ async def execute(
 
     name = contact["display_name"]
 
-    settings = _paperless_settings()
+    settings = _paperless_settings(ctx)
     if not settings:
         return {
             "_llm_hint": (
@@ -336,7 +338,7 @@ async def execute(
     if use_cache:
         cached = _read_paperless_cache(cid)
         if cached:
-            decorated = _decorate_cached(cached)
+            decorated = _decorate_cached(cached, ctx)
             _emit_needs_input(cid, name, decorated, template_id=None)
             return {
                 "_llm_hint":    _format_hint(name, decorated),
@@ -353,7 +355,7 @@ async def execute(
     except (TypeError, ValueError):
         max_docs_clamped = 5
 
-    doc_metas = await asyncio.to_thread(_find_relevant_docs, contact, max_docs_clamped)
+    doc_metas = await asyncio.to_thread(_find_relevant_docs, contact, max_docs_clamped, settings)
 
     if not doc_metas:
         return {

@@ -84,11 +84,29 @@ def _paperless_settings() -> Dict[str, str]:
             "api_key": api_key or ""}
 
 
-def _fetch_doc(paperless_doc_id: int) -> Optional[Dict[str, Any]]:
+def user_creds(user_id: Any) -> Optional[Dict[str, Any]]:
+    """The person's own Paperless token as {base_url, api_key}, or None
+    when they have no Paperless account (then they see no documents —
+    never the admin's view)."""
+    if user_id is None:
+        return None
+    try:
+        from .external_users import get_user_paperless_creds
+        creds = get_user_paperless_creds(str(user_id))
+    except Exception as exc:  # noqa: BLE001
+        log.debug("paperless creds lookup failed for %s: %s", user_id, exc)
+        return None
+    return creds if creds and creds.get("api_key") else None
+
+
+def _fetch_doc(paperless_doc_id: int,
+               creds_override: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """Returns Paperless doc as a dict (title, content, correspondent, …)
-    or None if not reachable / not found."""
-    s = _paperless_settings()
-    if not s["api_key"]:
+    or None if not reachable / not found. With `creds_override` the
+    lookup runs as that person, so a document they may not see is
+    "not found"."""
+    s = creds_override or _paperless_settings()
+    if not s.get("api_key"):
         log.warning("paperless_ingest: no API token — skipping doc %s", paperless_doc_id)
         return None
     headers = {"Authorization": f"Token {s['api_key']}", "Accept": "application/json"}
@@ -557,14 +575,24 @@ def search(query: str, k: int = 8,
     if not rows:
         return []
 
-    # Batch-fetch the document metadata so each result carries a citation.
-    # Per-user creds (wave 3) take precedence: pass them in via the
-    # `creds_override` arg so Anna's search hydrates against her token
-    # and Paperless's own ACL filters the visible docs.
+    return _hydrate(rows, creds_override)
+
+
+def _hydrate(rows: List[Any], creds_override: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Batch-fetch the document metadata so each result carries a
+    citation. With `creds_override` (a person's own token) the fetch
+    runs as that person and Paperless's own permissions decide what
+    comes back — and a chunk whose document did not come back is
+    dropped, because its text is that document's text. (Until
+    2026-09-22 such rows stayed in with the title "Document #N", so the
+    per-user token hid titles but not contents — audit 1.6.) Without
+    `creds_override` the admin token hydrates and nothing is dropped:
+    that path is for Yorik's own housekeeping only."""
     s = creds_override or _paperless_settings()
     headers = {"Authorization": f"Token {s['api_key']}", "Accept": "application/json"}
     doc_ids = sorted({r["paperless_doc_id"] for r in rows})
     docs_meta: Dict[int, Dict[str, Any]] = {}
+    fetched = False
     if s["api_key"]:
         try:
             r = requests.get(
@@ -577,8 +605,13 @@ def search(query: str, k: int = 8,
             r.raise_for_status()
             for d in (r.json() or {}).get("results", []):
                 docs_meta[d["id"]] = d
+            fetched = True
         except requests.RequestException as exc:
             log.warning("paperless search: doc-meta fetch failed: %s", exc)
+    if creds_override is not None:
+        if not fetched:
+            return []                       # cannot tell what the person may see → nothing
+        rows = [r for r in rows if r["paperless_doc_id"] in docs_meta]
 
     # Phase 12.1: derive visibility from each doc's tag list. visibility_of()
     # consults the resolved tag-id cache, no extra Paperless round-trip.

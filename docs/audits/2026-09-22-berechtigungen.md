@@ -158,7 +158,16 @@ Als Referenz für die Reparatur, denn hier steht das Muster schon:
   Credential-Store, `verify()` prüft die Session-Bindung, `/api/ask-voice`
   erkennt nur am Kiosk, nimmt `profile_id` für Rolle und Daten und antwortet
   409 `identify_needed` statt als Cookie-Nutzer).
-  Timetable (2.7) bleibt consent-basiert: der Stundenplan eines Kindes, das
+  Paket 6 (1.4, 1.5, 1.6, 1.8, 1.9, 1.10, 3.5): Paperless antwortet als die
+  fragende Person — `paperless_ingest.user_creds`, `_hydrate` verwirft
+  Chunks, deren Dokument der eigene Token nicht liefert; beide Such-Routen,
+  `search_documents`, `read_document`, `read_document_vision` (eigener Token,
+  PDF im Render-Tempdir), Adress-Skill, der Paperless-Connector
+  (`connectors.invoke(user_id=…)`, ohne Person Fehler statt Admin-Token),
+  `_paperless_hints` und `_calendar_context` in WhatsApp-/Mail-Entwürfen.
+  Nicht angefasst: 1.7 (`space_id` im Chunk-Index) — durch die Hydration
+  über den Token der Person nicht mehr nötig, der Space-Filter bleibt als
+  Zusatz. Timetable (2.7) bleibt consent-basiert: der Stundenplan eines Kindes, das
   auf der Wand ist, ist für den Haushalt. 2.19 (`GET /api/settings/{key}`)
   offen, weil das Frontend Haushalts-Einstellungen für alle liest.
 - **Entschieden von Dirk 22.09.:** Notfall-Zugriff wie vorgeschlagen (ja);

@@ -137,9 +137,9 @@ async def _generate_and_store(chat_jid: str, trigger_msg_id: str, owner_user_id:
     # about cross-modal context, not chat data).
     fts_hits = wa._cross_chat_hints(chat_jid, last_inbound, owner_user_id=owner_user_id)
     sem_hits = wa._semantic_hints(chat_jid, last_inbound)
-    pap_hits = wa._paperless_hints(last_inbound)
+    pap_hits = wa._paperless_hints(last_inbound, user_id=owner_user_id)
     sources = wa._merge_hints(fts_hits, sem_hits, pap_hits, cap=6)
-    calendar = wa._calendar_context()
+    calendar = wa._calendar_context(user_id=owner_user_id)
 
     prompt = _build_variants_prompt(
         contact_name=chat_row["name"] or chat_jid.split("@")[0],

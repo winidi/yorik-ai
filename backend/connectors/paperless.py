@@ -84,9 +84,13 @@ def _doc_dict(d: Dict[str, Any], base_url: str) -> Dict[str, Any]:
 
 
 def paperless(op: str, query: str = "", limit: int = 10, doc_id: Optional[int] = None,
-              correspondent: str = "", tag: str = "", **_kw) -> Dict[str, Any]:
+              correspondent: str = "", tag: str = "",
+              creds_override: Optional[Dict[str, Any]] = None, **_kw) -> Dict[str, Any]:
+    """`creds_override` is the calling person's own {base_url, api_key};
+    every op then sees what that person may see. The admin settings are
+    the fallback for Yorik's own housekeeping only."""
     op = (op or "").lower().strip()
-    s = _settings()
+    s = creds_override or _settings()
     if not s["api_key"]:
         return {"ok": False,
                 "error": "Paperless not configured — open Settings → Connectors → Paperless and paste an API token. "
@@ -115,7 +119,7 @@ def paperless(op: str, query: str = "", limit: int = 10, doc_id: Optional[int] =
             if not query.strip():
                 return {"ok": False, "error": "search_semantic requires 'query'"}
             from .. import paperless_ingest as pi
-            results = pi.search(query, k=min(limit, MAX_RETURN))
+            results = pi.search(query, k=min(limit, MAX_RETURN), creds_override=creds_override)
             return {"op": "search_semantic", "query": query, "passages": results}
 
         if op == "recent":

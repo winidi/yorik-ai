@@ -45,6 +45,10 @@ async def execute(ctx, query: str = "", k: int = 5) -> dict[str, Any]:
             log.warning("user_visible_space_ids failed for user=%s role=%s: %s",
                         user_id, role, exc)
 
+    # Paperless answers as the person asking: their own token, or
+    # nothing at all when they have no Paperless account.
+    creds = _pp.user_creds(user_id)
+
     if not q:
         # Empty-query path: recent N across both sources.
         try:
@@ -53,7 +57,7 @@ async def execute(ctx, query: str = "", k: int = 5) -> dict[str, Any]:
         except Exception as exc:  # noqa: BLE001
             native_hits, native_total = [], 0
             log.warning("native recent failed: %s", exc)
-        pp = _pp.recent_with_count(k=k)
+        pp = _pp.recent_with_count(k=k, creds_override=creds) if creds else {"hits": [], "total": 0}
         pp_hits = pp.get("hits", [])
         pp_total = pp.get("total", 0)
         hits = (pp_hits + native_hits)[:k]
@@ -70,7 +74,8 @@ async def execute(ctx, query: str = "", k: int = 5) -> dict[str, Any]:
             native_hits = []
             log.warning("native search failed: %s", exc)
         try:
-            hybrid = _pp.search_hybrid(q, k=k, visible_space_ids=visible_space_ids)
+            hybrid = (_pp.search_hybrid(q, k=k, creds_override=creds, visible_space_ids=visible_space_ids)
+                      if creds else {"hits": [], "legs": {}})
             pp_hits_raw = hybrid.get("hits", [])
             pp_legs = hybrid.get("legs", {})
         except Exception as exc:  # noqa: BLE001

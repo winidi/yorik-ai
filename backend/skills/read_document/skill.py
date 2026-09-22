@@ -22,7 +22,7 @@ log = logging.getLogger("yorik.skills.read_document")
 MAX_CHARS = 40_000
 
 
-async def execute(ctx, doc_id: int) -> dict[str, Any]:  # noqa: ARG001
+async def execute(ctx, doc_id: int) -> dict[str, Any]:
     try:
         doc_id_int = int(doc_id)
     except (TypeError, ValueError):
@@ -63,16 +63,17 @@ async def execute(ctx, doc_id: int) -> dict[str, Any]:  # noqa: ARG001
             (doc_id_int,),
         ).fetchall()
     if rows:
-        title = None
-        try:
-            from backend.paperless_ingest import _fetch_doc
-            meta = _fetch_doc(doc_id_int)
-            if meta:
-                title = meta.get("title")
-        except Exception:
-            pass  # title is nice-to-have; text is the load-bearing field
+        # The chunks are the document's text, so the document must be
+        # one the person may see: looked up with their own Paperless
+        # token, a document outside their view is "not found" (audit
+        # 2026-09-22, 1.8 — this skill read any doc id for anyone).
+        from backend.paperless_ingest import _fetch_doc, user_creds
+        creds = user_creds(getattr(ctx, "user_id", None))
+        meta = _fetch_doc(doc_id_int, creds_override=creds) if creds else None
+        if not meta:
+            return {"ok": False, "doc_id": doc_id_int, "error": f"document {doc_id_int} not found"}
         return _build_result(doc_id_int, "paperless",
-                             rows, title, "application/pdf", None, None)
+                             rows, meta.get("title"), "application/pdf", None, None)
 
     return {
         "ok":      False,

@@ -175,7 +175,10 @@ class TriggerConnectorTool(Tool[TriggerConnectorArgs]):
         return TriggerConnectorArgs
 
     async def execute(self, context: ToolContext, args: TriggerConnectorArgs) -> ToolResult:
-        result = await connectors.invoke(args.name, args.params or {})
+        uid = getattr(context, "user_id", None)
+        if uid is None:
+            uid = getattr(getattr(context, "user", None), "id", None)
+        result = await connectors.invoke(args.name, args.params or {}, user_id=uid)
         # Stringify for the LLM so it can summarize naturally.
         if result.get("ok") is False:
             return ToolResult(

@@ -53,8 +53,9 @@ async def execute(
     if last - first + 1 > MAX_PAGES:
         last = first + MAX_PAGES - 1  # silently cap rather than error
 
-    # 1. Find the PDF on disk or fetch from paperless.
-    pdf_path, source, title = _resolve_pdf(doc_id_int)
+    # 1. Find the PDF on disk or fetch from paperless — as the person
+    #    asking, so a document they may not see is "not found".
+    pdf_path, source, title = _resolve_pdf(doc_id_int, getattr(ctx, "user_id", None))
     if not pdf_path:
         return {
             "ok":    False,
@@ -62,8 +63,13 @@ async def execute(
             "error": f"document {doc_id_int} not found (checked native uploads + paperless)",
         }
 
-    # 2. Render to PNGs in a tempdir we clean up afterwards.
+    # 2. Render to PNGs in a tempdir we clean up afterwards (the
+    #    downloaded PDF lives inside it too).
     with tempfile.TemporaryDirectory(prefix="ydv-") as tmpdir:
+        if source == "paperless":
+            _new = os.path.join(tmpdir, "document.pdf")
+            os.replace(pdf_path, _new)
+            pdf_path = _new
         png_paths = _render_pages(pdf_path, tmpdir, first, last)
         if not png_paths:
             return {
@@ -145,14 +151,15 @@ def _parse_page_range(spec: str) -> tuple[int, int]:
         return 1, 10
 
 
-def _resolve_pdf(doc_id: int) -> tuple[Optional[str], Optional[str], Optional[str]]:
+def _resolve_pdf(doc_id: int, user_id: Any = None) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Return (pdf_path_or_tempfile, source_label, title).
 
     Native uploads first — `documents.path` points at the on-disk PDF.
-    Paperless second — we fetch via the REST API into a temp file.
-    The caller is responsible for cleaning the temp file (we render
-    inside a tempdir that gets cleaned anyway, but the PDF itself is
-    held in /tmp briefly).
+    Paperless second — fetched with the person's own token into a
+    private temp file the caller moves into its render dir and deletes
+    with it. (Until 2026-09-22 the download ran with the admin token for
+    any doc id and left the PDF at a predictable path in /tmp — audit
+    1.8.)
     """
     # Native upload first.
     try:
@@ -169,15 +176,16 @@ def _resolve_pdf(doc_id: int) -> tuple[Optional[str], Optional[str], Optional[st
     title = None
     try:
         import requests
-        from backend.paperless_ingest import _paperless_settings, _fetch_doc
-        s = _paperless_settings()
-        if not s.get("api_key"):
+        from backend.paperless_ingest import _fetch_doc, user_creds
+        s = user_creds(user_id)
+        if not s:
             return None, None, None
-        # Fetch metadata for the title (best-effort).
-        meta = _fetch_doc(doc_id)
-        if meta:
-            title = meta.get("title")
-        # Download the actual PDF.
+        # The person's own lookup: a document outside their view is None.
+        meta = _fetch_doc(doc_id, creds_override=s)
+        if not meta:
+            return None, None, None
+        title = meta.get("title")
+        # Download the actual PDF, as them.
         url = f"{s['base_url']}/api/documents/{doc_id}/download/"
         r = requests.get(url,
                           headers={"Authorization": f"Token {s['api_key']}"},
@@ -185,8 +193,8 @@ def _resolve_pdf(doc_id: int) -> tuple[Optional[str], Optional[str], Optional[st
         if r.status_code != 200:
             log.warning("paperless download %s returned %s", doc_id, r.status_code)
             return None, None, None
-        pdf_path = f"/tmp/ydv-paperless-{doc_id}.pdf"
-        with open(pdf_path, "wb") as fh:
+        fd, pdf_path = tempfile.mkstemp(prefix="ydv-", suffix=".pdf")
+        with os.fdopen(fd, "wb") as fh:
             fh.write(r.content)
         return pdf_path, "paperless", title
     except Exception:  # noqa: BLE001

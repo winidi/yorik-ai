@@ -80,7 +80,7 @@ async def execute(
     fts_hits   = _email_fts_hits(message_id, user_id, last_body, k=3)
     cross_chat = _wa_cross_hints_for_email(user_id, last_body, k=2)
     sources = fts_hits + cross_chat
-    calendar = _calendar_context()
+    calendar = _calendar_context(user_id=user_id)
 
     # Per-message body cap bumped 800 → 3000 chars. WhatsApp messages
     # are short by nature so 800 covers them; emails routinely run

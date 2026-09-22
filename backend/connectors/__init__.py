@@ -111,11 +111,27 @@ async def _invoke_n8n(spec: "ConnectorSpec", params: Dict[str, Any]) -> Dict[str
     return await asyncio.to_thread(lambda: n8n_client.trigger_webhook(path, params))
 
 
-async def invoke(name: str, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Call a connector by name. Always returns a dict — errors land in `error` key."""
+async def invoke(name: str, params: Dict[str, Any], *, user_id: Any = None) -> Dict[str, Any]:
+    """Call a connector by name. Always returns a dict — errors land in `error` key.
+
+    `user_id` is the person on whose behalf the call runs. The Paperless
+    connector then uses that person's own token (their documents, not
+    the household's); without a Paperless account of their own it
+    answers with an error rather than falling back to the admin token
+    (audit 2026-09-22, 1.10)."""
     spec = get(name)
     if not spec:
         return {"ok": False, "error": f"unknown connector '{name}'", "available": [s.name for s in list_all()]}
+    if name == "paperless":
+        params = dict(params or {})
+        if user_id is not None:
+            from ..paperless_ingest import user_creds
+            creds = user_creds(user_id)
+            if not creds:
+                return {"ok": False, "error": "no Paperless account for this person — nothing to search"}
+            params["creds_override"] = creds
+        elif "creds_override" not in params:
+            return {"ok": False, "error": "the Paperless connector needs the person it runs for"}
 
     # n8n-backed connectors don't have a Python invoke — they route through webhook.
     if spec.backend == "n8n":

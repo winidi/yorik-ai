@@ -7300,8 +7300,9 @@ async def invoke_connector_endpoint(
     body: ConnectorInvokeIn,
     role: str = Depends(_auth.current_role),
     layout_id: Optional[str] = Query(None, description="ID of the layout making the call, for permission enforcement"),
+    user: Dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
-    """Invoke a connector. Per-layout permission grants enforced here."""
+    """Invoke a connector as the person calling. Per-layout permission grants enforced here."""
     require_write(role)
     if not _has_grant(layout_id or "", name):
         # 403 with the info the frontend needs to prompt the user.
@@ -7315,7 +7316,7 @@ async def invoke_connector_endpoint(
                 "connector_description": spec.description if spec else "(unknown connector)",
             },
         )
-    return await connectors.invoke(name, body.params or {})
+    return await connectors.invoke(name, body.params or {}, user_id=user.get("id"))
 
 
 # ── connector credentials (Wave 4) ─────────────────────────────────────────
@@ -7349,7 +7350,9 @@ def test_connector_credentials(name: str, body: CredentialsIn, role: str = Depen
     credential_store.get = _override  # type: ignore[assignment]
     try:
         import asyncio
-        result = asyncio.run(connectors.invoke(name, {"op": "test_connection"}))
+        # Housekeeping, not a person's call: the admin credentials under
+        # test are what the connector should use (creds_override=None).
+        result = asyncio.run(connectors.invoke(name, {"op": "test_connection", "creds_override": None}))
     except Exception as exc:  # noqa: BLE001
         return {"all_ok": False, "error": f"{type(exc).__name__}: {exc}"}
     finally:
@@ -12229,11 +12232,17 @@ def embeddings_autotag_cancel(role: str = Depends(_auth.current_role)) -> Dict[s
 
 @app.get("/api/paperless/search")
 def paperless_search(q: str = Query(...), k: int = Query(8, ge=1, le=20),
-                     role: str = Depends(_auth.current_role)) -> Dict[str, Any]:
-    """Semantic search over the Paperless mirror. Returns chunks + citations."""
+                     role: str = Depends(_auth.current_role),
+                     user: Dict[str, Any] = Depends(_auth.current_user)) -> Dict[str, Any]:
+    """Semantic search over the Paperless mirror, as the person asking:
+    their token hydrates the hits and what it may not see is dropped.
+    No Paperless account → no documents."""
     normalize_role(role)
     from . import paperless_ingest as pi
-    return {"query": q, "results": pi.search(q, k=k)}
+    creds = pi.user_creds(user.get("id"))
+    if not creds:
+        return {"query": q, "results": []}
+    return {"query": q, "results": pi.search(q, k=k, creds_override=creds)}
 
 
 @app.get("/api/documents")
@@ -13099,7 +13108,8 @@ class SearchDocumentsIn(BaseModel):
 
 
 @app.post("/api/documents/search")
-def search_documents_endpoint(body: SearchDocumentsIn, role: str = Depends(_auth.current_role)) -> Dict[str, Any]:
+def search_documents_endpoint(body: SearchDocumentsIn, role: str = Depends(_auth.current_role),
+                              user: Dict[str, Any] = Depends(_auth.current_user)) -> Dict[str, Any]:
     """Direct document search for the /documents UI's query field.
 
     Searches BOTH Yorik-native uploads (document_chunks) AND Paperless
@@ -13117,8 +13127,14 @@ def search_documents_endpoint(body: SearchDocumentsIn, role: str = Depends(_auth
     native = documents_mod.search(body.query, k=body.k, role=role)
 
     pp_result: Dict[str, Any]
+    creds = _pp.user_creds(user.get("id"))
     try:
-        pp_result = _pp.search_hybrid(body.query, k=body.k)
+        if not creds:
+            pp_result = {"hits": [], "legs": {
+                "semantic": {"count": 0, "error": "no Paperless account for this person", "vec_count": 0},
+                "fts":      {"count": 0, "error": "no Paperless account for this person"}}}
+        else:
+            pp_result = _pp.search_hybrid(body.query, k=body.k, creds_override=creds)
     except Exception as exc:  # noqa: BLE001
         log.exception("paperless hybrid search failed in /api/documents/search: %s", exc)
         pp_result = {
