@@ -66,18 +66,25 @@ def test_default_owner_workflow_fires_on_consumption_only(monkeypatch):
     monkeypatch.setattr(pv.requests, "get", lambda url, **kw: _Resp(data={"results": []}))
     monkeypatch.setattr(pv.requests, "post", lambda url, **kw: posted.append(kw["json"]) or _Resp(data={"id": 9}))
     monkeypatch.setattr(pv.requests, "patch", lambda url, **kw: patched.append((url, kw["json"])) or _Resp())
-    assert pv._ensure_default_owner_workflow("http://p", {}, 3) == 9
+    assert pv._ensure_default_owner_workflow("http://p", {}, 3, parents_group_id=4) == 9
     assert posted[0]["triggers"] == [{"type": 1, "sources": [1], "filter_filename": "*"}]
-    assert posted[0]["actions"] == [{"type": 1, "assign_owner": 3}]
+    assert posted[0]["actions"] == [{"type": 1, "assign_owner": 3, "assign_view_groups": [4]}]   # the parents see the scans
 
     old = {"id": 1, "name": pv._DEFAULT_OWNER_WORKFLOW_NAME,
            "triggers": [{"type": 2, "sources": [1]}], "actions": [{"type": 1, "assign_owner": 3}]}
     monkeypatch.setattr(pv.requests, "get", lambda url, **kw: _Resp(data={"results": [old]}))
-    assert pv._ensure_default_owner_workflow("http://p", {}, 3) == 1
+    assert pv._ensure_default_owner_workflow("http://p", {}, 3, parents_group_id=4) == 1
     assert patched == [("http://p/api/workflows/1/",
-                        {"triggers": [{"type": 1, "sources": [1], "filter_filename": "*"}], "actions": [{"type": 1, "assign_owner": 3}]})]
+                        {"triggers": [{"type": 1, "sources": [1], "filter_filename": "*"}],
+                         "actions": [{"type": 1, "assign_owner": 3, "assign_view_groups": [4]}]})]
 
-    good = dict(old, triggers=[{"type": 1, "sources": [1]}])
+    # a workflow with the right trigger but without the parents group is repaired too
+    half = dict(old, triggers=[{"type": 1, "sources": [1]}])
+    monkeypatch.setattr(pv.requests, "get", lambda url, **kw: _Resp(data={"results": [half]}))
+    assert pv._ensure_default_owner_workflow("http://p", {}, 3, parents_group_id=4) == 1
+    assert len(patched) == 2
+
+    good = dict(half, actions=[{"type": 1, "assign_owner": 3, "assign_view_groups": [4]}])
     monkeypatch.setattr(pv.requests, "get", lambda url, **kw: _Resp(data={"results": [good]}))
-    assert pv._ensure_default_owner_workflow("http://p", {}, 3) == 1
-    assert len(patched) == 1                                   # a correct workflow is left alone
+    assert pv._ensure_default_owner_workflow("http://p", {}, 3, parents_group_id=4) == 1
+    assert len(patched) == 2                                   # a correct workflow is left alone

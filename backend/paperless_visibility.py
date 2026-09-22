@@ -111,7 +111,8 @@ def ensure_tags() -> Dict[str, int]:
     default_owner_id = _first_superuser_id(base, headers)
     if default_owner_id is not None:
         _backfill_ownerless_documents(base, headers, default_owner_id)
-        _ensure_default_owner_workflow(base, headers, default_owner_id)
+        _ensure_default_owner_workflow(base, headers, default_owner_id,
+                                       parents_group_id=group_ids.get(GROUPS["parents"]))
 
     out: Dict[str, int] = {}
     try:
@@ -407,9 +408,21 @@ _CONSUME_FOLDER_TRIGGER = {
 }
 
 
-def _workflow_trigger_ok(workflow: Dict[str, Any]) -> bool:
+def _consume_folder_action(owner_id: int, parents_group_id: Optional[int]) -> Dict[str, Any]:
+    """What a consume-folder document gets: the admin as owner (nobody
+    in the household is that account) and, so the adults can find what
+    the scanner produced, view for the "parents" group. Decided with
+    Dirk 2026-09-22."""
+    action: Dict[str, Any] = {"type": 1, "assign_owner": owner_id}      # type 1 = Assignment
+    if parents_group_id is not None:
+        action["assign_view_groups"] = [int(parents_group_id)]
+    return action
+
+
+def _workflow_ok(workflow: Dict[str, Any], parents_group_id: Optional[int]) -> bool:
     """True when every trigger of the workflow is "Consumption Started"
-    restricted to the consume folder."""
+    restricted to the consume folder, and its action gives the parents
+    group view."""
     triggers = workflow.get("triggers") or []
     if not triggers:
         return False
@@ -418,19 +431,24 @@ def _workflow_trigger_ok(workflow: Dict[str, Any]) -> bool:
             return False
         if sorted(int(x) for x in (t.get("sources") or [])) != _CONSUME_FOLDER_TRIGGER["sources"]:
             return False
+    if parents_group_id is not None:
+        groups = {int(g) for a in (workflow.get("actions") or []) for g in (a.get("assign_view_groups") or [])}
+        if int(parents_group_id) not in groups:
+            return False
     return True
 
 
-def _repair_workflow_trigger(base: str, headers: Dict[str, str], wid: int, owner_id: int) -> bool:
-    """Rewrite the workflow's triggers (and re-assert its action) so an
-    install that registered the "Document Added" trigger stops taking
-    ownership of member uploads."""
+def _repair_workflow_trigger(base: str, headers: Dict[str, str], wid: int, owner_id: int,
+                             parents_group_id: Optional[int] = None) -> bool:
+    """Rewrite the workflow's triggers and action so an install that
+    registered the "Document Added" trigger stops taking ownership of
+    member uploads, and consume-folder documents reach the parents."""
     try:
         r = requests.patch(
             f"{base}/api/workflows/{wid}/",
             headers={**headers, "Content-Type": "application/json"},
             json={"triggers": [_CONSUME_FOLDER_TRIGGER],
-                  "actions": [{"type": 1, "assign_owner": owner_id}]},
+                  "actions": [_consume_folder_action(owner_id, parents_group_id)]},
             timeout=TIMEOUT_S,
         )
         if r.ok:
@@ -445,6 +463,7 @@ def _repair_workflow_trigger(base: str, headers: Dict[str, str], wid: int, owner
 
 def _ensure_default_owner_workflow(
     base: str, headers: Dict[str, str], owner_id: int,
+    parents_group_id: Optional[int] = None,
 ) -> Optional[int]:
     """Create the Paperless Workflow that auto-assigns the default
     owner to every newly-consumed doc from the consume folder. Without
@@ -471,18 +490,15 @@ def _ensure_default_owner_workflow(
             for w in (r.json() or {}).get("results") or []:
                 if w.get("name") == _DEFAULT_OWNER_WORKFLOW_NAME:
                     wid = int(w["id"])
-                    if not _workflow_trigger_ok(w):
-                        _repair_workflow_trigger(base, headers, wid, owner_id)
+                    if not _workflow_ok(w, parents_group_id):
+                        _repair_workflow_trigger(base, headers, wid, owner_id, parents_group_id)
                     return wid
         payload = {
             "name":    _DEFAULT_OWNER_WORKFLOW_NAME,
             "order":   0,
             "enabled": True,
             "triggers": [_CONSUME_FOLDER_TRIGGER],
-            "actions": [{
-                "type":         1,         # Assignment
-                "assign_owner": owner_id,
-            }],
+            "actions": [_consume_folder_action(owner_id, parents_group_id)],
         }
         cr = requests.post(
             f"{base}/api/workflows/",
