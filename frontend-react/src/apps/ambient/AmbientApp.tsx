@@ -473,7 +473,18 @@ export function AmbientApp() {
           <IdleOverlay greeting={timeGreeting()} />
         </>
       ) : (
-        <div className="absolute inset-0 z-10" onPointerDown={e => { e.stopPropagation(); touchBoard(); }} onPointerUp={e => e.stopPropagation()}>
+        // The board has to be able to scroll here. On a narrow screen
+        // (the wall in portrait) FamilyBoard lays itself out as
+        // min-h-full and expects an ancestor to scroll — on /board that
+        // ancestor is h-screen overflow-y-auto, but the wall's own
+        // surface is fixed inset-0 overflow-hidden, so anything past
+        // the first screen was simply unreachable. It only showed up
+        // once somebody signed in, because that is when each column
+        // grows a "+ Aufgabe" row and the content finally overflows.
+        // The class also restores touch-action: pan-y, which index.css
+        // takes away from everything by default (body: touch-action
+        // none, scroll containers get it back).
+        <div className="absolute inset-0 z-10 overflow-y-auto" onPointerDown={e => { e.stopPropagation(); touchBoard(); }} onPointerUp={e => e.stopPropagation()}>
           <FamilyBoard mode={mode} currentUserId={meId} currentUserRole={active ? ((auth.user as any)?.role || null) : null} lockOthers
                        onNeedSignIn={(p) => { setBoardSignIn(true); setBoardPerson(p.id); void openPicker(); }} />
         </div>
