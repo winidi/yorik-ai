@@ -94,8 +94,10 @@ export function AmbientApp() {
   useEffect(() => {
     api.get<{ mode: WallMode }>("/api/ambient/mode").then(r => setMode(r.mode)).catch(() => {});
   }, []);
-  async function cycleMode() {
-    const next = MODES[(MODES.findIndex(m => m.id === mode) + 1) % MODES.length].id;
+  // One tap per mode, not a cycle: the wall lives on the calendar and
+  // the household wants the photos back in one touch, not four.
+  async function pickMode(next: WallMode) {
+    if (next === mode) return;
     setMode(next);
     try { await api.patch("/api/ambient/mode", { mode: next }); } catch {}
   }
@@ -382,17 +384,19 @@ export function AmbientApp() {
     );
   }
 
-  // Album not configured yet — show a polite hint with a settings link.
-  // Admins can fix this from Settings → Devices. Non-admin users on
-  // the same tablet just see the hint without an action button.
-  if (configured === false) {
+  // No photos configured yet — a hint with a settings link, but only
+  // on the photo wall. The board modes (calendar, tasks, timetable)
+  // have nothing to do with Immich; a household that runs the wall as
+  // a calendar and never picks an album would otherwise never get past
+  // this screen.
+  if (configured === false && mode === "photos") {
     return (
       <FullscreenMessage>
-        <div className="text-2xl font-light mb-2">No album configured</div>
+        <div className="text-2xl font-light mb-2">Keine Fotos eingerichtet</div>
         <div className="text-white/70 mb-6 max-w-md text-center">
-          Pick the Immich album you want to show on this kiosk in
-          Settings → Devices → {kiosk.device_label || "this device"} →
-          Choose album.
+          Einstellungen → Geräte → {kiosk.device_label || "dieses Gerät"}:
+          ein Immich-Album wählen oder „Fotos von heute“ einschalten.
+          Der Kalender läuft auch ohne.
         </div>
         {(auth.user?.role === "admin" || auth.user?.role === "platform_admin") && (
           <button
@@ -425,16 +429,30 @@ export function AmbientApp() {
                        onNeedSignIn={(p) => { setBoardSignIn(true); setBoardPerson(p.id); void openPicker(); }} />
         </div>
       )}
-      <button
+      <div
         onPointerDown={e => e.stopPropagation()}
         onPointerUp={e => e.stopPropagation()}
-        onClick={() => { void cycleMode(); }}
-        className={cn("fixed right-5 bottom-5 z-30 flex items-center gap-2 rounded-full px-4 py-2.5 text-sm border backdrop-blur-md",
-                      mode === "photos" ? "bg-black/55 hover:bg-black/70 text-white/90 border-white/15" : "bg-white/90 hover:bg-white text-[#1f2430] border-[#e9e6df] shadow")}
-        title="Anzeige wechseln"
+        className={cn("fixed right-5 bottom-5 z-30 flex items-center gap-1 rounded-full p-1 border backdrop-blur-md",
+                      mode === "photos" ? "bg-black/55 text-white/90 border-white/15" : "bg-white/90 text-[#1f2430] border-[#e9e6df] shadow")}
       >
-        {(() => { const m = MODES.find(x => x.id === mode)!; return <><m.Icon className="w-4 h-4" /> {m.label}</>; })()}
-      </button>
+        {MODES.map(m => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => { void pickMode(m.id); }}
+            title={m.label}
+            aria-label={m.label}
+            aria-current={m.id === mode}
+            className={cn("flex items-center gap-2 rounded-full px-3 py-2 text-sm transition",
+                          m.id === mode
+                            ? (mode === "photos" ? "bg-white/20" : "bg-[#1f2430] text-white")
+                            : (mode === "photos" ? "hover:bg-white/10" : "hover:bg-black/5"))}
+          >
+            <m.Icon className="w-5 h-5" />
+            {m.id === mode && <span className="pr-1">{m.label}</span>}
+          </button>
+        ))}
+      </div>
       {recordingsOn && !recorderLive && (
         <button
           onPointerDown={e => e.stopPropagation()}
@@ -474,7 +492,8 @@ export function AmbientApp() {
         <AvatarPinFallback
           users={pickableUsers ?? []}
           preselectId={boardPerson || undefined}
-          transcript={pickerError ? `Couldn't load users: ${pickerError}` : ""}
+          transcript=""
+          loadError={pickerError}
           retryMessage=""
           onClose={() => setPickerOpen(false)}
           // Chicken-and-egg escape: when pin-pickable 403s

@@ -47,9 +47,14 @@ interface Props {
   // mark this device as a kiosk. Omitted on the voice-ID picker
   // where the user is mid-conversation and shouldn't see it.
   onSignInWithPassword?: () => void;
+  // Why the list is empty, when it is empty for a reason other than
+  // "nobody set a PIN". A wall that is not (yet) a kiosk gets 403 on
+  // pin-pickable and would otherwise be told a falsehood about the
+  // household's PINs — which is exactly the wrong place to look.
+  loadError?:   string | null;
 }
 
-export function AvatarPinFallback({ users, transcript, retryMessage, onClose, onSwitched, onSignInWithPassword, preselectId }: Props) {
+export function AvatarPinFallback({ users, transcript, retryMessage, onClose, onSwitched, onSignInWithPassword, preselectId, loadError }: Props) {
   const [picked, setPicked]   = useState<PickableUser | null>(null);
   useEffect(() => {
     if (!picked && preselectId) {
@@ -134,8 +139,14 @@ export function AvatarPinFallback({ users, transcript, retryMessage, onClose, on
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-w-3xl">
             {users.length === 0 && (
               <div className="col-span-full text-sm text-white/60 text-center max-w-md mx-auto">
-                Nobody in this household has set a kiosk PIN yet. Open
-                Settings → Profile on any device to set one and try again.
+                {loadError
+                  ? <>Diese Wand darf die Namen gerade nicht laden — sie ist
+                      noch kein Kiosk-Gerät. Einstellungen → Geräte → dieses
+                      Gerät → Kiosk einschalten.
+                      <div className="mt-2 text-xs text-white/40">{loadError}</div></>
+                  : <>Niemand im Haushalt hat bisher eine Kiosk-PIN gesetzt.
+                      Einstellungen → Profil auf einem beliebigen Gerät, PIN
+                      setzen, dann noch einmal tippen.</>}
               </div>
             )}
             {users.map(u => (
