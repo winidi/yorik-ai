@@ -58,7 +58,7 @@ def workers(user: dict = Depends(current_user)) -> dict:
     that heartbeat recently, amber for stale, red for crashed.
     Auth-required because worker names hint at infra (which connectors
     are wired up)."""
-    return {"workers": _workers.get_all()}
+    return {"workers": _workers.visible_to(user)}
 
 
 @router.get("/digest")

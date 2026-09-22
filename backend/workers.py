@@ -13,6 +13,7 @@ storage would add lock contention to the hot path for no benefit.
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 from dataclasses import dataclass, field, asdict
@@ -119,3 +120,41 @@ def get_all() -> list[dict]:
 
 
 _STALE_THRESHOLD_S = 300  # 5 minutes — floor; per-worker may be longer
+
+
+_ACCOUNT_WORKER = re.compile(r"^email_account_(\d+)$")
+
+
+def visible_to(user: dict | None) -> list[dict]:
+    """The snapshot as one person may see it. A mail account's worker
+    (`email_account_<id>`) carries that account's address and its IMAP
+    errors in the detail line, so it is shown to the account's owner
+    only — admins included, there is nothing of another person's here
+    an admin needs. The household workers (backup, search index,
+    calendar feeds, …) are everyone's, but their detail line can hint
+    at infrastructure, so it stays with admins."""
+    uid = str((user or {}).get("id") or "")
+    role = ((user or {}).get("role") or "").lower()
+    is_admin = role in ("admin", "platform_admin")
+    with _lock:
+        account_ids = [int(m.group(1)) for name in _workers if (m := _ACCOUNT_WORKER.match(name))]
+    owners: dict[int, str] = {}
+    if account_ids:
+        try:
+            from .database import get_conn
+            with get_conn() as conn:
+                ph = ",".join("?" * len(account_ids))
+                owners = {int(r["id"]): str(r["owner_user_id"]) for r in conn.execute(
+                    f"SELECT id, owner_user_id FROM email_accounts WHERE id IN ({ph})", account_ids).fetchall()}
+        except Exception:  # noqa: BLE001 — unknown owner → shown to nobody
+            owners = {}
+    out = []
+    for w in get_all():
+        m = _ACCOUNT_WORKER.match(w["name"])
+        if m:
+            if owners.get(int(m.group(1))) != uid:
+                continue
+        elif not is_admin:
+            w = dict(w, detail="")
+        out.append(w)
+    return out

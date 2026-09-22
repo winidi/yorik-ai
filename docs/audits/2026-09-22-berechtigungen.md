@@ -146,6 +146,16 @@ Als Referenz für die Reparatur, denn hier steht das Muster schon:
 - **`spaces.user_visible_space_ids`**: die eine Stelle, die Regel 1 wörtlich umsetzt (fremder persönlicher Space unsichtbar für `admin` und `platform_admin`).
 - **Backup**: nur Admin, keine Download-Route. Bewusste Admin-Ausnahme.
 
+## Stand
+
+- **Erledigt 22.09.:** Paket 1 (2.2–2.4, Commit `da47b65`), Paket 2 (2.1, 2.21
+  Docstring), Paket 3 (2.5, 2.6, 2.7 Board, 3.1 Worker). Timetable (2.7)
+  bleibt consent-basiert: der Stundenplan eines Kindes, das auf der Wand
+  ist, ist für den Haushalt.
+- **Entschieden von Dirk 22.09.:** Notfall-Zugriff wie vorgeschlagen (ja);
+  Consume-Ordner-Dokumente sichtbar für `parents`; Immich-Login = Yorik-Login
+  (OIDC-Provider in Yorik, eigenes Paket nach den Berechtigungs-Paketen).
+
 ## Reparatur in Paketen
 
 Reihenfolge nach Blast-Radius, jedes Paket einzeln testbar und

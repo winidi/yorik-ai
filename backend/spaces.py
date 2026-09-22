@@ -71,12 +71,16 @@ TABLE_AREA = {"tasks": "tasks", "events": "calendar", "calendars": "calendar",
 def _membership_space_ids(c, user_id, area: Optional[str]) -> list[int]:
     """Spaces shared with the user, honouring scoped memberships: a row
     with scope 'tasks,calendar' counts for those areas only; scope NULL
-    is the whole space. area=None means "any membership at all"."""
+    is the whole space. area=None means "no particular area", which a
+    scoped membership does not cover — the same rule as _scoped_level.
+    (Until 2026-09-22 area=None matched every membership, so "Beate
+    sees my calendar" also opened Dirk's bills and recordings, the
+    tables without an area.)"""
     rows = c.execute("SELECT space_id, scope FROM space_members WHERE user_id = ?", (user_id,)).fetchall()
     out = []
     for r in rows:
         scope = (r["scope"] or "").strip()
-        if not scope or area is None or area in {x.strip() for x in scope.split(",")}:
+        if not scope or (area is not None and area in {x.strip() for x in scope.split(",")}):
             out.append(int(r["space_id"]))
     return out
 
@@ -319,11 +323,10 @@ def row_filter(
     """Return (sql_fragment, params) to AND into a list query. Filters
     `<table>` rows to ones the user can SEE per the spaces+shares model.
 
-    platform_admin → empty fragment (true global bypass).
-    admin → workspace-scoped: matches when space_id ∈ spaces in
-            workspaces the user owns ∪ personal ∪ memberships.
-    Member → matches when space_id ∈ visible spaces, OR row owner is
-             the user, OR a row_shares row exists.
+    Matches when space_id ∈ the user's visible spaces (see
+    user_visible_space_ids — another person's personal space is never
+    among them, for admins too), OR the row owner is the user, OR a
+    row_shares row exists, OR (tasks) the user is an assignee.
 
     `table_alias` lets the caller use it inside JOINs or with an alias.
     Defaults to the table name.

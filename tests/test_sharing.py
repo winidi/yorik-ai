@@ -95,3 +95,20 @@ def test_admin_sets_sharing_for_a_child_but_not_for_a_member(couple):
     assert dirk_c.put(f"/api/sharing/{dirk}?owner={beate}", json={"areas": ["tasks"], "level": "read"}).status_code == 403
     assert beate_c.put(f"/api/sharing/{beate}?owner={kid}", json={"areas": ["tasks"], "level": "read"}).status_code == 403
     assert dirk_c.put(f"/api/sharing/{beate}", json={"areas": ["photos"], "level": "read"}).status_code == 400
+
+
+def test_a_scoped_share_does_not_open_the_tables_without_an_area(couple):
+    """Bills and recordings have no sharing area. "Beate sees my calendar"
+    used to put Dirk's personal space into their filter too (audit
+    2026-09-22, 2.1); only a whole-space membership may."""
+    from backend import spaces as S
+    dirk_c, dirk = couple["dirk"]; _, beate = couple["beate"]
+    dirk_space = S.personal_space_id(dirk)
+    assert dirk_c.put(f"/api/sharing/{beate}", json={"areas": ["calendar"], "level": "read"}).status_code == 200
+    assert dirk_space in S.user_visible_space_ids(beate, "member", area="calendar")
+    assert dirk_space not in S.user_visible_space_ids(beate, "member")               # area=None
+    frag, params = S.row_filter(beate, "member", "bills")
+    assert dirk_space not in params
+    assert dirk_c.put(f"/api/sharing/{beate}", json={"areas": ["tasks", "calendar", "contacts", "documents"],
+                                                     "level": "read"}).status_code == 200
+    assert dirk_space in S.user_visible_space_ids(beate, "member")                   # everything = whole space

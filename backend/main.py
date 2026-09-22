@@ -1231,11 +1231,12 @@ def ambient_mode_set(body: _KioskModeBody, request: Request) -> Dict[str, Any]:
     return {"mode": mode, "modes": list(_KIOSK_MODES)}
 
 
-def _kiosk_or_session(request: Request) -> None:
-    """The wall (kiosk gate) or any signed-in household member."""
+def _kiosk_or_session(request: Request) -> Optional[Dict[str, Any]]:
+    """The wall (kiosk gate) or any signed-in household member. Returns
+    the member, or None when it is the wall itself."""
     try:
         _require_kiosk_session(request)
-        return
+        return None
     except HTTPException:
         pass
     sid = request.cookies.get(_auth.COOKIE_NAME)
@@ -1246,6 +1247,7 @@ def _kiosk_or_session(request: Request) -> None:
             user = _auth.get_user_from_bearer(auth_header[7:])
     if not user:
         raise HTTPException(403, "kiosk device or signed-in member required")
+    return user
 
 
 @app.get("/api/ambient/board", tags=["kiosk"])
@@ -1253,11 +1255,15 @@ def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
     """The family board feed: everyone who lets the wall show them
     (kiosk_agenda_consent), their events of the week and their open and
     today-done tasks. Consent is the one switch: a person who did not
-    tick it does not appear on the wall at all. No session needed on the
-    tablet; the kiosk gate is enough because the wall is in the house."""
+    tick it does not appear on the wall at all. The wall passes the
+    kiosk gate; a household member may read the same feed from their
+    phone and then sees the events through their own calendar rights.
+    An event marked private is "Busy" on the wall, as it is for anyone
+    but its owner; notes never leave the person's own view."""
     from datetime import datetime as _dt, timedelta as _td
+    from . import calendars as _cal_mod
     from . import people as _people_mod
-    _kiosk_or_session(request)
+    viewer = _kiosk_or_session(request)
     days = max(1, min(int(days or 7), 14))
     today = _dt.now().date()
     week_start = today - _td(days=today.weekday())
@@ -1270,16 +1276,26 @@ def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
         events, tasks = [], []
         if ids:
             ph = ",".join("?" * len(ids))
+            viewer_sql, viewer_params = ("TRUE", []) if viewer is None else \
+                _cal_mod.visible_event_filter(str(viewer["id"]), viewer.get("role") or "")
             for r in conn.execute(
-                f"SELECT e.id, e.title, e.starts_at, e.ends_at, e.all_day, e.owner_user_id, e.location, e.notes, c.kind AS cal_kind, c.name AS cal_name "
-                f"FROM events e LEFT JOIN calendars c ON c.id = e.calendar_id "
-                f"WHERE e.starts_at >= ? AND e.starts_at < ? AND (e.owner_user_id IN ({ph}) OR c.kind = 'shared') "
-                f"ORDER BY e.starts_at",
-                (week_start.isoformat(), end.isoformat(), *ids)).fetchall():
-                events.append({"id": r["id"], "title": r["title"], "starts_at": r["starts_at"], "ends_at": r["ends_at"],
-                               "all_day": bool(r["all_day"]), "owner_id": str(r["owner_user_id"]) if r["owner_user_id"] else None,
-                               "shared": r["cal_kind"] == "shared", "location": r["location"],
-                               "notes": r["notes"] or "", "calendar": r["cal_name"] or ""})
+                f"SELECT events.id, events.title, events.starts_at, events.ends_at, events.all_day, events.owner_user_id, "
+                f"       events.location, events.notes, events.visibility, events.calendar_id, c.kind AS cal_kind, c.name AS cal_name "
+                f"FROM events LEFT JOIN calendars c ON c.id = events.calendar_id "
+                f"WHERE events.starts_at >= ? AND events.starts_at < ? AND (events.owner_user_id IN ({ph}) OR c.kind = 'shared') "
+                f"AND {viewer_sql} ORDER BY events.starts_at",
+                (week_start.isoformat(), end.isoformat(), *ids, *viewer_params)).fetchall():
+                row = dict(r)
+                owner = str(row["owner_user_id"]) if row["owner_user_id"] else None
+                if viewer is not None:
+                    row = _cal_mod.downgrade_for_privacy(row, str(viewer["id"]), viewer.get("role") or "")
+                elif row.get("visibility") == "private":
+                    row = _cal_mod._busy_only(row)
+                mine = viewer is not None and owner == str(viewer["id"])
+                events.append({"id": row["id"], "title": row["title"], "starts_at": row["starts_at"], "ends_at": row["ends_at"],
+                               "all_day": bool(row["all_day"]), "owner_id": owner,
+                               "shared": row["cal_kind"] == "shared", "location": row["location"] if not row.get("_busy_only") else None,
+                               "notes": (row["notes"] or "") if mine else "", "calendar": row["cal_name"] or ""})
             week_ago = (today - _td(days=6)).isoformat()
             routine_log: list = []
             # the hand-made order of each column: {task_id: {user_id: position}}
@@ -6944,7 +6960,7 @@ def dashboard_workers(
     so the user sees them before noticing "I'm not receiving messages."
     """
     from . import workers
-    return {"workers": workers.get_all()}
+    return {"workers": workers.visible_to(user)}
 
 
 @app.get("/api/calendar/freebusy")
@@ -9144,10 +9160,20 @@ def chat_mentions(
     an empty list for that type, not a 500.
     """
     normalize_role(role)
+    from . import calendars as _cal_mod
+    from . import spaces as _sp
     requested = {t.strip() for t in (types or "").split(",") if t.strip()}
     q = (prefix or "").strip()
     like = f"%{q}%"
     out: Dict[str, List[Dict[str, Any]]] = {"contact": [], "event": [], "doc": []}
+    # Only what the person may see (audit 2026-09-22, 2.6): their
+    # contacts, their calendars and shares, other people's private
+    # events never.
+    user_id = (user or {}).get("id")
+    contact_sql, contact_params = _sp.row_filter(user_id, role, "contacts")
+    ev_sql, ev_params = _cal_mod.visible_event_filter(str(user_id), role)
+    ev_sql = f"{ev_sql} AND (events.visibility IS DISTINCT FROM 'private' OR events.owner_user_id = ?)"
+    ev_params = [*ev_params, user_id]
 
     with conn_ctx(DB_PATH) as conn:
         if "contact" in requested:
@@ -9155,19 +9181,19 @@ def chat_mentions(
                 rows = conn.execute(
                     "SELECT id, display_name, relation, kind, status "
                     "FROM contacts "
-                    "WHERE status = 'active' "
+                    f"WHERE status = 'active' AND {contact_sql} "
                     "AND (display_name LIKE ? OR aliases LIKE ?) "
                     "ORDER BY (last_used_at IS NULL), last_used_at DESC, "
                     "         display_name ASC "
                     "LIMIT ?",
-                    (like, like, limit),
+                    (*contact_params, like, like, limit),
                 ).fetchall()
             else:
                 rows = conn.execute(
                     "SELECT id, display_name, relation, kind, status "
-                    "FROM contacts WHERE status = 'active' "
+                    f"FROM contacts WHERE status = 'active' AND {contact_sql} "
                     "ORDER BY (last_used_at IS NULL), last_used_at DESC LIMIT ?",
-                    (limit,),
+                    (*contact_params, limit),
                 ).fetchall()
             out["contact"] = [{
                 "id":    r["id"],
@@ -9180,16 +9206,17 @@ def chat_mentions(
                 rows = conn.execute(
                     "SELECT id, title, starts_at, location "
                     "FROM events "
-                    "WHERE title LIKE ? "
+                    f"WHERE title LIKE ? AND {ev_sql} "
                     "ORDER BY starts_at DESC LIMIT ?",
-                    (like, limit),
+                    (like, *ev_params, limit),
                 ).fetchall()
             else:
                 rows = conn.execute(
                     "SELECT id, title, starts_at, location "
                     "FROM events "
+                    f"WHERE {ev_sql} "
                     "ORDER BY starts_at DESC LIMIT ?",
-                    (limit,),
+                    (*ev_params, limit),
                 ).fetchall()
             out["event"] = [{
                 "id":    r["id"],
@@ -9310,10 +9337,18 @@ def today_digest(
     """
     normalize_role(role)
     from datetime import datetime as _dt, timedelta as _td
+    from . import calendars as _cal_mod
+    from . import spaces as _sp
     user_id = (user or {}).get("id")
     today = _dt.now().date()
     today_iso = today.isoformat()
     tomorrow_iso = (today + _td(days=1)).isoformat()
+    # The person's own day: their calendars and shares, their tasks,
+    # their contacts. Until 2026-09-22 every section read the whole
+    # household (audit 2.5).
+    ev_sql, ev_params = _cal_mod.visible_event_filter(str(user_id), role)
+    task_sql, task_params = _sp.row_filter(user_id, role, "tasks")
+    contact_sql, contact_params = _sp.row_filter(user_id, role, "contacts")
 
     out: Dict[str, Any] = {
         "today_date":          today_iso,
@@ -9328,36 +9363,40 @@ def today_digest(
     with conn_ctx(DB_PATH) as conn:
         # Events today
         rows = conn.execute(
-            "SELECT id, title, starts_at, ends_at, all_day, location "
+            "SELECT id, title, starts_at, ends_at, all_day, location, visibility, owner_user_id, calendar_id "
             "FROM events "
-            "WHERE starts_at >= ? AND starts_at < ? "
+            f"WHERE starts_at >= ? AND starts_at < ? AND {ev_sql} "
             "ORDER BY starts_at ASC LIMIT 8",
-            (today_iso, tomorrow_iso),
+            (today_iso, tomorrow_iso, *ev_params),
         ).fetchall()
-        out["events_today"] = [dict(r) for r in rows]
+        out["events_today"] = [
+            {k: v for k, v in _cal_mod.downgrade_for_privacy(dict(r), str(user_id), role).items()
+             if k in ("id", "title", "starts_at", "ends_at", "all_day", "location")}
+            for r in rows]
 
         # Tasks overdue (due_date < today AND not done)
         cnt = conn.execute(
             "SELECT COUNT(*) AS n FROM tasks "
             "WHERE done = 0 AND due_date IS NOT NULL "
-            "AND due_date < ?",
-            (today_iso,),
+            f"AND due_date < ? AND {task_sql}",
+            (today_iso, *task_params),
         ).fetchone()
         out["tasks_overdue_count"] = int(cnt["n"]) if cnt else 0
         if out["tasks_overdue_count"] > 0:
             sample = conn.execute(
                 "SELECT id, title, due_date FROM tasks "
                 "WHERE done = 0 AND due_date IS NOT NULL "
-                "AND due_date < ? "
+                f"AND due_date < ? AND {task_sql} "
                 "ORDER BY due_date ASC LIMIT 3",
-                (today_iso,),
+                (today_iso, *task_params),
             ).fetchall()
             out["tasks_overdue_sample"] = [dict(r) for r in sample]
 
         # Pending contacts (mostly seeded by email_in / wa_sync; vCard
         # imports land here too when the user picks "Import to Pending")
         cnt = conn.execute(
-            "SELECT COUNT(*) AS n FROM contacts WHERE status = 'pending'",
+            f"SELECT COUNT(*) AS n FROM contacts WHERE status = 'pending' AND {contact_sql}",
+            tuple(contact_params),
         ).fetchone()
         out["contacts_pending_count"] = int(cnt["n"]) if cnt else 0
 
@@ -9370,9 +9409,9 @@ def today_digest(
             rows = conn.execute(
                 "SELECT id, display_name, birthday FROM contacts "
                 "WHERE status = 'active' AND birthday IS NOT NULL "
-                "AND substr(birthday, 6, 5) = ? "
+                f"AND substr(birthday, 6, 5) = ? AND {contact_sql} "
                 "LIMIT 4",
-                (mmdd,),
+                (mmdd, *contact_params),
             ).fetchall()
             for r in rows:
                 upcoming.append({
