@@ -3675,8 +3675,11 @@ def _ensure_row_writable(
         if cal and cal["read_only"]:
             raise HTTPException(status_code=403, detail="this calendar mirrors another one (e.g. Google); "
                                                         "change the event there and it follows within minutes")
-    if user is None or user.get("id") is None or role == "platform_admin":
-        return r
+    if user is None or user.get("id") is None:
+        raise HTTPException(status_code=401, detail="sign in to change this")
+    # No platform_admin arm any more: the loose end named in HANDOFF —
+    # whoever runs the box changes what is theirs or shared with them,
+    # like everyone else (audit 2026-09-22, 2.14).
     from . import spaces as _sp
     if not _sp.can_write_row(user["id"], role, table, r):
         subject = table[:-1] if table.endswith("s") else table
@@ -12439,15 +12442,12 @@ def change_document_visibility_route(
         raise HTTPException(503, "Paperless not configured")
     base = (s.get("base_url") or "http://localhost:8010").rstrip("/")
 
-    # Resolve the calling user's Paperless uid for the owner check.
-    me_paperless_uid: Optional[int] = None
-    try:
-        from . import external_users
-        creds = external_users.get_user_paperless_creds(user["id"])
-        if creds:
-            me_paperless_uid = creds.get("paperless_user_id")
-    except Exception:
-        pass
+    # The calling user's Paperless uid, from their profile (the creds
+    # helper never carried it, so the owner branch always failed and
+    # only admins could change a visibility — audit 2026-09-22, 1.17).
+    with conn_ctx(DB_PATH) as conn:
+        prow = conn.execute("SELECT paperless_user_id FROM user_profiles WHERE id = ?", (user["id"],)).fetchone()
+    me_paperless_uid: Optional[int] = int(prow["paperless_user_id"]) if prow and prow["paperless_user_id"] else None
 
     # Owner check via Paperless GET (admin token; cheap and authoritative).
     try:
@@ -12463,9 +12463,10 @@ def change_document_visibility_route(
         raise
     except Exception as exc:
         raise HTTPException(502, f"Paperless lookup failed: {exc}")
-    is_admin = (user.get("role") == "admin")
-    if not is_admin and (me_paperless_uid is None or owner != me_paperless_uid):
-        raise HTTPException(403, "only the owner or admin may change visibility")
+    # The owner decides who sees their document — an admin does not
+    # publish someone else's private document (audit 1.18).
+    if me_paperless_uid is None or owner != me_paperless_uid:
+        raise HTTPException(403, "only the document's owner may change its visibility")
 
     res = _pv.change_document_visibility(int(paperless_doc_id), body.visibility)
     if not res.get("ok"):
@@ -12957,19 +12958,35 @@ def get_document_raw(
     )
 
 
+def _own_local_document(doc_id: int, user: dict[str, Any]) -> None:
+    """A row of the local document mirror may be deleted or reindexed by
+    its owner; a row nobody owns (older uploads) by an admin. Until
+    2026-09-22 this was admin-only — the owner could not delete their
+    own upload and an admin could delete anyone's (audit 2.13)."""
+    doc = documents_mod.get_document(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail=f"document {doc_id} not found")
+    owner = doc.get("owner_user_id")
+    if owner is not None and str(owner) == str(user.get("id")):
+        return
+    if owner is None and normalize_role(user.get("role") or "") in ("admin", "platform_admin"):
+        return
+    raise HTTPException(status_code=403, detail="only the document's owner may do that")
+
+
 @app.delete("/api/documents/{doc_id}", status_code=204, response_class=Response)
-def delete_document_endpoint(doc_id: int, role: str = Depends(_auth.current_role)) -> Response:
-    if normalize_role(role) not in ("admin", "platform_admin"):
-        raise HTTPException(status_code=403, detail="role required: admin")
+def delete_document_endpoint(doc_id: int, role: str = Depends(_auth.current_role),
+                             user: dict[str, Any] = Depends(_auth.current_user)) -> Response:
+    _own_local_document(doc_id, user)
     if not documents_mod.delete_document(doc_id):
         raise HTTPException(status_code=404, detail=f"document {doc_id} not found")
     return Response(status_code=204)
 
 
 @app.post("/api/documents/{doc_id}/reindex")
-def reindex_document_endpoint(doc_id: int, role: str = Depends(_auth.current_role)) -> Dict[str, Any]:
-    if normalize_role(role) not in ("admin", "platform_admin"):
-        raise HTTPException(status_code=403, detail="role required: admin")
+def reindex_document_endpoint(doc_id: int, role: str = Depends(_auth.current_role),
+                              user: dict[str, Any] = Depends(_auth.current_user)) -> Dict[str, Any]:
+    _own_local_document(doc_id, user)
     result = documents_mod.index_document(doc_id)
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result.get("error", "indexing failed"))

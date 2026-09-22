@@ -30,17 +30,15 @@ async def execute(
         raise RuntimeError("Paperless is not configured on this Yorik instance")
     base = (s.get("base_url") or "http://localhost:8010").rstrip("/")
 
-    # Owner check — mirror the /api/documents/-N/visibility HTTP route.
-    role = (getattr(ctx, "role", None) or "").strip().lower()
+    # Owner check — mirror the /api/documents/-N/visibility HTTP route:
+    # the owner decides, nobody else (audit 2026-09-22, 1.17, 1.18).
     user_id = getattr(ctx, "user_id", None)
-    is_admin = role in ("platform_admin", "admin")
-
     me_paperless_uid = None
-    if not is_admin and user_id is not None:
-        from backend.external_users import get_user_paperless_creds
-        creds = get_user_paperless_creds(user_id)
-        if creds:
-            me_paperless_uid = creds.get("paperless_user_id")
+    if user_id is not None:
+        from backend.database import get_conn
+        with get_conn() as conn:
+            prow = conn.execute("SELECT paperless_user_id FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
+        me_paperless_uid = int(prow["paperless_user_id"]) if prow and prow["paperless_user_id"] else None
 
     # Look up the doc's owner + title from Paperless.
     try:
@@ -57,10 +55,10 @@ async def execute(
     owner = body.get("owner")
     title = body.get("title") or f"document {document_id}"
 
-    if not is_admin and (me_paperless_uid is None or owner != me_paperless_uid):
+    if me_paperless_uid is None or owner != me_paperless_uid:
         from backend.calendars import RowOwnerPermissionError
         raise RowOwnerPermissionError(
-            f"only the document's owner or an admin can change its visibility "
+            f"only the document's owner can change its visibility "
             f"({title!r} belongs to another user)."
         )
 

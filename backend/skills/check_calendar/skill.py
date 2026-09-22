@@ -129,12 +129,15 @@ def _query_events(start: datetime, end: datetime,
         where.append("lower(title) LIKE ?")
         params.append(f"%{title_needle}%")
 
-    if role != "platform_admin" and user_id is not None:
+    if user_id is not None:
+        # every role, the operator included (audit 2026-09-22, 4.6)
         from backend import calendars as _cal
         vis_clause, vis_params = _cal.visible_event_filter(user_id, role)
         if vis_clause:
             where.append(vis_clause)
             params.extend(vis_params)
+    else:
+        where.append("1=0")           # no person, no events
 
     sql = ("SELECT id, title, starts_at, ends_at, all_day, person "
            "FROM events WHERE " + " AND ".join(where) +

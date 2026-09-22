@@ -91,25 +91,12 @@ router = APIRouter(prefix="/paperless", tags=["paperless"])
 
 
 def _paperless_username(user: dict[str, Any]) -> str:
-    """Derive the Paperless username for a Yorik user.
-
-    Phase C T11: only `platform_admin` impersonates the Paperless
-    superuser. Workspace admins (`role='admin'`) route through their
-    own Paperless account — otherwise a workspace admin would see
-    every workspace's documents through the proxy, defeating per-
-    workspace Paperless isolation.
-
-    For non-platform-admin Yorik users (workspace admin and below),
-    fall back to the slug rule used in `external_users.provision_paperless`
-    so a properly-provisioned Paperless account picks up. (They'll see
-    a permission-less view until provisioning is done — that's the
-    documented limitation.)
-    """
-    if (user.get("role") or "").lower() == "platform_admin":
-        return os.getenv("PAPERLESS_ADMIN_USER", "admin")
-    email = (user.get("email") or "").lower()
-    base = email.split("@")[0] if email else (user.get("name") or "").lower()
-    cleaned = "".join(c for c in base if c.isalnum() or c in ".-_")[:30]
+    """The Paperless account a Yorik user browses as: their own, for
+    every role. Until 2026-09-22 `platform_admin` was mapped to the
+    Paperless superuser and saw every household member's documents in
+    the Paperless UI (audit 1.3). Same derivation as provisioning."""
+    from .external_users import paperless_username_for
+    cleaned = paperless_username_for(user.get("email") or "", user.get("name") or "")
     if not cleaned:
         # Shouldn't happen for a logged-in user, but don't crash the proxy.
         cleaned = f"yorik{user.get('id', 0)}"

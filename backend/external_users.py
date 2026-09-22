@@ -367,6 +367,17 @@ def _strong_paperless_password() -> str:
     return secrets.token_urlsafe(27)  # ~36 chars
 
 
+def paperless_username_for(email: str, name: str) -> str:
+    """The Paperless username of a Yorik account, derived from the
+    email's local part (`+` → `_` so a tenant prefix survives the
+    filter). One function for provisioning AND the proxy: they used to
+    differ, and Paperless's RemoteUser backend then minted a stray
+    empty account (audit 2026-09-22, 1.20)."""
+    local = (email or "").split("@")[0].lower() or _slug(name)
+    username = local.replace("+", "_")
+    return "".join(c for c in username if c.isalnum() or c in ".-_")[:30]
+
+
 def provision_paperless(yorik_user_id: str, name: str, email: str,
                          password: str, *, is_admin: bool = False,
                          _store: bool = True) -> dict[str, Any]:
@@ -428,9 +439,7 @@ def provision_paperless(yorik_user_id: str, name: str, email: str,
     # tenant boundary visible and matches drop-tenant's namespace
     # scan. Same Django constraint satisfied; same upstream user
     # identity.
-    local = (email or "").split("@")[0].lower() or _slug(name)
-    username = local.replace("+", "_")
-    username = "".join(c for c in username if c.isalnum() or c in ".-_")[:30]
+    username = paperless_username_for(email, name)
 
     # Find existing user by username.
     existing = None
@@ -465,20 +474,19 @@ def provision_paperless(yorik_user_id: str, name: str, email: str,
         paperless_uid = existing["id"]
         log.info("paperless: reusing existing user %s (id=%d)", username, paperless_uid)
 
-        # Re-provision must also reconcile the superuser flag — if a user
-        # was provisioned pre-fix (is_superuser=False even for Yorik
-        # admins) or had their Yorik role flipped to/from admin, the
-        # Paperless flag would otherwise drift. Skip the PATCH when the
-        # flag already matches so we don't churn on every re-run.
-        if bool(existing.get("is_superuser")) != is_admin:
+        # Nobody in the household is a Paperless superuser: a superuser
+        # reads every private document, which is the admin exception
+        # Yorik does not have (audit 2026-09-22, 1.1). Accounts made
+        # before that are demoted here on their next provisioning.
+        if bool(existing.get("is_superuser")) or bool(existing.get("is_staff")):
             try:
                 requests.patch(
                     f"{base}/api/users/{paperless_uid}/",
                     headers={**admin_headers, "Content-Type": "application/json"},
-                    json={"is_superuser": is_admin, "is_staff": is_admin},
+                    json={"is_superuser": False, "is_staff": False},
                     timeout=TIMEOUT_S,
                 )
-                log.info("paperless: synced is_superuser=%s for %s", is_admin, username)
+                log.info("paperless: removed superuser/staff from %s", username)
             except requests.RequestException as exc:  # noqa: BLE001
                 log.warning("paperless: failed to sync is_superuser for %s: %s", username, exc)
 
@@ -520,14 +528,11 @@ def provision_paperless(yorik_user_id: str, name: str, email: str,
         first, _, last = name.partition(" ")
 
         def _create_user(pwd: str):
-            # Yorik admins become Paperless superusers so they bypass
-            # Paperless's per-row permission system — matches Yorik's
-            # "admin sees all" model and lets them read consume-folder
-            # ingests (which arrive with `owner: None`). Non-admins
-            # currently get is_superuser=False and rely on owner/group
-            # grants set by skills + workflows; if that turns out to be
-            # too restrictive in practice we'll need to attach a default
-            # group with view_document permission too.
+            # Never a superuser, admins included: what a person sees in
+            # Paperless is what they own and what was shared with them;
+            # consume-folder documents reach the adults through the
+            # "parents" group (paperless_visibility). Housekeeping runs
+            # on the separate admin token.
             payload = {
                 "username": username,
                 "email": email,
@@ -535,8 +540,8 @@ def provision_paperless(yorik_user_id: str, name: str, email: str,
                 "first_name": first or name,
                 "last_name": last,
                 "is_active": True,
-                "is_staff": is_admin,
-                "is_superuser": is_admin,
+                "is_staff": False,
+                "is_superuser": False,
                 "groups": [],
                 "user_permissions": [],
             }
@@ -713,8 +718,10 @@ def provision_immich(yorik_user_id: str, name: str, email: str,
         # since the last provision, OR if this user pre-dates the
         # admin-mirroring fix and is stuck non-admin.
         update_body: Dict[str, Any] = {"password": password}
-        if existing_is_admin is not None and existing_is_admin != is_admin:
-            update_body["isAdmin"] = is_admin
+        # Nobody in the household is an Immich admin (an admin can set
+        # anyone's password and sign in as them — audit 2026-09-22, 1.2).
+        if existing_is_admin:
+            update_body["isAdmin"] = False
             log.info("immich: syncing isAdmin=%s for %s", is_admin, email)
         r = requests.put(
             f"{base}/api/admin/users/{immich_uid}",
@@ -732,7 +739,7 @@ def provision_immich(yorik_user_id: str, name: str, email: str,
             headers={**admin_headers, "Content-Type": "application/json"},
             json={"email": email, "name": name, "password": password,
                   "notify": False, "shouldChangePassword": False,
-                  "isAdmin": is_admin},
+                  "isAdmin": False},
             timeout=TIMEOUT_S,
         )
         if not r.ok:

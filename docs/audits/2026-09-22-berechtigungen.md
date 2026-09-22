@@ -197,6 +197,19 @@ Als Referenz für die Reparatur, denn hier steht das Muster schon:
   `paperless_ingest.user_creds` und die Dokument-Routen nehmen den
   Admin-Token (`via_admin_token` markiert). Bewusst nicht geöffnet: Mail,
   WhatsApp, Yorik-Chats, fremde Immich-Bibliotheken.
+  Paket 10 (1.1, 1.2, 1.3, 1.15, 1.17, 1.18, 1.20, 2.13, 2.14, 2.15, 2.16,
+  4.6): niemand wird Paperless-Superuser oder Immich-Admin (bestehende
+  Konten werden beim nächsten Provisionieren zurückgestuft), der
+  Paperless-Proxy läuft für alle als eigenes Konto (eine gemeinsame
+  Username-Ableitung `paperless_username_for`), `_ensure_row_writable` ohne
+  `platform_admin`- und ohne Anonym-Zweig, `require_row_owner_or_admin` →
+  `can_write_row` (kein Admin-Zweig, Eltern-Regel und Freigaben gelten im
+  Chat), Sichtbarkeit eines Dokuments ändert nur der Besitzer (Route und
+  Skill, `paperless_user_id` aus dem Profil), lokaler Dokument-Spiegel:
+  Löschen/Reindex durch den Besitzer, `freebusy` über `effective_access`,
+  `check_calendar` ohne `platform_admin`-Ausnahme. Offen aus 10: 2.21
+  (Admin-Level auf geteilten Spaces) — bewusst gelassen, das ist die
+  Workspace-Verwaltung.
   Nicht angefasst: 1.7 (`space_id` im Chunk-Index) — durch die Hydration
   über den Token der Person nicht mehr nötig, der Space-Filter bleibt als
   Zusatz. Timetable (2.7) bleibt consent-basiert: der Stundenplan eines Kindes, das

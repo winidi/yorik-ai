@@ -179,25 +179,26 @@ def require_row_owner_or_admin(
     subject: str = "row",
     owner_col: str = "owner_user_id",
 ) -> None:
-    """Gate mutation skills so a non-admin member can only act on rows
-    THEY own. Shared by the calendar event skills, the task skills, and
-    anything else with a per-row ownership column.
-
-    Admin always allowed. Legacy rows with no owner_user_id are gated
-    to admin too — safer than guessing.
+    """Gate mutation skills: the same rule as the REST routes
+    (`spaces.can_write_row` — owner, write-level space membership,
+    write-level row share, assignee, a parent for a child's task). No
+    admin arm: until 2026-09-22 `admin` passed for every row and could
+    share another person's contact or delete anyone's event from the
+    chat, while a parent could not tick a child's task (audit 2.15).
 
     `subject` is the noun used in error messages ("event", "task",
-    etc.) so the LLM relays a sensible message to the user.
-    `owner_col` lets tasks reuse this helper without a schema rename
-    (they store creator id under `created_by_user_id`).
+    etc.) so the LLM relays a sensible message to the user; it also
+    names the table for the spaces check. `owner_col` lets tasks reuse
+    this helper without a schema rename.
     """
-    if (role or "").strip().lower() == "admin":
+    from . import spaces as _sp
+    table = {"event": "events", "task": "tasks", "contact": "contacts"}.get((subject or "").lower())
+    if table and user_id is not None and _sp.can_write_row(user_id, role, table, row):
         return
     owner = row.get(owner_col)
     if owner is None:
         raise RowOwnerPermissionError(
-            f"this {subject} has no recorded owner (legacy row); only "
-            f"an admin can change it."
+            f"this {subject} has no recorded owner (legacy row) and cannot be changed from here."
         )
     # Phase E: user ids are UUIDs (strings), not ints. Compare as
     # strings so workspace_admin / personal-space ownership still
@@ -206,8 +207,8 @@ def require_row_owner_or_admin(
     # update_task / update_event call after Phase E.
     if user_id is None or str(user_id) != str(owner):
         raise RowOwnerPermissionError(
-            f"only the {subject}'s owner can change it. Ask the owner "
-            f"(or an admin) to make the change for you."
+            f"only the {subject}'s owner, or someone it was shared with for writing, "
+            f"can change it. Ask the owner to make the change for you."
         )
 
 
@@ -773,38 +774,21 @@ def freebusy(
             uid = uid
             # All calendars this user owns
             calendars = c.execute(
-                "SELECT id, hide_from_admin FROM calendars "
-                "WHERE owner_user_id = ? AND archived_at IS NULL",
+                "SELECT * FROM calendars WHERE owner_user_id = ? AND archived_at IS NULL",
                 (uid,),
             ).fetchall()
             cal_ids = [int(row["id"]) for row in calendars]
 
-            # Filter out calendars the requester cannot see at all. The
-            # requester is the OWNER of their own calendars (they can
-            # always see their own free/busy). For others, we still
-            # expose busy blocks unless hide_from_admin is on AND the
-            # requester isn't admin … wait, hide_from_admin specifically
-            # blocks admin. For non-admin requesters, the rule is
-            # "user-to-user free/busy is always allowed unless the
-            # calendar isn't shared at all." Implementation: if there's
-            # NO share row for the requester on a calendar AND the
-            # requester isn't the owner AND the requester isn't admin
-            # (or hide_from_admin is set), drop the calendar.
+            # A calendar counts when the requester may see it at least
+            # as free/busy — their own, or shared with them through the
+            # spaces model. (The old code asked a table dropped in
+            # Phase B and then let `admin` through; audit 2026-09-22,
+            # 2.16.)
             allowed_cal_ids: list[int] = []
             for cal in calendars:
                 cid = int(cal["id"])
-                if uid == requested_by_user_id:
-                    allowed_cal_ids.append(cid)
-                    continue
-                # explicit share?
-                share = c.execute(
-                    "SELECT 1 FROM calendar_shares WHERE calendar_id = ? AND user_id = ?",
-                    (cid, requested_by_user_id),
-                ).fetchone()
-                if share:
-                    allowed_cal_ids.append(cid)
-                    continue
-                if requested_by_role == "admin" and not cal["hide_from_admin"]:
+                if str(uid) == str(requested_by_user_id) or effective_access(
+                        str(requested_by_user_id), requested_by_role, dict(cal)):
                     allowed_cal_ids.append(cid)
 
             blocks: list[Dict[str, Any]] = []
