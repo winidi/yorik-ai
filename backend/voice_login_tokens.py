@@ -14,9 +14,17 @@ means voice-ID and session swap have separate audit logs, separate
 rate limits, and separate threat models.
 
 Token shape: HMAC-bound to (profile_id, device_uuid, source_sid, nonce,
-issued_at). A captured token can't be replayed from a different device
-or against a different profile, and a single nonce can only redeem
-once before the in-memory consumed set rejects it.
+issued_at). A captured token can't be replayed from a different device,
+from a different browser session, or against a different profile, and a
+single nonce can only redeem once before the in-memory consumed set
+rejects it.
+
+The HMAC secret is per install: generated once and kept in the
+credential store (or set with HOMEOS_VOICE_LOGIN_SECRET). Until
+2026-09-22 it defaulted to a constant known from the source, and
+verify() never checked the source session, so anyone on the LAN who
+knew a wall device's id could mint a token for any profile and get a
+full session as that person (audit 4.1).
 """
 
 from __future__ import annotations
@@ -45,17 +53,34 @@ _consumed: "OrderedDict[str, float]" = OrderedDict()
 _CONSUMED_MAX = 1024
 
 
-def _secret() -> bytes:
-    """Per-install HMAC secret. Override via HOMEOS_VOICE_LOGIN_SECRET in
-    config.env; defaults to a derived value so first-launch works.
+_STORE_KEY = "voice_login"
+_cached_secret: Optional[bytes] = None
 
-    The derived default is fine because the token also encodes the
-    source session id — a leaked default secret doesn't let an attacker
-    mint a token for a session they don't already control."""
+
+def _secret() -> bytes:
+    """Per-install HMAC secret: HOMEOS_VOICE_LOGIN_SECRET from config.env
+    if set, else a random one generated on first use and kept in the
+    credential store. Without a usable store (no master key yet) the
+    secret lives for this process only — a token minted before a
+    restart is then rejected, which is the safe direction."""
+    global _cached_secret
     override = os.getenv("HOMEOS_VOICE_LOGIN_SECRET", "").strip()
     if override:
-        return override.encode("utf-8")
-    return hashlib.sha256(b"yorik-voice-login-default-v1").digest()
+        return hashlib.sha256(override.encode("utf-8")).digest()
+    if _cached_secret:
+        return _cached_secret
+    fresh = secrets.token_bytes(32)
+    try:
+        from . import credential_store
+        stored = (credential_store.get(_STORE_KEY) or {}).get("secret")
+        if stored:
+            _cached_secret = base64.urlsafe_b64decode(stored)
+            return _cached_secret
+        credential_store.put(_STORE_KEY, {"secret": base64.urlsafe_b64encode(fresh).decode("ascii")})
+    except Exception:  # noqa: BLE001 — store unavailable: per-process secret
+        pass
+    _cached_secret = fresh
+    return _cached_secret
 
 
 def _b64encode(b: bytes) -> str:
@@ -91,10 +116,14 @@ def verify(
     *,
     expected_profile_id: int,
     expected_device_uuid: str,
+    expected_source_sid: str,
 ) -> Optional[dict]:
     """Validate token and consume the nonce. Returns the payload dict
     on success, None on any failure path (don't leak which check
     failed — return value is identical for all rejection reasons).
+    `expected_source_sid` is the session cookie of the redeeming
+    request: the token was minted for that browser session and no
+    other.
     """
     try:
         body_b64, sig_b64 = token.split(".", 1)
@@ -111,6 +140,8 @@ def verify(
         if int(payload.get("p") or 0) != int(expected_profile_id):
             return None
         if (payload.get("d") or "") != expected_device_uuid:
+            return None
+        if not expected_source_sid or (payload.get("s") or "") != expected_source_sid:
             return None
         nonce = payload.get("n") or ""
         if not nonce or nonce in _consumed:

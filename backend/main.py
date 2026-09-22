@@ -1165,6 +1165,7 @@ def auth_voice_login(
         body.swap_token,
         expected_profile_id=int(body.profile_id),
         expected_device_uuid=device_id,
+        expected_source_sid=request.cookies.get(_auth.COOKIE_NAME) or "",
     )
     if not payload:
         _throttle.record_login_failure(voice_key, client_ip)
@@ -13437,6 +13438,7 @@ def _voice_conv_id_with_idle_break(user_id: str) -> str:
 
 @app.post("/api/ask-voice")
 async def ask_voice(
+    request: Request,
     audio: UploadFile = File(...),
     role: str = Depends(_auth.current_role),
     user: Dict[str, Any] = Depends(_auth.current_user),
@@ -13444,12 +13446,21 @@ async def ask_voice(
 ) -> Dict[str, Any]:
     """Whisper → optional speaker-ID → Vanna ask → optional Piper TTS.
 
-    Identification is best-effort. If voice_id.identify returns None for any
-    reason (no enrolled profiles, audio too short, torch error), we fall back
-    to the `role` query param and the default language. The endpoint still
-    transcribes, answers, and (if a Piper voice is configured) synthesizes.
+    Speaker identification runs on kiosk turns only, like the streaming
+    twin: a laptop or phone is identified by its cookie. On a match the
+    turn runs as the matched person (role and data); on a miss with
+    enrolled profiles it answers 409 `identify_needed` rather than as
+    whoever the tablet's cookie belongs to. (Until 2026-09-22 this
+    endpoint identified on every device and then applied the speaker's
+    role to the cookie user's data — audit 4.2, 4.3.)
     """
     normalize_role(role)
+    _sid = request.cookies.get(_auth.COOKIE_NAME) or ""
+    is_kiosk_turn = bool(_sid and _auth.session_is_kiosk(_sid))
+    if not is_kiosk_turn:
+        _wall_dev = (request.headers.get("x-yorik-wall-device") or "").strip()
+        if _wall_dev and _auth.is_trusted_kiosk_device(_wall_dev):
+            is_kiosk_turn = True
     suffix = Path(audio.filename or "audio.webm").suffix or ".webm"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(await audio.read())
@@ -13462,7 +13473,11 @@ async def ask_voice(
         if not transcript:
             raise HTTPException(status_code=400, detail="Empty transcript — please retry")
 
-        identified = await asyncio.to_thread(voice_id.identify, tmp_path)  # never raises
+        identified = None
+        voice_id_ran = False
+        if is_kiosk_turn:
+            identified = await asyncio.to_thread(voice_id.identify, tmp_path)  # never raises
+            voice_id_ran = True
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001
@@ -13481,6 +13496,14 @@ async def ask_voice(
     # Rationale: an identified user has set their preference explicitly; otherwise
     # whoever is speaking should hear themselves answered in the language they
     # spoke in (a German visitor on a default-en box still gets German TTS).
+    if voice_id_ran and not identified:
+        with conn_ctx(DB_PATH) as conn:
+            any_enrolled = conn.execute(
+                "SELECT COUNT(*) AS n FROM user_profiles "
+                "WHERE voice_embedding IS NOT NULL AND voice_embedding != ''"
+            ).fetchone()["n"]
+        if any_enrolled:
+            raise HTTPException(409, detail={"identify_needed": True, "transcript": transcript})
     if identified:
         eff_role = identified["role"]
         eff_language = identified.get("language") or detected_language or DEFAULT_LANGUAGE
@@ -13488,10 +13511,12 @@ async def ask_voice(
         eff_role = role
         eff_language = detected_language or DEFAULT_LANGUAGE
 
-    # Default to the user's daily voice thread so back-references work
-    # across calls ("undo that", "den Termin von heute morgen"). The client
-    # can still pass an explicit conversation_id to override.
-    eff_user_id = (identified or {}).get("id") or user.get("id")
+    # The person the turn runs as: the matched speaker (voice_id returns
+    # `profile_id`), else the cookie's user — role and data from the same
+    # person. Default to their daily voice thread so back-references work
+    # across calls ("undo that", "den Termin von heute morgen"). The
+    # client can still pass an explicit conversation_id to override.
+    eff_user_id = (identified or {}).get("profile_id") or user.get("id")
     if not conversation_id and eff_user_id is not None:
         conversation_id = vanna_agent.voice_conversation_id(eff_user_id)
 
@@ -13506,8 +13531,8 @@ async def ask_voice(
             conversation_id=conversation_id,
             user_language=eff_language,
             identified_name=(identified or {}).get("name"),
-            user_id=((identified or {}).get("id") or user.get("id")),
-            dev_mode=_user_dev_mode((identified or {}).get("id") or user.get("id")),
+            user_id=eff_user_id,
+            dev_mode=_user_dev_mode(eff_user_id),
         )
     result["transcript"] = transcript
     result["identified"] = identified  # may be None

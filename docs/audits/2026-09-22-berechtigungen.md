@@ -154,6 +154,10 @@ Als Referenz für die Reparatur, denn hier steht das Muster schon:
   über `_contact_for`, Rechnungen über `_ensure_row_writable`, Teilnehmer
   und Kalender-Freigaben nur für Sichtbare, WhatsApp discard/reprocess auf
   den Besitzer, WhatsApp-Settings/Backfill/Bridge-Info und n8n nur Admin).
+  Paket 5 (4.1, 4.2, 4.3: Voice-Login-Secret pro Installation im
+  Credential-Store, `verify()` prüft die Session-Bindung, `/api/ask-voice`
+  erkennt nur am Kiosk, nimmt `profile_id` für Rolle und Daten und antwortet
+  409 `identify_needed` statt als Cookie-Nutzer).
   Timetable (2.7) bleibt consent-basiert: der Stundenplan eines Kindes, das
   auf der Wand ist, ist für den Haushalt. 2.19 (`GET /api/settings/{key}`)
   offen, weil das Frontend Haushalts-Einstellungen für alle liest.
