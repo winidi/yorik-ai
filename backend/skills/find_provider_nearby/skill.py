@@ -43,7 +43,7 @@ async def execute(
 
     near = (near or "").strip()
     if not near:
-        near = _user_home_city(getattr(ctx, "user_id", 1)) or ""
+        near = _user_home_city(getattr(ctx, "user_id", None)) or ""
     if not near:
         return {
             "_llm_hint": (

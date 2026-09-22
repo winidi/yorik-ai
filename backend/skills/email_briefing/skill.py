@@ -8,7 +8,8 @@ from typing import Any
 
 async def execute(ctx, hours: int = 24) -> dict[str, Any]:
     hours = max(1, min(int(hours), 168))
-    user_id = getattr(ctx, "user_id", 1)
+    from backend.skills.registry import require_user_id
+    user_id = require_user_id(ctx)
     from backend.database import get_conn
     from backend.whatsapp import _call_llm  # reuse the same llama-swap client
 

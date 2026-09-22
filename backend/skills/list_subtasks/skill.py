@@ -43,6 +43,8 @@ async def execute(
         else:
             where.append("created_by_user_id = ?")
             params.append(uid)
+    else:
+        where.append("1=0")           # no person, no tasks
 
     sql = (
         "SELECT id, title, due_date, done "

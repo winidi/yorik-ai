@@ -87,6 +87,8 @@ async def execute(
             params.append(user_id)
         else:
             where.append("1=0")
+    else:
+        where.append("1=0")           # no person, no tasks
 
     sql = (
         "SELECT id, title, due_date, done, person, category, priority, "

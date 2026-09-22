@@ -61,7 +61,8 @@ async def execute(
     # SkillContext carries the requesting user's id. Drafts are scoped
     # to whoever asked — wife drafting a reply only sees her own chat
     # data, not admin's.
-    user_id = getattr(ctx, "user_id", None) or wa.DEFAULT_OWNER
+    from backend.skills.registry import require_user_id
+    user_id = require_user_id(ctx)
 
     # Resolve chat_jid from contact_id when caller didn't pass one.
     # The contact's whatsapp channel value is normalized E.164 (plus

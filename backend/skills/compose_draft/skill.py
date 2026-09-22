@@ -427,7 +427,8 @@ async def execute(
     else:
         body_html = body_text
 
-    user_id = getattr(ctx, "user_id", 1)
+    from backend.skills.registry import require_user_id
+    user_id = require_user_id(ctx)
 
     from backend.database import conn_ctx, DEFAULT_DB_PATH
 
@@ -446,7 +447,7 @@ async def execute(
         with _cctx(_ddb) as _c:
             _row = _c.execute(
                 "SELECT country FROM user_profiles WHERE id = ?",
-                (getattr(ctx, "user_id", 1),),
+                (user_id,),
             ).fetchone()
             if _row and _row["country"]:
                 sender_country = _row["country"]
@@ -515,7 +516,7 @@ async def execute(
     # Without the intent gate, back-to-back tests with unrelated
     # intents would hijack each other's drafts.
     try:
-        _uid = getattr(ctx, "user_id", 1)
+        _uid = user_id
         from backend.database import conn_ctx as _c1, DEFAULT_DB_PATH as _db1
         with _c1(_db1) as _c:
             _recent = _c.execute(
@@ -582,7 +583,7 @@ async def execute(
                 ).fetchone()
             if _row:
                 # Ownership check — same shape as the GET endpoint.
-                if _row["user_id"] != getattr(ctx, "user_id", 1):
+                if _row["user_id"] != user_id:
                     existing_draft_id = None  # silently treat as create-new
                 else:
                     import json as _json2

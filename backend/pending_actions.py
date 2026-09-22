@@ -47,6 +47,15 @@ def _purge_stale() -> None:
         )
 
 
+def _require_user(ctx: Any) -> Any:
+    """A pending action belongs to the person who asked; none is staged
+    for "user 1" when the identity is missing (audit 2026-09-22, 4.7)."""
+    uid = getattr(ctx, "user_id", None)
+    if uid is None:
+        raise ValueError("a pending action needs a signed-in user")
+    return uid
+
+
 def stage(
     *,
     skill: str,
@@ -589,7 +598,7 @@ def stage_with_rollback(
         skill=skill,
         params=params or {},
         preview=preview,
-        user_id=getattr(ctx, "user_id", 1),
+        user_id=_require_user(ctx),
         llm_model=vanna_agent.LLM_MODEL,
         language=getattr(ctx, "language", "en"),
         rollback_kind=rollback_kind,
@@ -679,7 +688,7 @@ def stage_before_apply(
         skill=skill,
         params=params or {},
         preview=preview,
-        user_id=getattr(ctx, "user_id", 1),
+        user_id=_require_user(ctx),
         llm_model=vanna_agent.LLM_MODEL,
         language=getattr(ctx, "language", "en"),
         rollback_kind=APPLY_PREFIX + apply_kind,

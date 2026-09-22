@@ -61,6 +61,17 @@ def personal_space_id(user_id: str) -> Optional[int]:
         return int(row["id"]) if row else None
 
 
+def role_of(user_id: Any) -> str:
+    """A person's role as stored on their profile, "" when unknown.
+    For background work that runs on someone's behalf (mail autodraft,
+    the suggestion engine): their real role, never an assumed admin."""
+    if user_id is None:
+        return ""
+    with conn_ctx() as c:
+        row = c.execute("SELECT role FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
+    return ((row["role"] if row else "") or "").lower()
+
+
 AREAS = ("tasks", "calendar", "contacts", "documents")
 # table → sharing area. Tables outside the four areas (bills, …) are only
 # reached through an unscoped membership (the whole space).

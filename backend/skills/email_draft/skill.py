@@ -19,7 +19,8 @@ async def execute(
     falls back to the default brief/warm/detailed angle split."""
     if variants not in (1, 3):
         raise ValueError("variants must be 1 or 3")
-    user_id = getattr(ctx, "user_id", 1)
+    from backend.skills.registry import require_user_id
+    user_id = require_user_id(ctx)
 
     from backend.database import get_conn
     from backend.whatsapp import _call_llm, _calendar_context

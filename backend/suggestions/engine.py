@@ -185,7 +185,7 @@ async def analyse_message(
     source_kind: str,
     source_id: int,
     *,
-    user_role: str = "admin",
+    user_role: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Analyse one incoming message in the context of the sender's
     history. Returns a result dict (suggestion ids + summary). Never
@@ -194,6 +194,10 @@ async def analyse_message(
     Designed to be called from a background task (Layer 3 hook in the
     email fetcher etc.); the synchronous return is small and safe to
     log."""
+    if not user_role:
+        # the owner's real role, never an assumed admin (audit 2026-09-22, 3.11)
+        from .. import spaces as _sp
+        user_role = _sp.role_of(owner_user_id) or "member"
     from ..database import get_conn
 
     # Step 1: load source + contact for toggle checks.

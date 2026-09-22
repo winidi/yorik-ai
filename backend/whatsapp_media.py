@@ -106,13 +106,13 @@ def set_status_imports_enabled(enabled: bool) -> None:
 _MEDIA_SEM = asyncio.Semaphore(int(os.getenv("YORIK_WA_MEDIA_CONCURRENCY", "2")))
 
 
-async def process_media(msg: dict[str, Any], owner_user_id: str = 1, *, force: bool = False) -> None:
+async def process_media(msg: dict[str, Any], owner_user_id: str, *, force: bool = False) -> None:
     """Bounded wrapper — see _MEDIA_SEM."""
     async with _MEDIA_SEM:
         await _process_media_locked(msg, owner_user_id, force=force)
 
 
-async def _process_media_locked(msg: dict[str, Any], owner_user_id: str = 1, *, force: bool = False) -> None:
+async def _process_media_locked(msg: dict[str, Any], owner_user_id: str, *, force: bool = False) -> None:
     """Entry point — called from the WS subscriber for each ingested
     message that has a mediaKind. Spawned via asyncio.create_task so
     the subscriber doesn't block.

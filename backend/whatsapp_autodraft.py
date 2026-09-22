@@ -68,7 +68,7 @@ def _should_autodraft(msg: dict[str, Any]) -> bool:
     return True
 
 
-def schedule(msg: dict[str, Any], owner_user_id: str = 1) -> None:
+def schedule(msg: dict[str, Any], owner_user_id: str) -> None:
     """Called from the WS event handler for every ingested message.
     Debounces + spawns a draft task. Fire-and-forget.
 
@@ -92,7 +92,7 @@ def schedule(msg: dict[str, Any], owner_user_id: str = 1) -> None:
     )
 
 
-async def _debounced_draft(chat_jid: str, trigger_msg_id: str, owner_user_id: str = 1) -> None:
+async def _debounced_draft(chat_jid: str, trigger_msg_id: str, owner_user_id: str) -> None:
     try:
         await asyncio.sleep(DEBOUNCE_S)
     except asyncio.CancelledError:
@@ -108,7 +108,7 @@ async def _debounced_draft(chat_jid: str, trigger_msg_id: str, owner_user_id: st
             log.exception("autodraft for user=%s %s failed: %s", owner_user_id, chat_jid, e)
 
 
-async def _generate_and_store(chat_jid: str, trigger_msg_id: str, owner_user_id: str = 1) -> None:
+async def _generate_and_store(chat_jid: str, trigger_msg_id: str, owner_user_id: str) -> None:
     # Pull thread context the same way the manual draft endpoint does.
     # Lazy import — avoids circular dependency at module load.
     from . import whatsapp as wa
@@ -413,7 +413,7 @@ async def _call_llm_variants(prompt: str) -> list[tuple[str, str]]:
 
 # ───────────────────────── discard on manual reply ─────────────────────
 
-def discard_on_manual_reply(msg: dict[str, Any], owner_user_id: str = 1) -> int:
+def discard_on_manual_reply(msg: dict[str, Any], owner_user_id: str) -> int:
     """Called when a fromMe message lands on owner_user_id's session.
     If the fromMe message wasn't sent through Yorik (no draft has this
     msg_id as sent_msg_id for this user), mark all pending drafts in

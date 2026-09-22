@@ -72,7 +72,7 @@ async def execute(
     # PLZ+City → City so an obscure street name doesn't kill the call.
     src_candidates: list[str] = (
         [src] if src
-        else _user_home_address_variants(getattr(ctx, "user_id", 1))
+        else _user_home_address_variants(getattr(ctx, "user_id", None))
     )
     if not src_candidates:
         return {

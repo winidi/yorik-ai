@@ -33,10 +33,9 @@ async def execute(ctx, query: str = "", k: int = 5) -> dict[str, Any]:
 
     # Phase C: restrict semantic search to the caller's visible spaces
     # so a workspace member can never receive chunks from a workspace
-    # they don't belong to. When user_id is None (legacy / no-auth code
-    # path), `visible_space_ids` stays None and search() preserves the
-    # pre-Phase-C behaviour (no filter).
-    visible_space_ids: List[int] | None = None
+    # they don't belong to. Without a user there is nothing they may
+    # see (an empty list), not the whole household.
+    visible_space_ids: List[int] | None = []
     if user_id is not None:
         try:
             from backend import spaces as _spaces

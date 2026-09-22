@@ -22,6 +22,17 @@ class SkillError(Exception):
     """Raised when a skill is missing, malformed, or fails at runtime."""
 
 
+def require_user_id(ctx: Any) -> Any:
+    """The person a skill runs for. A skill without one must not guess:
+    until 2026-09-22 a dozen skills fell back to user id 1 (the admin)
+    and read or wrote the admin's mail, chats and drafts for whoever
+    lost their identity on the way (audit 4.7)."""
+    uid = getattr(ctx, "user_id", None)
+    if uid is None:
+        raise ValueError("this needs a signed-in user")
+    return uid
+
+
 @dataclass
 class Skill:
     """One loaded skill. Fields mirror skill.md frontmatter; `entrypoint`

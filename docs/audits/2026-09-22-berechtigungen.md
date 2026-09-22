@@ -177,6 +177,13 @@ Als Referenz für die Reparatur, denn hier steht das Muster schon:
   Chat/Nachricht/Besitzer), semantische WhatsApp-Hinweise nur aus den
   eigenen Chats; die Vorschlags-Retriever (Mail-Verlauf, Kalender, Aufgaben)
   lesen die Zeilen des Besitzers.
+  Paket 11 (3.8, 3.11, 4.7, 4.8, 4.10): `skills.registry.require_user_id`,
+  `pending_actions._require_user`; Skills, `/api/skills/{name}/invoke`,
+  `/api/whatsapp/draft` und `/import` brauchen eine angemeldete Person;
+  `_upsert_chat`, `_insert_message`, `_cross_chat_hints`, `process_media`,
+  Autodraft ohne Default auf Nutzer 1 (`DEFAULT_OWNER` weg); Dokument- und
+  Aufgaben-Skills ohne Person: nichts statt alles; Mail-Autodraft und
+  Vorschlags-Engine mit der echten Rolle (`spaces.role_of`).
   Nicht angefasst: 1.7 (`space_id` im Chunk-Index) — durch die Hydration
   über den Token der Person nicht mehr nötig, der Space-Filter bleibt als
   Zusatz. Timetable (2.7) bleibt consent-basiert: der Stundenplan eines Kindes, das

@@ -27,7 +27,8 @@ async def execute(
     days_back = max(0, int(days_back or 90))
     limit     = max(1, min(int(limit or 10), 50))
 
-    user_id = getattr(ctx, "user_id", 1)
+    from backend.skills.registry import require_user_id
+    user_id = require_user_id(ctx)
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days_back)).isoformat()
 
     # Token-AND match across subject AND from_email — one shot covers

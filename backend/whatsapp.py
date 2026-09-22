@@ -75,12 +75,6 @@ def _spawn(coro) -> "asyncio.Task":
 def _bridge_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {BRIDGE_TOKEN}"} if BRIDGE_TOKEN else {}
 
-# Fallback owner used by legacy single-tenant paths where no logged-in
-# user is available (e.g. /clear without auth context, the legacy WS
-# subscriber, fixture/seed code). Multi-tenant code paths now extract
-# owner_user_id from either Depends(_auth.current_user) (REST routes)
-# or evt["userId"] (bridge events).
-DEFAULT_OWNER = 1
 
 
 def _bridge_url(suffix: str, user_id: str | str | None) -> str:
@@ -175,7 +169,7 @@ def _is_phantom_self_chat(jid: Optional[str], name: Optional[str],
 
 
 def _upsert_chat(jid: str, name: Optional[str], is_group: bool, ts: Optional[int],
-                 last_text: Optional[str], owner_user_id: str = DEFAULT_OWNER) -> None:
+                 last_text: Optional[str], owner_user_id: str) -> None:
     """Idempotent chat upsert. Bumps last_message_ts only if the new ts is
     newer; name always backfills (COALESCE-on-NULL semantics so a name
     update never overwrites an existing name with NULL)."""
@@ -209,7 +203,7 @@ def _upsert_chat(jid: str, name: Optional[str], is_group: bool, ts: Optional[int
         conn.commit()
 
 
-def _insert_message(m: dict[str, Any], owner_user_id: str = DEFAULT_OWNER) -> None:
+def _insert_message(m: dict[str, Any], owner_user_id: str) -> None:
     """Insert one message (idempotent on (chat_jid, msg_id)). Skips empty
     meta-messages — anything with no text AND no media is a protocol
     artefact (encryption handshake, reaction, poll update, etc.) that
@@ -896,6 +890,7 @@ def patch_wa_settings(body: WaSettings, user: dict[str, Any] = Depends(_auth.req
 async def import_chat_export(
     file: UploadFile = File(...),
     chat_jid: Optional[str] = Form(None),
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> dict[str, Any]:
     """Import a WhatsApp "Export Chat" file.
 
@@ -937,18 +932,20 @@ async def import_chat_export(
         seed = (contact_name or "unknown") + hashlib.sha1(raw).hexdigest()[:8]
         chat_jid = f"import_{re.sub(r'[^a-z0-9]', '_', seed.lower())[:40]}@yorik.local"
 
+    # the importer's chat, not user 1's (audit 2026-09-22, 3.8)
     _upsert_chat(
         jid=chat_jid,
         name=contact_name or chat_jid,
         is_group=False,
         ts=messages[-1]["timestamp"] if messages else None,
         last_text=messages[-1].get("text") if messages else None,
+        owner_user_id=user["id"],
     )
 
     inserted = 0
     for m in messages:
         m["jid"] = chat_jid
-        _insert_message(m)
+        _insert_message(m, owner_user_id=user["id"])
         inserted += 1
 
     return {
@@ -1519,7 +1516,8 @@ async def send_message(
 # ─────────────────────────── draft generation ──────────────────────────
 
 @router.post("/draft")
-async def generate_draft(body: DraftBody, request: Request) -> dict[str, Any]:
+async def generate_draft(body: DraftBody, request: Request,
+                         user: dict[str, Any] = Depends(_auth.current_user)) -> dict[str, Any]:
     """Compose a draft reply for `chat_jid`. Thin HTTP adapter — the
     actual generation lives in the `whatsapp_draft` skill so the same
     code path is used by the WS auto-draft trigger, the agent's
@@ -1529,10 +1527,8 @@ async def generate_draft(body: DraftBody, request: Request) -> dict[str, Any]:
     creds (wave 3) are picked up downstream.
     """
     from .skills import get_registry, SkillContext, SkillError
-    from . import auth_sessions as _auth
-    user = _auth.current_user_optional(request, request.cookies.get(_auth.COOKIE_NAME))
-    role = (user or {}).get("role", "admin")
-    user_id = (user or {}).get("id", 1)
+    role = user.get("role") or ""
+    user_id = user["id"]
     reg = get_registry()
     if reg.get("whatsapp_draft"):
         try:
@@ -1607,17 +1603,9 @@ async def generate_draft(body: DraftBody, request: Request) -> dict[str, Any]:
     return {"draft": draft_text, "sources": sources}
 
 
-def _cross_chat_hints(current_jid: str, query_text: str, owner_user_id: str = DEFAULT_OWNER, k: int = 3) -> list[dict[str, Any]]:
-    """FTS5 search over wa_messages, excluding the current chat, scoped
-    to a single user. Returns up to `k` hits formatted as draft-prompt
-    sources.
-
-    owner_user_id defaults to DEFAULT_OWNER (admin) so legacy callers
-    (whatsapp_autodraft, email_draft skill, whatsapp_draft skill) keep
-    working unchanged for the admin's data. Multi-user code paths
-    (REST routes) should pass the logged-in user's id explicitly.
-    Follow-up: thread owner_user_id through whatsapp_autodraft + the
-    draft skills so they support non-admin users."""
+def _cross_chat_hints(current_jid: str, query_text: str, owner_user_id: str, k: int = 3) -> list[dict[str, Any]]:
+    """FTS5 search over the person's wa_messages, excluding the current
+    chat. Returns up to `k` hits formatted as draft-prompt sources."""
     q = (query_text or "").strip()
     if len(q) < 4:
         return []

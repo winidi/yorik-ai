@@ -93,7 +93,8 @@ async def _generate_and_store(owner_user_id: str, message_id: int,
     if not skill:
         return
 
-    ctx = SkillContext(reg, role="admin", user_id=owner_user_id)
+    from . import spaces as _sp
+    ctx = SkillContext(reg, role=_sp.role_of(owner_user_id) or "member", user_id=owner_user_id)
     try:
         kwargs: dict = {"message_id": message_id, "variants": 3}
         if extra_instructions:

@@ -7,7 +7,8 @@ from typing import Any
 async def execute(ctx, query: str) -> dict[str, Any]:
     if not query or not query.strip():
         return {"query": query, "total": 0, "results": {}}
-    user_id = getattr(ctx, "user_id", 1)
+    from backend.skills.registry import require_user_id
+    user_id = require_user_id(ctx)
 
     # Reuse the route's internals so the skill and the HTTP endpoint
     # return identical shapes.

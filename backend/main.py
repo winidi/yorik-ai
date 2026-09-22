@@ -2089,16 +2089,14 @@ def list_trusted_devices(
 async def invoke_skill(
     name: str,
     args: dict = None,
-    user: Optional[Dict[str, Any]] = Depends(_auth.current_user_optional),
+    user: Dict[str, Any] = Depends(_auth.current_user),
 ):
-    """Direct invocation. SkillContext carries the calling user so
-    skills like find_document / find_photo route through the right
-    per-user credentials (wave 3)."""
+    """Direct invocation as the signed-in person. SkillContext carries
+    the calling user so skills route through the right per-user
+    credentials. (No default to admin / user 1 — audit 2026-09-22, 4.10.)"""
     args = args or {}
     from .skills import SkillContext
-    role = (user or {}).get("role", "admin")
-    user_id = (user or {}).get("id", 1)
-    ctx = SkillContext(get_registry(), role=role, user_id=user_id)
+    ctx = SkillContext(get_registry(), role=user.get("role") or "", user_id=user.get("id"))
     try:
         return await get_registry().invoke(name, ctx=ctx, **args)
     except SkillError as e:
