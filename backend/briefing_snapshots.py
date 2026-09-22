@@ -7,8 +7,13 @@ backwards to any previously-captured date and see what was happening
 at the time, even after the underlying email / WhatsApp / photo data
 has drifted (new categories assigned, messages deleted, etc.).
 
+A snapshot is one person's day (their mail, calendar, WhatsApp), so
+there is one per (template, date, person). Until 2026-09-22 there was
+one per (template, date), taken as the first admin and served to
+everyone who asked for a past date (audit 2.8).
+
 Read path (used by briefing_routes):
-    get_snapshot(template_id, target_date) → dict | None
+    get_snapshot(template_id, target_date, user_id) → dict | None
 
 Write path (called by the scheduler or an explicit /api/briefings/snapshot
 POST):
@@ -16,8 +21,8 @@ POST):
 
 Scheduler:
     start_scheduler(loop) starts a daily fire at 03:00 local time that
-    captures yesterday's `day-recap` for the admin role. Pattern lifted
-    from backup.start_scheduler — wake every 60s, compare HH:MM,
+    captures yesterday's `day-recap` for every enabled person. Pattern
+    lifted from backup.start_scheduler — wake every 60s, compare HH:MM,
     track last-triggered-minute to avoid double-firing.
 """
 
@@ -42,14 +47,16 @@ SNAPSHOT_TEMPLATE_ID = "day-recap"
 SNAPSHOT_FIRE_TIME = "03:00"
 
 
-def get_snapshot(template_id: str, target_date: str) -> Optional[dict[str, Any]]:
-    """Return the saved briefing payload for that date, or None.
-    `target_date` is YYYY-MM-DD."""
+def get_snapshot(template_id: str, target_date: str, user_id: Any) -> Optional[dict[str, Any]]:
+    """Return the person's saved briefing payload for that date, or
+    None. `target_date` is YYYY-MM-DD."""
+    if user_id is None:
+        return None
     with conn_ctx(DB_PATH) as conn:
         row = conn.execute(
             "SELECT payload_json, generated_at FROM briefing_snapshots "
-            "WHERE template_id = ? AND target_date = ?",
-            (template_id, target_date),
+            "WHERE template_id = ? AND target_date = ? AND user_id = ?",
+            (template_id, target_date, user_id),
         ).fetchone()
     if not row:
         return None
@@ -61,25 +68,27 @@ def get_snapshot(template_id: str, target_date: str) -> Optional[dict[str, Any]]
     return payload
 
 
-def list_snapshot_dates(template_id: str = SNAPSHOT_TEMPLATE_ID, limit: int = 60) -> list[str]:
-    """Recent dates we have a saved snapshot for. Powers the date
-    navigator — only let the user click back to dates that actually
+def list_snapshot_dates(user_id: Any, template_id: str = SNAPSHOT_TEMPLATE_ID, limit: int = 60) -> list[str]:
+    """Recent dates the person has a saved snapshot for. Powers the
+    date navigator — only let them click back to dates that actually
     have content. Newest first."""
+    if user_id is None:
+        return []
     with conn_ctx(DB_PATH) as conn:
         rows = conn.execute(
             "SELECT target_date FROM briefing_snapshots "
-            "WHERE template_id = ? "
+            "WHERE template_id = ? AND user_id = ? "
             "ORDER BY target_date DESC LIMIT ?",
-            (template_id, limit),
+            (template_id, user_id, limit),
         ).fetchall()
     return [r["target_date"] for r in rows]
 
 
 async def capture_snapshot(template_id: str, target_date: str,
                             user_id: str, role: str = "admin") -> dict[str, Any]:
-    """Run the briefing FOR `target_date` and persist the result.
-    Idempotent: re-running for the same (template, date) overwrites
-    via UNIQUE constraint + INSERT OR REPLACE."""
+    """Run the briefing FOR `target_date` as `user_id` and persist the
+    result as that person's. Idempotent: re-running for the same
+    (template, date, person) overwrites."""
     from . import briefings
     payload = await briefings.run_briefing(
         template_id=template_id,
@@ -94,17 +103,19 @@ async def capture_snapshot(template_id: str, target_date: str,
 
     with conn_ctx(DB_PATH) as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO briefing_snapshots "
-            "(template_id, target_date, payload_json, generated_at) "
-            "VALUES (?, ?, ?, ?)",
+            "INSERT INTO briefing_snapshots "
+            "(template_id, target_date, user_id, payload_json, generated_at) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT (template_id, target_date, user_id) DO UPDATE SET "
+            "payload_json = EXCLUDED.payload_json, generated_at = EXCLUDED.generated_at",
             (
-                template_id, target_date,
+                template_id, target_date, user_id,
                 json.dumps(payload, ensure_ascii=False),
                 datetime.now().isoformat(timespec="seconds"),
             ),
         )
         conn.commit()
-    log.info("snapshot saved: %s @ %s", template_id, target_date)
+    log.info("snapshot saved: %s @ %s for user %s", template_id, target_date, user_id)
     return {"ok": True, "template_id": template_id, "target_date": target_date}
 
 
@@ -138,15 +149,14 @@ async def stop_scheduler() -> None:
             pass
 
 
-def _admin_user() -> Optional[tuple[int, str]]:
-    """First admin user_id + role. Snapshots are taken from the admin's
-    perspective for now — multi-user snapshots are a v2 problem."""
+def _people() -> list[tuple[Any, str]]:
+    """Every enabled person as (user_id, role): each gets their own
+    snapshot of their own day."""
     with conn_ctx(DB_PATH) as conn:
-        row = conn.execute(
-            "SELECT id, role FROM user_profiles WHERE role = 'admin' "
-            "AND disabled = 0 ORDER BY id LIMIT 1"
-        ).fetchone()
-    return (row["id"], row["role"]) if row else None
+        rows = conn.execute(
+            "SELECT id, role FROM user_profiles WHERE (disabled = 0 OR disabled IS NULL) ORDER BY created_at"
+        ).fetchall()
+    return [(r["id"], r["role"]) for r in rows]
 
 
 async def _scheduler_loop() -> None:
@@ -163,23 +173,23 @@ async def _scheduler_loop() -> None:
             if hhmm == SNAPSHOT_FIRE_TIME and hhmm != _last_fired_minute:
                 _last_fired_minute = hhmm
                 yesterday_iso = (date.today() - timedelta(days=1)).isoformat()
-                admin = _admin_user()
-                if not admin:
+                people = _people()
+                if not people:
                     workers.heartbeat("briefing_snapshot", "warn",
-                                      "no admin user — can't snapshot")
+                                      "no users — can't snapshot")
                 else:
-                    user_id, role = admin
-                    try:
-                        await capture_snapshot(
-                            SNAPSHOT_TEMPLATE_ID, yesterday_iso,
-                            user_id=user_id, role=role,
-                        )
-                        workers.heartbeat("briefing_snapshot", "ok",
-                                          f"snapshotted {yesterday_iso}")
-                    except Exception as e:
-                        log.exception("snapshot failed: %s", e)
-                        workers.report_error("briefing_snapshot",
-                                             f"snapshot @ {hhmm} failed: {str(e)[:80]}")
+                    done = 0
+                    for user_id, role in people:
+                        try:
+                            await capture_snapshot(
+                                SNAPSHOT_TEMPLATE_ID, yesterday_iso,
+                                user_id=user_id, role=role,
+                            )
+                            done += 1
+                        except Exception as e:
+                            log.exception("snapshot for user %s failed: %s", user_id, e)
+                    workers.heartbeat("briefing_snapshot", "ok" if done else "warn",
+                                      f"snapshotted {yesterday_iso} for {done}/{len(people)} people")
             else:
                 workers.heartbeat("briefing_snapshot", "ok",
                                   f"armed for {SNAPSHOT_FIRE_TIME}")

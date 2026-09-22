@@ -119,7 +119,7 @@ async def day_briefing(
     # Snapshot-first for past dates only — today's snapshot would be a
     # partial early-morning capture, not what the user wants.
     if target < today:
-        snap = briefing_snapshots.get_snapshot(template_id, target_iso)
+        snap = briefing_snapshots.get_snapshot(template_id, target_iso, user["id"])
         if snap:
             snap["period"] = period
             snap["target_date"] = target_iso
@@ -151,9 +151,9 @@ async def day_briefing(
 def list_snapshot_dates(
     user: dict = Depends(current_user),
 ) -> dict[str, Any]:
-    """Dates we have a saved snapshot for. Used by the date navigator
-    to only let users walk back to dates with content."""
-    return {"dates": briefing_snapshots.list_snapshot_dates()}
+    """Dates the person has a saved snapshot for. Used by the date
+    navigator to only let them walk back to dates with content."""
+    return {"dates": briefing_snapshots.list_snapshot_dates(user["id"])}
 
 
 @router.post("/snapshots/{target_date}")

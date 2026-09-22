@@ -170,7 +170,10 @@ Als Referenz für die Reparatur, denn hier steht das Muster schon:
   sie im Chat; Tag „whatsapp“ als Haushalts-Tag, Standard-Sichtbarkeit nach
   dem Consume, Dokument-ID statt Task-UUID in `media_paperless_id`), Compose
   legt als Autor ab, `_push_to_paperless` fällt nie mehr auf den Admin-Token
-  zurück. Nicht angefasst: 1.7 (`space_id` im Chunk-Index) — durch die Hydration
+  zurück. Paket 8 (2.8): Briefing-Snapshots pro Person (Migration 151,
+  Unique auf Template/Datum/Person; der Nachtlauf nimmt jede aktive Person
+  auf; Lesen, Datumsliste und manuelles Aufnehmen nur die eigenen).
+  Nicht angefasst: 1.7 (`space_id` im Chunk-Index) — durch die Hydration
   über den Token der Person nicht mehr nötig, der Space-Filter bleibt als
   Zusatz. Timetable (2.7) bleibt consent-basiert: der Stundenplan eines Kindes, das
   auf der Wand ist, ist für den Haushalt. 2.19 (`GET /api/settings/{key}`)
