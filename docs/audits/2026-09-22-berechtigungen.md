@@ -184,6 +184,11 @@ Als Referenz für die Reparatur, denn hier steht das Muster schon:
   Autodraft ohne Default auf Nutzer 1 (`DEFAULT_OWNER` weg); Dokument- und
   Aufgaben-Skills ohne Person: nichts statt alles; Mail-Autodraft und
   Vorschlags-Engine mit der echten Rolle (`spaces.role_of`).
+  Paket 12 (1.19, 4.4, 4.5): eigener Schalter „meine Fotos auf der Wand“
+  (`kiosk_photos_consent`, Migration 153, übernimmt beim Einspielen den
+  Wand-Consent), Slideshow nur aus diesen Bibliotheken, `?u=` am
+  Thumbnail-Proxy nur für diese Personen, keine Admin-Key-Fallbacks in den
+  drei Foto-Proxys (auch der alte `app_settings`-Fallback ist weg).
   Nicht angefasst: 1.7 (`space_id` im Chunk-Index) — durch die Hydration
   über den Token der Person nicht mehr nötig, der Space-Filter bleibt als
   Zusatz. Timetable (2.7) bleibt consent-basiert: der Stundenplan eines Kindes, das

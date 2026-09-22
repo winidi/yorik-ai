@@ -372,6 +372,7 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
         <VoiceEnrollmentCard toast={toast} />
         <KioskPinCard toast={toast} />
         <KioskAgendaConsentCard toast={toast} />
+        <KioskPhotosConsentCard toast={toast} />
         <ConfirmMutationsToggle toast={toast} />
         <DevModeToggle toast={toast} />
         <DefaultDocVisibilityChips toast={toast} />
@@ -1764,6 +1765,77 @@ function STTConfigCard({ toast }: {
 // Beta safety net: when ON, LLM-initiated create/update/delete actions
 // show a confirmation modal before they happen. Decision feeds the
 // per-model quality dashboard (Settings → Quality).
+
+// ─── Kiosk photos consent — show MY photos of the day on the household wall ───
+
+function KioskPhotosConsentCard({ toast }: {
+  toast: (text: string, kind?: "info" | "success" | "error") => void;
+}) {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await api.get<{ consent: boolean }>("/api/users/me/kiosk-photos-consent");
+        setEnabled(!!r.consent);
+      } catch {
+        setEnabled(false);
+      }
+    })();
+  }, []);
+
+  async function toggle() {
+    if (enabled === null) return;
+    const next = !enabled;
+    setSaving(true);
+    try {
+      await api.patch("/api/users/me/kiosk-photos-consent", { consent: next });
+      setEnabled(next);
+      toast(next
+        ? "Your photos of the day will roll past on the household wall."
+        : "Your photos are no longer on the wall.",
+        "success");
+    } catch (e: any) {
+      toast(e.message || "Failed to save", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card title="Household wall · photos">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <div className="text-sm font-medium">Show my photos of the day on the household wall</div>
+          <p className="text-xs text-muted-foreground mt-1">
+            When ON, what you photographed today rolls past in the kitchen
+            tablet's slideshow together with everyone else who opted in. A
+            separate switch from the agenda: your calendar on the wall does
+            not put your camera roll there. Off by default.
+          </p>
+        </div>
+        <button
+          onClick={toggle}
+          disabled={enabled === null || saving}
+          className={cn(
+            "shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition",
+            enabled ? "bg-violet-500" : "bg-muted",
+            (enabled === null || saving) && "opacity-60 cursor-wait",
+          )}
+          aria-pressed={!!enabled}
+        >
+          <span
+            className={cn(
+              "inline-block h-4 w-4 transform rounded-full bg-white transition",
+              enabled ? "translate-x-6" : "translate-x-1",
+            )}
+          />
+        </button>
+      </div>
+    </Card>
+  );
+}
 
 // ─── Kiosk agenda consent — show MY appointments on the household wall ───
 

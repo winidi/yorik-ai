@@ -491,6 +491,15 @@ class _KioskAgendaConsentBody(BaseModel):
     consent: bool
 
 
+def _kiosk_photo_people() -> list[str]:
+    """Ids of the enabled household members who put their photos on
+    the wall (kiosk_photos_consent)."""
+    with conn_ctx(DB_PATH) as conn:
+        return [str(r["id"]) for r in conn.execute(
+            "SELECT id FROM user_profiles WHERE kiosk_photos_consent = 1 AND (disabled = 0 OR disabled IS NULL) "
+            "ORDER BY created_at").fetchall()]
+
+
 @app.patch("/api/users/me/kiosk-agenda-consent", tags=["users"])
 def set_my_kiosk_agenda_consent(
     body: _KioskAgendaConsentBody,
@@ -503,6 +512,35 @@ def set_my_kiosk_agenda_consent(
     with conn_ctx(DB_PATH) as conn:
         conn.execute(
             "UPDATE user_profiles SET kiosk_agenda_consent = ? WHERE id = ?",
+            (1 if body.consent else 0, user["id"]),
+        )
+        conn.commit()
+    return {"consent": body.consent}
+
+
+@app.get("/api/users/me/kiosk-photos-consent", tags=["users"])
+def get_my_kiosk_photos_consent(
+    user: Dict[str, Any] = Depends(_auth.current_user),
+) -> Dict[str, Any]:
+    """Read the current user's consent for "show my photos on the
+    household wall" (the slideshow's today-photos mode)."""
+    with conn_ctx(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT COALESCE(kiosk_photos_consent, 0) AS v FROM user_profiles WHERE id = ?",
+            (user["id"],),
+        ).fetchone()
+    return {"consent": bool(row["v"]) if row else False}
+
+
+@app.patch("/api/users/me/kiosk-photos-consent", tags=["users"])
+def set_my_kiosk_photos_consent(
+    body: _KioskAgendaConsentBody,
+    user: Dict[str, Any] = Depends(_auth.current_user),
+) -> Dict[str, Any]:
+    """Flip the current user's photo consent — their own flag only."""
+    with conn_ctx(DB_PATH) as conn:
+        conn.execute(
+            "UPDATE user_profiles SET kiosk_photos_consent = ? WHERE id = ?",
             (1 if body.consent else 0, user["id"]),
         )
         conn.commit()
@@ -1571,23 +1609,16 @@ def ambient_slideshow(
     # before cycling into the curated album. Dedupe by Immich asset id
     # in case a today-photo is also in the album.
     #
-    # Today's photos AGGREGATE across every active workspace user —
-    # the wall is a shared surface, so what every household member
-    # shot today should roll past everyone else's eyes. The album
-    # path stays scoped to the wall-bound user (the kiosk's
-    # configured album is admin's choice and intentionally curated).
+    # Today's photos aggregate across the household members who put
+    # their photos on the wall (kiosk_photos_consent) — a photo that was
+    # never shared with anyone does not roll past the hallway on its
+    # own (audit 2026-09-22, 4.4). The album path stays scoped to the
+    # wall-bound user (the kiosk's configured album is admin's choice
+    # and intentionally curated).
     photos: list[dict[str, Any]] = []
     seen: set[str] = set()
     if today_mode:
-        with conn_ctx(DB_PATH) as conn:
-            uids = [
-                int(r["id"])
-                for r in conn.execute(
-                    "SELECT id FROM user_profiles "
-                    "WHERE (disabled = 0 OR disabled IS NULL) "
-                    "ORDER BY id ASC"
-                ).fetchall()
-            ]
+        uids = _kiosk_photo_people()
         for p in _ambient.get_today_photos_workspace(
             uids, limit=int(limit), exclude_ids=blocklist,
         ):
@@ -4558,21 +4589,13 @@ async def proxy_immich_asset(
     uid = user.get("id") if user else None
     if uid:
         creds = external_users.get_user_immich_creds(uid)
-    if not creds or not creds.get("api_key"):
-        creds = credential_store.get("immich") or {}
+    # No admin-key fallback: the person's own library or nothing
+    # (audit 2026-09-22, 1.19).
+    creds = creds if creds and creds.get("api_key") else {}
     base_url = (creds.get("base_url") or "").rstrip("/")
     api_key  = creds.get("api_key") or ""
     if not (base_url and api_key):
-        # Fall back to the legacy app_settings keys (same pattern as
-        # paperless_ingest._paperless_settings).
-        with conn_ctx(DB_PATH) as conn:
-            for k, dest in (("immich_base_url", "base_url"), ("immich_api_key", "api_key")):
-                row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (k,)).fetchone()
-                if row and row["value"]:
-                    if dest == "base_url" and not base_url: base_url = row["value"].rstrip("/")
-                    elif dest == "api_key" and not api_key: api_key = row["value"]
-    if not (base_url and api_key):
-        raise HTTPException(status_code=503, detail="Immich not configured")
+        raise HTTPException(status_code=503, detail="Immich not configured for this user")
     if not re.match(r"^[A-Za-z0-9._-]+$", asset_id):
         # Defence-in-depth — the path param could otherwise smuggle ../
         # or /../api/. Immich asset ids are UUIDs in practice.
@@ -4660,7 +4683,7 @@ async def immich_thumbnail_proxy(
     asset_id: str,
     request: Request,
     size: str = Query("preview", description="Immich thumbnail size: 'thumbnail' | 'preview'"),
-    u: Optional[int] = Query(None, description="Owner user_id — honoured for kiosk-scope callers so the household wall can fetch any member's asset; ignored for regular browser sessions."),
+    u: Optional[str] = Query(None, description="Owner user_id — honoured for kiosk-scope callers so the household wall can fetch the assets of members who put their photos on the wall; ignored for regular browser sessions."),
     user: dict[str, Any] = Depends(_auth.current_user),
 ):
     """Stream an Immich asset thumbnail through Yorik so the URL works
@@ -4705,9 +4728,14 @@ async def immich_thumbnail_proxy(
             is_kiosk_scope = True
 
     uid = user.get("id") if user else None
-    candidate_uids: list[int] = []
-    if u is not None and is_kiosk_scope:
-        candidate_uids.append(int(u))
+    candidate_uids: list[Any] = []
+    # The owner hint is honoured for the wall only, and only for people
+    # who put their photos on the wall — the slideshow emits nobody
+    # else's assets, so nobody else's library is reachable through it.
+    # No admin-key fallback: without an Immich account of your own there
+    # is nothing you may fetch (audit 2026-09-22, 4.5).
+    if u is not None and is_kiosk_scope and str(u) in _kiosk_photo_people():
+        candidate_uids.append(str(u))
     if uid:
         candidate_uids.append(uid)
     candidate_uids = list(dict.fromkeys(candidate_uids))
@@ -4718,9 +4746,6 @@ async def immich_thumbnail_proxy(
         if c and c.get("api_key"):
             creds = c
             break
-    if not creds:
-        # Admin fallback — same shape the connector uses.
-        creds = credential_store.get("immich") or None
     if not creds or not creds.get("api_key"):
         raise HTTPException(503, "Immich not configured for this user")
 
@@ -4774,9 +4799,7 @@ async def immich_person_thumbnail_proxy(
     creds = None
     if uid:
         creds = external_users.get_user_immich_creds(uid)
-    if not creds:
-        creds = credential_store.get("immich") or None
-    if not creds or not creds.get("api_key"):
+    if not creds or not creds.get("api_key"):          # no admin-key fallback (audit 1.19)
         raise HTTPException(503, "Immich not configured for this user")
 
     base = (creds.get("base_url") or "http://localhost:2283").rstrip("/")
