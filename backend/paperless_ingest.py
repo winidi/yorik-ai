@@ -90,6 +90,11 @@ def user_creds(user_id: Any) -> Optional[Dict[str, Any]]:
     never the admin's view)."""
     if user_id is None:
         return None
+    from . import emergency as _emergency
+    if _emergency.active(user_id):
+        # the one way to every document: a running emergency access
+        s = _paperless_settings()
+        return {"base_url": s["base_url"], "api_key": s["api_key"]} if s.get("api_key") else None
     try:
         from .external_users import get_user_paperless_creds
         creds = get_user_paperless_creds(str(user_id))

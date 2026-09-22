@@ -189,6 +189,14 @@ Als Referenz für die Reparatur, denn hier steht das Muster schon:
   Wand-Consent), Slideshow nur aus diesen Bibliotheken, `?u=` am
   Thumbnail-Proxy nur für diese Personen, keine Admin-Key-Fallbacks in den
   drei Foto-Proxys (auch der alte `app_settings`-Fallback ist weg).
+  **Notfall-Zugriff** (Entscheidung 1): `backend/emergency.py`, Migration 154,
+  Routen `/api/emergency-access`, Karte in Einstellungen → Du. Erwachsene,
+  Grund ≥ 10 Zeichen, Passwort erneut, ≤ 24 h; Benachrichtigung an alle
+  anderen Erwachsenen bei Start und Ende; Verlauf für alle Erwachsenen.
+  Wirkung: `spaces.user_visible_space_ids` zeigt alle Spaces,
+  `paperless_ingest.user_creds` und die Dokument-Routen nehmen den
+  Admin-Token (`via_admin_token` markiert). Bewusst nicht geöffnet: Mail,
+  WhatsApp, Yorik-Chats, fremde Immich-Bibliotheken.
   Nicht angefasst: 1.7 (`space_id` im Chunk-Index) — durch die Hydration
   über den Token der Person nicht mehr nötig, der Space-Filter bleibt als
   Zusatz. Timetable (2.7) bleibt consent-basiert: der Stundenplan eines Kindes, das

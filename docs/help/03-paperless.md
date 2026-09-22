@@ -96,6 +96,14 @@ and their own, never another member's private documents, tasks or
 calendars, unless that member shares them. Admin rights are for
 settings, users and backups.
 
+The one way past that is the **emergency access** in Settings → You,
+for the adults of the household: hospital, accident, a death. It needs
+a reason in words, your password again, and lasts at most 24 hours.
+While it runs you see every calendar, task, contact, document, bill
+and recording in the house — not other people's mail, WhatsApp or
+chats with Yorik. Every other adult is notified the moment it starts
+and the moment it ends, and the log stays visible to all adults.
+
 Sharing is per area and per person: Settings → You → **Sharing** shows
 every household member with four boxes — tasks, calendar, contacts,
 documents — and a "can edit" box. Tick tasks and calendar for your

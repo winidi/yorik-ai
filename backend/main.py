@@ -134,6 +134,9 @@ app.include_router(_search_routes.router)
 from . import chat_attachments as _chat_attachments
 from .agent import conversation_io as _conversation_io
 app.include_router(_chat_attachments.router)
+from . import emergency as _emergency
+from . import emergency_routes as _emergency_routes
+app.include_router(_emergency_routes.router)
 from . import calendar_import as _calendar_import
 app.include_router(_calendar_import.router)
 
@@ -12321,9 +12324,11 @@ def list_documents_endpoint(
                 pl_token = creds["api_key"]
         except Exception:  # noqa: BLE001
             pass
-    if pl_token is None:
-        # Admin fallback only — gives the legacy admin-sees-all behaviour.
-        if normalize_role(role) == "admin":
+    if pl_token is None or _emergency.active(user_id):
+        # No admin fallback (audit 2026-09-22, 1.15). The one way to the
+        # whole library is a running emergency access — then the admin
+        # token, and the rows say so (via_admin_token).
+        if _emergency.active(user_id):
             from .connectors.paperless import _settings as _ps
             pl_token = (_ps().get("api_key"))
             used_admin_token = True
@@ -12739,7 +12744,7 @@ def documents_facets(
                 pl_token = creds["api_key"]
         except Exception:  # noqa: BLE001
             pass
-    if pl_token is None and normalize_role(role) == "admin":
+    if _emergency.active(user_id):
         from .connectors.paperless import _settings as _ps
         pl_token = (_ps().get("api_key"))
     if not pl_token:
@@ -12874,7 +12879,7 @@ def get_document_endpoint(
                     pl_token = creds["api_key"]
             except Exception:  # noqa: BLE001
                 pass
-        if pl_token is None and normalize_role(role) == "admin":
+        if _emergency.active(user_id):
             from .connectors.paperless import _settings as _ps
             pl_token = (_ps().get("api_key"))
         if not pl_token:

@@ -122,6 +122,12 @@ def user_visible_space_ids(user_id: Optional[int], role: Optional[str],
     if user_id is None:
         return []
     r = (role or "").lower()
+    # A running emergency access (backend/emergency.py) is the one way
+    # to every space in the house, other people's personal ones included.
+    from . import emergency as _emergency
+    if _emergency.active(user_id):
+        include_others_personal = True
+        r = "platform_admin"
     others_personal = "" if include_others_personal else \
         " AND NOT (kind = 'personal' AND owner_user_id IS DISTINCT FROM ?)"
     with conn_ctx() as c:
