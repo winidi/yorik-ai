@@ -229,17 +229,23 @@ def _wa_by_names(names: list[str], user_id: str):
 
 
 def _events_by_names(names: list[str], user_id: str) -> list[dict[str, Any]]:
+    """The person's own events naming this contact (audit 2.18: the
+    query took user_id and never used it)."""
     if not names:
         return []
+    from . import calendars as _cal
     likes = " OR ".join(["LOWER(title) LIKE ? OR LOWER(COALESCE(person,'')) LIKE ?"] * len(names))
     params = []
     for n in names:
         params.extend([f"%{n.lower()}%", f"%{n.lower()}%"])
     with get_conn() as conn:
+        role_row = conn.execute("SELECT role FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
+        ev_sql, ev_params = _cal.visible_event_filter(str(user_id), (role_row["role"] if role_row else "") or "")
         rows = conn.execute(
-            f"SELECT id, title, starts_at, ends_at, person FROM events WHERE ({likes}) "
+            f"SELECT id, title, starts_at, ends_at, person FROM events WHERE ({likes}) AND {ev_sql} "
+            f"AND (events.visibility IS DISTINCT FROM 'private' OR events.owner_user_id = ?) "
             f"ORDER BY starts_at DESC LIMIT 10",
-            params,
+            [*params, *ev_params, user_id],
         ).fetchall()
     return [dict(r) for r in rows]
 

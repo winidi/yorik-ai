@@ -149,9 +149,14 @@ Als Referenz für die Reparatur, denn hier steht das Muster schon:
 ## Stand
 
 - **Erledigt 22.09.:** Paket 1 (2.2–2.4, Commit `da47b65`), Paket 2 (2.1, 2.21
-  Docstring), Paket 3 (2.5, 2.6, 2.7 Board, 3.1 Worker). Timetable (2.7)
-  bleibt consent-basiert: der Stundenplan eines Kindes, das auf der Wand
-  ist, ist für den Haushalt.
+  Docstring), Paket 3 (2.5, 2.6, 2.7 Board, 3.1 Worker; Commit `968588a`),
+  Paket 4 (2.9, 2.10, 2.11, 2.17, 2.18, 3.2, 3.3, 3.9, 3.10: Kontakt-Routen
+  über `_contact_for`, Rechnungen über `_ensure_row_writable`, Teilnehmer
+  und Kalender-Freigaben nur für Sichtbare, WhatsApp discard/reprocess auf
+  den Besitzer, WhatsApp-Settings/Backfill/Bridge-Info und n8n nur Admin).
+  Timetable (2.7) bleibt consent-basiert: der Stundenplan eines Kindes, das
+  auf der Wand ist, ist für den Haushalt. 2.19 (`GET /api/settings/{key}`)
+  offen, weil das Frontend Haushalts-Einstellungen für alle liest.
 - **Entschieden von Dirk 22.09.:** Notfall-Zugriff wie vorgeschlagen (ja);
   Consume-Ordner-Dokumente sichtbar für `parents`; Immich-Login = Yorik-Login
   (OIDC-Provider in Yorik, eigenes Paket nach den Berechtigungs-Paketen).

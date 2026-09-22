@@ -839,21 +839,25 @@ def bump_use(contact_id: int) -> None:
 # ---------------------------------------------------------------------------
 
 
-def status_counts(role: Optional[str] = None) -> Dict[str, int]:
+def status_counts(role: Optional[str] = None, user_id: Optional[str] = None) -> Dict[str, int]:
     """Return {active, pending, spam, archived, pending_unclassified,
     pending_classified} → count. The pending_(un)classified split
     drives the cleanup pipeline's "Step 1: Classify" badge — it
-    fades to ✓ when every pending row has a triage_verdict."""
+    fades to ✓ when every pending row has a triage_verdict.
+    With a user, the counts cover the contacts that person may see."""
     out = {"active": 0, "pending": 0, "spam": 0, "archived": 0,
            "pending_unclassified": 0, "pending_classified": 0}
+    vis_sql, vis_params = ("TRUE", []) if user_id is None else _visibility_clause(role, user_id)
     with conn_ctx() as c:
-        for r in c.execute("SELECT status, COUNT(*) AS n FROM contacts GROUP BY status").fetchall():
+        for r in c.execute(f"SELECT status, COUNT(*) AS n FROM contacts WHERE {vis_sql} GROUP BY status",
+                           vis_params).fetchall():
             out[r["status"]] = r["n"]
         r = c.execute(
             "SELECT "
             "  COUNT(*) FILTER (WHERE triage_classified_at IS NULL) AS unc, "
             "  COUNT(*) FILTER (WHERE triage_classified_at IS NOT NULL) AS cls "
-            "FROM contacts WHERE status='pending'"
+            f"FROM contacts WHERE status='pending' AND {vis_sql}",
+            vis_params,
         ).fetchone()
         if r:
             out["pending_unclassified"] = int(r["unc"] or 0)

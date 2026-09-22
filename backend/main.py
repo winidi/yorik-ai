@@ -4837,8 +4837,9 @@ def patch_bill(
     bill_id: int,
     body: BillPatch,
     role: str = Depends(_auth.current_role),
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
-    require_role(role, "bills")
+    _ensure_row_writable("bills", bill_id, role, user)       # the person's own or a space they may write to
     updates: List[str] = []
     params: List[Any] = []
     if body.paid is not None:
@@ -5548,12 +5549,34 @@ def triage_auto_classify_status(
 
 
 
+def _contact_for(contact_id: int, user: Dict[str, Any], action: str = "edit",
+                 include_children: bool = False) -> Dict[str, Any]:
+    """Load a contact the person may see ("view") or change ("edit"),
+    the gate PATCH and DELETE already use. A contact outside the
+    person's view answers 404 like a missing one (no probing by id);
+    an edit without rights 403. Until 2026-09-22 the satellite routes
+    (pin, promote, spam, channels, addresses, timeline, proposals, …)
+    took `user` and never looked at it (audit 2.9, 2.10)."""
+    from . import calendars as _cal
+    raw = _contacts.get(contact_id, include_children=include_children)
+    if raw is None:
+        raise HTTPException(404, "contact not found")
+    try:
+        _cal.require_contact_access(user.get("role"), user.get("id"), raw, action=action)
+    except _cal.RowOwnerPermissionError as exc:
+        if action == "view":
+            raise HTTPException(404, "contact not found") from exc
+        raise HTTPException(403, str(exc)) from exc
+    return raw
+
+
 @app.get("/api/contacts/_counts")
 def contact_counts(
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, int]:
-    """Counts per status — drives the tab badges."""
-    return _contacts.status_counts()
+    """Counts per status — drives the tab badges. The person's own
+    contacts (audit 2.9)."""
+    return _contacts.status_counts(role=user.get("role"), user_id=user.get("id"))
 
 
 @app.post("/api/contacts/yorik-assist/bulk")
@@ -5720,7 +5743,7 @@ async def enrich_one_contact(
 @app.get("/api/contacts/{contact_id}/proposals")
 def get_contact_proposals(
     contact_id: int,
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
     """Pending LLM proposals for this contact + a cheap scan summary
     so the UI can ALWAYS show "we checked X emails, Y WA, Z docs,
@@ -5728,6 +5751,7 @@ def get_contact_proposals(
     ("nothing to suggest" vs "feature is broken") was previously
     invisible to the user; now it's right there next to the Enrich
     button. The summary is SQL-only (no LLM call), ~50ms typically."""
+    _contact_for(contact_id, user, "view")
     from .contacts import conn_ctx as _ccx
     from . import contact_enricher as _ce
     with _ccx() as c:
@@ -5760,7 +5784,7 @@ class _ProposalDecision(BaseModel):
 def decide_contact_proposal(
     contact_id: int,
     body: _ProposalDecision,
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
     """Mark a proposal accepted or rejected. Called when the user picks
     a dropdown alternative + saves, OR explicitly rejects a suggestion.
@@ -5769,6 +5793,7 @@ def decide_contact_proposal(
     purely for audit + "don't re-suggest" on the next enricher run."""
     if body.decision not in ("accepted", "rejected"):
         raise HTTPException(400, "decision must be 'accepted' or 'rejected'")
+    _contact_for(contact_id, user, "edit")
     from .contacts import conn_ctx as _ccx
     with _ccx() as c:
         cur = c.execute(
@@ -6070,10 +6095,9 @@ def delete_contact(
 @app.post("/api/contacts/{contact_id}/promote")
 def promote_contact(
     contact_id: int,
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
-    if not _contacts.get(contact_id, include_children=False):
-        raise HTTPException(404, "contact not found")
+    _contact_for(contact_id, user, "edit")
     _contacts.promote_pending(contact_id)
     return _contacts.get(contact_id) or {}
 
@@ -6091,10 +6115,9 @@ class ContactPinIn(BaseModel):
 def pin_contact(
     contact_id: int,
     body: ContactPinIn,
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
-    if not _contacts.get(contact_id, include_children=False):
-        raise HTTPException(404, "contact not found")
+    _contact_for(contact_id, user, "edit")
     with conn_ctx(DB_PATH) as conn:
         conn.execute(
             "UPDATE contacts SET pinned = ?, updated_at = datetime('now') "
@@ -6161,9 +6184,10 @@ def contact_timeline(
     limit: int = Query(20, ge=1, le=80),
     user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
-    c = _contacts.get(contact_id, include_children=True)
-    if not c:
-        raise HTTPException(404, "contact not found")
+    c = _contact_for(contact_id, user, "view", include_children=True)
+    _tl_ev_sql, _tl_ev_params = _calendars_mod.visible_event_filter(str(user["id"]), user.get("role") or "")
+    _tl_ev_sql = f"{_tl_ev_sql} AND (events.visibility IS DISTINCT FROM 'private' OR events.owner_user_id = ?)"
+    _tl_ev_params = [*_tl_ev_params, user["id"]]
 
     display = c.get("display_name") or ""
     aliases = c.get("aliases") or []
@@ -6220,9 +6244,9 @@ def contact_timeline(
             rows = conn.execute(
                 f"SELECT id, title, starts_at, location "
                 f"FROM events "
-                f"WHERE ({ev_clauses}) "
+                f"WHERE ({ev_clauses}) AND {_tl_ev_sql} "
                 f"ORDER BY starts_at DESC LIMIT ?",
-                [*ev_params, int(limit)],
+                [*ev_params, *_tl_ev_params, int(limit)],
             ).fetchall()
             for r in rows:
                 items.append({
@@ -6330,10 +6354,9 @@ def vcard_import_apply(
 @app.post("/api/contacts/{contact_id}/spam")
 def spam_contact(
     contact_id: int,
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
-    if not _contacts.get(contact_id, include_children=False):
-        raise HTTPException(404, "contact not found")
+    _contact_for(contact_id, user, "edit")
     _contacts.mark_spam(contact_id)
     return _contacts.get(contact_id) or {}
 
@@ -6342,10 +6365,9 @@ def spam_contact(
 def add_contact_channel_route(
     contact_id: int,
     body: _ChannelIn,
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
-    if not _contacts.get(contact_id, include_children=False):
-        raise HTTPException(404, "contact not found")
+    _contact_for(contact_id, user, "edit")
     try:
         _contacts.add_channel(contact_id, kind=body.kind, value=body.value,
                               label=body.label, source="manual")
@@ -6363,9 +6385,13 @@ def add_contact_channel_route(
 @app.delete("/api/contacts/channels/{channel_id}", status_code=204, response_class=Response)
 def remove_contact_channel_route(
     channel_id: int,
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Response:
-    _contacts.remove_channel(channel_id)
+    with conn_ctx(DB_PATH) as conn:
+        owner = conn.execute("SELECT contact_id FROM contact_channels WHERE id = ?", (channel_id,)).fetchone()
+    if owner:
+        _contact_for(int(owner["contact_id"]), user, "edit")
+        _contacts.remove_channel(channel_id)
     return Response(status_code=204)
 
 
@@ -6373,10 +6399,9 @@ def remove_contact_channel_route(
 def add_contact_address_route(
     contact_id: int,
     body: _AddressIn,
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
-    if not _contacts.get(contact_id, include_children=False):
-        raise HTTPException(404, "contact not found")
+    _contact_for(contact_id, user, "edit")
     try:
         _contacts.add_address(
             contact_id, kind=body.kind, line1=body.line1, line2=body.line2,
@@ -6391,9 +6416,13 @@ def add_contact_address_route(
 @app.delete("/api/contacts/addresses/{address_id}", status_code=204, response_class=Response)
 def remove_contact_address_route(
     address_id: int,
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Response:
-    _contacts.remove_address(address_id)
+    with conn_ctx(DB_PATH) as conn:
+        owner = conn.execute("SELECT contact_id FROM contact_addresses WHERE id = ?", (address_id,)).fetchone()
+    if owner:
+        _contact_for(int(owner["contact_id"]), user, "edit")
+        _contacts.remove_address(address_id)
     return Response(status_code=204)
 
 
@@ -6401,15 +6430,16 @@ def remove_contact_address_route(
 def get_contact_by_channel_route(
     kind: str,
     value: str,
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
     """Look up a contact by exact channel value. Powers the WhatsApp /
     Email inbound banners ("👥 Anna is a pending contact" → confirm /
     spam). Returns 404 if no contact owns this channel — caller treats
     that as "unknown sender, offer to add."
     """
+    from . import spaces as _sp
     hit = _contacts.find_by_channel(kind, value)
-    if not hit:
+    if not hit or not _sp.can_view_row(user.get("id"), user.get("role"), "contacts", hit):
         raise HTTPException(404, "no contact owns this channel")
     return hit
 
@@ -6443,12 +6473,13 @@ def backfill_whatsapp_names(
 @app.get("/api/contacts/{contact_id}/address-suggestions")
 def address_suggestions(
     contact_id: int,
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
     """Return cached address suggestions (does NOT run the LLM). Empty
     candidates + null scraped_at means "never scraped — show the
     Search button." Use POST /scrape-addresses to actually run it.
     """
+    _contact_for(contact_id, user, "view")
     from . import contact_address_scraper
     return contact_address_scraper.scrape_and_cache(contact_id, use_cache=True)
 
@@ -6463,6 +6494,7 @@ def scrape_addresses(
     an address" in the address editor. Subsequent GETs return the
     cached result.
     """
+    _contact_for(contact_id, user, "edit")
     from . import contact_address_scraper
     return contact_address_scraper.scrape_and_cache(
         contact_id,
@@ -6487,6 +6519,7 @@ def birthday_suggestion_for_contact(
     Empty result {detected: null} means: not enough data or no WA
     history. Frontend shows the suggestion as a one-click pill.
     """
+    _contact_for(contact_id, user, "view")
     c = _contacts.get(contact_id, include_children=True)
     if not c:
         raise HTTPException(404, "contact not found")
@@ -6595,6 +6628,7 @@ def email_suggestions_for_contact(
     count, most recent subject, and date. Already-attached emails are
     skipped — no point suggesting what we already have.
     """
+    _contact_for(contact_id, user, "view")
     c = _contacts.get(contact_id, include_children=True)
     if not c:
         raise HTTPException(404, "contact not found")
@@ -6779,8 +6813,11 @@ def archive_calendar_route(
 @app.get("/api/calendars/{calendar_id}/shares")
 def list_calendar_shares(
     calendar_id: int,
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> List[Dict[str, Any]]:
+    cal = _calendars_mod.get(calendar_id)
+    if not cal or not _calendars_mod.effective_access(str(user["id"]), user.get("role") or "", cal):
+        raise HTTPException(404, "calendar not found")
     return _calendars_mod.list_shares(calendar_id)
 
 
@@ -6990,8 +7027,13 @@ def calendar_freebusy(
 @app.get("/api/events/{event_id}/attendees")
 def list_event_attendees(
     event_id: int,
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> List[Dict[str, Any]]:
+    ev_sql, ev_params = _calendars_mod.visible_event_filter(str(user["id"]), user.get("role") or "")
+    with conn_ctx(DB_PATH) as conn:
+        seen = conn.execute(f"SELECT 1 FROM events WHERE events.id = ? AND {ev_sql}", (event_id, *ev_params)).fetchone()
+    if not seen:
+        raise HTTPException(404, "event not found")
     return _calendars_mod.attendees_for(event_id)
 
 

@@ -34,7 +34,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
-from .auth_sessions import current_user, get_user_for_session, COOKIE_NAME
+from .auth_sessions import current_user, get_user_for_session, require_admin, COOKIE_NAME  # noqa: F401
 
 log = logging.getLogger("yorik.n8n_proxy")
 
@@ -81,7 +81,10 @@ def _client_get() -> httpx.AsyncClient:
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     include_in_schema=False,
 )
-async def proxy(path: str, request: Request, user: dict[str, Any] = Depends(current_user)) -> Response:
+async def proxy(path: str, request: Request, user: dict[str, Any] = Depends(require_admin)) -> Response:
+    # Admins only: n8n runs with its own user management off and holds
+    # every workflow and every credential of the household; a member
+    # or a child has no business in the editor (audit 2026-09-22, 3.10).
     # NOTE on N8N_PATH inconsistency:
     # With N8N_PATH=/n8n/, n8n generates URLs in its HTML/JS prefixed
     # with /n8n/ (so the browser routes them back through this proxy),
@@ -151,7 +154,7 @@ async def proxy_ws(websocket: WebSocket, path: str) -> None:
     sid = websocket.cookies.get(COOKIE_NAME)
     client_ip = websocket.client.host if websocket.client else None
     user = get_user_for_session(sid, ip=client_ip) if sid else None
-    if not user:
+    if not user or (user.get("role") or "").lower() not in ("admin", "platform_admin"):
         await websocket.close(code=4401)
         return
 

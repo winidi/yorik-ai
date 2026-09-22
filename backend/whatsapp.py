@@ -615,7 +615,7 @@ async def status(
 # installs (BYO bridge on another host) get a clean error message.
 
 @router.get("/bridge/info")
-def bridge_info() -> dict[str, Any]:
+def bridge_info(user: dict[str, Any] = Depends(_auth.require_admin)) -> dict[str, Any]:
     """Container + docker state for the WhatsApp bridge, so the UI can
     show the right action ("Start" vs "Restart" vs "Docker not installed").
 
@@ -864,7 +864,7 @@ async def qr(
 
 
 @router.get("/settings")
-def get_wa_settings() -> dict[str, Any]:
+def get_wa_settings(user: dict[str, Any] = Depends(_auth.require_admin)) -> dict[str, Any]:
     """Read user-controllable WhatsApp toggles. Used by the Settings →
     WhatsApp panel. Currently one flag (status auto-import); easy to
     extend with more without schema churn (each flag is a separate
@@ -882,7 +882,7 @@ class WaSettings(BaseModel):
 
 
 @router.patch("/settings")
-def patch_wa_settings(body: WaSettings) -> dict[str, Any]:
+def patch_wa_settings(body: WaSettings, user: dict[str, Any] = Depends(_auth.require_admin)) -> dict[str, Any]:
     """Flip a WhatsApp toggle. Returns the post-update state for the
     caller to confirm. Admin gate is implicit via the chat-app auth
     already applied to the router."""
@@ -1122,7 +1122,7 @@ def _stable_msg_id(sender: str, ts: int, text: str) -> str:
 
 
 @router.get("/semantic-status")
-async def semantic_status() -> dict[str, Any]:
+async def semantic_status(user: dict[str, Any] = Depends(_auth.require_admin)) -> dict[str, Any]:
     """How many messages are indexed for semantic search, is the
     embedder reachable, etc. Drives the "Backfill" button state."""
     from . import whatsapp_semantic as _sem
@@ -1130,7 +1130,8 @@ async def semantic_status() -> dict[str, Any]:
 
 
 @router.post("/backfill-embeddings")
-async def backfill_embeddings(limit: Optional[int] = None) -> dict[str, Any]:
+async def backfill_embeddings(limit: Optional[int] = None,
+                              user: dict[str, Any] = Depends(_auth.require_admin)) -> dict[str, Any]:
     """Embed every wa_message that isn't yet in the semantic index.
     Idempotent — safe to re-run. Limit param caps the batch size for
     a first probe (defaults to "do everything")."""
@@ -1140,13 +1141,14 @@ async def backfill_embeddings(limit: Optional[int] = None) -> dict[str, Any]:
 
 
 @router.post("/messages/{msg_id}/reprocess")
-async def reprocess_message(msg_id: str, chat_jid: str = Query(...)) -> dict[str, Any]:
-    """Re-trigger media processing for one message. Useful after
-    configuring Paperless/Immich, or if a service was down at first
-    ingest. chat_jid is a query param (not path) because msg_id alone
-    isn't globally unique."""
+async def reprocess_message(msg_id: str, chat_jid: str = Query(...),
+                            user: dict[str, Any] = Depends(_auth.current_user)) -> dict[str, Any]:
+    """Re-trigger media processing for one of the person's own messages.
+    Useful after configuring Paperless/Immich, or if a service was down
+    at first ingest. chat_jid is a query param (not path) because msg_id
+    alone isn't globally unique."""
     from . import whatsapp_media
-    return await whatsapp_media.reprocess_message(chat_jid, msg_id)
+    return await whatsapp_media.reprocess_message(chat_jid, msg_id, owner_user_id=str(user["id"]))
 
 
 @router.get("/avatar/{jid:path}")
@@ -2064,20 +2066,26 @@ async def pending_draft_counts(
 
 
 @router.post("/drafts/{chat_jid:path}/discard")
-async def discard_pending_drafts(chat_jid: str) -> dict[str, Any]:
-    """User explicitly dismisses the pending draft set."""
+async def discard_pending_drafts(
+    chat_jid: str,
+    user: dict[str, Any] = Depends(_auth.current_user),
+) -> dict[str, Any]:
+    """User explicitly dismisses the pending draft set — their own; the
+    sibling routes always filtered on the owner, this one did not
+    (audit 2026-09-22, 3.2)."""
+    uid = user["id"]
     with get_conn() as conn:
         cur = conn.execute(
             "UPDATE wa_drafts SET status='discarded', discarded_at=datetime('now'), "
-            "discard_reason='user_dismissed' WHERE chat_jid=? AND status='pending'",
-            (chat_jid,),
+            "discard_reason='user_dismissed' WHERE chat_jid=? AND owner_user_id=? AND status='pending'",
+            (chat_jid, uid),
         )
         conn.commit()
     await _broadcast_to_browsers({
         "type": "drafts_updated",
         "payload": {"chat_jid": chat_jid, "discarded": cur.rowcount or 0,
                     "reason": "user_dismissed"},
-    })
+    }, user_id=uid)
     return {"discarded": cur.rowcount or 0}
 
 

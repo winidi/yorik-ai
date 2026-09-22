@@ -422,17 +422,19 @@ async def _route_to_whisper(msg: dict[str, Any]) -> None:
 
 # ───────────────────────── Re-process API ──────────────────────────────
 
-async def reprocess_message(chat_jid: str, msg_id: str) -> dict[str, Any]:
-    """Manually re-trigger media processing for one message. Used by
-    POST /api/whatsapp/messages/<msg_id>/reprocess — handy when the
-    user later configures Paperless/Immich, or one of them was down
-    when the message originally arrived."""
+async def reprocess_message(chat_jid: str, msg_id: str, *, owner_user_id: str) -> dict[str, Any]:
+    """Manually re-trigger media processing for one of the owner's
+    messages. Used by POST /api/whatsapp/messages/<msg_id>/reprocess —
+    handy when the user later configures Paperless/Immich, or one of
+    them was down when the message originally arrived. The owner is the
+    person whose WhatsApp session holds the message; nobody else may
+    read its transcript or push its media anywhere (audit 3.3)."""
     with get_conn() as conn:
         row = conn.execute(
             "SELECT msg_id, chat_jid, media_kind, mimetype, filename, "
             "       media_paperless_id, media_immich_id, transcript "
-            "FROM wa_messages WHERE chat_jid=? AND msg_id=?",
-            (chat_jid, msg_id),
+            "FROM wa_messages WHERE chat_jid=? AND msg_id=? AND owner_user_id=?",
+            (chat_jid, msg_id, owner_user_id),
         ).fetchone()
     if not row:
         return {"ok": False, "error": "message not found"}
@@ -443,18 +445,18 @@ async def reprocess_message(chat_jid: str, msg_id: str) -> dict[str, Any]:
     with get_conn() as conn:
         if row["media_kind"] == "document":
             conn.execute(
-                "UPDATE wa_messages SET media_paperless_id=NULL WHERE chat_jid=? AND msg_id=?",
-                (chat_jid, msg_id),
+                "UPDATE wa_messages SET media_paperless_id=NULL WHERE chat_jid=? AND msg_id=? AND owner_user_id=?",
+                (chat_jid, msg_id, owner_user_id),
             )
         elif row["media_kind"] in ("image", "video"):
             conn.execute(
-                "UPDATE wa_messages SET media_immich_id=NULL WHERE chat_jid=? AND msg_id=?",
-                (chat_jid, msg_id),
+                "UPDATE wa_messages SET media_immich_id=NULL WHERE chat_jid=? AND msg_id=? AND owner_user_id=?",
+                (chat_jid, msg_id, owner_user_id),
             )
         elif row["media_kind"] == "audio":
             conn.execute(
-                "UPDATE wa_messages SET transcript=NULL WHERE chat_jid=? AND msg_id=?",
-                (chat_jid, msg_id),
+                "UPDATE wa_messages SET transcript=NULL WHERE chat_jid=? AND msg_id=? AND owner_user_id=?",
+                (chat_jid, msg_id, owner_user_id),
             )
         conn.commit()
 
@@ -465,15 +467,15 @@ async def reprocess_message(chat_jid: str, msg_id: str) -> dict[str, Any]:
         "mimetype": row["mimetype"],
         "filename": row["filename"],
     }
-    # Manual reprocess = user is vouching for this attachment themselves,
-    # so bypass the known-sender gate.
-    await process_media(fake_msg, force=True)
+    # Manual reprocess = the owner is vouching for this attachment
+    # themselves, so bypass the known-sender gate.
+    await process_media(fake_msg, owner_user_id, force=True)
 
     # Read state back to report what landed.
     with get_conn() as conn:
         out = conn.execute(
             "SELECT media_paperless_id, media_immich_id, transcript "
-            "FROM wa_messages WHERE chat_jid=? AND msg_id=?",
-            (chat_jid, msg_id),
+            "FROM wa_messages WHERE chat_jid=? AND msg_id=? AND owner_user_id=?",
+            (chat_jid, msg_id, owner_user_id),
         ).fetchone()
     return {"ok": True, **dict(out)}
