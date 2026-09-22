@@ -164,11 +164,11 @@ async def _process_media_locked(msg: dict[str, Any], owner_user_id: str = 1, *, 
 
     try:
         if kind == "document" and not row["media_paperless_id"]:
-            await _route_to_paperless(msg)
+            await _route_to_paperless(msg, owner_user_id)
         elif kind == "image" and not row["media_immich_id"]:
-            await _route_to_immich(msg, is_video=False)
+            await _route_to_immich(msg, owner_user_id, is_video=False)
         elif kind == "video" and not row["media_immich_id"]:
-            await _route_to_immich(msg, is_video=True)
+            await _route_to_immich(msg, owner_user_id, is_video=True)
         elif kind == "audio" and not row["transcript"]:
             await _route_to_whisper(msg)
         # sticker / contact / location — intentionally not routed
@@ -266,15 +266,21 @@ def _chat_name(jid: str) -> str:
 
 # ───────────────────────── Paperless route ─────────────────────────────
 
-async def _route_to_paperless(msg: dict[str, Any]) -> None:
-    # Imported lazily — both modules pull from connectors which has
-    # heavier imports we don't want to pay if the user has no Paperless.
-    from .connectors.paperless import _settings as _paperless_settings
-    from .compose.save import _ensure_tag_ids
+async def _route_to_paperless(msg: dict[str, Any], owner_user_id: str) -> None:
+    """File an incoming WhatsApp document in Paperless as the person who
+    received it — their own token, so it is theirs, with their default
+    visibility applied after the consume like an upload in the chat.
+    Without a Paperless account of their own the document stays in
+    WhatsApp. (Until 2026-09-22 this uploaded with the admin token, so
+    the admin owned every member's incoming documents and the recipient
+    saw nothing — audit 1.11.)"""
+    from .external_users import get_user_paperless_creds
+    from . import paperless_visibility as _pv
 
-    s = _paperless_settings()
-    if not s.get("api_key"):
-        log.info("Paperless not configured — skipping doc route for %s", msg.get("id"))
+    s = get_user_paperless_creds(str(owner_user_id))
+    if not s or not s.get("api_key"):
+        log.info("no Paperless account for user %s — WhatsApp document %s stays in the chat",
+                 owner_user_id, msg.get("id"))
         return
 
     content = await _download_from_bridge(msg["id"])
@@ -283,13 +289,14 @@ async def _route_to_paperless(msg: dict[str, Any]) -> None:
     contact = _chat_name(msg["jid"])
     title = f"WA · {contact} · {filename}"
 
-    # Use _ensure_tag_ids (sync, uses `requests`) in a thread so we don't
-    # block the asyncio loop.
-    tag_ids = await asyncio.to_thread(_ensure_tag_ids, s, ["whatsapp", contact])
+    from .chat_attachments import _default_visibility
+    visibility = _default_visibility(str(owner_user_id))
+    tag_ids = [t for t in [await asyncio.to_thread(_pv.ensure_household_tag, "whatsapp")] if t]
 
     headers = {"Authorization": f"Token {s['api_key']}"}
     files = {"document": (filename, content, mimetype)}
     data: dict[str, Any] = {"title": title}
+    _pv.apply_visibility_to_payload(visibility, data)
     for tid in tag_ids:
         data.setdefault("tags", []).append(tid)
 
@@ -306,25 +313,38 @@ async def _route_to_paperless(msg: dict[str, Any]) -> None:
     # task_id is a UUID — the post-consume webhook (already wired) will
     # backfill the real doc id once OCR finishes. For our purposes, the
     # task id is enough to prove the upload succeeded.
-    with get_conn() as conn:
-        conn.execute(
-            "UPDATE wa_messages SET media_paperless_id=? WHERE chat_jid=? AND msg_id=?",
-            (task_id, msg["jid"], msg["id"]),
-        )
-        conn.commit()
-    log.info("WA doc → Paperless (task=%s) from %s", task_id, contact)
+    # post_document answers with a task id; the document id exists only
+    # once Paperless has consumed the file. `media_paperless_id` is an
+    # integer column, so the id is written by the callback after the
+    # consume (the old code stored the task's UUID there, which
+    # Postgres rejected). Until then the message counts as unfiled; a
+    # second run would be refused by Paperless as a duplicate.
+    jid, mid = msg["jid"], msg["id"]
+
+    def _remember(doc_id: int) -> None:
+        with get_conn() as conn:
+            conn.execute("UPDATE wa_messages SET media_paperless_id=? WHERE chat_jid=? AND msg_id=?",
+                         (int(doc_id), jid, mid))
+            conn.commit()
+
+    _pv.apply_after_consume(task_id, visibility, on_document=_remember)
+    log.info("WA doc → Paperless (task=%s, %s) for user %s from %s", task_id, visibility, owner_user_id, contact)
 
 
 # ───────────────────────── Immich route ────────────────────────────────
 
-async def _route_to_immich(msg: dict[str, Any], is_video: bool) -> None:
-    from . import credential_store
+async def _route_to_immich(msg: dict[str, Any], owner_user_id: str, is_video: bool) -> None:
+    """Put an incoming WhatsApp photo or video into the recipient's own
+    Immich library (their API key). Without one it stays in WhatsApp.
+    (Until 2026-09-22 the admin key was used, so every member's incoming
+    media landed in the admin's library — audit 1.11.)"""
+    from .external_users import get_user_immich_creds
 
-    creds = credential_store.get("immich") or {}
+    creds = get_user_immich_creds(str(owner_user_id)) or {}
     api_key = creds.get("api_key")
     if not api_key:
-        log.info("Immich not configured — skipping %s route for %s",
-                 "video" if is_video else "image", msg.get("id"))
+        log.info("no Immich account for user %s — WhatsApp %s %s stays in the chat",
+                 owner_user_id, "video" if is_video else "image", msg.get("id"))
         return
     base_url = (creds.get("base_url") or "http://localhost:2283").rstrip("/")
 

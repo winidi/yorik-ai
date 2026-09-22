@@ -11813,7 +11813,7 @@ def compose_save(
     res = save_mod.save_to_paperless(
         body.body_html, title=body.title, tags=body.tags or ["compose"],
         correspondent=body.correspondent, page_size=body.page_size,
-        margins_mm=margins,
+        margins_mm=margins, user_id=user.get("id"),
     )
     if not res.get("ok"):
         raise HTTPException(status_code=502, detail=res.get("error") or "save failed")
@@ -11984,7 +11984,7 @@ async def compose_send_email(
         save_result = save_mod.save_to_paperless(
             body.body_html, title=body.title,
             tags=(body.tags or []) + ["gesendet"],
-            correspondent=body.correspondent,
+            correspondent=body.correspondent, user_id=user.get("id"),
         )
 
     # Consume series numbers AFTER the email was successfully sent. If
@@ -12642,21 +12642,17 @@ def _push_to_paperless(
             return {"ok": False, "skipped": True, "reason": "Paperless not configured (no admin token)"}
         base_url = (s.get("base_url") or "http://localhost:8010").rstrip("/")
 
-        # Prefer the calling user's own token — Paperless then attributes
-        # the doc's `owner` to them, and per-user permission filtering
-        # on /api/documents/ Just Works for everyone else. Fall back to
-        # admin if the user hasn't been provisioned yet.
-        used_token = admin_key
-        token_owner = "admin"
-        if user_id is not None:
-            try:
-                from . import external_users
-                creds = external_users.get_user_paperless_creds(user_id)
-                if creds and creds.get("api_key"):
-                    used_token = creds["api_key"]
-                    token_owner = f"user:{user_id}"
-            except Exception as exc:  # noqa: BLE001
-                log.debug("user paperless creds lookup failed (uid=%s): %s", user_id, exc)
+        # The calling user's own token — Paperless then attributes the
+        # doc's `owner` to them, and per-user permission filtering on
+        # /api/documents/ Just Works for everyone else. No fallback to
+        # the admin token: a document filed under the admin is one its
+        # uploader cannot see (audit 2026-09-22, 1.14).
+        from . import paperless_ingest as _pi
+        creds = _pi.user_creds(user_id)
+        if not creds:
+            return {"ok": False, "error": "no Paperless account for this person — the file was not filed"}
+        used_token = creds["api_key"]
+        token_owner = f"user:{user_id}"
 
         headers = {"Authorization": f"Token {used_token}"}
         files = {"document": (filename, pdf_or_doc_bytes, mime_type or "application/octet-stream")}

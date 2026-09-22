@@ -141,6 +141,34 @@ def ensure_tags() -> Dict[str, int]:
     return out
 
 
+_HOUSEHOLD_TAGS: Dict[str, int] = {}
+
+
+def ensure_household_tag(name: str) -> Optional[int]:
+    """A plain tag ("whatsapp") that every household member may attach:
+    created with the admin token (Yorik's housekeeping) and given to
+    the household group for viewing, so an upload with a member's own
+    token can carry it. Cached for the process."""
+    if name in _HOUSEHOLD_TAGS:
+        return _HOUSEHOLD_TAGS[name]
+    s = _settings()
+    if not s.get("api_key"):
+        return None
+    base, headers = s["base_url"], _admin_headers()
+    try:
+        tag_id = _get_or_create_tag(base, headers, name)
+        if tag_id is None:
+            return None
+        gid = _ensure_groups(base, headers).get(GROUPS["shared"])
+        if gid is not None:
+            _grant_tag_view_to_group(base, headers, tag_id, gid)
+        _HOUSEHOLD_TAGS[name] = int(tag_id)
+        return int(tag_id)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("ensure_household_tag(%s): %s", name, exc)
+        return None
+
+
 def sync_parents_group(group_id: Optional[int] = None) -> int:
     """Who is in the Paperless group "parents": every enabled household
     account that is not a restricted (child) account and has a Paperless

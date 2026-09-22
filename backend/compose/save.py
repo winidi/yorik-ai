@@ -28,19 +28,24 @@ def save_to_paperless(body_html: str, *,
                        tags: Optional[List[str]] = None,
                        correspondent: Optional[str] = None,
                        page_size: str = "A4",
-                       margins_mm=(20, 18, 25, 18)) -> Dict[str, Any]:
-    """Render the HTML to PDF and upload to Paperless. Returns
-    {ok, paperless_task_id?, error?, pdf_bytes}. Paperless's upload
-    endpoint returns 200 with a UUID task id even before OCR finishes —
-    the doc will appear in Paperless shortly after."""
+                       margins_mm=(20, 18, 25, 18),
+                       user_id: Any = None) -> Dict[str, Any]:
+    """Render the HTML to PDF and upload to Paperless as `user_id` (their
+    own token, so the document is theirs). Returns {ok,
+    paperless_task_id?, error?, pdf_bytes}. Paperless's upload endpoint
+    returns 200 with a UUID task id even before OCR finishes — the doc
+    will appear in Paperless shortly after. (Until 2026-09-22 this used
+    the admin token and the admin owned every composed document —
+    audit 1.12.)"""
     pdf_bytes = render_pdf(body_html, page_size=page_size, margins_mm=margins_mm,
                             filename=f"{title}.pdf")
     if not pdf_bytes:
         return {"ok": False, "error": "Gotenberg render failed"}
 
-    s = _paperless_settings()
-    if not s.get("api_key"):
-        return {"ok": False, "error": "Paperless not configured (no api_key)"}
+    from ..paperless_ingest import user_creds
+    s = user_creds(user_id)
+    if not s:
+        return {"ok": False, "error": "no Paperless account for this person — the document was not filed"}
     headers = {"Authorization": f"Token {s['api_key']}"}
     files = {"document": (f"{title}.pdf", pdf_bytes, "application/pdf")}
     data: Dict[str, Any] = {"title": title}

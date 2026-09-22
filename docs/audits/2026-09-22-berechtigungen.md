@@ -165,7 +165,12 @@ Als Referenz für die Reparatur, denn hier steht das Muster schon:
   PDF im Render-Tempdir), Adress-Skill, der Paperless-Connector
   (`connectors.invoke(user_id=…)`, ohne Person Fehler statt Admin-Token),
   `_paperless_hints` und `_calendar_context` in WhatsApp-/Mail-Entwürfen.
-  Nicht angefasst: 1.7 (`space_id` im Chunk-Index) — durch die Hydration
+  Paket 7 (1.11, 1.12, 1.14): WhatsApp-Dokumente und -Fotos gehen mit den
+  Zugängen der Empfängerin nach Paperless/Immich (ohne eigenes Konto bleiben
+  sie im Chat; Tag „whatsapp“ als Haushalts-Tag, Standard-Sichtbarkeit nach
+  dem Consume, Dokument-ID statt Task-UUID in `media_paperless_id`), Compose
+  legt als Autor ab, `_push_to_paperless` fällt nie mehr auf den Admin-Token
+  zurück. Nicht angefasst: 1.7 (`space_id` im Chunk-Index) — durch die Hydration
   über den Token der Person nicht mehr nötig, der Space-Filter bleibt als
   Zusatz. Timetable (2.7) bleibt consent-basiert: der Stundenplan eines Kindes, das
   auf der Wand ist, ist für den Haushalt. 2.19 (`GET /api/settings/{key}`)
