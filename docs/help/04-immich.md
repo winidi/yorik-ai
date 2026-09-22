@@ -8,6 +8,23 @@ summary: Pair your phone's camera roll to Yorik via the Immich mobile app. Face 
 
 Yorik bundles Immich as the photo store. Phone uploads, face recognition, location, CLIP semantic search — all of it works offline against your local Immich.
 
+## Signing in: the Yorik login is the Immich login
+
+Yorik is an OpenID Connect provider for Immich (`backend/oidc.py`).
+Once `scripts/configure_immich_oauth.py` has been run, opening Photos
+signs you into Immich as yourself — no second form, no way to end up
+in someone else's library. The Immich mobile app offers "Mit Yorik
+anmelden" too. Immich's own password login stays on as a fallback
+(the password is the one Yorik set when it made your account).
+
+    set -a; . ./config.env; set +a
+    PYTHONPATH=. venv/bin/python scripts/configure_immich_oauth.py \
+        --issuer https://<yorik host>:8445 --immich https://<yorik host>:8443
+
+`--issuer` must be Yorik's URL as both the browser and the Immich
+container see it (behind Tailscale serve that is the https URL). Set
+`YORIK_OIDC_ISSUER` in `config.env` to pin it.
+
 ## Where Immich runs
 
 Bundled by default. `bash start.sh` brings up the Immich containers (immich-server, immich-machine-learning, immich-redis, immich-postgres). Web UI at `http://localhost:2283` for direct access.

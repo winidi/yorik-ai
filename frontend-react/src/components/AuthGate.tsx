@@ -112,6 +112,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return <LoginScreen onLoggedIn={refresh} />;
   }
 
+  // Signed in on the way to another app (Immich asks Yorik to sign the
+  // person in — backend/oidc.py sent them here first): go back there.
+  // Only a same-origin /oidc/authorize path is followed.
+  const oidcNext = new URLSearchParams(window.location.search).get("oidc_next");
+  if (oidcNext && oidcNext.startsWith("/oidc/authorize?")) {
+    window.location.replace(oidcNext);
+    return <FullPageSpinner />;
+  }
+
   if (!state.user.onboarded_at) {
     return (
       <OnboardingWizard

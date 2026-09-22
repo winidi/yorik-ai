@@ -137,6 +137,8 @@ app.include_router(_chat_attachments.router)
 from . import emergency as _emergency
 from . import emergency_routes as _emergency_routes
 app.include_router(_emergency_routes.router)
+from . import oidc as _oidc
+app.include_router(_oidc.router)
 from . import calendar_import as _calendar_import
 app.include_router(_calendar_import.router)
 

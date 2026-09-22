@@ -210,6 +210,11 @@ Als Referenz für die Reparatur, denn hier steht das Muster schon:
   `check_calendar` ohne `platform_admin`-Ausnahme. Offen aus 10: 2.21
   (Admin-Level auf geteilten Spaces) — bewusst gelassen, das ist die
   Workspace-Verwaltung.
+  **Immich-Login = Yorik-Login** (Entscheidung 3, 1.21): Yorik ist
+  OIDC-Anbieter (`backend/oidc.py`: Discovery, JWKS, Authorize über die
+  Session, Token mit RS256-ID-Token, Userinfo, PKCE, Codes einmal/60 s);
+  `scripts/configure_immich_oauth.py` schreibt Client und Immich-Config,
+  Plan in `docs/plans/2026-09-22-immich-login-ist-yorik-login.md`.
   Nicht angefasst: 1.7 (`space_id` im Chunk-Index) — durch die Hydration
   über den Token der Person nicht mehr nötig, der Space-Filter bleibt als
   Zusatz. Timetable (2.7) bleibt consent-basiert: der Stundenplan eines Kindes, das
