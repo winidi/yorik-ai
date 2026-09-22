@@ -37,7 +37,10 @@ Immich kann sich an einen OpenID-Connect-Anbieter hängen (Einstellungen
   oder die Tailscale-URL; das Discovery-Dokument muss von dort
   erreichbar sein und die `issuer`-Angabe muss zu der URL passen, die
   der Browser sieht — die Tailscale-URL `https://workstation…:8445`
-  erfüllt beides), `clientId`, `clientSecret`, `scope: openid email
+  erfüllt beides; geprüft am 22.09.: aus dem Immich-Container antwortet
+  `https://workstation.tailf0bde1.ts.net:8445/api/health` mit 200,
+  `host.docker.internal` ist dort unbekannt, `172.17.0.1:8000` geht auch),
+  `clientId`, `clientSecret`, `scope: openid email
   profile`, `buttonText: "Mit Yorik anmelden"`, `autoLaunch: true`,
   `autoRegister: false`, `mobileOverrideEnabled: true`.
 - Fotos-App: unverändert iframe; zusätzlich „angemeldet als …“ aus
