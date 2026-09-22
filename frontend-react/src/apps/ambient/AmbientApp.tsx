@@ -194,9 +194,6 @@ export function AmbientApp() {
               device_label: wallLabelFromUserAgent(),
               show_today:   true,
             });
-            // Pin the policy to the tablet's UUID, so the next PIN
-            // switch or app restart doesn't drop it again.
-            await api.post("/api/devices/trust");
             // A fresh wall opens on the family calendar; photos are
             // one tap away in the mode bar.
             await api.patch("/api/ambient/mode", { mode: "calendar" });
@@ -207,6 +204,17 @@ export function AmbientApp() {
             // Not fatal: the wall still renders, the household just
             // sees the "not a kiosk yet" hint on the picker.
             console.warn("ambient: wall self-setup failed", err);
+          }
+        }
+        // Pin the policy to the tablet's UUID — whether this session
+        // just became a kiosk above or an admin flipped it from their
+        // laptop, where the tablet's UUID never travels. Without the
+        // pin the wall is only as durable as one cookie: the next PIN
+        // switch mints a fresh session and the wall goes black again.
+        // Idempotent, so running it on every launch costs one call.
+        if (mine && inWrapper && isAdmin) {
+          try { await api.post("/api/devices/trust"); } catch (err) {
+            console.warn("ambient: pinning this wall failed", err);
           }
         }
         if (!mine && !inWrapper) {
