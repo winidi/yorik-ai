@@ -35,6 +35,7 @@ This module is the gateway:
 from __future__ import annotations
 
 import logging
+import re
 import threading
 from typing import Any, Dict, Optional
 
@@ -710,6 +711,37 @@ def apply_document_permissions(paperless_doc_id: int, visibility: str) -> bool:
         return False
 
 
+def task_state(task_id: str) -> Optional[Dict[str, Any]]:
+    """{status, result, related_document} of a post_document task, or
+    None when Paperless is unreachable / the task unknown. status is
+    Paperless's: PENDING, STARTED, SUCCESS, FAILURE."""
+    s = _settings()
+    if not s.get("api_key") or not task_id:
+        return None
+    try:
+        r = requests.get(f"{s['base_url']}/api/tasks/", params={"task_id": task_id},
+                         headers=_admin_headers(), timeout=TIMEOUT_S)
+        items = r.json() if r.ok else []
+        items = items if isinstance(items, list) else items.get("results", [])
+        if not items:
+            return None
+        t = items[0]
+        rd = t.get("related_document")
+        return {"status": (t.get("status") or "").upper(), "result": t.get("result") or "",
+                "related_document": int(rd) if rd else None}
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def duplicate_of(result_text: str) -> Optional[int]:
+    """The id of the existing document when Paperless refused a file as
+    a duplicate ("It is a duplicate of Kobra (#3)"), else None."""
+    if "duplicate" not in (result_text or "").lower():
+        return None
+    m = re.search(r"#(\d+)", result_text or "")
+    return int(m.group(1)) if m else None
+
+
 def document_id_for_task(task_id: str) -> Optional[int]:
     """The document a post_document task produced; None while Paperless
     is still consuming it (or when it failed / was a duplicate)."""
@@ -727,10 +759,13 @@ def document_id_for_task(task_id: str) -> Optional[int]:
         return None
 
 
-def apply_after_consume(task_id: str, visibility: str, on_document: Any = None) -> None:
+def apply_after_consume(task_id: str, visibility: str, on_document: Any = None,
+                        on_failure: Any = None) -> None:
     """post_document only queues the file; permissions can be set once
     Paperless has consumed it. Waits in a background thread (up to five
-    minutes), then applies the visibility and tells `on_document(doc_id)`."""
+    minutes), then applies the visibility and tells `on_document(doc_id)`.
+    When the task fails (a duplicate, a broken file) `on_failure(text)`
+    hears Paperless's reason instead."""
     if not task_id:
         return
 
@@ -738,7 +773,15 @@ def apply_after_consume(task_id: str, visibility: str, on_document: Any = None) 
         import time
         for _ in range(60):
             time.sleep(5)
-            doc_id = document_id_for_task(task_id)
+            state = task_state(task_id)
+            if state and state["status"] == "FAILURE":
+                if on_failure:
+                    try:
+                        on_failure(state["result"])
+                    except Exception as exc:  # noqa: BLE001
+                        log.debug("apply_after_consume failure callback failed: %s", exc)
+                return
+            doc_id = (state or {}).get("related_document") or document_id_for_task(task_id)
             if doc_id:
                 if (visibility or "private").lower() != "private":
                     apply_document_permissions(doc_id, visibility)

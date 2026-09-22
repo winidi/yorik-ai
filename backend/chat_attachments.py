@@ -53,6 +53,7 @@ def _public(row: Dict[str, Any]) -> Dict[str, Any]:
         "conversation_id": row["conversation_id"], "created_at": row["created_at"], "expires_at": row["expires_at"],
         "filed": bool(row["filed_at"]), "filed_at": row["filed_at"], "visibility": row["visibility"],
         "paperless_doc_id": row.get("paperless_doc_id"),
+        "paperless_error": row.get("paperless_error"),
         # A PDF or an office file is almost always a record; a picture is
         # usually something shown in passing.
         "suggest": "keep" if is_image else "file",
@@ -181,21 +182,66 @@ def file_in_paperless(attachment_id: int, user_id: str, visibility: Optional[str
         mime_type=row["mime_type"], tags=[], user_id=user_id, visibility=vis)
     if not result.get("ok"):
         return {"ok": False, "error": result.get("error") or result.get("reason") or "Paperless did not take the file"}
-    with get_conn() as conn:
-        conn.execute("UPDATE chat_attachments SET filed_at = ?, paperless_task_id = ?, visibility = ? WHERE id = ?",
-                     (_now(), str(result.get("task_id") or ""), vis, row["id"]))
-        conn.commit()
+    task_id = str(result.get("task_id") or "")
+    att_id = int(row["id"])
+    from . import paperless_visibility as _pv
 
-    def _remember(doc_id: int, att_id: int = int(row["id"])) -> None:
+    def _remember(doc_id: int) -> None:
         with get_conn() as conn:
-            conn.execute("UPDATE chat_attachments SET paperless_doc_id = ? WHERE id = ?", (int(doc_id), att_id))
+            conn.execute("UPDATE chat_attachments SET paperless_doc_id = ?, paperless_error = NULL WHERE id = ?",
+                         (int(doc_id), att_id))
             conn.commit()
 
-    # _push_to_paperless already applies a non-private visibility after
-    # the consume; for a private one we still want the document's id.
-    if vis == "private" and result.get("task_id"):
-        from . import paperless_visibility as _pv
-        _pv.apply_after_consume(str(result["task_id"]), "private", on_document=_remember)
+    def _failed(reason: str) -> None:
+        # A duplicate means the document is in Paperless already — that
+        # is "filed", pointing at the existing one. Anything else is not.
+        existing = _pv.duplicate_of(reason)
+        with get_conn() as conn:
+            if existing:
+                conn.execute("UPDATE chat_attachments SET paperless_doc_id = ?, paperless_error = NULL WHERE id = ?",
+                             (existing, att_id))
+            else:
+                conn.execute("UPDATE chat_attachments SET filed_at = NULL, paperless_task_id = NULL, "
+                             "paperless_error = ? WHERE id = ?", ((reason or "Paperless refused the file")[:300], att_id))
+            conn.commit()
+
+    # Paperless refuses a duplicate or a broken file within seconds of
+    # the upload; a good file takes longer (OCR). Wait a moment for the
+    # verdict so the card does not say "filed" for a refused file (the
+    # 2026-09-21 case); after that the background waiter reports.
+    import time
+    state = None
+    for _ in range(8 if task_id and _pv._settings().get("api_key") else 0):
+        state = _pv.task_state(task_id)
+        if state and state["status"] in ("SUCCESS", "FAILURE"):
+            break
+        time.sleep(1)
+    if state and state["status"] == "FAILURE":
+        existing = _pv.duplicate_of(state["result"])
+        if not existing:
+            with get_conn() as conn:
+                conn.execute("UPDATE chat_attachments SET paperless_error = ? WHERE id = ?",
+                             ((state["result"] or "Paperless refused the file")[:300], att_id))
+                conn.commit()
+            return {"ok": False, "refused": True, "error": state["result"] or "Paperless refused the file"}
+        with get_conn() as conn:
+            conn.execute("UPDATE chat_attachments SET filed_at = ?, paperless_task_id = ?, visibility = ?, "
+                         "paperless_doc_id = ?, paperless_error = NULL WHERE id = ?",
+                         (_now(), task_id, vis, existing, att_id))
+            conn.commit()
+        return {"ok": True, "filed_at": _now(), "visibility": vis, "already_in_paperless": True, "paperless_doc_id": existing}
+
+    with get_conn() as conn:
+        conn.execute("UPDATE chat_attachments SET filed_at = ?, paperless_task_id = ?, visibility = ?, paperless_error = NULL "
+                     "WHERE id = ?", (_now(), task_id, vis, att_id))
+        conn.commit()
+    if state and state["status"] == "SUCCESS" and state.get("related_document"):
+        _remember(state["related_document"])
+    elif task_id:
+        # _push_to_paperless applies a non-private visibility after the
+        # consume on its own; this waiter is for the document id and the
+        # failure verdict (a second permissions call is idempotent).
+        _pv.apply_after_consume(task_id, vis, on_document=_remember, on_failure=_failed)
     return {"ok": True, "filed_at": _now(), "visibility": vis}
 
 
@@ -331,8 +377,8 @@ def file_route(attachment_id: int, visibility: Optional[str] = Query(None),
                user: Dict[str, Any] = Depends(_current_user())) -> Dict[str, Any]:
     result = file_in_paperless(attachment_id, str(user["id"]), visibility)
     if not result.get("ok"):
-        raise HTTPException(status_code=502 if "Paperless" in (result.get("error") or "") else 404,
-                            detail=result.get("error"))
+        code = 422 if result.get("refused") else 502 if "Paperless" in (result.get("error") or "") else 404
+        raise HTTPException(status_code=code, detail=result.get("error"))
     return _public(get(attachment_id, str(user["id"])) or {})
 
 

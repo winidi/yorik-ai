@@ -122,3 +122,27 @@ def test_a_scanned_pdf_is_read_by_the_vision_model_once(two, monkeypatch):
     assert "first 1 of 3 pages" in out["_llm_hint"] and "file it in Paperless" in out["_llm_hint"]
     asyncio.run(read(ctx, attachment_id=att["id"]))
     assert calls == [att["id"]]                                        # the transcript is kept
+
+
+def test_a_refused_file_is_not_filed_and_a_duplicate_points_at_the_existing_document(two, monkeypatch):
+    """Paperless answers the upload with a task that can still fail. The
+    card used to say "filed" regardless (Beate's Kobra.pdf, 2026-09-21)."""
+    from backend import paperless_visibility as pv
+    beate_c, _ = two["beate"]
+    monkeypatch.setattr(pv, "_settings", lambda: {"base_url": "http://p", "api_key": "k"})     # Paperless "is there"
+    monkeypatch.setattr(pv, "task_state", lambda task_id: {"status": "FAILURE", "related_document": None,
+                                                           "result": "Kobra.pdf: Not consuming Kobra.pdf: It is a duplicate of Kobra (#3)."})
+    att = _upload(beate_c, "kobra.txt")
+    r = beate_c.post(f"/api/chat/attachments/{att['id']}/file?visibility=shared")
+    assert r.status_code == 200 and r.json()["filed"] is True and r.json()["paperless_doc_id"] == 3
+    monkeypatch.setattr(pv, "task_state", lambda task_id: {"status": "FAILURE", "related_document": None,
+                                                           "result": "broken.pdf: Not consuming: file is corrupt"})
+    att = _upload(beate_c, "broken.txt")
+    r = beate_c.post(f"/api/chat/attachments/{att['id']}/file")
+    assert r.status_code >= 400 and "corrupt" in r.text
+    meta = beate_c.get(f"/api/chat/attachments/{att['id']}").json()
+    assert meta["filed"] is False and "corrupt" in meta["paperless_error"]
+    monkeypatch.setattr(pv, "task_state", lambda task_id: {"status": "SUCCESS", "related_document": 9, "result": "ok"})
+    att = _upload(beate_c, "fine.txt")
+    r = beate_c.post(f"/api/chat/attachments/{att['id']}/file")
+    assert r.json()["filed"] is True and r.json()["paperless_doc_id"] == 9

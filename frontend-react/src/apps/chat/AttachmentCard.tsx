@@ -14,6 +14,7 @@ interface Attachment {
   id: number; filename: string; mime_type: string; bytes: number; is_image: boolean;
   expires_at: string; filed: boolean; visibility: string | null; suggest: "file" | "keep"; raw_url: string;
   default_visibility: "private" | "parents" | "shared" | "business";
+  paperless_error?: string | null;
 }
 
 const WHO: Record<string, string> = {
@@ -114,7 +115,11 @@ export function AttachmentCard({ id }: { id: number }) {
                 Löschen
               </button>
             </div>
-            {error && <div className="mt-2 text-[11px] text-red-500">{error}</div>}
+            {(error || att.paperless_error) && (
+              <div className="mt-2 text-[11px] text-red-500">
+                {error || `Paperless hat die Datei abgelehnt: ${att.paperless_error}`}
+              </div>
+            )}
           </>
         )}
       </div>
