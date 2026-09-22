@@ -72,12 +72,13 @@ export function AmbientApp() {
   // every consenting household member. User-agnostic surface.
   const [agendaOpen, setAgendaOpen] = useState(false);
 
-  // Dinner recording from the wall: the tile opens the sign-in picker
-  // (so the recording belongs to a person, not the wall), then the
-  // "who is here" dialog; RecorderDock does the rest and stays visible
-  // over the slideshow.
+  // Dinner recording from the wall. A recording belongs to a person,
+  // never to the wall, so the tile only exists while someone is signed
+  // in on the board — the avatar tap IS the sign-in. An idle wall in
+  // the hallway shows the calendar and nothing else; three minutes
+  // after the last touch the tile is gone again with the rest of the
+  // unlock. RecorderDock does the rest and stays visible over both.
   const [recordOpen, setRecordOpen] = useState(false);
-  const [recordAfterSignIn, setRecordAfterSignIn] = useState(false);
   const [recorderLive, setRecorderLive] = useState(() => getRecorderState().phase !== "idle");
   useEffect(() => subscribeRecorder(st => setRecorderLive(st.phase !== "idle")), []);
   // What the wall shows: photos, or the family board in one of three
@@ -96,9 +97,17 @@ export function AmbientApp() {
   }, []);
   // One tap per mode, not a cycle: the wall lives on the calendar and
   // the household wants the photos back in one touch, not four.
+  //
+  // Switching TO photos refetches right away instead of waiting for
+  // the 5-minute poll. The wall spends hours on the calendar, and a
+  // list fetched before the last nap is either stale or — if that
+  // fetch failed while the device wasn't a kiosk yet — empty. Landing
+  // on a black rectangle for five minutes is how "the photos are
+  // broken" starts.
   async function pickMode(next: WallMode) {
     if (next === mode) return;
     setMode(next);
+    if (next === "photos") void refreshPhotos();
     try { await api.patch("/api/ambient/mode", { mode: next }); } catch {}
   }
   // the board's avatar tap: sign in as that person, stay on the wall.
@@ -453,22 +462,21 @@ export function AmbientApp() {
           </button>
         ))}
       </div>
-      {recordingsOn && !recorderLive && (
+      {recordingsOn && active && !recorderLive && (
         <button
-          onPointerDown={e => e.stopPropagation()}
+          onPointerDown={e => { e.stopPropagation(); touchBoard(); }}
           onPointerUp={e => e.stopPropagation()}
-          onClick={() => {
-            // sign in first so the recording is a person's, then ask who is here
-            setRecordAfterSignIn(true);
-            void openPicker();
-          }}
-          className="fixed left-10 bottom-28 z-20 flex items-center gap-2 rounded-full bg-black/55 hover:bg-black/70 backdrop-blur-md text-white/90 px-4 py-2.5 text-sm border border-white/15"
+          onClick={() => setRecordOpen(true)}
+          className={cn("fixed left-5 bottom-5 z-30 flex items-center gap-2 rounded-full px-4 py-2.5 text-sm border backdrop-blur-md",
+                        mode === "photos"
+                          ? "bg-black/55 hover:bg-black/70 text-white/90 border-white/15"
+                          : "bg-white/90 hover:bg-white text-[#1f2430] border-[#e9e6df] shadow")}
         >
-          <Mic className="w-4 h-4 text-red-400" /> Record dinner
+          <Mic className="w-4 h-4 text-red-500" /> Essen aufnehmen
         </button>
       )}
       {recordOpen && (
-        <RecordingStartDialog dark defaultKind="dinner" onClose={() => { setRecordOpen(false); setRecordAfterSignIn(false); }} />
+        <RecordingStartDialog dark defaultKind="dinner" onClose={() => setRecordOpen(false)} />
       )}
       {greeting && (
         <div
@@ -522,7 +530,6 @@ export function AmbientApp() {
             // wall again and the next tap re-opens the picker.
             setPickerOpen(false);
             auth.refresh().catch(() => {});
-            if (recordAfterSignIn) { setRecordAfterSignIn(false); setRecordOpen(true); return; }
             if (boardSignIn) { setBoardSignIn(false); setBoardPerson(null); setActiveUntil(Date.now() + ACTIVE_MS); return; }
             navigate("/chat");
           }}

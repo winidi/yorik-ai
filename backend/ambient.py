@@ -264,7 +264,7 @@ def get_today_photos(
 
 
 def get_today_photos_workspace(
-    user_ids: list[int],
+    user_ids: list[str],
     *,
     limit: int = 200,
     exclude_ids: Optional[frozenset[str]] = None,

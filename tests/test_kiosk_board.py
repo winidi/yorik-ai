@@ -101,3 +101,49 @@ def test_timetable_is_for_children_and_kept_by_parents_and_the_child(fresh_app):
     assert mum_c.put(f"/api/ambient/timetable/{mum}", json=plan).status_code == 404      # adults have none
     assert TestClient(fresh_app).get("/api/ambient/timetable").status_code in (401, 403)
     assert TestClient(fresh_app).put(f"/api/ambient/timetable/{kid}", json=plan).status_code in (401, 403)
+
+
+def test_wall_routes_survive_uuid_user_ids(fresh_app, monkeypatch):
+    """Every wall route reads the bound user's id, and that id is a UUID.
+
+    The live wall died on `int(meta["user_id"])` — the slideshow answered
+    500 and the frontend swallowed it, so the wall showed a black
+    rectangle and nobody could tell why. Same coercion sat in the idle
+    bundle. These are the plain calls; they only have to not crash.
+    """
+    wall_user = seed_user(name="Wall", role="member")
+    c = _kiosk_client(fresh_app, wall_user, monkeypatch)
+
+    r = c.get("/api/ambient/slideshow")
+    assert r.status_code == 200, r.text
+    # No album and no today-photos on this device: a clean "nothing set
+    # up" answer, not an exception.
+    assert r.json()["configured"] is False
+
+    assert c.get("/api/ambient/idle").status_code == 200
+
+
+def test_pin_switch_takes_a_uuid_and_a_wrong_pin_is_not_a_crash(fresh_app, monkeypatch):
+    """The wall's PIN pad answered 500 for every entry, right and wrong
+    alike: the user id went through int(). A wrong PIN is a 401, a right
+    one switches the session over."""
+    from backend import auth_sessions
+
+    wall_user = seed_user(name="Wall", role="member")
+    beate = seed_user(name="Beate", role="member")
+    auth_sessions.set_pin(beate, "2468")
+    c = _kiosk_client(fresh_app, wall_user, monkeypatch)
+    # Marking a device as a kiosk stamps trusted_until a year out; that
+    # is what lets the wall's PIN pad run at all (see auth_pin_switch).
+    from backend.database import get_conn
+    with get_conn() as conn:
+        conn.execute("UPDATE sessions SET trusted_until = ? WHERE id = ?",
+                     ("2099-01-01 00:00:00", c.cookies.get(auth_sessions.COOKIE_NAME)))
+        conn.commit()
+
+    bad = c.post("/api/auth/pin-switch", json={"user_id": str(beate), "pin": "1111"})
+    assert bad.status_code == 401, bad.text
+
+    ok = c.post("/api/auth/pin-switch", json={"user_id": str(beate), "pin": "2468"})
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["user"]["id"] == str(beate)

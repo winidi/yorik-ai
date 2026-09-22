@@ -1128,10 +1128,10 @@ def auth_pin_switch(
     if not allowed:
         raise HTTPException(429, reason or "too many PIN attempts",
                              headers={"Retry-After": str(retry or 60)})
-    if not _auth.verify_pin(int(body.user_id), body.pin or ""):
+    if not _auth.verify_pin(str(body.user_id), body.pin or ""):
         _throttle.record_login_failure(pin_key, client_ip)
         raise HTTPException(401, "wrong PIN")
-    target = _auth.get_user_by_id(int(body.user_id))
+    target = _auth.get_user_by_id(str(body.user_id))
     if not target or target.get("disabled"):
         raise HTTPException(404, "user not found")
     # Mint a regular long-lived session for the picked user — same
@@ -1148,7 +1148,7 @@ def auth_pin_switch(
     # the wall-device-header fallback; this just makes the visible
     # state match what the device is actually doing.
     new_sid = _auth.create_session(
-        int(body.user_id),
+        str(body.user_id),
         user_agent=request.headers.get("user-agent", "") + " (pin-switch)",
         ip=client_ip,
         wall_device_id=device_id or None,
@@ -1158,7 +1158,7 @@ def auth_pin_switch(
         samesite="lax", secure=(request.url.scheme == "https"),
         max_age=_auth.SESSION_TTL_DAYS * 24 * 3600, path="/",
     )
-    _auth.touch_login(int(body.user_id))
+    _auth.touch_login(str(body.user_id))
     return {"ok": True, "user": {"id": target["id"], "name": target["name"],
                                    "role": target["role"]}}
 
@@ -1580,7 +1580,7 @@ def ambient_slideshow(
     meta = _require_kiosk_session(request)
     album_id     = meta.get("kiosk_album_id") or ""
     today_mode   = bool(meta.get("kiosk_show_today_photos"))
-    uid          = int(meta.get("user_id") or 0)
+    uid          = str(meta.get("user_id") or "")
     # Decode the persisted phrases blob (JSON list) — empty / NULL /
     # malformed all degrade silently to "no filter" so a fat-fingered
     # admin edit doesn't blank the wall.
@@ -1661,7 +1661,7 @@ def ambient_idle(
     for whatever data exists. Scope = the kiosk session's bound user.
     """
     meta = _require_kiosk_session(request)
-    uid = int(meta.get("user_id") or 0)
+    uid = str(meta.get("user_id") or "")
 
     # Next event for the bound user. Joins through calendars to
     # respect spaces (same shape /api/events uses).
@@ -1976,7 +1976,7 @@ def revoke_device(
         ).fetchone()
         if not row:
             return Response(status_code=204)  # already gone — idempotent
-        if int(row["user_id"]) != user["id"] and (user.get("role") or "") not in ("admin", "platform_admin"):
+        if str(row["user_id"]) != str(user["id"]) and (user.get("role") or "") not in ("admin", "platform_admin"):
             raise HTTPException(403, "can only revoke your own sessions")
         conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
         conn.commit()

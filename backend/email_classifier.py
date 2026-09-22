@@ -264,7 +264,7 @@ def _propose_action(message_id: int, category: str, row: dict) -> None:
     # Drop early if the user has blocked this sender (or its domain).
     # No notification, no row change — we still pulled the mail, the
     # user just won't be bothered about it.
-    owner_id = int(row["owner_user_id"])
+    owner_id = str(row["owner_user_id"])
     from_email_raw = (row.get("from_email") or "").strip()
     if email_blocklist.matches(owner_id, from_email_raw):
         log.info("skipped %s notification — sender %r is blocked",
@@ -304,7 +304,7 @@ def _propose_action(message_id: int, category: str, row: dict) -> None:
         }
 
     notifications.create(
-        user_id=int(row["owner_user_id"]),
+        user_id=str(row["owner_user_id"]),
         kind="email_proposal",
         title=title,
         body=body,
