@@ -174,19 +174,48 @@ export function AmbientApp() {
         // AND that session is flagged as a kiosk. Just checking
         // is_kiosk would let an admin's laptop in just because they
         // own a kiosk session somewhere on a wall tablet.
-        const mine = devices.find(d => d.is_current && d.is_kiosk);
+        let mine = devices.find(d => d.is_current && d.is_kiosk);
         if (cancelled) return;
+        const myDevice = devices.find(d => d.is_current);
+        // Opening the wall app IS the setup. An admin who has the app
+        // in front of them can already do every step of Settings →
+        // Geräte → Kiosk; walking them through that menu on a wall
+        // tablet buys nothing and is how a wall ends up black for
+        // three days. So do it for them, with their own rights, using
+        // the same two endpoints the Devices page calls — both stay
+        // admin-only and trusted-LAN-only, nothing is relaxed here.
+        // Runs once: from the second launch on, the device is a kiosk
+        // and this branch is skipped.
+        const isAdmin = auth.user?.role === "admin" || auth.user?.role === "platform_admin";
+        if (!mine && inWrapper && myDevice && isAdmin) {
+          try {
+            await api.post(`/api/devices/${myDevice.id}/kiosk`, {
+              is_kiosk:     true,
+              device_label: wallLabelFromUserAgent(),
+              show_today:   true,
+            });
+            // Pin the policy to the tablet's UUID, so the next PIN
+            // switch or app restart doesn't drop it again.
+            await api.post("/api/devices/trust");
+            // A fresh wall opens on the family calendar; photos are
+            // one tap away in the mode bar.
+            await api.patch("/api/ambient/mode", { mode: "calendar" });
+            if (cancelled) return;
+            setMode("calendar");
+            mine = { ...myDevice, is_kiosk: true };
+          } catch (err) {
+            // Not fatal: the wall still renders, the household just
+            // sees the "not a kiosk yet" hint on the picker.
+            console.warn("ambient: wall self-setup failed", err);
+          }
+        }
         if (!mine && !inWrapper) {
           // Not a kiosk session AND not running inside the wrapper —
           // leave ambient mode and go to the personal home dashboard.
           navigate("/home", { replace: true });
           return;
         }
-        // In wrapper but session isn't flagged: keep the kiosk view
-        // anyway. We don't have a kiosk_album_id so the slideshow
-        // will fall back to its "no album configured" hint; that's
-        // fine, the admin can configure it from Settings later.
-        const myDevice = devices.find(d => d.is_current);
+        if (cancelled) return;
         setKiosk({
           is_kiosk:         true,
           device_label:     mine?.device_label ?? myDevice?.device_label ?? "Wall",
@@ -204,7 +233,7 @@ export function AmbientApp() {
       }
     })();
     return () => { cancelled = true; };
-  }, [navigate]);
+  }, [navigate, auth.user?.role]);
 
   // Slideshow poll loop
   const refreshPhotos = useCallback(async () => {
@@ -563,6 +592,15 @@ function FullscreenMessage({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
+}
+
+/** "Xiaomi 2405CPCFBG" out of the wrapper's UA tail, which reads
+ *  `… YorikWall/0.1.0 (Xiaomi 2405CPCFBG)`. Names the row in
+ *  Settings → Geräte, so a household with two walls can tell them
+ *  apart without guessing at session ids. */
+function wallLabelFromUserAgent(): string {
+  const m = /YorikWall\/\S+\s+\(([^)]*)\)/.exec(navigator.userAgent);
+  return ((m?.[1] || "").trim() || "Wand").slice(0, 60);
 }
 
 function timeGreeting(): string {

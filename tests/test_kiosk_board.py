@@ -147,3 +147,70 @@ def test_pin_switch_takes_a_uuid_and_a_wrong_pin_is_not_a_crash(fresh_app, monke
     ok = c.post("/api/auth/pin-switch", json={"user_id": str(beate), "pin": "2468"})
     assert ok.status_code == 200, ok.text
     assert ok.json()["user"]["id"] == str(beate)
+
+
+def test_the_wall_app_sets_itself_up_and_the_device_stays_a_wall(fresh_app, monkeypatch):
+    """Opening the wall app is the whole setup.
+
+    The two calls the wrapper makes on first launch are the same ones
+    Settings → Geräte makes, with the same admin-only, trusted-LAN-only
+    guards. What matters afterwards is that the WALL, not the session,
+    is what Yorik remembers: a PIN switch or an app restart mints a new
+    session, and the tablet has to keep showing the wall through it.
+    """
+    from fastapi.testclient import TestClient
+    from backend import auth_sessions
+    from backend.database import get_conn
+
+    admin = seed_user(name="Dirk", role="platform_admin")
+    from backend import main as M
+    monkeypatch.setattr(M, "is_trusted_lan_request", lambda request: True)
+
+    wall_uuid = "11111111-2222-3333-4444-555555555555"
+    ua = ("Mozilla/5.0 (Linux; Android 15; wv) AppleWebKit/537.36 "
+          "YorikWall/0.1.0 (Xiaomi 2405CPCFBG)")
+    sid = auth_sessions.create_session(admin, user_agent=ua, ip="127.0.0.1")
+    c = TestClient(fresh_app, headers={"user-agent": ua,
+                                       "x-yorik-wall-device": wall_uuid})
+    c.cookies.set(auth_sessions.COOKIE_NAME, sid)
+
+    # Before: an ordinary session, and the wall routes say no.
+    assert c.get("/api/ambient/slideshow").status_code in (401, 403)
+
+    # What the app does on first launch, with the admin's own rights.
+    mine = [d for d in c.get("/api/devices").json() if d["is_current"]][0]
+    assert c.post(f"/api/devices/{mine['id']}/kiosk",
+                  json={"is_kiosk": True, "device_label": "Xiaomi 2405CPCFBG",
+                        "show_today": True}).status_code == 200
+    assert c.post("/api/devices/trust").status_code == 200
+    assert c.patch("/api/ambient/mode", json={"mode": "calendar"}).status_code == 200
+
+    assert c.get("/api/ambient/slideshow").json()["show_today"] is True
+
+    # A plain new session on the same tablet — a fresh sign-in, nothing
+    # kiosk about it. The wall keeps working because the TABLET is
+    # trusted, which is the whole point of pinning the policy to the
+    # device: this is where the black screen used to come back.
+    fresh_sid = auth_sessions.create_session(admin, user_agent=ua, ip="127.0.0.1")
+    with get_conn() as conn:
+        assert conn.execute("SELECT is_kiosk FROM sessions WHERE id = ?",
+                            (fresh_sid,)).fetchone()["is_kiosk"] == 0
+    c2 = TestClient(fresh_app, headers={"user-agent": ua,
+                                        "x-yorik-wall-device": wall_uuid})
+    c2.cookies.set(auth_sessions.COOKIE_NAME, fresh_sid)
+    assert c2.get("/api/ambient/slideshow").status_code == 200
+    assert c2.get("/api/ambient/mode").json()["mode"] == "calendar"
+
+    # And the session a PIN switch mints — it carries the wall's UUID —
+    # comes out flagged, so Settings → Geräte shows the tablet for what
+    # it is instead of a stray browser session.
+    switched = auth_sessions.create_session(admin, user_agent=ua, ip="127.0.0.1",
+                                            wall_device_id=wall_uuid)
+    with get_conn() as conn:
+        row = conn.execute("SELECT is_kiosk, kiosk_show_today_photos FROM sessions "
+                           "WHERE id = ?", (switched,)).fetchone()
+    assert row["is_kiosk"] == 1 and row["kiosk_show_today_photos"] == 1
+
+    # And a browser on the same LAN that is not the wall stays out.
+    plain = TestClient(fresh_app)
+    assert plain.get("/api/ambient/slideshow").status_code in (401, 403)
