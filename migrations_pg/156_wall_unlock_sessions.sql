@@ -1,0 +1,12 @@
+-- A PIN at the wall unlocks the wall for a few minutes, it does not sign
+-- someone in for a month. Until now a PIN switch minted an ordinary
+-- session: 30 days, or a full year on a tablet that is a trusted wall —
+-- so the hallway stayed Beate's account until somebody happened to
+-- switch it. Decided with Dirk 2026-09-22: three minutes, extended by
+-- every touch.
+--
+-- The column carries the unlock length so the sliding-window refresh in
+-- get_user_for_session can extend by three minutes instead of promoting
+-- the session to the usual 30 days. NULL = an ordinary session,
+-- untouched behaviour.
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS wall_unlock_seconds INTEGER;

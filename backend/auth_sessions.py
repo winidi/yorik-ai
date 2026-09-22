@@ -59,6 +59,18 @@ if not _SUPABASE_JWT_SECRET:
 _auth_log = logging.getLogger("yorik.auth")
 
 COOKIE_NAME = "yorik_session"
+
+# While someone is PIN-unlocked at the wall, the wall's OWN session id
+# waits here so the tablet has something to fall back to. Without it the
+# unlock would end in a login screen in the hallway — AuthGate has no
+# third state between "signed in" and "show LoginScreen".
+WALL_COOKIE_NAME = "yorik_wall_session"
+
+# How long a PIN at the wall unlocks it. Every touch pushes it out again
+# (see get_user_for_session); three minutes of nobody touching anything
+# and the wall is the wall again. Matches the board's own unlock window
+# so the tiles and the session lock at the same moment.
+WALL_UNLOCK_SECONDS = 3 * 60
 SESSION_TTL_DAYS = 30
 # Idle-timeout: how long a session can sit unused before we kick it
 # out even though its absolute expiry hasn't fired yet. Defense
@@ -154,19 +166,27 @@ def create_session(user_id: str, user_agent: Optional[str] = None,
 
 def create_ephemeral_session(user_id: str, *, ttl_seconds: int,
                               user_agent: Optional[str] = None,
-                              ip: Optional[str] = None) -> str:
+                              ip: Optional[str] = None,
+                              sliding: bool = False) -> str:
     """Same shape as create_session but with a SECOND-grain TTL.
-    Used for PIN-switch on kiosk: a 5-minute window where API calls
-    run as the picked user, after which the cookie expires and the
-    tablet falls back to the avatar+PIN picker."""
+
+    The wall's PIN unlock: a few minutes in which API calls run as the
+    picked person. `sliding` writes the window onto the row so
+    get_user_for_session extends by THAT window on every request
+    instead of promoting the session to the usual 30 days — without it
+    the first request the tablet makes would turn a three-minute unlock
+    into a month, which is exactly the bug this exists to fix."""
     sid = secrets.token_urlsafe(32)
+    ttl = int(ttl_seconds)
     expires = (datetime.now(timezone.utc).replace(tzinfo=None)
-                + timedelta(seconds=int(ttl_seconds))).isoformat(timespec="seconds")
+                + timedelta(seconds=ttl)).isoformat(timespec="seconds")
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_seen) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (sid, user_id, expires, (user_agent or "")[:200], ip),
+            "INSERT INTO sessions (id, user_id, expires_at, user_agent, ip_seen, "
+            "                      wall_unlock_seconds) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (sid, user_id, expires, (user_agent or "")[:200], ip,
+             ttl if sliding else None),
         )
         conn.commit()
     return sid
@@ -199,6 +219,7 @@ def get_user_for_session(sid: Optional[str], ip: Optional[str] = None) -> Option
     with get_conn() as conn:
         row = conn.execute(
             "SELECT s.id, s.user_id, s.expires_at, s.last_seen_at, "
+            "       s.wall_unlock_seconds, "
             "       u.name, u.email, u.role, u.disabled, u.language, "
             "       u.country, u.address_street, u.address_postcode, u.address_city, "
             "       u.phone, u.business_name, u.tax_id, u.iban, u.onboarded_at, "
@@ -234,9 +255,15 @@ def get_user_for_session(sid: Optional[str], ip: Optional[str] = None) -> Option
                 return None
         except (TypeError, ValueError):
             pass  # malformed last_seen_at — treat as fresh, will be re-stamped below
-        # Touch + maybe extend.
+        # Touch + maybe extend. A wall unlock slides by its own window:
+        # every request the tablet makes while someone is using it pushes
+        # the three minutes out, and the moment they walk away it runs
+        # out. Anything else keeps the ordinary 30-day refresh.
         new_expiry: Optional[str] = None
-        if (expires - now) < timedelta(days=SESSION_REFRESH_DAYS):
+        unlock = row["wall_unlock_seconds"]
+        if unlock:
+            new_expiry = (now + timedelta(seconds=int(unlock))).isoformat(timespec="seconds")
+        elif (expires - now) < timedelta(days=SESSION_REFRESH_DAYS):
             new_expiry = (now + timedelta(days=SESSION_TTL_DAYS)).isoformat(timespec="seconds")
         params = [now.isoformat(timespec="seconds"), ip or "", sid]
         sql = "UPDATE sessions SET last_seen_at=?, ip_seen=?"
@@ -421,6 +448,20 @@ def session_is_trusted(sid: str) -> bool:
     except ValueError:
         return False
     return until > datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def session_is_wall_unlock(sid: str) -> bool:
+    """True for the short session a PIN at the wall mints. Tells the
+    wall's own session apart from the person currently unlocked on it,
+    so a second PIN switch doesn't stash an unlock as the thing to fall
+    back to."""
+    if not sid:
+        return False
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT wall_unlock_seconds FROM sessions WHERE id=?", (sid,),
+        ).fetchone()
+    return bool(row and row["wall_unlock_seconds"])
 
 
 def session_is_kiosk(sid: str) -> bool:

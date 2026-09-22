@@ -10,7 +10,7 @@
  * and renders the right thing.
  */
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { api, registerSessionExpiredHandler as api_registerSessionExpiredHandler } from "@/lib/api";
 import type { AuthMe, YorikUser } from "@/lib/api";
@@ -23,6 +23,10 @@ interface AuthContextValue {
   isTenant: boolean;
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
+  /** Somebody is PIN-unlocked at the wall right now. */
+  wallUnlock: boolean;
+  /** End the unlock and give the wall back to itself. */
+  endWallUnlock: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -52,6 +56,33 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // The wall never shows a login screen. A PIN there unlocks the tablet
+  // for a few minutes, and when that runs out the cookie points at a
+  // session the server has already dropped — which would land the
+  // hallway on LoginScreen. Inside the wrapper we first ask for the
+  // wall's own session back (it is parked in a second cookie, so this
+  // only restores something this device already had). Once per lapse:
+  // the ref keeps a failing return from looping.
+  const wallReturnTried = useRef(false);
+  const signedOut = !loading && !state?.logged_in;
+  const inWrapper = typeof navigator !== "undefined"
+    && navigator.userAgent.includes("YorikWall");
+  useEffect(() => {
+    if (!signedOut || !inWrapper || wallReturnTried.current) return;
+    wallReturnTried.current = true;
+    (async () => {
+      try {
+        await api.post("/api/auth/wall-return");
+        await refresh();
+      } catch {
+        // No parked session, or it died too: the wall genuinely needs
+        // someone to sign in, so let the login screen through.
+      }
+    })();
+  }, [signedOut, inWrapper, refresh]);
+  // Signed in again → arm the next lapse.
+  useEffect(() => { if (state?.logged_in) wallReturnTried.current = false; }, [state?.logged_in]);
+
   // Mid-session 401 plumbing. When ANY api call elsewhere in the app
   // gets a 401 on a non-auth endpoint, treat it as "the cookie just
   // expired" and re-fetch /api/auth/me. If we come back logged_in:
@@ -80,6 +111,46 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     try { await api.post("/api/auth/logout"); } catch {}
     await refresh();
   }, [refresh]);
+
+  // Hand the wall back to itself: ends the PIN unlock and restores the
+  // wall's own session, so the hallway is a calendar again rather than
+  // the last person's account.
+  const endWallUnlock = useCallback(async () => {
+    try { await api.post("/api/auth/wall-return"); } catch { /* fall through to refresh */ }
+    await refresh();
+  }, [refresh]);
+
+  // Three minutes without anyone touching the tablet ends the unlock.
+  // This has to live up here, not in the wall screen: somebody who
+  // PIN-switches and walks off leaves the tablet on /chat, and the
+  // background polling there would otherwise keep them signed in for
+  // as long as the app is open. Touch — not traffic — is what counts.
+  const unlockMs = (state?.wall_unlock_seconds || 180) * 1000;
+  useEffect(() => {
+    if (!state?.wall_unlock) return;
+    let timer = 0;
+    const arm = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        void endWallUnlock().then(() => {
+          // Somebody unlocked the wall, went to /chat and walked away.
+          // Handing the session back is not enough — the tablet has to
+          // go back to being the wall, and the native idle-watch skips
+          // /chat on purpose so it will not do it for us.
+          if (inWrapper && !window.location.pathname.startsWith("/r/ambient")) {
+            window.location.assign("/r/ambient");
+          }
+        });
+      }, unlockMs);
+    };
+    arm();
+    const events = ["pointerdown", "keydown"] as const;
+    events.forEach(e => window.addEventListener(e, arm, { passive: true }));
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach(e => window.removeEventListener(e, arm));
+    };
+  }, [state?.wall_unlock, unlockMs, endWallUnlock, inWrapper]);
 
   if (loading && !state) {
     return <FullPageSpinner />;
@@ -133,7 +204,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user: state.user, isTenant: !!state.is_tenant, refresh, logout }}>
+    <AuthContext.Provider value={{ user: state.user, isTenant: !!state.is_tenant, refresh, logout,
+                                  wallUnlock: !!state.wall_unlock, endWallUnlock }}>
       {children}
     </AuthContext.Provider>
   );

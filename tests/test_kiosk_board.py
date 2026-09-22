@@ -214,3 +214,100 @@ def test_the_wall_app_sets_itself_up_and_the_device_stays_a_wall(fresh_app, monk
     # And a browser on the same LAN that is not the wall stays out.
     plain = TestClient(fresh_app)
     assert plain.get("/api/ambient/slideshow").status_code in (401, 403)
+
+
+def test_a_pin_at_the_wall_unlocks_for_minutes_not_for_a_month(fresh_app, monkeypatch):
+    """A PIN at the wall is an unlock, not a month in the hallway.
+
+    Before this, a PIN switch minted an ordinary session: 30 days, and a
+    full year on a tablet that is a trusted wall. The household wall
+    stayed signed in as whoever last touched it. Now it is three
+    minutes, pushed out by every request the person's own use makes,
+    and the wall's own session waits in a second cookie so the tablet
+    never lands on a login screen.
+    """
+    from datetime import datetime, timezone
+    from fastapi.testclient import TestClient
+    from backend import auth_sessions
+    from backend.database import get_conn
+
+    from backend import main as M
+    monkeypatch.setattr(M, "is_trusted_lan_request", lambda request: True)
+
+    admin = seed_user(name="Dirk", role="platform_admin")
+    beate = seed_user(name="Beate", role="member")
+    auth_sessions.set_pin(beate, "2468")
+
+    wall_uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    ua = "Mozilla/5.0 (Linux; Android 15; wv) YorikWall/0.1.0 (Xiaomi 2405CPCFBG)"
+    hdrs = {"user-agent": ua, "x-yorik-wall-device": wall_uuid}
+    wall_sid = auth_sessions.create_session(admin, user_agent=ua, ip="127.0.0.1")
+    def cookies_set_by(resp):
+        # Read what the server SENT rather than what httpx kept: the jar
+        # ends up with two entries called yorik_session (ours and the
+        # server's) and raises CookieConflict on every later read.
+        out = {}
+        for h in resp.headers.get_list("set-cookie"):
+            name, _, rest = h.partition("=")
+            out[name.strip()] = rest.split(";")[0]
+        return out
+
+    c = TestClient(fresh_app, headers=hdrs)
+    c.cookies.set(auth_sessions.COOKIE_NAME, wall_sid)
+    mine = [d for d in c.get("/api/devices").json() if d["is_current"]][0]
+    c.post(f"/api/devices/{mine['id']}/kiosk",
+           json={"is_kiosk": True, "device_label": "Wand", "show_today": True})
+    c.post("/api/devices/trust")
+
+    r = c.post("/api/auth/pin-switch", json={"user_id": str(beate), "pin": "2468"})
+    assert r.status_code == 200, r.text
+    assert r.json()["unlock_seconds"] == auth_sessions.WALL_UNLOCK_SECONDS
+
+    handed_out = cookies_set_by(r)
+    unlocked_sid = handed_out[auth_sessions.COOKIE_NAME]
+    assert unlocked_sid != wall_sid
+    assert handed_out[auth_sessions.WALL_COOKIE_NAME] == wall_sid, \
+        "the wall's own session is parked, so there is a way back"
+    c.cookies.clear()
+    c.cookies.set(auth_sessions.COOKIE_NAME, unlocked_sid)
+    c.cookies.set(auth_sessions.WALL_COOKIE_NAME, wall_sid)
+
+    with get_conn() as conn:
+        row = conn.execute("SELECT user_id, expires_at, wall_unlock_seconds FROM sessions "
+                           "WHERE id = ?", (unlocked_sid,)).fetchone()
+    assert str(row["user_id"]) == str(beate)
+    assert row["wall_unlock_seconds"] == auth_sessions.WALL_UNLOCK_SECONDS
+    left = datetime.fromisoformat(row["expires_at"]) - datetime.now(timezone.utc).replace(tzinfo=None)
+    assert left.total_seconds() <= auth_sessions.WALL_UNLOCK_SECONDS + 5, \
+        f"three minutes, not {left}"
+
+    # Using the wall slides the unlock — by three minutes, NOT by the
+    # 30 days the ordinary refresh window would have granted.
+    assert c.get("/api/auth/me").json()["wall_unlock"] is True
+    with get_conn() as conn:
+        after = conn.execute("SELECT expires_at FROM sessions WHERE id = ?",
+                             (unlocked_sid,)).fetchone()["expires_at"]
+    assert (datetime.fromisoformat(after) - datetime.now(timezone.utc).replace(tzinfo=None)).total_seconds() \
+        <= auth_sessions.WALL_UNLOCK_SECONDS + 5
+
+    # "Fertig" — the wall is the wall again, and Beate's unlock is gone.
+    back = c.post("/api/auth/wall-return")
+    assert back.status_code == 200, back.text
+    assert cookies_set_by(back)[auth_sessions.COOKIE_NAME] == wall_sid
+    c.cookies.clear()
+    c.cookies.set(auth_sessions.COOKIE_NAME, wall_sid)
+    with get_conn() as conn:
+        assert conn.execute("SELECT 1 FROM sessions WHERE id = ?",
+                            (unlocked_sid,)).fetchone() is None
+    me = c.get("/api/auth/me").json()
+    assert me["user"]["name"] == "Dirk" and me["wall_unlock"] is False
+
+
+def test_wall_return_needs_the_parked_session(fresh_app, monkeypatch):
+    """The way back restores a session whose cookie the caller already
+    holds — it is not a door into the wall's account for anyone who can
+    reach the tablet's URL."""
+    from fastapi.testclient import TestClient
+    from backend import main as M
+    monkeypatch.setattr(M, "is_trusted_lan_request", lambda request: True)
+    assert TestClient(fresh_app).post("/api/auth/wall-return").status_code == 400

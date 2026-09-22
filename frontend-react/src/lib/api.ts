@@ -132,4 +132,9 @@ export interface AuthMe {
   user?: YorikUser;
   setup_required?: boolean;
   is_tenant?: boolean;
+  /** This session is a PIN unlock at the wall, not somebody signed in
+   *  on their own device — see /api/auth/wall-return. */
+  wall_unlock?: boolean;
+  /** How long the unlock holds without a touch, in seconds. */
+  wall_unlock_seconds?: number;
 }

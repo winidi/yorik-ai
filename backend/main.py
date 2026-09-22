@@ -456,7 +456,8 @@ def _provision_supabase_auth_user(
 
 
 @app.get("/api/auth/me", tags=["auth"])
-def auth_me(user: Optional[Dict[str, Any]] = Depends(_auth.current_user_optional)):
+def auth_me(request: Request,
+            user: Optional[Dict[str, Any]] = Depends(_auth.current_user_optional)):
     """Who am I? Returns user dict or {logged_in: false, setup_required}.
     setup_required=true means no user has a password yet and the client
     should show the first-run setup flow instead of the login form.
@@ -468,7 +469,16 @@ def auth_me(user: Optional[Dict[str, Any]] = Depends(_auth.current_user_optional
     from . import external_users as _eu
     is_tenant = _eu._is_tenant_mode()
     if user:
-        return {"logged_in": True, "user": user, "is_tenant": is_tenant}
+        # `wall_unlock` tells the frontend this session is somebody
+        # standing at the wall for a few minutes, not somebody signed in
+        # on their own device. The wall uses it for the "Fertig" button
+        # and to hand itself back after three minutes without a touch —
+        # the background polling must not be what keeps a person signed
+        # in in the hallway.
+        sid = request.cookies.get(_auth.COOKIE_NAME) or ""
+        return {"logged_in": True, "user": user, "is_tenant": is_tenant,
+                "wall_unlock": _auth.session_is_wall_unlock(sid),
+                "wall_unlock_seconds": _auth.WALL_UNLOCK_SECONDS}
     return {
         "logged_in": False,
         "setup_required": not _auth.has_any_password(),
@@ -642,6 +652,45 @@ def auth_logout(request: Request, response: Response):
                                           bool(sid),
                                           extra={"event": "logout"})
     return {"ok": True}
+
+
+@app.post("/api/auth/wall-return", tags=["auth"])
+def auth_wall_return(request: Request, response: Response):
+    """Give the wall back to itself after a PIN unlock.
+
+    Called by the "Fertig" button on the wall and automatically when the
+    unlock has run out — the tablet cannot be left showing a login
+    screen in the hallway, which is what an expired session would
+    otherwise mean (AuthGate has no state between "signed in" and
+    "LoginScreen").
+
+    This grants nothing: it restores a session whose cookie the caller
+    already holds. No cookie, no return — and the parked session has to
+    still be valid on its own terms.
+    """
+    if not is_trusted_lan_request(request):
+        raise HTTPException(403, "wall routes require trusted-LAN access")
+    wall_sid = request.cookies.get(_auth.WALL_COOKIE_NAME) or ""
+    if not wall_sid:
+        raise HTTPException(400, "no wall session parked on this device")
+    owner = _auth.get_user_for_session(
+        wall_sid, ip=request.client.host if request.client else None)
+    if not owner:
+        # The wall's own session died while someone was unlocked. Clear
+        # the crumb so the frontend stops retrying and asks for a real
+        # sign-in instead of looping.
+        response.delete_cookie(_auth.WALL_COOKIE_NAME, path="/")
+        raise HTTPException(409, "the wall's own session is gone — sign in again")
+    current = request.cookies.get(_auth.COOKIE_NAME) or ""
+    if current and current != wall_sid and _auth.session_is_wall_unlock(current):
+        _auth.delete_session(current)
+    response.set_cookie(
+        key=_auth.COOKIE_NAME, value=wall_sid, httponly=True,
+        samesite="lax", secure=(request.url.scheme == "https"),
+        max_age=_auth.SESSION_TTL_DAYS * 24 * 3600, path="/",
+    )
+    response.delete_cookie(_auth.WALL_COOKIE_NAME, path="/")
+    return {"ok": True, "user": {"id": owner["id"], "name": owner["name"]}}
 
 
 @app.post("/api/auth/setup", tags=["auth"])
@@ -1147,20 +1196,50 @@ def auth_pin_switch(
     # kiosk config on every switch. Ambient routes ALREADY worked via
     # the wall-device-header fallback; this just makes the visible
     # state match what the device is actually doing.
-    new_sid = _auth.create_session(
-        str(body.user_id),
-        user_agent=request.headers.get("user-agent", "") + " (pin-switch)",
-        ip=client_ip,
-        wall_device_id=device_id or None,
-    )
+    on_wall = bool(device_id and _auth.is_trusted_kiosk_device(device_id))
+    if on_wall:
+        # A PIN at the wall UNLOCKS the wall for a few minutes; it does
+        # not sign anybody in for a month in the hallway. Every request
+        # the tablet makes pushes the window out, so the unlock lasts as
+        # long as someone is actually standing there.
+        new_sid = _auth.create_ephemeral_session(
+            str(body.user_id),
+            ttl_seconds=_auth.WALL_UNLOCK_SECONDS,
+            sliding=True,
+            user_agent=request.headers.get("user-agent", "") + " (wall unlock)",
+            ip=client_ip,
+        )
+        # Park the wall's OWN session so there is something to come back
+        # to — /api/auth/wall-return hands it back when the unlock ends
+        # or when the person taps "Fertig". Only ever park the wall's own
+        # session: a second switch (Beate → Dirk) must not park Beate's
+        # unlock as the thing the wall falls back to.
+        if sid and not _auth.session_is_wall_unlock(sid) and _auth.session_is_kiosk(sid):
+            response.set_cookie(
+                key=_auth.WALL_COOKIE_NAME, value=sid, httponly=True,
+                samesite="lax", secure=(request.url.scheme == "https"),
+                max_age=_auth.SESSION_TTL_DAYS * 24 * 3600, path="/",
+            )
+    else:
+        new_sid = _auth.create_session(
+            str(body.user_id),
+            user_agent=request.headers.get("user-agent", "") + " (pin-switch)",
+            ip=client_ip,
+            wall_device_id=device_id or None,
+        )
     response.set_cookie(
         key=_auth.COOKIE_NAME, value=new_sid, httponly=True,
         samesite="lax", secure=(request.url.scheme == "https"),
+        # The browser keeps the cookie; the SERVER decides how long the
+        # unlock lives. A 3-minute max_age would take the cookie away
+        # mid-use and there would be nothing left to slide.
         max_age=_auth.SESSION_TTL_DAYS * 24 * 3600, path="/",
     )
     _auth.touch_login(str(body.user_id))
-    return {"ok": True, "user": {"id": target["id"], "name": target["name"],
-                                   "role": target["role"]}}
+    return {"ok": True,
+            "unlock_seconds": _auth.WALL_UNLOCK_SECONDS if on_wall else None,
+            "user": {"id": target["id"], "name": target["name"],
+                     "role": target["role"]}}
 
 
 @app.post("/api/auth/voice-login", tags=["auth"])

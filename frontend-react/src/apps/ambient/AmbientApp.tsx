@@ -25,7 +25,7 @@ import { AvatarPinFallback, type PickableUser } from "./AvatarPinFallback";
 import { AgendaPane } from "./AgendaPane";
 import { RecordingStartDialog } from "@/components/RecordingStartDialog";
 import { getRecorderState, subscribeRecorder } from "@/components/RecorderDock";
-import { Mic, Images, LayoutGrid, CalendarDays, ListChecks, GraduationCap } from "lucide-react";
+import { Mic, Images, LayoutGrid, CalendarDays, ListChecks, GraduationCap, LogOut } from "lucide-react";
 import { FamilyBoard, type BoardMode } from "./FamilyBoard";
 
 // Pointer-gesture thresholds. Picked for a wall-mounted tablet —
@@ -120,7 +120,10 @@ export function AmbientApp() {
   const [activeUntil, setActiveUntil] = useState(0);
   const [, setTick] = useState(0);
   useEffect(() => { const t = setInterval(() => setTick(x => x + 1), 15_000); return () => clearInterval(t); }, []);
-  const active = activeUntil > Date.now();
+  // Signed in at the wall = PIN-unlocked. The auth layer owns the clock
+  // (it ends the unlock three minutes after the last touch, anywhere in
+  // the app); this is the board's view of the same fact.
+  const active = auth.wallUnlock || activeUntil > Date.now();
   const meId: string | null = active ? ((auth.user as any)?.id || null) : null;
   const touchBoard = () => { if (activeUntil > Date.now()) setActiveUntil(Date.now() + ACTIVE_MS); };
 
@@ -499,6 +502,21 @@ export function AmbientApp() {
           </button>
         ))}
       </div>
+      {active && (
+        <button
+          onPointerDown={e => e.stopPropagation()}
+          onPointerUp={e => e.stopPropagation()}
+          onClick={() => { setActiveUntil(0); void auth.endWallUnlock(); }}
+          className={cn("fixed left-1/2 -translate-x-1/2 bottom-5 z-30 flex items-center gap-2 rounded-full px-5 py-2.5 text-sm border backdrop-blur-md",
+                        mode === "photos"
+                          ? "bg-black/55 hover:bg-black/70 text-white/90 border-white/15"
+                          : "bg-white/90 hover:bg-white text-[#1f2430] border-[#e9e6df] shadow")}
+          title="Die Wand ist danach wieder nur die Wand"
+        >
+          <LogOut className="w-4 h-4" />
+          Fertig{auth.user?.first_name ? `, ${auth.user.first_name}` : ""}
+        </button>
+      )}
       {recordingsOn && active && !recorderLive && (
         <button
           onPointerDown={e => { e.stopPropagation(); touchBoard(); }}
