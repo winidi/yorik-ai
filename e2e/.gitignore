@@ -3,3 +3,4 @@ node_modules/
 report/
 report.log
 __pycache__/
+history/

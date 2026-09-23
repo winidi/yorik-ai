@@ -1,0 +1,5 @@
+#!/bin/sh
+# The test household must never drive the real containers (the WhatsApp
+# page offers "Restart bridge"). household.py puts this first in PATH.
+echo "docker is off limits in the test household" >&2
+exit 1

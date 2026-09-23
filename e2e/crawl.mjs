@@ -211,8 +211,10 @@ function summary(results, seconds) {
 
 async function main() {
   const [onlyPerson, onlyViewport, onlyRoute] = process.argv.slice(2);
-  fs.rmSync(REPORT, { recursive: true, force: true });
+  // Only the crawler's own files: the journeys may have written theirs already.
+  for (const f of ["crawl.json", "SUMMARY.md"]) fs.rmSync(path.join(REPORT, f), { force: true });
   fs.mkdirSync(path.join(REPORT, "shots"), { recursive: true });
+  for (const f of fs.readdirSync(path.join(REPORT, "shots"))) if (!f.startsWith("ui-")) fs.rmSync(path.join(REPORT, "shots", f));
   const started = Date.now();
   const browser = await chromium.launch({
     args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"],

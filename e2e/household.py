@@ -45,6 +45,10 @@ BASE = f"http://127.0.0.1:{PORT}"
 PY = str(ROOT / "venv" / "bin" / "python")
 DEAD = "http://127.0.0.1:9"          # the discard port: nothing answers
 PASSWORD = "testhaus-2026"
+# YORIK_E2E_REAL_LLM=http://127.0.0.1:8080/v1 lets the test household talk
+# to the real model (read-only inference; whatever the chat creates lands
+# in the throwaway database). Default: the fake model.
+REAL_LLM = os.getenv("YORIK_E2E_REAL_LLM", "")
 
 FAMILY = [
     # key, name, email, role, pin
@@ -113,8 +117,8 @@ def server_env(settings: dict[str, str]) -> dict[str, str]:
         "YORIK_BIND": "127.0.0.1", "HOMEOS_PORT": str(PORT), "YORIK_SKIP_BIND_PROBE": "1",
         "YORIK_TRUSTED_ORIGINS": BASE,
         "YORIK_TZ": "Europe/Berlin", "TZ": "Europe/Berlin",
-        "HOMEOS_LLM_BASE_URL": f"http://127.0.0.1:{LLM_PORT}/v1",
-        "HOMEOS_MODEL": "fake-household-model",
+        "HOMEOS_LLM_BASE_URL": REAL_LLM or f"http://127.0.0.1:{LLM_PORT}/v1",
+        "HOMEOS_MODEL": os.getenv("YORIK_E2E_MODEL", "qwen3.8-27b") if REAL_LLM else "fake-household-model",
         "HOMEOS_DEFAULT_LANGUAGE": "de",
         "YORIK_ENABLE_WHATSAPP": "0", "YORIK_ENABLE_PAPERLESS": "0", "YORIK_ENABLE_IMMICH": "0",
         "YORIK_WA_BRIDGE_URL": DEAD, "YORIK_WA_BRIDGE_WS": "ws://127.0.0.1:9/events",
@@ -130,7 +134,10 @@ def server_env(settings: dict[str, str]) -> dict[str, str]:
         "YORIK_API_MAX_REQUESTS": "100000", "YORIK_API_ASK_MAX": "1000", "YORIK_API_LOGIN_MAX": "1000",
         # e2e/guard/sitecustomize.py: nothing local but these ports.
         "PYTHONPATH": str(ROOT / "e2e" / "guard"),
-        "YORIK_E2E_ALLOWED_PORTS": ",".join(map(str, (settings["port"], PORT, LLM_PORT, 9080))),
+        # …and no docker: a stand-in that refuses (e2e/guard/bin/docker).
+        "PATH": f"{ROOT / 'e2e' / 'guard' / 'bin'}:{os.environ.get('PATH', '')}",
+        "YORIK_E2E_ALLOWED_PORTS": ",".join(map(str, (settings["port"], PORT, LLM_PORT, 9080)
+                                                + ((int(REAL_LLM.split(":")[2].split("/")[0]),) if REAL_LLM else ()))),
         "YORIK_E2E_BLOCKED_LOG": str(RUN / "blocked.log"),
     })
     return env
@@ -299,6 +306,7 @@ def seed(settings: dict[str, str]) -> dict:
     household = {
         "base_url": BASE,
         "password": PASSWORD,
+        "real_llm": bool(REAL_LLM),
         "people": [{"key": k, "name": n, "email": e, "role": r, "pin": p, "id": ids.get(k, "")}
                    for k, n, e, r, p in FAMILY],
     }
