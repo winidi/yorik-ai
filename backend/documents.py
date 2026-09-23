@@ -299,14 +299,14 @@ def embed(text: str) -> List[float]:
 def embedder_reachable() -> bool:
     """True iff at least one embedder backend can serve a request.
 
-    Used by /api/health and start.sh banners. We treat 'local' as always
-    reachable (the model loads or it doesn't — `is_available` covers
-    that), and probe `/v1/models` for external."""
+    Used by Settings → Embeddings and the document search. 'local' counts
+    as reachable once its model files are installed; external is probed
+    at `/v1/models`."""
     if EMBED_BACKEND == "off":
         return False
     if EMBED_BACKEND in ("auto", "local"):
         from .embedders import local as _local
-        if _local.is_available():
+        if _local.installed():
             return True
         if EMBED_BACKEND == "local":
             return False

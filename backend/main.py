@@ -26,6 +26,10 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Stre
 from psycopg import errors as pg_errors
 from pydantic import BaseModel, Field
 
+# Used by error paths all over this module; it was never defined, so a
+# handled failure (a geocode, an invite notice) became a 500 NameError.
+log = logging.getLogger("yorik.main")
+
 from .auth import (
     apply_filter,
     normalize_role,

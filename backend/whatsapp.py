@@ -638,8 +638,12 @@ def bridge_info(user: dict[str, Any] = Depends(_auth.require_admin)) -> dict[str
 
     # Compose CLI probe — distinguishes "docker installed but no compose"
     # (rare) so the UI can hint to install compose.
-    from .storage import _compose_command
-    info["compose_available"] = _compose_command() is not None
+    try:
+        info["compose_available"] = subprocess.run(
+            ["docker", "compose", "version"], capture_output=True, timeout=3,
+        ).returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        info["compose_available"] = False
 
     # Container inspect — fastest reliable way to read state.
     try:

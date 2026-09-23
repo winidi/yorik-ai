@@ -469,7 +469,8 @@ function TaskList({ tasks }: { tasks: any[] }) {
 }
 
 function formatDueDateShort(iso: string): string {
-  const d = new Date(iso + "T12:00:00");
+  // Midnight to midnight: noon against midnight rounded "today" up to "tomorrow".
+  const d = new Date(iso.slice(0, 10) + "T00:00:00");
   if (isNaN(d.getTime())) return iso;
   const today = new Date();
   today.setHours(0, 0, 0, 0);

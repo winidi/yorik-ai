@@ -1397,7 +1397,7 @@ async def _drain(role: str, message: str, conversation_id: Optional[str] = None,
                 ui_actions=ui_actions_snapshot,
             )
         except Exception as exc:  # noqa: BLE001
-            log.exception("attach message extras failed: %s", exc)
+            __import__("logging").getLogger("yorik.ask").exception("attach message extras failed: %s", exc)
 
     return {
         "response": response,

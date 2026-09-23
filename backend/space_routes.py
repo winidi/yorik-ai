@@ -350,7 +350,7 @@ def get_space(
             "SELECT sm.user_id, u.name, u.email, sm.level, sm.added_at, "
             "       u.paperless_user_id, u.immich_user_id "
             "FROM space_members sm JOIN user_profiles u ON u.id = sm.user_id "
-            "WHERE sm.space_id=? ORDER BY u.name COLLATE NOCASE",
+            "WHERE sm.space_id=? ORDER BY lower(u.name)",
             (space_id,),
         ).fetchall()
     # Personal-space owner is an implicit admin without a space_members
