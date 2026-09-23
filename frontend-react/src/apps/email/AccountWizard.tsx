@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { X, AlertCircle, Loader2, ExternalLink } from "lucide-react";
 import { api } from "@/lib/api";
 import type { EmailAccount, ProviderPreset } from "./types";
+import { IMPORT_SCOPES } from "./types";
 
 interface Props {
   onClose: () => void;
@@ -39,6 +40,7 @@ export function AccountWizard({ onClose, onSaved }: Props) {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [isDefault, setIsDefault] = useState(false);
+  const [importScope, setImportScope] = useState("recent");
 
   const [imap, setImap] = useState({ host: "", port: 993, ssl: true, starttls: false });
   const [smtp, setSmtp] = useState({ host: "", port: 465, ssl: true, starttls: false });
@@ -118,6 +120,7 @@ export function AccountWizard({ onClose, onSaved }: Props) {
         smtp_ssl: smtp.ssl,
         smtp_starttls: smtp.starttls,
         is_default: isDefault,
+        import_scope: importScope,
       });
       onSaved(acct);
     } catch (e: any) {
@@ -287,6 +290,15 @@ export function AccountWizard({ onClose, onSaved }: Props) {
             <input value={displayName} onChange={e => setDisplayName(e.target.value)}
               placeholder='e.g. "Personal Gmail" or "Work"'
               className="w-full h-9 px-3 rounded-md bg-muted text-sm focus:outline-none focus:ring-2 focus:ring-ring/40" />
+          </Field>
+          <Field label="Bring into Yorik">
+            <select value={importScope} onChange={e => setImportScope(e.target.value)}
+              className="w-full h-9 px-3 rounded-md bg-muted text-sm focus:outline-none focus:ring-2 focus:ring-ring/40">
+              {IMPORT_SCOPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <span className="text-[11px] text-muted-foreground block mt-1">
+              In every folder. Older mail stays on the server and can be brought in later. Yorik never deletes anything there.
+            </span>
           </Field>
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={isDefault}

@@ -20,7 +20,29 @@ export interface EmailAccount {
   last_error?: string | null;
   last_error_at?: string | null;
   created_at: string;
+  /** How much of the mailbox Yorik keeps: "recent", "days:N" or "all". */
+  import_scope?: string;
+  /** The last sync pass: in sync, or still importing. */
+  sync_state?: {
+    phase: "importing" | "in_sync";
+    pending: number;
+    fetched: number;
+    removed: number;
+    failing: number;
+    parked: number;
+    last_run_at: string;
+  } | null;
+  /** Mails Yorik could not read after several tries (safe on the server). */
+  failed_mails?: number;
 }
+
+/** The choices for how far back an account is kept in Yorik. */
+export const IMPORT_SCOPES: { value: string; label: string }[] = [
+  { value: "recent", label: "The latest 200 mails" },
+  { value: "days:90", label: "The last 3 months" },
+  { value: "days:365", label: "The last year" },
+  { value: "all", label: "Everything" },
+];
 
 export interface EmailMessageRow {
   id: number;

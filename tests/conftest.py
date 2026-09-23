@@ -37,6 +37,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 MIGRATIONS_PG = ROOT / "migrations_pg"
+
+# The suite logs into a folder of its own. Writing into data/logs rotated
+# the live service's log away within hours — the log of the mail import
+# that lost mails on 2026-09-21 was gone by the time anyone looked.
+os.environ.setdefault("YORIK_LOG_DIR", tempfile.mkdtemp(prefix="yorik-pytest-logs-"))
 TEMPLATE_DB = "yorik_test_template"
 TEST_DB_PREFIX = "yorik_test_"
 

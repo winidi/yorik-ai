@@ -53,6 +53,26 @@ IDLE_REFRESH_S  = 25 * 60  # re-issue IDLE every 25 min (RFC 2177 recommends ≤
 RECONNECT_INITIAL_S = 5
 RECONNECT_MAX_S = 60
 SNIPPET_LEN = 220
+
+# How much of each folder 'recent' keeps (the default import scope), and
+# how many mails one sync pass may bring in before it goes back to
+# listening for new mail (a big import continues on the next pass).
+RECENT_INBOX = 200
+RECENT_OTHER = 50
+PASS_BUDGET = 300
+FETCH_CHUNK = 50
+# A mail that fails this often is parked and shown in the settings; the
+# "Repair" action gives it another round.
+MAX_ATTEMPTS = 5
+# A full compare with the server at most this often per account, unless
+# an import is still running or a repair was asked for.
+RECONCILE_EVERY_S = 15 * 60
+# Mail older than this, found by an import or a repair, arrives quietly:
+# no bell proposal, no draft, no suggestion.
+QUIET_AFTER_S = 48 * 3600
+_SENT_NAMES = {"sent", "sent items", "sent messages", "sent mail", "gesendet", "gesendete elemente",
+               "gesendete objekte", "gesendete nachrichten"}
+FETCH_ITEMS = [b"INTERNALDATE", b"FLAGS", b"RFC822.SIZE", b"BODY.PEEK[HEADER]", b"BODY.PEEK[TEXT]"]
 ATTACHMENT_DIR_DEFAULT = "data/email_attachments"
 
 # Auto-draft debounce — coalesce a burst of messages into a single
@@ -257,10 +277,23 @@ def _run_once(cfg: dict) -> None:
                 if n:
                     log.info("account %d %s: %d new", account_id, f["name"], n)
             else:
-                # Non-inbox: tiny initial sync, just enough for the UI.
-                n = _sync_new_messages(c, cfg, f["id"], initial_cap=30)
+                # Non-inbox: a small first sync; the sync pass fills the
+                # rest of the import scope in the background.
+                n = _sync_new_messages(c, cfg, f["id"], initial_cap=RECENT_OTHER)
                 if n:
                     log.info("account %d %s: %d new", account_id, f["name"], n)
+
+        # The sync pass: fetch what is missing, retry failures, take over
+        # read/flagged, drop what the server no longer has. Not on every
+        # reconnect (a new mail reconnects), but at least every
+        # RECONCILE_EVERY_S, right away after "Repair", and again soon
+        # while an import is unfinished.
+        idle_timeout = IDLE_REFRESH_S
+        if _reconcile_due(cfg):
+            state = reconcile_account(c, cfg)
+            _last_reconcile[account_id] = __import__("time").monotonic()
+            if state.get("pending"):
+                idle_timeout = 30
 
         _record_account_sync(account_id)
 
@@ -275,7 +308,7 @@ def _run_once(cfg: dict) -> None:
 
         # IDLE loop (or fall back to polling if unsupported).
         if c.has_capability(b"IDLE"):
-            _idle_then_sync(c, cfg, inbox_folder_id)
+            _idle_then_sync(c, cfg, inbox_folder_id, timeout=idle_timeout)
         else:
             log.info("account %d: server lacks IDLE, polling every %ds",
                      account_id, POLL_FALLBACK_S)
@@ -286,14 +319,31 @@ def _run_once(cfg: dict) -> None:
         c.logout()
 
 
-def _idle_then_sync(c: IMAPClient, cfg: dict, folder_id: int) -> None:
+_last_reconcile: dict[int, float] = {}
+
+
+def _reconcile_due(cfg: dict) -> bool:
+    import time
+    if cfg.get("repair_requested"):
+        return True
+    try:
+        state = json.loads(cfg.get("sync_state") or "{}")
+    except ValueError:
+        state = {}
+    if state.get("pending"):
+        return True
+    last = _last_reconcile.get(cfg["id"])
+    return last is None or time.monotonic() - last >= RECONCILE_EVERY_S
+
+
+def _idle_then_sync(c: IMAPClient, cfg: dict, folder_id: int, timeout: int = IDLE_REFRESH_S) -> None:
     """Issue IDLE, wait for server push (or timeout), then sync delta."""
     folder_name = _folder_name(folder_id)
     c.idle()
     try:
-        # Wait up to IDLE_REFRESH_S for a server push. None timeout
-        # would block forever; we want periodic refresh per RFC 2177.
-        responses = c.idle_check(timeout=IDLE_REFRESH_S)
+        # Wait up to `timeout` for a server push. None timeout would
+        # block forever; we want periodic refresh per RFC 2177.
+        responses = c.idle_check(timeout=timeout)
     finally:
         c.idle_done()
     if responses:
@@ -320,13 +370,16 @@ def _sync_new_messages(c: IMAPClient, cfg: dict, folder_id: int,
                         initial_cap: int = 200,
                         force_start_uid: Optional[int] = None,
                         force_end_uid: Optional[int] = None,
-                        freeze_uid_next: bool = False) -> int:
+                        freeze_uid_next: bool = False,
+                        quiet: bool = False) -> int:
     """Fetch every UID >= last_uid_next and insert into email_messages.
     Returns count actually inserted.
 
-    `initial_cap` is the maximum number of messages pulled on the FIRST
-    sync (subsequent syncs do pure deltas regardless). 200 for INBOX,
-    ~30 for secondary folders.
+    `initial_cap` is how many mails the FIRST sync of a folder brings in
+    — the latest that many mails, not the latest that many UID numbers
+    (after years of deleting and moving, the last 200 numbers of a GMX
+    inbox held 17 mails). The rest of the import scope follows in the
+    background through reconcile_account().
 
     `force_start_uid` overrides the prev_next high-watermark — used by
     the "Load older" backfill path which scans UIDs *below* the
@@ -335,7 +388,11 @@ def _sync_new_messages(c: IMAPClient, cfg: dict, folder_id: int,
 
     `freeze_uid_next` skips the trailing `UPDATE email_folders SET
     uid_next=…` so a backfill pass doesn't accidentally pretend the
-    older UIDs are the new high-watermark."""
+    older UIDs are the new high-watermark.
+
+    A mail that fails to parse or save does not hold the watermark back
+    (the mails after it still arrive) and is not lost either: it is
+    recorded in email_fetch_failures and retried on every pass."""
     folder_name = _folder_name(folder_id)
     with get_conn() as conn:
         row = conn.execute(
@@ -352,6 +409,7 @@ def _sync_new_messages(c: IMAPClient, cfg: dict, folder_id: int,
     if prev_validity is not None and prev_validity != validity:
         log.warning("account %d UIDVALIDITY changed (%s → %s), full resync",
                     cfg["id"], prev_validity, validity)
+        _forget_uids(cfg["id"], folder_id)
         prev_next = 1
 
     # Transient "SEARCH failed: no such message" / "NO" responses are
@@ -365,8 +423,7 @@ def _sync_new_messages(c: IMAPClient, cfg: dict, folder_id: int,
             end_part = str(force_end_uid) if force_end_uid is not None else "*"
             new_uids = c.search([u"UID", f"{force_start_uid}:{end_part}"])
         elif prev_next == 1:
-            start = max(1, next_uid - initial_cap)
-            new_uids = c.search([u"UID", f"{start}:*"])
+            new_uids = sorted(u for u in c.search(["UNDELETED"]) if u)[-initial_cap:] if initial_cap else []
         else:
             new_uids = c.search([u"UID", f"{prev_next}:*"])
     except IMAPClientError as exc:
@@ -386,45 +443,387 @@ def _sync_new_messages(c: IMAPClient, cfg: dict, folder_id: int,
                           and (force_end_uid is None or u <= force_end_uid))
     else:
         new_uids = sorted(u for u in new_uids if u and u >= prev_next)
-    if not new_uids:
-        if not freeze_uid_next:
-            # Still update UIDVALIDITY/UIDNEXT so we don't re-search next time.
-            with get_conn() as conn:
-                conn.execute(
-                    "UPDATE email_folders SET uid_validity=?, uid_next=?, last_sync_at=datetime('now') WHERE id=?",
-                    (validity, max(prev_next, next_uid), folder_id),
-                )
-                conn.commit()
-        return 0
 
-    # Fetch headers + body in one round-trip. ENVELOPE has structured
-    # from/to/subject; BODY[] is the full RFC822 message.
-    fetched = c.fetch(new_uids, [b"INTERNALDATE", b"FLAGS", b"RFC822.SIZE",
-                                   b"BODY.PEEK[HEADER]", b"BODY.PEEK[TEXT]"])
     inserted = 0
     highest_uid = prev_next - 1
-    for uid, data in fetched.items():
-        try:
-            raw_headers = data[b"BODY[HEADER]"] or b""
-            raw_body = data[b"BODY[TEXT]"] or b""
-            raw_full = raw_headers + b"\r\n" + raw_body
-            parsed = mailparser.parse_from_bytes(raw_full)
-            _insert_message(cfg, folder_id, uid, data, parsed)
-            inserted += 1
-            if uid > highest_uid:
-                highest_uid = uid
-        except Exception as e:
-            log.exception("account %d UID %d parse failed: %s", cfg["id"], uid, e)
-            continue
+    if new_uids:
+        # The first sync of a folder brings its past: quiet for old mail.
+        q = quiet or ("auto" if prev_next == 1 and force_start_uid is None else False)
+        inserted, _failed = _fetch_and_store(c, cfg, folder_id, new_uids, quiet=q)
+        highest_uid = max(highest_uid, max(new_uids))
 
     if not freeze_uid_next:
         with get_conn() as conn:
             conn.execute(
                 "UPDATE email_folders SET uid_validity=?, uid_next=?, last_sync_at=datetime('now') WHERE id=?",
-                (validity, max(highest_uid + 1, next_uid), folder_id),
+                (validity, max(prev_next, highest_uid + 1, next_uid), folder_id),
             )
             conn.commit()
     return inserted
+
+
+def _fetch_and_store(c: IMAPClient, cfg: dict, folder_id: int, uids: list,
+                     quiet: Any = False) -> tuple[int, list]:
+    """Fetch these UIDs of the selected folder in chunks and save them.
+    Returns (saved, failed uids). A mail that fails is recorded in
+    email_fetch_failures (retried later); one that succeeds clears its
+    record. `quiet` True/False, or "auto": quiet for mail older than
+    QUIET_AFTER_S (an import brings old mail, but a new one that a
+    missed IDLE left behind should still notify)."""
+    saved, failed = 0, []
+    now = datetime.now(timezone.utc)
+    for i in range(0, len(uids), FETCH_CHUNK):
+        chunk = uids[i:i + FETCH_CHUNK]
+        fetched = c.fetch(chunk, FETCH_ITEMS)
+        for uid in chunk:
+            data = fetched.get(uid)
+            if data is None:
+                # Gone between SEARCH and FETCH (moved or expunged by
+                # another client). Not a failure; the next pass sees
+                # the folder as it is.
+                continue
+            q = quiet
+            if quiet == "auto":
+                q = True
+                try:
+                    q = (now - data[b"INTERNALDATE"].astimezone(timezone.utc)).total_seconds() > QUIET_AFTER_S
+                except Exception:  # noqa: BLE001
+                    pass
+            try:
+                raw_headers = data[b"BODY[HEADER]"] or b""
+                raw_body = data[b"BODY[TEXT]"] or b""
+                raw_full = raw_headers + b"\r\n" + raw_body
+                parsed = mailparser.parse_from_bytes(raw_full)
+                _insert_message(cfg, folder_id, uid, data, parsed, quiet=bool(q))
+                saved += 1
+                _clear_failure(cfg["id"], folder_id, uid)
+            except Exception as e:  # noqa: BLE001
+                log.exception("account %d UID %d could not be stored: %s", cfg["id"], uid, e)
+                _record_failure(cfg["id"], folder_id, uid, e)
+                failed.append(uid)
+    return saved, failed
+
+
+# ───────────────────────── failures ─────────────────────────────────
+
+def _record_failure(account_id: int, folder_id: int, uid: int, error: Exception) -> None:
+    text = f"{type(error).__name__}: {error}"[:500]
+    try:
+        with get_conn() as conn:
+            conn.execute(
+                "INSERT INTO email_fetch_failures "
+                "(account_id, folder_id, uid, attempts, last_error, first_failed_at, last_tried_at, parked) "
+                "VALUES (?, ?, ?, 1, ?, datetime('now'), datetime('now'), 0) "
+                "ON CONFLICT (account_id, folder_id, uid) DO UPDATE SET "
+                "  attempts = email_fetch_failures.attempts + 1, last_error = EXCLUDED.last_error, "
+                "  last_tried_at = EXCLUDED.last_tried_at, "
+                "  parked = CASE WHEN email_fetch_failures.attempts + 1 >= ? THEN 1 ELSE 0 END",
+                (account_id, folder_id, uid, text, MAX_ATTEMPTS),
+            )
+            conn.commit()
+    except Exception as exc:  # noqa: BLE001
+        log.error("account %d: could not record the failure of UID %d (%s): %s",
+                  account_id, uid, text, exc)
+
+
+def _clear_failure(account_id: int, folder_id: int, uid: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM email_fetch_failures WHERE account_id=? AND folder_id=? AND uid=?",
+                     (account_id, folder_id, uid))
+        conn.commit()
+
+
+def _retry_failures(c: IMAPClient, cfg: dict, folder_id: int) -> int:
+    """Try the recorded, not yet parked failures of the selected folder
+    again. Returns how many are now stored."""
+    with get_conn() as conn:
+        uids = [int(r["uid"]) for r in conn.execute(
+            "SELECT uid FROM email_fetch_failures WHERE account_id=? AND folder_id=? AND parked=0 ORDER BY uid",
+            (cfg["id"], folder_id),
+        ).fetchall()]
+    if not uids:
+        return 0
+    present = set(c.search(["UID", ",".join(str(u) for u in uids)]))
+    gone = [u for u in uids if u not in present]
+    for u in gone:                     # deleted or moved on the server meanwhile
+        _clear_failure(cfg["id"], folder_id, u)
+    saved, _ = _fetch_and_store(c, cfg, folder_id, [u for u in uids if u in present], quiet="auto")
+    if saved:
+        log.info("account %d folder %d: %d earlier failure(s) now stored", cfg["id"], folder_id, saved)
+    return saved
+
+
+def _forget_uids(account_id: int, folder_id: int) -> None:
+    """UIDVALIDITY changed: the stored UIDs of this folder mean nothing
+    any more. Keep the rows (drafts, filing, categories hang on them) and
+    let the next pass match them to the new UIDs by Message-ID."""
+    with get_conn() as conn:
+        conn.execute("UPDATE email_messages SET uid=NULL WHERE account_id=? AND folder_id=? AND uid > 0",
+                     (account_id, folder_id))
+        conn.execute("DELETE FROM email_fetch_failures WHERE account_id=? AND folder_id=?",
+                     (account_id, folder_id))
+        conn.commit()
+
+
+# ───────────────────────── keeping Yorik equal to the server ─────────
+
+def _scope_uids(c: IMAPClient, scope: str, is_inbox: bool, server_all: list) -> list:
+    """The UIDs of the selected folder that Yorik should hold."""
+    scope = (scope or "recent").strip().lower()
+    if scope == "all":
+        return server_all
+    if scope.startswith("days:"):
+        try:
+            days = max(1, int(scope.split(":", 1)[1]))
+        except ValueError:
+            days = 90
+        from datetime import date, timedelta
+        since = date.today() - timedelta(days=days)
+        return sorted(u for u in c.search(["SINCE", since, "UNDELETED"]) if u)
+    n = RECENT_INBOX if is_inbox else RECENT_OTHER
+    return server_all[-n:]
+
+
+def _tombstoned_uids(c: IMAPClient, account_id: int, folder_id: int, uids: list) -> set:
+    """Of these UIDs, the ones whose Message-ID the user deleted in Yorik
+    — fetched headers only, so a deleted mail is not downloaded again on
+    every pass."""
+    with get_conn() as conn:
+        n = conn.execute("SELECT COUNT(*) AS n FROM email_deleted_message_ids WHERE account_id=?",
+                         (account_id,)).fetchone()["n"]
+    if not n or not uids:
+        return set()
+    out: set = set()
+    for i in range(0, len(uids), 200):
+        chunk = uids[i:i + 200]
+        heads = c.fetch(chunk, [b"BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)]"])
+        mids = {}
+        for uid, data in heads.items():
+            raw = data.get(b"BODY[HEADER.FIELDS (MESSAGE-ID)]") or b""
+            m = re.search(rb"<([^>]+)>", raw)
+            if m:
+                mids[uid] = m.group(1).decode("utf-8", "replace")
+        if not mids:
+            continue
+        with get_conn() as conn:
+            ph = ",".join("?" * len(mids))
+            dead = {r["message_id"] for r in conn.execute(
+                f"SELECT message_id FROM email_deleted_message_ids WHERE account_id=? "
+                f"  AND message_id IN ({ph}) AND (suppress_folder_id IS NULL OR suppress_folder_id=?)",
+                (account_id, *mids.values(), folder_id),
+            ).fetchall()}
+        out |= {u for u, mid in mids.items() if mid in dead}
+    return out
+
+
+def _reconcile_folder(c: IMAPClient, cfg: dict, folder: dict, budget: int) -> dict:
+    """Make the selected folder in Yorik equal to the folder on the server,
+    the way a mail program does: fetch what is missing (inside the import
+    scope, newest first, at most `budget` mails), take over read / flagged
+    from the server, and drop mails that are no longer on the server
+    (deleted or moved by another program — a moved mail is fetched in
+    its new folder). Returns counts for the progress display."""
+    folder_id, name = folder["id"], folder["name"]
+    out = {"missing": 0, "fetched": 0, "removed": 0, "flags": 0}
+    st = c.folder_status(name, [b"UIDVALIDITY", b"MESSAGES", b"UNSEEN"])
+    validity = int(st[b"UIDVALIDITY"])
+    with get_conn() as conn:
+        row = conn.execute("SELECT uid_validity FROM email_folders WHERE id=?", (folder_id,)).fetchone()
+    if row and row["uid_validity"] is not None and int(row["uid_validity"]) != validity:
+        # _sync_new_messages handles a new UIDVALIDITY; wait for it.
+        return out
+    # A mail another program marked \\Deleted counts as deleted, as it
+    # does in Thunderbird.
+    server_all = sorted(u for u in c.search(["UNDELETED"]) if u)
+    messages = int(st.get(b"MESSAGES", 0) or 0)
+    if not server_all and messages:
+        log.warning("account %d %s: server says %d mails but SEARCH found none — no changes",
+                    cfg["id"], name, messages)
+        return out
+    server_set = set(server_all)
+    wanted = set(_scope_uids(c, cfg.get("import_scope") or "recent", _is_inbox(folder), server_all))
+
+    with get_conn() as conn:
+        local = {int(r["uid"]): r for r in conn.execute(
+            "SELECT id, uid, is_unread, is_starred FROM email_messages "
+            "WHERE account_id=? AND folder_id=? AND uid > 0",
+            (cfg["id"], folder_id),
+        ).fetchall()}
+        failing = {int(r["uid"]) for r in conn.execute(
+            "SELECT uid FROM email_fetch_failures WHERE account_id=? AND folder_id=?",
+            (cfg["id"], folder_id),
+        ).fetchall()}
+
+    # 1. What is on the server, in scope, and not in Yorik.
+    missing = sorted((wanted - set(local) - failing), reverse=True)
+    if missing:
+        skip = _tombstoned_uids(c, cfg["id"], folder_id, missing)
+        with get_conn() as conn:
+            is_collection = folder_id in _collection_folder_ids(conn, cfg["id"])
+        if is_collection:
+            skip |= _known_message_uids(c, cfg["id"], missing)
+        missing = [u for u in missing if u not in skip]
+    out["missing"] = len(missing)
+    take = sorted(missing[:budget])
+    if take:
+        saved, _failed = _fetch_and_store(c, cfg, folder_id, take, quiet="auto")
+        out["fetched"] = saved
+
+    # 2. What is in Yorik and no longer on the server.
+    gone = [uid for uid in local if uid not in server_set]
+    if gone:
+        # Ask again for exactly these: a cut-off SEARCH answer must never
+        # make mails disappear from Yorik.
+        still = set()
+        for i in range(0, len(gone), 500):
+            still |= set(c.search(["UID", ",".join(str(u) for u in gone[i:i + 500]), "UNDELETED"]))
+        gone = [u for u in gone if u not in still]
+    if gone:
+        _drop_rows(cfg["id"], [int(local[u]["id"]) for u in gone])
+        out["removed"] = len(gone)
+
+    # 3. Read / flagged as the server has it.
+    keep = sorted(u for u in local if u in server_set)
+    changes = []
+    for i in range(0, len(keep), 500):
+        chunk = keep[i:i + 500]
+        for uid, data in c.fetch(chunk, [b"FLAGS"]).items():
+            flags = data.get(b"FLAGS", ())
+            unread = 0 if b"\\Seen" in flags else 1
+            starred = 1 if b"\\Flagged" in flags else 0
+            r = local.get(uid)
+            if r and (int(r["is_unread"] or 0) != unread or int(r["is_starred"] or 0) != starred):
+                changes.append((unread, starred, int(r["id"])))
+    if changes:
+        with get_conn() as conn:
+            for unread, starred, mid in changes:
+                conn.execute("UPDATE email_messages SET is_unread=?, is_starred=? WHERE id=?",
+                             (unread, starred, mid))
+            conn.commit()
+        out["flags"] = len(changes)
+
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE email_folders SET message_count=?, unread_count=?, last_reconcile_at=datetime('now') WHERE id=?",
+            (messages, int(st.get(b"UNSEEN", 0) or 0), folder_id),
+        )
+        conn.commit()
+    return out
+
+
+_COLLECTION_FLAGS = ("\\All", "\\Important", "\\Flagged")
+
+
+def _collection_folder_ids(conn, account_id: int) -> tuple:
+    """Folders that collect copies of mail kept elsewhere (Gmail's All
+    Mail, Important, Starred), by their SPECIAL-USE flag."""
+    rows = conn.execute("SELECT id, flags FROM email_folders WHERE account_id=?", (account_id,)).fetchall()
+    out = []
+    for r in rows:
+        try:
+            flags = json.loads(r["flags"] or "[]")
+        except ValueError:
+            flags = []
+        if any(f in _COLLECTION_FLAGS for f in flags):
+            out.append(int(r["id"]))
+    return tuple(out)
+
+
+def _known_message_uids(c: IMAPClient, account_id: int, uids: list) -> set:
+    """Of these UIDs of the selected collection folder, the ones whose mail
+    Yorik already holds in some folder — headers only."""
+    out: set = set()
+    for i in range(0, len(uids), 200):
+        chunk = uids[i:i + 200]
+        mids = {}
+        for uid, data in c.fetch(chunk, [b"BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)]"]).items():
+            m = re.search(rb"<([^>]+)>", data.get(b"BODY[HEADER.FIELDS (MESSAGE-ID)]") or b"")
+            if m:
+                mids[uid] = m.group(1).decode("utf-8", "replace")
+        if not mids:
+            continue
+        with get_conn() as conn:
+            ph = ",".join("?" * len(mids))
+            have = {r["message_id"] for r in conn.execute(
+                f"SELECT message_id FROM email_messages WHERE account_id=? AND message_id IN ({ph})",
+                (account_id, *mids.values()),
+            ).fetchall()}
+        out |= {u for u, mid in mids.items() if mid in have}
+    return out
+
+
+def _drop_rows(account_id: int, row_ids: list) -> None:
+    """Remove mails from Yorik that are gone from the server. Only Yorik's
+    copy: the server already let go of them."""
+    if not row_ids:
+        return
+    from . import email_actions as _ea
+    with get_conn() as conn:
+        ph = ",".join("?" * len(row_ids))
+        _ea.drop_attachment_files(row_ids)
+        conn.execute(f"DELETE FROM email_attachments WHERE message_id IN ({ph})", tuple(row_ids))
+        conn.execute(f"DELETE FROM email_messages WHERE account_id=? AND id IN ({ph})", (account_id, *row_ids))
+        conn.commit()
+
+
+def _is_inbox(folder: dict) -> bool:
+    flags = folder.get("flags") or "[]"
+    try:
+        flag_list = json.loads(flags) if isinstance(flags, str) else list(flags)
+    except Exception:  # noqa: BLE001
+        flag_list = []
+    return "\\Inbox" in flag_list or (folder.get("name") or "").upper() == "INBOX"
+
+
+def reconcile_account(c: IMAPClient, cfg: dict, budget: int = PASS_BUDGET) -> dict:
+    """One sync pass over every folder of a connected account. Returns
+    totals; `pending` > 0 means the import is not finished and the next
+    pass should come soon."""
+    with get_conn() as conn:
+        folders = [dict(r) for r in conn.execute(
+            "SELECT id, name, flags FROM email_folders WHERE account_id=? ORDER BY id",
+            (cfg["id"],),
+        ).fetchall()]
+    # The inbox first: it is what people look at.
+    folders.sort(key=lambda f: 0 if _is_inbox(f) else 1)
+    total = {"missing": 0, "fetched": 0, "removed": 0, "flags": 0}
+    left = budget
+    for f in folders:
+        try:
+            c.select_folder(f["name"], readonly=True)
+        except Exception as e:  # noqa: BLE001
+            log.info("account %d: cannot open %s for the sync pass: %s", cfg["id"], f["name"], e)
+            continue
+        try:
+            _retry_failures(c, cfg, f["id"])
+            r = _reconcile_folder(c, cfg, f, max(0, left))
+        except IMAPClientError as e:
+            log.info("account %d %s: sync pass skipped (%s)", cfg["id"], f["name"], e)
+            continue
+        left -= r["fetched"]
+        for k in total:
+            total[k] += r[k]
+    with get_conn() as conn:
+        parked = conn.execute(
+            "SELECT COUNT(*) AS n FROM email_fetch_failures WHERE account_id=? AND parked=1",
+            (cfg["id"],),
+        ).fetchone()["n"]
+        failing = conn.execute(
+            "SELECT COUNT(*) AS n FROM email_fetch_failures WHERE account_id=? AND parked=0",
+            (cfg["id"],),
+        ).fetchone()["n"]
+    pending = max(0, total["missing"] - total["fetched"])
+    state = {"phase": "importing" if pending else "in_sync", "pending": pending,
+             "fetched": total["fetched"], "removed": total["removed"], "flags": total["flags"],
+             "failing": int(failing), "parked": int(parked),
+             "last_run_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+    with get_conn() as conn:
+        conn.execute("UPDATE email_accounts SET sync_state=?, repair_requested=0 WHERE id=?",
+                     (json.dumps(state), cfg["id"]))
+        conn.commit()
+    if total["fetched"] or total["removed"]:
+        log.info("account %d sync pass: %s", cfg["id"], state)
+    return state
 
 
 def backfill_older(account_id: int, count: int = 200) -> dict:
@@ -481,7 +880,7 @@ def backfill_older(account_id: int, count: int = 200) -> dict:
         n = _sync_new_messages(
             c, cfg, folder_id,
             force_start_uid=start, force_end_uid=end,
-            freeze_uid_next=True,
+            freeze_uid_next=True, quiet=True,
         )
     log.info("account %d backfill_older: fetched %d msg(s) in UID range %d-%d",
              account_id, n, start, end)
@@ -489,8 +888,16 @@ def backfill_older(account_id: int, count: int = 200) -> dict:
 
 
 def _insert_message(cfg: dict, folder_id: int, uid: int,
-                    data: dict, parsed: mailparser.MailParser) -> None:
-    """Persist one parsed message. Idempotent via (account_id, folder_id, uid) PK."""
+                    data: dict, parsed: mailparser.MailParser,
+                    quiet: bool = False) -> Optional[int]:
+    """Persist one parsed message. Idempotent via (account_id, folder_id, uid).
+    Returns the row id, or None when the user deleted this mail in Yorik
+    (tombstone). Raises when the mail could not be saved — the caller
+    records it as a failure and tries again; it is never skipped silently.
+
+    `quiet` (imports, repairs, old mail): saved and classified, but no
+    bell proposal, no draft, no suggestion, no contact capture and no
+    automatic filing to Paperless."""
     from_email, from_name = "", ""
     if parsed.from_:
         # parsed.from_ = [(name, email), ...]
@@ -588,7 +995,7 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
             if tomb:
                 log.debug("tombstoned message %s on account %s folder %s — skipping insert",
                           message_id[:60], cfg["id"], folder_id)
-                return
+                return None
         try:
             # Is this row landing in the IMAP Sent folder? The /messages
             # endpoint splits inbox vs sent on the `is_sent` column, not
@@ -598,7 +1005,7 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
             folder_is_sent = 0
             try:
                 frow = conn.execute(
-                    "SELECT flags FROM email_folders WHERE id=?",
+                    "SELECT flags, name FROM email_folders WHERE id=?",
                     (folder_id,),
                 ).fetchone()
                 if frow and frow["flags"]:
@@ -608,25 +1015,53 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
                         flag_list = []
                     if any("\\Sent" in str(f) for f in flag_list):
                         folder_is_sent = 1
+                # Servers without SPECIAL-USE flags: the usual names.
+                if frow and (frow["name"] or "").strip().lower() in _SENT_NAMES:
+                    folder_is_sent = 1
             except Exception:  # noqa: BLE001
                 folder_is_sent = 0
-            # Dedup on message_id: when we APPEND'd a sent message to the
-            # IMAP Sent folder, the local mirror wrote a row first (uid =
-            # negative timestamp). The fetcher now pulls the same message
-            # back with the real IMAP UID. Without this dedup, the Sent
-            # view shows the same email twice. UPDATE the existing row
-            # with real IMAP fields instead of inserting a fresh copy.
+            # Dedup on message_id, for the rows that are a placeholder for
+            # this very copy: the local mirror of a sent mail (negative
+            # uid, written before the server had it), a row Yorik moved
+            # into this folder (uid NULL until the server's copy is seen),
+            # or the same uid again. A copy of the mail in ANOTHER folder
+            # is a mail of its own, as in any mail program — matching it
+            # made the one row hop between folders on every pass, and the
+            # mail vanished from the folder it had just left.
             existing_id: Optional[int] = None
             existing_is_sent: int = 0
-            if message_id:
-                existing = conn.execute(
-                    "SELECT id, is_sent FROM email_messages "
-                    "WHERE account_id=? AND message_id=?",
+            existing = None
+            collections = _collection_folder_ids(conn, cfg["id"])
+            if message_id and folder_id in collections:
+                # Gmail's "All Mail" / "Important" / "Starred" hold copies
+                # of mail that lives in a real folder. Known mail is not
+                # a new mail here — one row per mail, as before.
+                known = conn.execute(
+                    "SELECT id FROM email_messages WHERE account_id=? AND message_id=? LIMIT 1",
                     (cfg["id"], message_id),
                 ).fetchone()
-                if existing:
-                    existing_id = int(existing["id"])
-                    existing_is_sent = int(existing["is_sent"] or 0)
+                if known:
+                    return int(known["id"])
+            if message_id:
+                ph = ",".join("?" * len(collections)) or "NULL"
+                existing = conn.execute(
+                    "SELECT id, is_sent FROM email_messages "
+                    "WHERE account_id=? AND message_id=? "
+                    "  AND (uid < 0 OR (folder_id=? AND (uid IS NULL OR uid=?)) "
+                    f"      OR folder_id IN ({ph})) "
+                    "ORDER BY (folder_id=?) DESC, id LIMIT 1",
+                    (cfg["id"], message_id, folder_id, uid, *collections, folder_id),
+                ).fetchone()
+            if existing is None:
+                same = conn.execute(
+                    "SELECT id FROM email_messages WHERE account_id=? AND folder_id=? AND uid=?",
+                    (cfg["id"], folder_id, uid),
+                ).fetchone()
+                if same:
+                    return int(same["id"])       # this copy is already stored
+            if existing:
+                existing_id = int(existing["id"])
+                existing_is_sent = int(existing["is_sent"] or 0)
             if existing_id is not None:
                 # Preserve is_sent=1 from any prior local mirror; lift it
                 # to 1 if the new folder is a Sent folder. Never lower
@@ -650,7 +1085,12 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
                 )
                 msg_id = existing_id
                 log.debug("dedup: updated existing email_messages row id=%s for message_id=%s",
-                          existing_id, message_id[:60])
+                          existing_id, (message_id or "")[:60])
+                # A placeholder that now has its server copy: its
+                # attachments, classification and notices happened when
+                # it was first written. Nothing more to do.
+                conn.commit()
+                return msg_id
             else:
                 cur = conn.execute(
                     "INSERT INTO email_messages "
@@ -724,10 +1164,14 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
                     }))
             conn.commit()
         except Exception as e:
-            # Most common: UNIQUE constraint — message already inserted
-            # (race between IDLE and catch-up). Silent skip.
-            if "UNIQUE constraint" not in str(e):
-                log.exception("insert msg failed: %s", e)
+            # A race between IDLE and catch-up inserting the same uid is
+            # harmless; anything else means the mail is not in Yorik and
+            # must be retried — raise, the caller records it.
+            text = str(e)
+            if "UNIQUE constraint" in text or "duplicate key" in text:
+                log.debug("msg uid %s already stored: %s", uid, text[:120])
+                return None
+            raise
 
     # Classify the message (bill / appointment / newsletter / …) so the
     # email list can show a colored badge and downstream features (e.g.
@@ -738,7 +1182,7 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
     if inserted_id:
         try:
             from . import email_classifier
-            message_category = email_classifier.apply_to_message(inserted_id)
+            message_category = email_classifier.apply_to_message(inserted_id, quiet=quiet)
         except Exception as e:
             log.debug("classify msg %s failed: %s", inserted_id, e)
 
@@ -748,7 +1192,7 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
     # when the sender is on the spam list. Always safe to call — the
     # autocapture module never raises.
     autocapture_category: Optional[str] = None
-    if inserted_id:
+    if inserted_id and not quiet:
         from . import contact_autocapture
         autocapture_category = contact_autocapture.on_inbound_email(
             from_email=from_email, from_name=from_name, message_id=inserted_id,
@@ -769,7 +1213,7 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
     # asyncio loop (not the IMAP thread) so the LLM call doesn't
     # block IMAP. Skipped for sent/no-reply/list traffic AND for
     # senders the user has marked as spam.
-    if (inserted_id
+    if (inserted_id and not quiet
             and autocapture_category != "spam"
             and _should_autodraft(from_email, subject, to_addrs)):
         try:
@@ -790,7 +1234,7 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
     # asyncio.get_event_loop() from here raises RuntimeError. Use the
     # main loop the FastAPI startup hook captured into
     # backend.suggestions.get_main_loop() instead.
-    if inserted_id and autocapture_category != "spam":
+    if inserted_id and not quiet and autocapture_category != "spam":
         try:
             from . import suggestions as _suggestions_pkg
             from .suggestions.triggers import email_new as _email_new_trig
@@ -828,7 +1272,8 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
         contact_active = bool(contact and contact.get("status") == "active")
         tier1_categories = {"bill", "appointment"}
         auto_eligible = (
-            contact_active
+            not quiet
+            and contact_active
             and message_category in tier1_categories
             and autocapture_category != "spam"
         )
@@ -852,6 +1297,7 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
                         _c.commit()
                 except Exception as e:
                     log.debug("mark suggested failed for att %s: %s", att_id, e)
+    return inserted_id
 
 
 _PAPERLESS_MIMES = {
@@ -1068,7 +1514,7 @@ def _load_account_config(account_id: int) -> Optional[dict]:
             "SELECT id, owner_user_id, email, display_name, "
             "       imap_host, imap_port, imap_ssl, imap_starttls, imap_username, "
             "       smtp_host, smtp_port, smtp_ssl, smtp_starttls, smtp_username, "
-            "       credential_key, enabled, is_default "
+            "       credential_key, enabled, is_default, import_scope, sync_state, repair_requested "
             "FROM email_accounts WHERE id=?",
             (account_id,),
         ).fetchone()

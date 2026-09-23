@@ -48,6 +48,17 @@ then store it where only you can read it:
 mkdir -p ~/.config/yorik-e2e && install -m 600 /dev/stdin ~/.config/yorik-e2e/token <<< 'yk_…'
 ```
 
+## The mail server
+
+`household.py` starts a real mail server for the test household
+(GreenMail, container `yorik-e2e-mail`, IMAP on 127.0.0.1:3143 with IDLE,
+MOVE and UIDPLUS, SMTP on 127.0.0.1:3025), fills Anna's and Ben's
+mailboxes (three new mails by SMTP, twelve older ones in `Archiv`), and
+adds both accounts through Yorik's own "add account" route. The journeys
+then check against the server itself: read status both ways, sending,
+the Sent folder, deleting into the Trash, mail deleted on "the phone".
+`down` removes the container.
+
 ## The family
 
 | Login | Name | Role |
@@ -59,8 +70,8 @@ mkdir -p ~/.config/yorik-e2e && install -m 600 /dev/stdin ~/.config/yorik-e2e/to
 
 Password `testhaus-2026`, PINs 1111 … 4444. The family is seeded through
 Yorik's own routes: tasks (their own, chores for the children, a daily
-one, an overdue one), events, contacts, the demo data, and a small inbox
-for Anna and Ben.
+one, an overdue one), events, contacts, the demo data, and the two mail
+accounts above.
 
 ## Why it cannot touch the real household
 

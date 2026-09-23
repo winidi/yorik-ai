@@ -23,6 +23,17 @@ Fill in:
 
 Yorik tests both legs on save. Green check = working. Red = bad credentials or unreachable host.
 
+## Your mailbox stays the original
+
+Yorik works like a mail program (Thunderbird, the mail app on your phone): the mail stays on your provider's server, and Yorik keeps a copy in step with it.
+
+- **How much Yorik keeps**: when you add an account, and later under Email → Settings → *Keep in Yorik*: the latest 200 mails (in every other folder the latest 50), the last 3 months, the last year, or everything. Older mail simply stays on the server; a wider choice brings it in, quietly, in the background.
+- **In step with the server**: new mail arrives at once. Every 15 minutes, and whenever you press **Check now**, Yorik compares every folder with the server: it fetches whatever is missing, takes over *read* and *flagged* from your other devices, and lets go of mail you deleted or moved elsewhere (a moved mail shows up in its new folder).
+- **Old mail arrives quietly**: mail brought in by an import or a check makes no bell entry, no draft and no suggestion; only mail from the last two days counts as new.
+- **Nothing is skipped**: a mail Yorik cannot read or store is tried again on every check. After a few tries it is listed under the account ("… could not be read — they are safe on the server"); **Check now** gives them another round.
+- **Deleting**: *Delete* moves the mail to the Trash on the server. Deleting in the Trash deletes that mail for good — only that one. When the mail cannot go to the Trash (no Trash folder, the server refuses), nothing is deleted and you see why.
+- **Gmail**: "All Mail", "Important" and "Starred" hold copies of your other mail. Yorik shows each mail once; mail you archive in Gmail stays visible.
+
 ## App passwords (Gmail / iCloud / others)
 
 Most providers require app-specific passwords for IMAP/SMTP — your real password won't work even if 2FA is off.
@@ -54,5 +65,5 @@ Email content is stored in Yorik's local DB (`email_messages`). Never forwarded 
 ## Troubleshooting
 
 - **IMAP auth failed**: 99% of the time it's "use an app password" — see above.
-- **Mail arrives but Yorik doesn't see it**: check the IMAP poll cycle (Settings → Connectors → Email → poll interval; default 5 min).
+- **Mail arrives but Yorik doesn't see it**: open Email → Settings and look at the account: *In step with the server* with the time of the last check, or *Bringing mail in — N to go*. Older than your *Keep in Yorik* choice? Widen it. Otherwise press **Check now**.
 - **SMTP STARTTLS error**: some providers want SSL on port 465 instead of STARTTLS on 587. Try the other config.

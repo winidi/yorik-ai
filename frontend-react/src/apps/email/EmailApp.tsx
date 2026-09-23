@@ -27,6 +27,7 @@ import { api } from "@/lib/api";
 import type {
   EmailAccount, EmailAttachment, EmailMessageRow, EmailMessageDetail, EmailFolder,
 } from "./types";
+import { IMPORT_SCOPES } from "./types";
 import { AccountWizard } from "./AccountWizard";
 import { Composer, type ComposeDraft } from "./Composer";
 import { HtmlBody } from "./HtmlBody";
@@ -3143,6 +3144,98 @@ function ClassifierSettingsPanel() {
 // firing because removing an account also wipes its credential-store
 // row, which can't be undone without re-entering the IMAP password.
 
+/** One account's sync with its server: how far back Yorik keeps mail,
+ *  whether it is in step with the server, mails it could not read, and
+ *  a button to compare everything now. */
+function AccountSync({ account, onChanged }: { account: EmailAccount; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [failures, setFailures] = useState<{ folder: string; uid: number; last_error: string; parked: number }[] | null>(null);
+  const st = account.sync_state;
+  const failed = account.failed_mails || 0;
+
+  async function setScope(value: string) {
+    setBusy(true);
+    try {
+      await api.patch(`/api/email/accounts/${account.id}`, { import_scope: value });
+      toast(value === account.import_scope ? "Unchanged" : "Saved — Yorik is bringing the mail in", "success");
+      onChanged();
+    } catch (e: any) {
+      toast(e?.message || "Could not save", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function checkNow() {
+    setBusy(true);
+    try {
+      await api.post(`/api/email/accounts/${account.id}/repair`, {});
+      toast("Checking every folder against the server", "success");
+      window.setTimeout(onChanged, 4000);
+    } catch (e: any) {
+      toast(e?.message || "Could not start the check", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function showFailures() {
+    if (failures) { setFailures(null); return; }
+    try {
+      const r = await api.get<{ failures: typeof failures }>(`/api/email/accounts/${account.id}/failures`);
+      setFailures(r.failures || []);
+    } catch (e: any) {
+      toast(e?.message || "Could not load the list", "error");
+    }
+  }
+
+  const status = !st
+    ? "Waiting for the first check"
+    : st.phase === "importing"
+      ? `Bringing mail in — ${st.pending} to go`
+      : `In step with the server · checked ${st.last_run_at.slice(11, 16)}`;
+
+  return (
+    <div className="mt-2 space-y-1.5 text-[11px]">
+      <div className="flex items-center gap-2 flex-wrap">
+        <label className="text-muted-foreground" htmlFor={`scope-${account.id}`}>Keep in Yorik</label>
+        <select id={`scope-${account.id}`} value={account.import_scope || "recent"} disabled={busy}
+          onChange={e => setScope(e.target.value)}
+          className="h-7 px-2 rounded-md bg-muted text-[11px] focus:outline-none focus:ring-2 focus:ring-ring/40">
+          {IMPORT_SCOPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <button onClick={checkNow} disabled={busy}
+          className="h-7 px-2 rounded-md border border-border hover:bg-muted transition disabled:opacity-50 inline-flex items-center gap-1"
+          title="Compare every folder with the server now and bring in whatever is missing">
+          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+          Check now
+        </button>
+      </div>
+      <div className={cn("inline-flex items-center gap-1",
+        st?.phase === "importing" ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground")}>
+        {st?.phase === "importing" && <Loader2 className="w-3 h-3 animate-spin" />}
+        {status}
+      </div>
+      {failed > 0 && (
+        <div className="text-amber-600 dark:text-amber-400">
+          <button onClick={showFailures} className="inline-flex items-center gap-1 underline-offset-2 hover:underline">
+            <AlertTriangle className="w-3 h-3" />
+            {failed} mail{failed === 1 ? "" : "s"} could not be read — they are safe on the server
+          </button>
+          {failures && (
+            <ul className="mt-1 space-y-0.5 font-mono text-[10px] text-muted-foreground">
+              {failures.map(f => (
+                <li key={`${f.folder}-${f.uid}`} className="truncate">{f.folder} #{f.uid}: {f.last_error}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function EmailSettingsModal({
   accounts, onClose, onAddAccount, onDisconnected,
 }: {
@@ -3164,6 +3257,14 @@ function EmailSettingsModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [busyId, onClose]);
+
+  // While an import runs, keep the numbers moving.
+  const importing = accounts.some(a => a.sync_state?.phase === "importing");
+  useEffect(() => {
+    if (!importing) return;
+    const t = window.setInterval(onDisconnected, 10_000);
+    return () => window.clearInterval(t);
+  }, [importing, onDisconnected]);
 
   async function disconnect(account_id: number) {
     setBusyId(account_id);
@@ -3235,6 +3336,7 @@ function EmailSettingsModal({
                       <span className="truncate">{a.last_error}</span>
                     </div>
                   )}
+                  <AccountSync account={a} onChanged={onDisconnected} />
                 </div>
                 {confirmId === a.id ? (
                   <div className="flex gap-1.5 shrink-0">

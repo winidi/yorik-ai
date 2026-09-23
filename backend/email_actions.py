@@ -58,6 +58,25 @@ def imap_for_account(account_id: int):
         yield c
 
 
+def _remove_from_folder(c, uids: list) -> None:
+    """Take these UIDs out of the selected folder after they were copied
+    elsewhere. Only these: UID EXPUNGE (UIDPLUS). A plain EXPUNGE would
+    also erase every mail another program had merely marked as deleted
+    in this folder, for good. Without UIDPLUS the copies stay marked
+    \\Deleted, which every mail program shows as deleted — nothing is
+    lost."""
+    c.delete_messages(uids)
+    if c.has_capability(b"UIDPLUS"):
+        c.uid_expunge(uids)
+    else:
+        log.info("server without UIDPLUS: %d mail(s) left marked \\Deleted instead of expunged", len(uids))
+
+
+_TRASH_SQL = ("SELECT id, name FROM email_folders WHERE account_id=? AND "
+              "(flags LIKE '%\\\\Trash%' OR LOWER(name) IN ('trash','gelöscht','geloescht','deleted','papierkorb')) "
+              "LIMIT 1")
+
+
 def _msg_lookup(message_id: int, user_id: str) -> Optional[dict]:
     """Resolve a message_id (our DB) to its account + folder + IMAP UID,
     with ownership check baked in."""
@@ -165,8 +184,7 @@ def move_to_folder(message_id: int, user_id: str, target_folder_id: int) -> bool
                 c.move([msg["uid"]], target["name"])
             else:
                 c.copy([msg["uid"]], target["name"])
-                c.delete_messages([msg["uid"]])
-                c.expunge()
+                _remove_from_folder(c, [msg["uid"]])
     except Exception as e:
         log.warning("IMAP move failed for msg %d: %s", message_id, e)
         return False
@@ -234,7 +252,6 @@ def delete_messages_bulk(message_ids: list[int], user_id: str) -> dict:
     for (account_id, folder_id, folder_name), msgs in grouped.items():
         msg_ids_in_group = [m["id"] for m in msgs]
         uids_in_group   = [int(m["uid"]) for m in msgs]
-        mids_for_tomb   = [m["message_id"] for m in msgs]
 
         # Find this account's Trash folder. Empty = no Trash, we hard-
         # delete with STORE+EXPUNGE in the source folder instead.
@@ -255,52 +272,41 @@ def delete_messages_bulk(message_ids: list[int], user_id: str) -> dict:
         try:
             with imap_for_account(account_id) as c:
                 c.select_folder(folder_name)
-                if trash and trash["name"]:
-                    if c.has_capability(b"MOVE"):
-                        c.move(uids_in_group, trash["name"])
-                    else:
-                        c.copy(uids_in_group, trash["name"])
-                        c.delete_messages(uids_in_group)
-                        c.expunge()
-                    # Update local rows to point at Trash with NULL uid
-                    # so the unique constraint admits all of them; the
-                    # fetcher's next pass under the Trash folder fills
-                    # in real UIDs.
-                    with get_conn() as conn:
-                        for mid in msg_ids_in_group:
-                            conn.execute(
-                                "UPDATE email_messages SET folder_id=?, uid=NULL WHERE id=?",
-                                (int(trash["id"]), mid),
-                            )
-                        # Tombstone — block re-insert from the source folder.
-                        for mmid in mids_for_tomb:
-                            if mmid:
-                                conn.execute(
-                                    "INSERT OR REPLACE INTO email_deleted_message_ids "
-                                    "(account_id, message_id, suppress_folder_id) "
-                                    "VALUES (?, ?, ?)",
-                                    (account_id, mmid, folder_id),
-                                )
-                        conn.commit()
-                else:
-                    # No Trash → hard delete in source.
-                    c.delete_messages(uids_in_group)
-                    c.expunge()
+                if trash and trash["name"] and folder_id == int(trash["id"]):
+                    # Deleting in the Trash is the explicit "delete for
+                    # good" — these mails only, never the whole folder.
+                    _remove_from_folder(c, uids_in_group)
                     with get_conn() as conn:
                         drop_attachment_files(msg_ids_in_group)
                         conn.execute(
                             f"DELETE FROM email_messages WHERE id IN ({','.join(['?'] * len(msg_ids_in_group))})",
                             tuple(msg_ids_in_group),
                         )
-                        for mmid in mids_for_tomb:
-                            if mmid:
-                                conn.execute(
-                                    "INSERT OR REPLACE INTO email_deleted_message_ids "
-                                    "(account_id, message_id, suppress_folder_id) "
-                                    "VALUES (?, ?, ?)",
-                                    (account_id, mmid, folder_id),
-                                )
                         conn.commit()
+                elif trash and trash["name"]:
+                    if c.has_capability(b"MOVE"):
+                        c.move(uids_in_group, trash["name"])
+                    else:
+                        c.copy(uids_in_group, trash["name"])
+                        _remove_from_folder(c, uids_in_group)
+                    # Update local rows to point at Trash with NULL uid
+                    # so the unique constraint admits all of them; the
+                    # fetcher's next pass under the Trash folder fills
+                    # in real UIDs. No tombstone: the mails really left
+                    # the source folder, and one moved back later (from
+                    # a phone, say) must show up there again.
+                    with get_conn() as conn:
+                        for mid in msg_ids_in_group:
+                            conn.execute(
+                                "UPDATE email_messages SET folder_id=?, uid=NULL WHERE id=?",
+                                (int(trash["id"]), mid),
+                            )
+                        conn.commit()
+                else:
+                    # No Trash folder: nothing is deleted. The mails stay
+                    # where they are and the caller reports a failure —
+                    # never a silent delete for good.
+                    raise RuntimeError("no Trash folder on this account — nothing deleted")
             deleted_total += len(msgs)
             group_status["ok"] = True
             group_status["deleted"] = len(msgs)
@@ -334,151 +340,82 @@ def delete_messages_bulk(message_ids: list[int], user_id: str) -> dict:
 
 
 def delete_message(message_id: int, user_id: str) -> bool:
-    """Move to the account's Trash folder. Multi-step fallback:
-      1. UID MOVE source → Trash (normal IMAP)
-      2. UID COPY source → Trash, no source mutation (Gmail-style:
-         "All Mail" / virtual folders are read-only; COPY adds the
-         message under \\Trash which is how the provider models a
-         label/delete, and the source folder stays untouched)
-      3. STORE +FLAGS \\Deleted + EXPUNGE in source (no-Trash servers)
+    """Delete the way a mail program does — nothing is lost by accident:
 
-    Local row is removed after step 1 OR step 2 succeeds, so the UI
-    reflects the delete even when the source folder won't accept an
-    EXPUNGE. The next fetcher tick may re-create the row under the
-    Trash folder, which is the correct end state.
-    """
+      1. In any folder but the Trash: MOVE to the Trash (COPY + remove
+         these UIDs where MOVE is missing).
+      2. Where the source refuses to let go (Gmail's "All Mail", Proton
+         Bridge): COPY to the Trash, which is how those providers model
+         a delete; the source copy is hidden in Yorik by a tombstone.
+      3. In the Trash itself: delete for good, this mail only.
+
+    Anything else — no Trash folder, the server refusing — deletes
+    nothing and returns False; the mail stays in Yorik and on the server
+    and the user sees the error. (It used to fall back to erasing the
+    mail for good, or to hiding it in Yorik while it stayed on the
+    server.)"""
     msg = _msg_lookup(message_id, user_id)
     if not msg:
         return False
     with get_conn() as conn:
-        # Find the Trash folder for this account.
-        trash = conn.execute(
-            "SELECT id, name FROM email_folders WHERE account_id=? AND "
-            "(flags LIKE '%\\\\Trash%' OR LOWER(name) IN ('trash','gelöscht','geloescht','deleted','papierkorb')) "
-            "LIMIT 1",
-            (msg["account_id"],),
-        ).fetchone()
-    # Capture the Message-ID + source folder up front so every
-    # successful-delete path can tombstone correctly (see migrations
-    # 043 + 044). suppress_folder_id scopes the tombstone — NULL means
-    # "block in any folder" (last-resort), a specific id means "block
-    # re-insert into the original source folder, but allow Trash to
-    # reappear via the fetcher's next tick".
-    with get_conn() as conn:
+        trash = conn.execute(_TRASH_SQL, (msg["account_id"],)).fetchone()
         msg_row = conn.execute(
             "SELECT message_id, account_id, folder_id FROM email_messages WHERE id=?",
             (message_id,),
         ).fetchone()
+    if not trash or not trash["id"]:
+        log.warning("delete_message: account %d has no Trash folder — msg %d not deleted",
+                    msg["account_id"], message_id)
+        return False
     msg_mid = (msg_row["message_id"] if msg_row else None) or None
-    msg_acct = int(msg_row["account_id"]) if msg_row else int(msg["account_id"])
-    msg_source_folder = int(msg_row["folder_id"]) if (msg_row and msg_row["folder_id"]) else None
+    source_folder = int(msg_row["folder_id"]) if (msg_row and msg_row["folder_id"]) else None
 
-    def _tombstone(suppress_folder_id: Optional[int]) -> None:
-        if not msg_mid:
-            return
-        try:
-            with get_conn() as conn:
-                # INSERT OR REPLACE so a second delete of the same
-                # message updates the scope rather than failing on PK.
-                conn.execute(
-                    "INSERT OR REPLACE INTO email_deleted_message_ids "
-                    "(account_id, message_id, suppress_folder_id) "
-                    "VALUES (?, ?, ?)",
-                    (msg_acct, msg_mid, suppress_folder_id),
-                )
-                conn.commit()
-        except Exception as exc:  # noqa: BLE001
-            log.debug("tombstone insert failed for msg %d (%s): %s",
-                      message_id, msg_mid, exc)
-
-    if trash and trash["id"]:
-        # Step 1: full MOVE (works on standard IMAP servers).
-        if move_to_folder(message_id, user_id, trash["id"]):
-            # MOVE physically removed the message from the source folder
-            # on the server. Tombstone the source folder defensively so
-            # a quirky IMAP server can't re-create it on the next tick.
-            _tombstone(suppress_folder_id=msg_source_folder)
-            return True
-        log.info("delete_message: MOVE failed for msg %d, trying COPY-only",
-                 message_id)
-        # Step 2: COPY + relocate local row to Trash + tombstone source.
-        # On Gmail-style providers (Proton Bridge included) the source
-        # folder ("All Mail" / a virtual label-folder) is read-only
-        # for MOVE / EXPUNGE, but COPY still works and is the expected
-        # way to add the \\Trash label. We don't touch the source
-        # folder. The local row's folder_id is updated to Trash so
-        # the message appears in Trash immediately (rather than
-        # disappearing until the next fetcher tick). The source-
-        # scoped tombstone keeps the fetcher from re-INSERTing it
-        # under the original source folder when it sees the still-
-        # present copy there.
+    # 3. Already in the Trash: for good, this one only.
+    if source_folder == int(trash["id"]):
+        if not msg["uid"]:
+            return False                      # not on the server yet as far as Yorik knows
         try:
             with imap_for_account(msg["account_id"]) as c:
                 c.select_folder(msg["folder_name"])
-                c.copy([msg["uid"]], trash["name"])
-            with get_conn() as conn:
-                # UID is unknown in Trash until the fetcher resyncs;
-                # NULL so multiple deletions into Trash don't collide
-                # on UNIQUE(account_id, folder_id, uid). Was uid=0 — a
-                # sentinel that broke after the first row.
-                conn.execute(
-                    "UPDATE email_messages SET folder_id=?, uid=NULL WHERE id=?",
-                    (int(trash["id"]), message_id),
-                )
-                conn.commit()
-            _tombstone(suppress_folder_id=msg_source_folder)
-            log.info("delete_message: COPY-to-Trash succeeded for msg %d "
-                     "(source folder %r left untouched; local row moved "
-                     "to Trash; source-scoped tombstone added)",
-                     message_id, msg["folder_name"])
-            return True
-        except Exception as e:
-            log.info("delete_message: COPY-to-Trash failed for msg %d: %s; "
-                     "falling back to flag+EXPUNGE",
-                     message_id, e)
-    # Step 3: no Trash OR both MOVE and COPY failed — last-resort hard
-    # delete in source. Works on servers without a Trash folder; will
-    # also fail on read-only virtual folders (Gmail "All Mail", Proton
-    # Bridge "All Mail"), which is when step 4 kicks in.
-    try:
-        with imap_for_account(msg["account_id"]) as c:
-            c.select_folder(msg["folder_name"])
-            c.delete_messages([msg["uid"]])
-            c.expunge()
+                _remove_from_folder(c, [msg["uid"]])
+        except Exception as e:  # noqa: BLE001
+            log.warning("delete for good failed for msg %d: %s", message_id, e)
+            return False
         with get_conn() as conn:
             drop_attachment_files([message_id])
             conn.execute("DELETE FROM email_messages WHERE id=?", (message_id,))
             conn.commit()
-        # EXPUNGE removed the message from source on the server;
-        # tombstone source-scoped as a belt-and-braces guard against
-        # eventual-consistency on rebuild-style servers.
-        _tombstone(suppress_folder_id=msg_source_folder)
         return True
-    except Exception as e:
-        log.warning("IMAP delete failed for msg %d: %s (falling back to "
-                    "local-row delete only — message remains on server)",
+
+    # 1. Move to the Trash.
+    if move_to_folder(message_id, user_id, trash["id"]):
+        return True
+
+    # 2. COPY only (read-only virtual source folders).
+    log.info("delete_message: MOVE failed for msg %d, trying COPY to Trash", message_id)
+    try:
+        with imap_for_account(msg["account_id"]) as c:
+            c.select_folder(msg["folder_name"])
+            c.copy([msg["uid"]], trash["name"])
+    except Exception as e:  # noqa: BLE001
+        log.warning("delete_message: msg %d stays where it is — the server refused MOVE and COPY: %s",
                     message_id, e)
-    # Step 4: local-row-only delete. The IMAP server refused every
-    # operation (typical when the source is a read-only virtual
-    # folder like Proton Bridge's "All Mail"). The message stays on
-    # the server but disappears from Yorik's view — the user gets a
-    # successful delete in the UI. The next fetcher tick may re-
-    # create the row if it sees the same message again; until the
-    # fetcher gains a "user-deleted UIDs" guard, this is the cleanest
-    # behaviour. Better than refusing the delete and leaving the user
-    # with no way to remove a message from their Yorik mailbox.
+        return False
     with get_conn() as conn:
-        drop_attachment_files([message_id])
-        conn.execute("DELETE FROM email_messages WHERE id=?", (message_id,))
+        # UID is unknown in Trash until the fetcher resyncs; NULL so
+        # several deletions into Trash don't collide on
+        # UNIQUE(account_id, folder_id, uid).
+        conn.execute("UPDATE email_messages SET folder_id=?, uid=NULL WHERE id=?",
+                     (int(trash["id"]), message_id))
+        if msg_mid and source_folder:
+            # The source copy stays on the server by the provider's
+            # design; keep it out of that folder in Yorik.
+            conn.execute(
+                "INSERT OR REPLACE INTO email_deleted_message_ids "
+                "(account_id, message_id, suppress_folder_id) VALUES (?, ?, ?)",
+                (int(msg["account_id"]), msg_mid, source_folder),
+            )
         conn.commit()
-    # Server refused every IMAP op — message stays on the server in
-    # whatever folders it was already in. Tombstone with NULL scope
-    # so the fetcher refuses to re-create the row in ANY folder. The
-    # user explicitly deleted; we honour that even if the IMAP side
-    # can't be made consistent.
-    _tombstone(suppress_folder_id=None)
-    log.info("delete_message: local-only delete for msg %d (server "
-             "refused every IMAP op; global tombstone)", message_id)
     return True
 
 

@@ -46,6 +46,9 @@ class AccountCreate(BaseModel):
     smtp_starttls: bool = False
     smtp_username: Optional[str] = None
     is_default: bool = False
+    # How much of the mailbox Yorik keeps: 'recent' (latest 200 in the
+    # inbox, 50 elsewhere), 'days:N', or 'all'.
+    import_scope: str = "recent"
 
 
 class AccountUpdate(BaseModel):
@@ -54,6 +57,16 @@ class AccountUpdate(BaseModel):
     is_default: Optional[bool] = None
     password: Optional[str] = None     # if set, replaces IMAP+SMTP password
     smtp_password: Optional[str] = None
+    import_scope: Optional[str] = None
+
+
+def _check_scope(scope: str) -> str:
+    scope = (scope or "").strip().lower()
+    if scope in ("recent", "all"):
+        return scope
+    if scope.startswith("days:") and scope[5:].isdigit() and 1 <= int(scope[5:]) <= 36500:
+        return scope
+    raise HTTPException(400, "import_scope must be 'recent', 'all' or 'days:N'")
 
 
 class SendAttachmentIn(BaseModel):
@@ -91,6 +104,11 @@ def _account_row_to_dict(r) -> dict:
     d["smtp_ssl"] = bool(d.get("smtp_ssl"))
     d["smtp_starttls"] = bool(d.get("smtp_starttls"))
     d.pop("credential_key", None)  # don't leak
+    if "sync_state" in d:
+        try:
+            d["sync_state"] = json.loads(d["sync_state"]) if d["sync_state"] else None
+        except (TypeError, ValueError):
+            d["sync_state"] = None
     return d
 
 
@@ -122,7 +140,10 @@ def list_accounts(user: dict = Depends(current_user)):
             "SELECT id, owner_user_id, email, display_name, "
             "       imap_host, imap_port, imap_ssl, imap_starttls, imap_username, "
             "       smtp_host, smtp_port, smtp_ssl, smtp_starttls, smtp_username, "
-            "       enabled, is_default, last_sync_at, last_error, last_error_at, created_at "
+            "       enabled, is_default, last_sync_at, last_error, last_error_at, created_at, "
+            "       import_scope, sync_state, "
+            "       (SELECT COUNT(*) FROM email_fetch_failures x WHERE x.account_id = email_accounts.id "
+            "          AND x.parked = 1) AS failed_mails "
             "FROM email_accounts WHERE owner_user_id=? ORDER BY id",
             (user["id"],),
         ).fetchall()
@@ -134,6 +155,7 @@ async def create_account(body: AccountCreate, user: dict = Depends(current_user)
     """Add a new email account for the current user. Tests both IMAP
     and SMTP login before persisting — fails fast if creds are wrong
     instead of silently storing bad config."""
+    scope = _check_scope(body.import_scope)
     imap_user = body.imap_username or body.email
     smtp_user = body.smtp_username or body.email
     smtp_pw = body.smtp_password or body.password
@@ -167,14 +189,14 @@ async def create_account(body: AccountCreate, user: dict = Depends(current_user)
                 "(owner_user_id, email, display_name, "
                 " imap_host, imap_port, imap_ssl, imap_starttls, imap_username, "
                 " smtp_host, smtp_port, smtp_ssl, smtp_starttls, smtp_username, "
-                " credential_key, is_default) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " credential_key, is_default, import_scope) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (user["id"], body.email, body.display_name,
                  body.imap_host, body.imap_port, 1 if body.imap_ssl else 0,
                  1 if body.imap_starttls else 0, imap_user,
                  body.smtp_host, body.smtp_port, 1 if body.smtp_ssl else 0,
                  1 if body.smtp_starttls else 0, smtp_user,
-                 cred_key, 1 if body.is_default else 0),
+                 cred_key, 1 if body.is_default else 0, scope),
             )
             aid = cur.lastrowid
         except Exception as e:
@@ -215,6 +237,10 @@ async def update_account(account_id: int, body: AccountUpdate,
         fields, params = [], []
         if body.display_name is not None: fields.append("display_name=?"); params.append(body.display_name)
         if body.enabled is not None:      fields.append("enabled=?");      params.append(1 if body.enabled else 0)
+        if body.import_scope is not None:
+            fields.append("import_scope=?"); params.append(_check_scope(body.import_scope))
+            # A wider scope means mail to fetch: run the sync pass now.
+            fields.append("repair_requested=1")
         if body.is_default is not None:
             if body.is_default:
                 conn.execute("UPDATE email_accounts SET is_default=0 WHERE owner_user_id=?",
@@ -279,6 +305,7 @@ def inbox_summary(user: dict = Depends(current_user)) -> dict:
         "     flags LIKE '%\\\\Trash%'"
         "  OR flags LIKE '%\\\\Junk%'"
         "  OR flags LIKE '%\\\\Drafts%'"
+        "  OR LOWER(name) IN ('trash','deleted','deleted items','deleted messages','bin','gelöscht','geloescht','papierkorb','gelöschte elemente','junk','spam','spamverdacht','junk-e-mail','junk e-mail','junk email','unerwünschte werbung','unerwuenschte werbung','drafts','draft','entwürfe','entwuerfe')"
         " )"
     )
     with get_conn() as conn:
@@ -349,6 +376,7 @@ def list_account_folders(account_id: int, user: dict = Depends(current_user)):
                     "     flags LIKE '%\\\\Trash%'"
                     "  OR flags LIKE '%\\\\Junk%'"
                     "  OR flags LIKE '%\\\\Drafts%'"
+                    "  OR LOWER(name) IN ('trash','deleted','deleted items','deleted messages','bin','gelöscht','geloescht','papierkorb','gelöschte elemente','junk','spam','spamverdacht','junk-e-mail','junk e-mail','junk email','unerwünschte werbung','unerwuenschte werbung','drafts','draft','entwürfe','entwuerfe')"
                     " )"
                 )
                 with get_conn() as conn:
@@ -382,6 +410,41 @@ def _folder_category(flags: list, name: str) -> str:
     if "\\All" in flags:                                        return "all"
     if "\\Flagged" in flags:                                    return "starred"
     return "custom"
+
+
+@router.post("/accounts/{account_id}/repair")
+async def repair_account(account_id: int, user: dict = Depends(current_user)):
+    """Compare every folder with the server now: fetch whatever is
+    missing inside the import scope (quietly — no drafts, no bell, no
+    filing for old mail), take over read/flagged, drop what the server
+    no longer has, and give parked mails another round."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT owner_user_id FROM email_accounts WHERE id=?", (account_id,)).fetchone()
+        if not row or row["owner_user_id"] != user["id"]:
+            raise HTTPException(404, "account not found")
+        conn.execute("UPDATE email_fetch_failures SET parked=0, attempts=0 WHERE account_id=?", (account_id,))
+        conn.execute("UPDATE email_accounts SET repair_requested=1 WHERE id=?", (account_id,))
+        conn.commit()
+    from . import email_fetcher
+    await email_fetcher.reload_account(account_id)
+    return {"ok": True, "started": True}
+
+
+@router.get("/accounts/{account_id}/failures")
+def account_failures(account_id: int, user: dict = Depends(current_user)):
+    """Mails Yorik could not read or store (retried on every pass; parked
+    after a few attempts). They are safe on the server either way."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT owner_user_id FROM email_accounts WHERE id=?", (account_id,)).fetchone()
+        if not row or row["owner_user_id"] != user["id"]:
+            raise HTTPException(404, "account not found")
+        rows = conn.execute(
+            "SELECT f.name AS folder, x.uid, x.attempts, x.parked, x.last_error, x.first_failed_at, x.last_tried_at "
+            "FROM email_fetch_failures x JOIN email_folders f ON f.id = x.folder_id "
+            "WHERE x.account_id=? ORDER BY x.parked DESC, x.first_failed_at",
+            (account_id,),
+        ).fetchall()
+    return {"failures": [dict(r) for r in rows]}
 
 
 @router.post("/accounts/{account_id}/sync")
@@ -523,6 +586,7 @@ def list_messages(
             "     flags LIKE '%\\\\Trash%'"
             "  OR flags LIKE '%\\\\Junk%'"
             "  OR flags LIKE '%\\\\Drafts%'"
+            "  OR LOWER(name) IN ('trash','deleted','deleted items','deleted messages','bin','gelöscht','geloescht','papierkorb','gelöschte elemente','junk','spam','spamverdacht','junk-e-mail','junk e-mail','junk email','unerwünschte werbung','unerwuenschte werbung','drafts','draft','entwürfe','entwuerfe')"
             " )"
         )
     elif folder == "sent":
@@ -726,6 +790,7 @@ def cleanup_senders(
         "      flags LIKE '%\\\\Trash%'"
         "   OR flags LIKE '%\\\\Junk%'"
         "   OR flags LIKE '%\\\\Drafts%'"
+        "   OR LOWER(name) IN ('trash','deleted','deleted items','deleted messages','bin','gelöscht','geloescht','papierkorb','gelöschte elemente','junk','spam','spamverdacht','junk-e-mail','junk e-mail','junk email','unerwünschte werbung','unerwuenschte werbung','drafts','draft','entwürfe','entwuerfe')"
         "  ) "
     )
     params: list[Any] = [user["id"]]
@@ -758,6 +823,7 @@ def cleanup_senders(
                 "      flags LIKE '%\\\\Trash%'"
                 "   OR flags LIKE '%\\\\Junk%'"
                 "   OR flags LIKE '%\\\\Drafts%'"
+                "   OR LOWER(name) IN ('trash','deleted','deleted items','deleted messages','bin','gelöscht','geloescht','papierkorb','gelöschte elemente','junk','spam','spamverdacht','junk-e-mail','junk e-mail','junk email','unerwünschte werbung','unerwuenschte werbung','drafts','draft','entwürfe','entwuerfe')"
                 "  )",
                 [user["id"], *senders],
             ).fetchall()
@@ -820,6 +886,7 @@ async def cleanup_apply(body: CleanupApplyBody, user: dict = Depends(current_use
                     "      flags LIKE '%\\\\Trash%'"
                     "   OR flags LIKE '%\\\\Junk%'"
                     "   OR flags LIKE '%\\\\Drafts%'"
+                    "   OR LOWER(name) IN ('trash','deleted','deleted items','deleted messages','bin','gelöscht','geloescht','papierkorb','gelöschte elemente','junk','spam','spamverdacht','junk-e-mail','junk e-mail','junk email','unerwünschte werbung','unerwuenschte werbung','drafts','draft','entwürfe','entwuerfe')"
                     "  ) "
                     "ORDER BY date_received DESC NULLS LAST, id DESC LIMIT 1",
                     (user["id"], sender),
@@ -862,6 +929,7 @@ async def cleanup_apply(body: CleanupApplyBody, user: dict = Depends(current_use
                     "      flags LIKE '%\\\\Trash%'"
                     "   OR flags LIKE '%\\\\Junk%'"
                     "   OR flags LIKE '%\\\\Drafts%'"
+                    "   OR LOWER(name) IN ('trash','deleted','deleted items','deleted messages','bin','gelöscht','geloescht','papierkorb','gelöschte elemente','junk','spam','spamverdacht','junk-e-mail','junk e-mail','junk email','unerwünschte werbung','unerwuenschte werbung','drafts','draft','entwürfe','entwuerfe')"
                     "  )",
                     (user["id"], sender),
                 ).fetchall()
@@ -1221,10 +1289,11 @@ async def archive_message_route(msg_id: int, user: dict = Depends(current_user))
 
 @router.delete("/messages/{msg_id}")
 async def delete_message_route(msg_id: int, user: dict = Depends(current_user)):
-    """Move to Trash (or hard-delete if no Trash exists)."""
+    """Move to Trash; in the Trash, delete for good. Never a silent hard
+    delete: when the mail cannot go to the Trash, nothing happens."""
     ok = await asyncio.to_thread(email_actions.delete_message, msg_id, user["id"])
     if not ok:
-        raise HTTPException(502, "delete failed")
+        raise HTTPException(502, "The mail could not be moved to the Trash — nothing was deleted.")
     return {"ok": True}
 
 

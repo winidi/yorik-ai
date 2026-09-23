@@ -139,11 +139,15 @@ def _user_classifier_mode(conn, user_id: Any) -> str:
         return "heuristic"
 
 
-def apply_to_message(message_id: int) -> Optional[str]:
+def apply_to_message(message_id: int, *, quiet: bool = False) -> Optional[str]:
     """Look up the message, classify it (per the owner's preference),
     persist the category. Returns the category — callers that want
     to act on the result (e.g. propose 'New bill — add to bills?')
-    don't have to re-fetch."""
+    don't have to re-fetch.
+
+    `quiet` is for mail brought in by an import or a repair pass: the
+    heuristic only (no model call per old mail) and no bell proposal —
+    a bill from last spring is not news."""
     from .database import get_conn
     with get_conn() as conn:
         row = conn.execute(
@@ -175,7 +179,7 @@ def apply_to_message(message_id: int) -> Optional[str]:
         # LLM endpoint never leaves rows uncategorised.
         category: Optional[str] = None
         version = HEURISTIC_VERSION
-        if mode == "llm":
+        if mode == "llm" and not quiet:
             from . import email_classifier_llm as _llm
             category = _llm.classify_llm(
                 row["subject"] or "",
@@ -197,7 +201,7 @@ def apply_to_message(message_id: int) -> Optional[str]:
     # For actionable categories (bill / appointment), surface a one-click
     # proposal in the notification bell. The user accepts → we run the
     # existing add_bill / add_calendar_event skill with extracted data.
-    if category in ("bill", "appointment"):
+    if category in ("bill", "appointment") and not quiet:
         try:
             _propose_action(message_id, category, dict(row))
         except Exception as exc:  # noqa: BLE001

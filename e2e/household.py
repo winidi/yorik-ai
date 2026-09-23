@@ -45,6 +45,13 @@ BASE = f"http://127.0.0.1:{PORT}"
 PY = str(ROOT / "venv" / "bin" / "python")
 DEAD = "http://127.0.0.1:9"          # the discard port: nothing answers
 PASSWORD = "testhaus-2026"
+# A real mail server for the test household (GreenMail in a container of
+# its own): IMAP with IDLE/MOVE/UIDPLUS on 3143, SMTP on 3025, plain text
+# on 127.0.0.1 only. Mailboxes anna@ / ben@example.test.
+MAIL_CONTAINER = "yorik-e2e-mail"
+MAIL_IMAGE = "greenmail/standalone:2.1.3"
+IMAP_PORT, SMTP_PORT = 3143, 3025
+MAIL_USERS = {"anna": "pw-anna", "ben": "pw-ben"}
 # YORIK_E2E_REAL_LLM=http://127.0.0.1:8080/v1 lets the test household talk
 # to the real model (read-only inference; whatever the chat creates lands
 # in the throwaway database). Default: the fake model.
@@ -136,7 +143,7 @@ def server_env(settings: dict[str, str]) -> dict[str, str]:
         "PYTHONPATH": str(ROOT / "e2e" / "guard"),
         # …and no docker: a stand-in that refuses (e2e/guard/bin/docker).
         "PATH": f"{ROOT / 'e2e' / 'guard' / 'bin'}:{os.environ.get('PATH', '')}",
-        "YORIK_E2E_ALLOWED_PORTS": ",".join(map(str, (settings["port"], PORT, LLM_PORT, 9080)
+        "YORIK_E2E_ALLOWED_PORTS": ",".join(map(str, (settings["port"], PORT, LLM_PORT, 9080, IMAP_PORT, SMTP_PORT)
                                                 + ((int(REAL_LLM.split(":")[2].split("/")[0]),) if REAL_LLM else ()))),
         "YORIK_E2E_BLOCKED_LOG": str(RUN / "blocked.log"),
     })
@@ -204,6 +211,78 @@ def _wait(url: str, seconds: int, what: str) -> None:
             pass
         time.sleep(0.5)
     raise SystemExit(f"{what} did not come up within {seconds}s — see {RUN}/*.log")
+
+
+# ─── the mail server ─────────────────────────────────────────────────
+
+def start_mailserver() -> None:
+    subprocess.run(["docker", "rm", "-f", MAIL_CONTAINER], capture_output=True)
+    users = ",".join(f"{k}:{pw}@example.test" for k, pw in MAIL_USERS.items())
+    subprocess.run([
+        "docker", "run", "-d", "--name", MAIL_CONTAINER,
+        "-p", f"127.0.0.1:{IMAP_PORT}:3143", "-p", f"127.0.0.1:{SMTP_PORT}:3025",
+        "-e", "GREENMAIL_OPTS=-Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imap "
+              f"-Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users={users} -Dgreenmail.users.login=email",
+        MAIL_IMAGE,
+    ], check=True, capture_output=True)
+    from imapclient import IMAPClient
+    deadline = time.time() + 60
+    while True:
+        try:
+            with IMAPClient("127.0.0.1", port=IMAP_PORT, ssl=False, timeout=3) as c:
+                c.login("anna@example.test", MAIL_USERS["anna"])
+            break
+        except Exception:  # noqa: BLE001
+            if time.time() > deadline:
+                raise SystemExit("test mail server did not come up")
+            time.sleep(1)
+    _log("test mail server up (IMAP 3143, SMTP 3025)")
+
+
+def stop_mailserver() -> None:
+    subprocess.run(["docker", "rm", "-f", MAIL_CONTAINER], capture_output=True)
+
+
+def fill_mailboxes() -> None:
+    """Three new mails in each inbox by SMTP, plus the folders and older
+    mail a mailbox has after some years (appended by IMAP)."""
+    import smtplib
+    from email.message import EmailMessage
+    from email.utils import format_datetime, make_msgid
+    from datetime import timezone
+    from imapclient import IMAPClient
+
+    def msg(sender, to, subject, body, when=None):
+        m = EmailMessage()
+        m["From"], m["To"], m["Subject"] = sender, to, subject
+        m["Message-ID"] = make_msgid(domain="example.test")
+        m["Date"] = format_datetime(when or datetime.now(timezone.utc))
+        m.set_content(body)
+        m.add_alternative(f"<p>{body}</p>", subtype="html")
+        return m
+
+    for who, pw in MAIL_USERS.items():
+        addr = f"{who}@example.test"
+        with IMAPClient("127.0.0.1", port=IMAP_PORT, ssl=False) as c:
+            c.login(addr, pw)
+            for folder in ("Trash", "Archiv", "Sent"):
+                c.create_folder(folder)
+            for n in range(12):                      # older mail in the archive
+                when = datetime.now(timezone.utc) - timedelta(days=60 + 30 * n)
+                c.append("Archiv", msg("kita@example.test", addr, f"Kita-Info {n + 1}",
+                                       "Liebe Eltern, …", when).as_bytes(),
+                         flags=[b"\\Seen"], msg_time=when)
+        with smtplib.SMTP("127.0.0.1", SMTP_PORT, timeout=10) as s:
+            s.login(addr, pw)
+            for sender, subject, body in (
+                ("schule@example.test", "Elternbrief: Wandertag am Freitag",
+                 "Liebe Eltern,\n\nam Freitag ist Wandertag. Bitte Brotdose und Regenjacke mitgeben.\n\nViele Grüße"),
+                ("rechnung@stadtwerke.example.test", "Ihre Rechnung Oktober",
+                 "Guten Tag,\n\nIhre Rechnung über 84,20 € ist am 15. fällig.\n\nStadtwerke"),
+                ("oma.hilde@example.test", "Sonntag Kaffee?",
+                 "Hallo ihr Lieben,\n\nkommt ihr Sonntag um drei zum Kaffee?\n\nOma"),
+            ):
+                s.send_message(msg(sender, addr, subject, body))
 
 
 # ─── the family ──────────────────────────────────────────────────────
@@ -278,35 +357,32 @@ def seed(settings: dict[str, str]) -> dict:
 
     _ok(anna.post(f"{BASE}/api/demo/seed"), "demo data")
 
-    # Mail cannot come in without an IMAP server; put a small inbox in
-    # place by hand, on an account that is switched off (no fetcher).
-    C = _pg()
-    with C._admin_conn(settings, DB_NAME) as db:
-        for who in ("anna", "ben"):
-            owner = ids[who]
-            aid = db.execute(
-                "INSERT INTO email_accounts (owner_user_id, email, imap_host, imap_username, smtp_host, "
-                "smtp_username, credential_key, enabled) VALUES (%s, %s, '127.0.0.1', %s, '127.0.0.1', %s, 'e2e', 0) "
-                "RETURNING id", (owner, f"{who}@example.test", who, who)).fetchone()[0]
-            for uid, (sender, subject, body) in enumerate((
-                ("schule@example.test", "Elternbrief: Wandertag am Freitag",
-                 "Liebe Eltern,\n\nam Freitag ist Wandertag. Bitte Brotdose und Regenjacke mitgeben.\n\nViele Grüße"),
-                ("rechnung@stadtwerke.example.test", "Ihre Rechnung Oktober",
-                 "Guten Tag,\n\nIhre Rechnung über 84,20 € ist am 15. fällig.\n\nStadtwerke"),
-                ("oma.hilde@example.test", "Sonntag Kaffee?",
-                 "Hallo ihr Lieben,\n\nkommt ihr Sonntag um drei zum Kaffee?\n\nOma"),
-            ), start=1):
-                db.execute(
-                    "INSERT INTO email_messages (account_id, uid, owner_user_id, message_id, from_email, subject, "
-                    "body_text, snippet, is_unread, is_sent, date_received) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 1, 0, %s)",
-                    (aid, uid, owner, f"<e2e-{who}-{uid}@example.test>", sender, subject, body, body[:120],
-                     (datetime.now() - timedelta(hours=uid * 3)).isoformat(timespec="seconds")))
+    # Mail: real accounts on the test mail server, added the way a person
+    # adds one (Settings → Email → add account), then wait for the fetcher.
+    for who in MAIL_USERS:
+        _ok(sessions[who].post(f"{BASE}/api/email/accounts", json={
+            "email": f"{who}@example.test", "password": MAIL_USERS[who], "display_name": "Testpost",
+            "imap_host": "127.0.0.1", "imap_port": IMAP_PORT, "imap_ssl": False,
+            "smtp_host": "127.0.0.1", "smtp_port": SMTP_PORT, "smtp_ssl": False, "smtp_starttls": False,
+            "is_default": True, "import_scope": "recent",
+        }, timeout=60), f"mail account {who}")
+    deadline = time.time() + 120
+    for who in MAIL_USERS:
+        while True:
+            j = sessions[who].get(f"{BASE}/api/email/messages").json()
+            rows = j if isinstance(j, list) else j.get("messages", j.get("items", []))
+            if len(rows) >= 3:
+                break
+            if time.time() > deadline:
+                raise SystemExit(f"mail for {who} did not arrive — see {RUN}/yorik.log")
+            time.sleep(1)
+    _log("mail accounts connected, inboxes fetched")
 
     household = {
         "base_url": BASE,
         "password": PASSWORD,
         "real_llm": bool(REAL_LLM),
+        "mail": {"imap_port": IMAP_PORT, "smtp_port": SMTP_PORT, "passwords": MAIL_USERS},
         "people": [{"key": k, "name": n, "email": e, "role": r, "pin": p, "id": ids.get(k, "")}
                    for k, n, e, r, p in FAMILY],
     }
@@ -320,6 +396,8 @@ def seed(settings: dict[str, str]) -> dict:
 def up() -> None:
     down(quiet=True)
     RUN.mkdir(parents=True, exist_ok=True)
+    start_mailserver()
+    fill_mailboxes()
     copy_code()
     settings = build_database()
     env = server_env(settings)
@@ -339,6 +417,7 @@ def up() -> None:
 def down(quiet: bool = False) -> None:
     _stop("yorik")
     _stop("fake_llm")
+    stop_mailserver()
     try:
         drop_database()
     except Exception as exc:  # noqa: BLE001

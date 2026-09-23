@@ -341,7 +341,8 @@ def _():
 
 
 # ─── mail ───────────────────────────────────────────────────────────
-M = "Mail"
+M = "Mail (real test mail server)"
+MAIL = HOUSEHOLD.get("mail") or {}
 
 
 def inbox(p):
@@ -349,11 +350,54 @@ def inbox(p):
     return j if isinstance(j, list) else j.get("messages", j.get("items", []))
 
 
-@check(M, "Anna and Ben each see their own inbox only")
+def imap(who: str):
+    """A connection to the person's mailbox on the test mail server — what
+    their phone would see."""
+    from imapclient import IMAPClient
+    c = IMAPClient("127.0.0.1", port=MAIL["imap_port"], ssl=False, timeout=10)
+    c.login(f"{who}@example.test", MAIL["passwords"][who])
+    return c
+
+
+def server_subjects(who: str, folder: str) -> list[str]:
+    import email as _email
+    c = imap(who)
+    c.select_folder(folder, readonly=True)
+    uids = c.search(["UNDELETED"])
+    out = [_email.message_from_bytes(d[b"BODY[HEADER.FIELDS (SUBJECT)]"])["Subject"]
+           for d in c.fetch(uids, [b"BODY.PEEK[HEADER.FIELDS (SUBJECT)]"]).values()] if uids else []
+    c.logout()
+    return sorted(out)
+
+
+def check_now(p) -> None:
+    """Settings → Email → "Check now", and wait until the pass ran."""
+    acc = p.api("GET", "/api/email/accounts").json()[0]
+    before = (acc.get("sync_state") or {}).get("last_run_at")
+    p.api("POST", f"/api/email/accounts/{acc['id']}/repair")
+    for _ in range(60):
+        time.sleep(1)
+        st = p.api("GET", "/api/email/accounts").json()[0].get("sync_state") or {}
+        if st.get("last_run_at") and st.get("last_run_at") != before:
+            return
+    raise AssertionError("the sync pass did not run within 60 s")
+
+
+def row(p, subject):
+    return next((m for m in inbox(p) if (m.get("subject") or "") == subject), None)
+
+
+@check(M, "Anna and Ben each see their own mail only")
 def _():
     a, b = inbox(anna), inbox(ben)
     ids_a, ids_b = {m["id"] for m in a}, {m["id"] for m in b}
-    return len(a) == 3 and len(b) == 3 and not (ids_a & ids_b), f"Anna {len(a)}, Ben {len(b)}, shared ids {ids_a & ids_b}"
+    return len(a) >= 3 and len(b) >= 3 and not (ids_a & ids_b), f"Anna {len(a)}, Ben {len(b)}, shared ids {ids_a & ids_b}"
+
+
+@check(M, "the older mail in the archive came in too, quietly")
+def _():
+    kita = [m for m in inbox(anna) if (m.get("subject") or "").startswith("Kita-Info")]
+    return len(kita) == 12, f"{len(kita)} of 12 archive mails in Yorik"
 
 
 @check(M, "Ben cannot open one of Anna's mails by its number")
@@ -370,23 +414,79 @@ def _():
     return (r.status_code in (403, 404) or rows == []), f"HTTP {r.status_code}, {len(rows)} mails"
 
 
-@check(M, "marking a mail read (needs the mail server: not testable here)")
+@check(M, "marking a mail read in Yorik marks it read on the server")
 def _():
-    mid = inbox(anna)[0]["id"]
-    r = anna.api("PATCH", f"/api/email/messages/{mid}", json={"is_unread": 0})
-    if r.status_code == 502:
-        return None, "no IMAP server in the test household — refused cleanly (502)"
-    m = anna.api("GET", f"/api/email/messages/{mid}").json()
-    return r.ok and not m.get("is_unread"), f"PATCH {r.status_code}, is_unread={m.get('is_unread')}"
+    m = row(anna, "Sonntag Kaffee?")
+    r = anna.api("PATCH", f"/api/email/messages/{m['id']}", json={"is_unread": 0})
+    c = imap("anna")
+    c.select_folder("INBOX", readonly=True)
+    seen = c.search(["SEEN", "SUBJECT", "Sonntag Kaffee"])
+    c.logout()
+    return r.ok and bool(seen), f"PATCH {r.status_code}; seen on the server: {bool(seen)}"
 
 
-@check(M, "sending without a mail server is refused with a message, not a crash")
+@check(M, "read on the phone shows as read in Yorik")
 def _():
-    j = anna.api("GET", "/api/email/accounts").json()
-    aid = (j if isinstance(j, list) else j.get("accounts", []))[0]["id"]
-    r = anna.api("POST", "/api/email/send", json={"account_id": aid, "to": ["oma.hilde@example.test"],
-                                                    "subject": "Test", "body": "Hallo"})
-    return r.status_code != 500 and "detail" in r.text, f"HTTP {r.status_code}: {r.text[:160]}"
+    c = imap("anna")
+    c.select_folder("INBOX")
+    c.add_flags(c.search(["SUBJECT", "Ihre Rechnung Oktober"]), [b"\\Seen"])
+    c.logout()
+    check_now(anna)
+    m = row(anna, "Ihre Rechnung Oktober")
+    return m is not None and not m.get("is_unread"), f"is_unread={m and m.get('is_unread')}"
+
+
+@check(M, "Anna writes to Ben; it arrives in Ben's Yorik")
+def _():
+    acc = anna.api("GET", "/api/email/accounts").json()[0]
+    r = anna.api("POST", "/api/email/send", json={"account_id": acc["id"], "to": ["ben@example.test"],
+                                                    "subject": "Einkaufsliste", "body_text": "Milch, Brot, Äpfel"})
+    for _ in range(60):
+        if row(ben, "Einkaufsliste"):
+            break
+        time.sleep(1)
+    return r.ok and row(ben, "Einkaufsliste") is not None, f"send {r.status_code}: {r.text[:120]}"
+
+
+@check(M, "what Yorik sent is in the Sent folder on the server (the phone sees it)")
+def _():
+    subjects = server_subjects("anna", "Sent")
+    return "Einkaufsliste" in subjects, f"server Sent: {subjects}"
+
+
+@check(M, "deleting in Yorik moves the mail to the server's Trash")
+def _():
+    m = row(ben, "Sonntag Kaffee?")
+    r = ben.api("DELETE", f"/api/email/messages/{m['id']}")
+    inbox_now, trash_now = server_subjects("ben", "INBOX"), server_subjects("ben", "Trash")
+    return (r.ok and "Sonntag Kaffee?" not in inbox_now and "Sonntag Kaffee?" in trash_now,
+            f"DELETE {r.status_code}; server inbox {inbox_now}; trash {trash_now}")
+
+
+@check(M, "a mail deleted on the phone leaves Yorik")
+def _():
+    c = imap("ben")
+    c.select_folder("INBOX")
+    uids = c.search(["SUBJECT", "Ihre Rechnung Oktober"])
+    c.move(uids, "Trash")
+    c.logout()
+    check_now(ben)
+    acc = ben.api("GET", "/api/email/accounts").json()[0]
+    f = ben.api("GET", f"/api/email/accounts/{acc['id']}/folders").json()
+    trash = next(x["id"] for x in (f if isinstance(f, list) else f.get("folders", [])) if x["name"] == "Trash")
+    in_inbox = row(ben, "Ihre Rechnung Oktober") is not None
+    t = ben.api("GET", f"/api/email/messages?folder_id={trash}").json()
+    in_trash = any(m.get("subject") == "Ihre Rechnung Oktober" for m in (t if isinstance(t, list) else t.get("messages", [])))
+    return not in_inbox and in_trash, f"still in the inbox view: {in_inbox}; in the Trash: {in_trash}"
+
+
+@check(M, "no mail failed, and the account says it is in step with the server")
+def _():
+    out = []
+    for p in (anna, ben):
+        acc = p.api("GET", "/api/email/accounts").json()[0]
+        out.append((acc.get("failed_mails"), (acc.get("sync_state") or {}).get("phase")))
+    return all(f == 0 and ph == "in_sync" for f, ph in out), str(out)
 
 
 @check(M, "the school letter becomes an appointment ('add to calendar')")
