@@ -141,3 +141,7 @@ psycopg[binary]>=3.2.0
 psycopg-pool>=3.2.0
 pgvector>=0.3.0
 PyJWT>=2.8
+
+# Photos of people and letterhead logos are resized with it
+# (backend/people.py, backend/writing/letterhead.py).
+Pillow==12.2.0
