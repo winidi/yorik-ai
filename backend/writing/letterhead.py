@@ -33,6 +33,7 @@ FONTS: Dict[str, Dict[str, str]] = {
     "caladea":          {"label": "Elegant (wie Cambria)",     "css": 'Caladea, Cambria, "Liberation Serif", serif'},
 }
 LOGO_PLACES = ("right", "left", "center")
+STYLES = ("auto", "private", "business")
 
 # field → (default, max length). Everything is text except the three below.
 FIELDS: Dict[str, tuple] = {
@@ -43,6 +44,9 @@ FIELDS: Dict[str, tuple] = {
     "tax_id": ("", 40), "vat_id": ("", 20), "register": ("", 120),
     "accent": ("#1f3a5f", 7), "font": ("liberation-sans", 24), "logo_place": ("right", 8),
     "closing": ("Mit freundlichen Grüßen", 80), "signature_name": ("", 80),
+    # "auto": a private letter for a person without a business name, the
+    # business letterhead otherwise; "private" / "business" to choose.
+    "style": ("auto", 8),
     "payment_text": ("Bitte überweisen Sie den Betrag bis zum {faellig} auf das unten genannte Konto.", 300),
     "small_business_text": ("Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.", 200),
 }
@@ -72,19 +76,33 @@ def clean(raw: Any, base: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         out["font"] = FIELDS["font"][0]
     if out["logo_place"] not in LOGO_PLACES:
         out["logo_place"] = "right"
+    if out["style"] not in STYLES:
+        out["style"] = "auto"
     out["country"] = (out["country"] or "DE").upper()
     return out
+
+
+def is_private(lh: Dict[str, Any]) -> bool:
+    """A private letter: no letterhead block at the top and no name in the
+    footer — the name stands once in the sender line above the address
+    and once under the letter. For a person without a business name
+    unless the letterhead says otherwise."""
+    style = lh.get("style") or "auto"
+    return style == "private" or (style == "auto" and not (lh.get("business_name") or "").strip())
 
 
 def _from_profile(user_id: str) -> Dict[str, Any]:
     with conn_ctx() as conn:
         r = conn.execute(
-            "SELECT name, email, phone, country, address_street, address_postcode, address_city, "
+            "SELECT name, first_name, last_name, email, phone, country, address_street, address_postcode, address_city, "
             "       business_name, tax_id, iban FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
     if not r:
         return clean({})
+    # A letter is signed with the full name; the display name ("Beate")
+    # is what the household calls you, not what goes under a letter.
+    full = " ".join(p for p in ((r["first_name"] or "").strip(), (r["last_name"] or "").strip()) if p) or (r["name"] or "")
     return clean({
-        "sender_name": r["name"] or "", "signature_name": r["name"] or "", "business_name": r["business_name"] or "",
+        "sender_name": full, "signature_name": full, "business_name": r["business_name"] or "",
         "street": r["address_street"] or "", "postcode": r["address_postcode"] or "", "city": r["address_city"] or "",
         "country": r["country"] or "DE", "phone": r["phone"] or "", "email": r["email"] or "",
         "tax_id": r["tax_id"] or "", "iban": r["iban"] or "",

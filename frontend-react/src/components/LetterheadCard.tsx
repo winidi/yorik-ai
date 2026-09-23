@@ -154,6 +154,15 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
                 <option value="right">Right</option><option value="left">Left</option><option value="center">Centred</option>
               </select>
             </label>
+            <label className="col-span-2 grid gap-1 text-[11px] text-muted-foreground">
+              Letter style
+              <select value={text("style") || "auto"} onChange={e => set("style", e.target.value)}
+                      className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary">
+                <option value="auto">Automatic — private letter unless a business name is set</option>
+                <option value="private">Private letter — your name once above the address and under the letter</option>
+                <option value="business">Business letterhead — name at the top and in the footer</option>
+              </select>
+            </label>
             <div className="col-span-2 flex items-center gap-2">
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; if (f) void uploadLogo(f); }} />
               {lh.logo_url && <img src={lh.logo_url} alt="" className="h-9 max-w-[120px] object-contain rounded bg-white p-1" />}

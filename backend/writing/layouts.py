@@ -7,6 +7,7 @@ sanitised HTML from the editor, an invoice is data.
 """
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -14,7 +15,7 @@ from typing import Any, Dict, List, Optional
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from . import invoice as inv
-from .letterhead import FONTS, clean as clean_letterhead
+from .letterhead import FONTS, clean as clean_letterhead, is_private
 
 KINDS = ("letter", "invoice", "quote")
 _env = Environment(loader=FileSystemLoader(str(Path(__file__).parent / "layouts")),
@@ -112,10 +113,34 @@ def render(kind: str, letterhead: Dict[str, Any], recipient: Optional[Dict[str, 
     from markupsafe import Markup
     css = Markup(_env.get_template("base.css.j2").render(lh=lh, font_css=font_css, preview=preview))
     template = _env.get_template("letter.html.j2" if kind == "letter" else "invoice.html.j2")
-    html = template.render(kind=kind, lh=lh, to=to, c=c, info=[(a, b) for a, b in info if a], css=css, logo=logo, preview=preview, title=title)
-    cols = _env.get_template("_footer_cols.html.j2").render(lh=lh)
+    # Invoices and quotes always carry the business head; a letter from a
+    # person is a private letter (see letterhead.is_private).
+    private = kind == "letter" and is_private(lh)
+    html = template.render(kind=kind, lh=lh, to=to, c=c, info=[(a, b) for a, b in info if a], css=css, logo=logo,
+                           preview=preview, title=title, private=private)
+    cols = _env.get_template("_footer_cols.html.j2").render(lh=lh, private=private)
     footer = _env.get_template("footer.html.j2").render(lh=lh, font_css=font_css, cols=cols)
     return {"html": html, "footer_html": footer, "title": title}
+
+
+def email_body(letterhead: Dict[str, Any], content: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    """A letter as the text of a mail instead of a PDF: the letter's own
+    text, the closing and the name once — no letterhead, no address
+    block, no footer. Returns {"text", "html"}."""
+    import html as _html
+    lh = clean_letterhead(letterhead)
+    content = dict(content or {})
+    body = sanitise(content.get("text_html")) or text_to_html(content.get("text"))
+    name = lh["signature_name"] or lh["sender_name"]
+    if content.get("add_closing", False):
+        body += f"<p>{_html.escape(lh['closing'])}<br>{_html.escape(name)}</p>"
+    text = re.sub(r"<br\s*/?>", "\n", body, flags=re.I)
+    text = re.sub(r"</(p|div|h[1-6]|li|tr)>", "\n\n", text, flags=re.I)
+    text = re.sub(r"<li[^>]*>", "• ", text, flags=re.I)
+    text = _html.unescape(re.sub(r"<[^>]+>", "", text))
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
+    return {"text": text, "html": f"<div style=\"font-family: sans-serif; font-size: 14px; line-height: 1.5\">{body}</div>"}
 
 
 def sample_content(kind: str) -> Dict[str, Any]:

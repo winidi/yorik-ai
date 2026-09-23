@@ -358,12 +358,18 @@ class SendIn(BaseModel):
     to: str
     subject: str
     message: str = ""
+    # "pdf": the letter as a PDF attachment with `message` as the mail
+    # text; "text": the letter itself is the mail (text, closing, name —
+    # no letterhead), for the cancellation that goes to a gym by mail.
+    send_as: str = "pdf"
 
 
 @router.post("/api/writing/{doc_id}/send")
 def send_doc(doc_id: int, body: SendIn, user: Dict[str, Any] = Depends(_user())) -> Dict[str, Any]:
-    """The PDF as an attachment, from one of the person's own mail
-    accounts. Sending makes the document final."""
+    """From one of the person's own mail accounts: the PDF as an
+    attachment, or (letters, send_as="text") the letter as the mail's
+    own text. Sending makes the document final; the PDF is kept either
+    way, so the archive holds what was sent."""
     doc = _doc_or_404(doc_id, user)
     if doc["kind"] != "letter" and doc["status"] != "final":
         raise HTTPException(status_code=409, detail="erst fertigstellen: die Nummer wird beim Fertigstellen vergeben")
@@ -376,11 +382,19 @@ def send_doc(doc_id: int, body: SendIn, user: Dict[str, Any] = Depends(_user()))
     to = [t.strip() for t in body.to.replace(";", ",").split(",") if t.strip()]
     if not to or not all("@" in t for t in to):
         raise HTTPException(status_code=400, detail="a recipient address is needed")
+    as_text = (body.send_as or "pdf").strip().lower() == "text"
+    if as_text and doc["kind"] != "letter":
+        raise HTTPException(status_code=400, detail="only a letter can go as the text of a mail")
     blob = _final_pdf(doc, uid)
     from .. import email_sender as _sender
-    result = _sender.send(int(body.account_id), to, body.subject.strip() or (doc["title"] or "Brief"),
-                          body.message.strip() or "Anbei das Schreiben als PDF.",
-                          attachments=[{"filename": _filename(doc), "mimetype": "application/pdf", "content": blob}])
+    subject = body.subject.strip() or doc["content"].get("subject") or doc["title"] or "Brief"
+    if as_text:
+        mail = layouts.email_body(_letterhead_of(doc, uid)["data"], doc["content"])
+        result = _sender.send(int(body.account_id), to, subject, mail["text"], body_html=mail["html"])
+    else:
+        result = _sender.send(int(body.account_id), to, subject,
+                              body.message.strip() or "Anbei das Schreiben als PDF.",
+                              attachments=[{"filename": _filename(doc), "mimetype": "application/pdf", "content": blob}])
     if not result.get("ok"):
         raise HTTPException(status_code=502, detail=result.get("error") or "the mail could not be sent")
     return {"ok": True, "document": _finalise(doc, uid, blob)}

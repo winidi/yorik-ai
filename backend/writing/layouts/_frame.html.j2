@@ -6,7 +6,9 @@
 <body>
 {% if preview %}<div class="sheet">{% endif %}
 <div class="head place-{{ lh.logo_place }}">
-  <div class="who">{{ lh.business_name or lh.sender_name }}{% if lh.business_name and lh.sender_name %}<small>{{ lh.sender_name }}</small>{% endif %}</div>
+  {#- A private letter has no letterhead block: the name stands in the
+      sender line above the address and under the letter. -#}
+  {% if not private %}<div class="who">{{ lh.business_name or lh.sender_name }}{% if lh.business_name and lh.sender_name %}<small>{{ lh.sender_name }}</small>{% endif %}</div>{% endif %}
   {% if logo %}<div class="logo"><img src="{{ logo }}" alt=""></div>{% endif %}
 </div>
 <div class="zone">

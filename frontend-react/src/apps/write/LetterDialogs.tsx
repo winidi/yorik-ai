@@ -38,6 +38,16 @@ export function SendDialog({ doc, to, subject, onClose, onDone }: { doc: Written
   const [addr, setAddr] = useState(to);
   const [subj, setSubj] = useState(subject);
   const [message, setMessage] = useState("Guten Tag,\n\nanbei erhalten Sie mein Schreiben als PDF.\n\nMit freundlichen Grüßen");
+  // A letter can also BE the mail (text, closing, name) instead of a PDF
+  // attached to one; the last choice is kept on this device.
+  const canText = doc.kind === "letter";
+  const [sendAs, setSendAs] = useState<"pdf" | "text">(() => {
+    try { return canText && localStorage.getItem("yorik_write_send_as") === "text" ? "text" : "pdf"; } catch { return "pdf"; }
+  });
+  function chooseSendAs(v: "pdf" | "text") {
+    setSendAs(v);
+    try { localStorage.setItem("yorik_write_send_as", v); } catch {}
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -49,7 +59,7 @@ export function SendDialog({ doc, to, subject, onClose, onDone }: { doc: Written
   async function send() {
     if (!accountId) return;
     setBusy(true); setError("");
-    try { onDone((await api.post<{ document: WrittenDoc }>(`/api/writing/${doc.id}/send`, { account_id: accountId, to: addr, subject: subj, message })).document); }
+    try { onDone((await api.post<{ document: WrittenDoc }>(`/api/writing/${doc.id}/send`, { account_id: accountId, to: addr, subject: subj, message, send_as: canText ? sendAs : "pdf" })).document); }
     catch (e: any) { setError(e?.message || String(e)); }
     finally { setBusy(false); }
   }
@@ -67,8 +77,23 @@ export function SendDialog({ doc, to, subject, onClose, onDone }: { doc: Written
             <input value={addr} onChange={e => setAddr(e.target.value)} placeholder="name@beispiel.de" className={cn(field, !addr.includes("@") && "border-amber-500/50")} /></label>
           <label className="grid gap-1 text-[11px] text-muted-foreground">Betreff
             <input value={subj} onChange={e => setSubj(e.target.value)} className={field} /></label>
-          <label className="grid gap-1 text-[11px] text-muted-foreground">Nachricht (der Brief hängt als PDF an)
-            <textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} className={cn(field, "resize-y")} /></label>
+          {canText && (
+            <div className="grid gap-1 text-[11px] text-muted-foreground">So verschicken
+              <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="So verschicken">
+                {([["text", "Als E-Mail-Text"], ["pdf", "Als PDF-Anhang"]] as const).map(([v, label]) => (
+                  <button key={v} type="button" role="radio" aria-checked={sendAs === v} onClick={() => chooseSendAs(v)}
+                    className={cn("rounded-lg border px-2.5 py-1.5 text-sm transition",
+                      sendAs === v ? "border-primary bg-primary/10 text-foreground" : "border-border hover:bg-muted")}>{label}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {sendAs === "text" && canText ? (
+            <p className="text-[11px] text-muted-foreground">Der Brief steht direkt in der E-Mail: dein Text, der Gruß und dein Name — ohne Briefkopf und Adressfeld. Als PDF bleibt er trotzdem in „Fertig“ abgelegt.</p>
+          ) : (
+            <label className="grid gap-1 text-[11px] text-muted-foreground">Nachricht (der Brief hängt als PDF an)
+              <textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} className={cn(field, "resize-y")} /></label>
+          )}
           {finalNote(doc)}
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">

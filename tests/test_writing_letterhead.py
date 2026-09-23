@@ -70,7 +70,8 @@ def test_layouts_mark_what_is_missing_and_never_take_a_look_from_the_content():
                     "text_html": '<p style="color:red" onclick="x()">Guten Tag<script>alert(1)</script></p><img src="http://evil/x.png">'})
     assert "Adresse fehlt" in page["html"] and "Empfänger fehlt" not in page["html"]
     assert "<script" not in page["html"].split("</style>")[1] and "onclick" not in page["html"] and "evil" not in page["html"] and "color:red" not in page["html"]
-    assert "Seite" in page["footer_html"] and "01067 Dresden" in page["footer_html"]
+    # a private letter: the address stands in the sender line, not in the footer
+    assert "Seite" in page["footer_html"] and "Dirk · Weg 1 · 01067 Dresden" in page["html"]
     plain = L.render("letter", lh, None, {"text": "Hallo <Welt>\n\nzweiter Absatz"})
     assert "<p>Hallo &lt;Welt&gt;</p><p>zweiter Absatz</p>" in plain["html"] and "Empfänger fehlt" in plain["html"]
     assert "Noch keine Positionen" in L.render("quote", lh, None, {})["html"]
