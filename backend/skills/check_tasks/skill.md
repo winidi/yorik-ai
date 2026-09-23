@@ -43,6 +43,11 @@ inputs:
     required: false
     default: false
     description: Strictly past-due open tasks (`due_date < today AND done = 0`). Overrides start_iso / end_iso / include_undated — pass this alone for any "überfällig / overdue" question instead of trying to build the date window by hand.
+  mine_only:
+    type: boolean
+    required: false
+    default: false
+    description: Only the caller's own list (assigned to them, or unassigned and created by them). Briefings set it.
 outputs:
   tasks:
     type: array

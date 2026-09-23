@@ -135,3 +135,25 @@ def test_a_repeating_task_stays_with_the_child_it_was_given_to(family):
     # the board can set and clear the rule
     assert beate_c.patch(f"/api/tasks/{b}?role=member", json={"recurrence_rule": "every Mon,Tue,Wed,Thu,Fri"}).json()["recurrence_rule"] == "every Mon,Tue,Wed,Thu,Fri"
     assert beate_c.patch(f"/api/tasks/{b}?role=member", json={"recurrence_rule": ""}).json()["recurrence_rule"] is None
+
+
+def test_the_briefing_lists_your_own_tasks_only(family):
+    """A briefing is the person's own list: assigned to them, or
+    unassigned and made by them — not what they may merely see."""
+    from datetime import date
+    beate_c, _ = family["beate"]; kid_c, kid = family["kid"]
+    today = date.today().isoformat()
+    for body in ({"title": "Steuer ablegen"},
+                 {"title": "Zimmer aufräumen", "assignee_user_ids": [kid]}):
+        r = beate_c.post("/api/tasks?role=member", json={**body, "due_date": today})
+        assert r.status_code in (200, 201), r.text
+    assert "Zimmer aufräumen" in _titles(beate_c, "member")       # she still sees it in the app
+
+    def briefing_tasks(client):
+        r = client.post("/api/briefings/day-today/run")
+        assert r.status_code == 200, r.text
+        section = next(s for s in r.json()["sections"] if s["id"] == "today-tasks")
+        return {t["title"] for t in section["result"]["tasks"]}
+
+    assert briefing_tasks(beate_c) == {"Steuer ablegen"}
+    assert briefing_tasks(kid_c) == {"Zimmer aufräumen"}

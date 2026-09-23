@@ -27,7 +27,8 @@
       "args":     {
         "end_iso":         "{today_end}",
         "include_undated": false,
-        "include_rows":    true
+        "include_rows":    true,
+        "mine_only":       true
       },
       "render":   "raw_json"
     },

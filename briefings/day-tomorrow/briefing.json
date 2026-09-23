@@ -28,7 +28,8 @@
         "start_iso":       "{tomorrow_start}",
         "end_iso":         "{tomorrow_end}",
         "include_undated": false,
-        "include_rows":    true
+        "include_rows":    true,
+        "mine_only":       true
       },
       "render":   "raw_json",
       "condition": "result.count > 0"

@@ -19,6 +19,7 @@ async def execute(
     person: Optional[str] = None,
     include_rows: bool = False,
     overdue_only: bool = False,
+    mine_only: bool = False,
 ) -> dict[str, Any]:
     from backend.database import get_conn
 
@@ -77,18 +78,23 @@ async def execute(
     # endpoint behaviour.
     user_id = getattr(ctx, "user_id", None)
     role = getattr(ctx, "role", None)
-    if user_id is not None:
-        from backend import spaces as _sp
-        visible_spaces = _sp.user_visible_space_ids(user_id, role, area="tasks")
-        if visible_spaces:
-            placeholders = ",".join("?" * len(visible_spaces))
-            where.append(f"(space_id IN ({placeholders}) OR created_by_user_id = ?)")
-            params.extend(visible_spaces)
-            params.append(user_id)
-        else:
-            where.append("1=0")
-    else:
+    if user_id is None:
         where.append("1=0")           # no person, no tasks
+    elif mine_only:
+        # The person's own list, the Tasks app's rule: assigned to them,
+        # or unassigned and created by them. What they may merely see
+        # (a shared space, a child's chores) stays out — briefings.
+        where.append(
+            "(id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)"
+            " OR (created_by_user_id = ?"
+            "     AND NOT EXISTS (SELECT 1 FROM task_assignees a WHERE a.task_id = tasks.id)))"
+        )
+        params.extend([user_id, user_id])
+    else:
+        from backend import spaces as _sp
+        clause, clause_params = _sp.row_filter(user_id, role, "tasks")
+        where.append(clause)
+        params.extend(clause_params)
 
     sql = (
         "SELECT id, title, due_date, done, person, category, priority, "
