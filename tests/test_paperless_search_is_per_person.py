@@ -25,7 +25,11 @@ def _rows(*ids):
     return [{"id": 100 + i, "paperless_doc_id": i, "chunk_index": 0, "text": f"text of {i}", "distance": 0.1} for i in ids]
 
 
-def test_hydration_keeps_only_what_the_persons_token_returns(monkeypatch):
+def test_hydration_keeps_only_what_the_persons_token_returns(fresh_app, monkeypatch):
+    # fresh_app: a throwaway database. Without it the test ran against
+    # whatever database the backend was imported with — an empty one in
+    # CI (no connector_credentials table), the live one on the workstation.
+    from backend import paperless_ingest as PI
     monkeypatch.setattr(PI, "_paperless_settings", lambda: {"base_url": "http://p", "api_key": "admin"})
     monkeypatch.setattr(PI.requests, "get", lambda url, **kw: _Resp([{"id": 4, "title": "Projektvertrag", "tags": []}]))
     beate = {"base_url": "http://p", "api_key": "beate"}
