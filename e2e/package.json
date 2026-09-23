@@ -1,0 +1,11 @@
+{
+  "name": "yorik-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "crawl": "node crawl.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}
