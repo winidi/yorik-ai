@@ -141,6 +141,24 @@ function rewriteHtmlImages(
     if (srcset) s.setAttribute("srcset", rewriteSrcset(srcset));
   });
 
+  // Links: every one opens in a new tab. The <base target="_blank">
+  // below is only a default — a link that says target="_self" (the
+  // activation button of a Trustpilot mail did) tried to load the
+  // page INSIDE this sandboxed frame, where the browser refuses it,
+  // and the click did nothing. noreferrer: the tracking redirect a
+  // mailer wraps around links does not learn Yorik's address.
+  // javascript: links lose their href (no scripts run here anyway).
+  doc.querySelectorAll("a[href], area[href]").forEach((a) => {
+    const href = (a.getAttribute("href") || "").trim();
+    if (/^javascript:/i.test(href)) {
+      a.removeAttribute("href");
+      return;
+    }
+    if (href.startsWith("#")) return;          // an anchor inside the mail
+    a.setAttribute("target", "_blank");
+    a.setAttribute("rel", "noopener noreferrer");
+  });
+
   // Preserve the email's own <head> content (retailers put <style>
   // blocks there for layout). Earlier this function returned only
   // doc.body.innerHTML, which silently broke responsive emails

@@ -274,6 +274,25 @@ def fill_mailboxes() -> None:
                          flags=[b"\\Seen"], msg_time=when)
         with smtplib.SMTP("127.0.0.1", SMTP_PORT, timeout=10) as s:
             s.login(addr, pw)
+            if who == "anna":
+                # An account activation the way Trustpilot sends it: the
+                # button says target="_self"; and a plain-text mail with
+                # a bare address. Both links must open on a click.
+                act = EmailMessage()
+                act["From"], act["To"] = "noreply@bewertungen.example.test", addr
+                act["Subject"] = "Aktivieren Sie Ihr Konto"
+                act["Message-ID"] = make_msgid(domain="example.test")
+                act.set_content("Aktivieren: https://bewertungen.example.test/activate?token=e2e-html")
+                act.add_alternative(
+                    '<p>Willkommen!</p><a href="https://bewertungen.example.test/activate?token=e2e-html" '
+                    'target="_self" style="background:#04da8d;padding:12px">Konto aktivieren</a>', subtype="html")
+                s.send_message(act)
+                plain = EmailMessage()
+                plain["From"], plain["To"] = "verein@example.test", addr
+                plain["Subject"] = "Anmeldung Sommerfest"
+                plain["Message-ID"] = make_msgid(domain="example.test")
+                plain.set_content("Hallo Anna,\n\nbitte hier anmelden: https://verein.example.test/sommerfest?id=e2e-text.\n\nGruß")
+                s.send_message(plain)
             for sender, subject, body in (
                 ("schule@example.test", "Elternbrief: Wandertag am Freitag",
                  "Liebe Eltern,\n\nam Freitag ist Wandertag. Bitte Brotdose und Regenjacke mitgeben.\n\nViele Grüße"),

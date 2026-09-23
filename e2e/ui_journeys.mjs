@@ -20,7 +20,14 @@ async function newPage(browser, device) {
   const ctx = await browser.newContext(device === "phone"
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, locale: "de-DE", timezoneId: "Europe/Berlin" }
     : { viewport: { width: 1440, height: 900 }, locale: "de-DE", timezoneId: "Europe/Berlin" });
-  await ctx.route("**/*", (r) => (new URL(r.request().url()).origin === BASE ? r.continue() : r.abort()));
+  // Only the test household; the made-up sites in test mails answer
+  // with a stub page so a link that opens can be seen opening.
+  await ctx.route("**/*", (r) => {
+    const u = new URL(r.request().url());
+    if (u.origin === BASE) return r.continue();
+    if (u.hostname.endsWith(".example.test")) return r.fulfill({ status: 200, contentType: "text/html", body: "<p>stub</p>" });
+    return r.abort();
+  });
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e.message)));
@@ -113,6 +120,37 @@ if (H.real_llm) await journey("Anna asks the chat on her phone and gets an answe
   // Four appointments tomorrow (seeded); "keine Termine" is the wrong answer.
   return [/Elternabend|Kundentermin|vier|four|\b4\b/i.test(answer) && !/keine Termine|no (appointments|events)/i.test(answer),
           (text.split("Welche Termine habe ich morgen?").pop() || "").replace(/\s+/g, " ").slice(0, 200)];
+}, browser);
+
+async function openMail(page, subject) {
+  await page.goto(BASE + "/r/email");
+  await page.waitForLoadState("networkidle");
+  await page.getByText(subject, { exact: true }).first().click();
+  await page.waitForTimeout(1200);
+}
+
+await journey("a mail's activation button opens its page (target=_self, like Trustpilot)", "phone", async (page) => {
+  await login(page, "anna");
+  await openMail(page, "Aktivieren Sie Ihr Konto");
+  const [popup] = await Promise.all([
+    page.context().waitForEvent("page", { timeout: 8000 }),
+    page.frameLocator("iframe[title='email body']").getByText("Konto aktivieren").click(),
+  ]);
+  await popup.waitForLoadState("domcontentloaded").catch(() => {});
+  const url = popup.url();
+  return [url.includes("bewertungen.example.test/activate"), `new tab: ${url}`];
+}, browser);
+
+await journey("a link in a plain-text mail opens its page", "desktop", async (page) => {
+  await login(page, "anna");
+  await openMail(page, "Anmeldung Sommerfest");
+  const [popup] = await Promise.all([
+    page.context().waitForEvent("page", { timeout: 8000 }),
+    page.getByRole("link", { name: /verein\.example\.test\/sommerfest/ }).click(),
+  ]);
+  await popup.waitForLoadState("domcontentloaded").catch(() => {});
+  const url = popup.url();
+  return [url.startsWith("https://verein.example.test/sommerfest?id=e2e-text") && !url.endsWith("."), `new tab: ${url}`];
 }, browser);
 
 await journey("Clara opens the family board on the wall page", "desktop", async (page) => {

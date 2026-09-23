@@ -2380,8 +2380,8 @@ function Reader({
                 cidMap={cidMap}
               />
             ) : (
-              <div className="text-sm leading-relaxed whitespace-pre-wrap break-words h-full">
-                {m.body_text || "(empty body)"}
+              <div className="text-sm leading-relaxed whitespace-pre-wrap break-words h-full overflow-y-auto">
+                {m.body_text ? <LinkedText text={m.body_text} /> : "(empty body)"}
               </div>
             )}
           </div>
@@ -3143,6 +3143,31 @@ function ClassifierSettingsPanel() {
 // Disconnect is owner-only on the backend; the UI confirms before
 // firing because removing an account also wipes its credential-store
 // row, which can't be undone without re-entering the IMAP password.
+
+/** Plain-text mail with its web addresses clickable, the way every mail
+ *  program shows them. Opens in a new tab; the tracking redirect does
+ *  not learn Yorik's address. */
+function LinkedText({ text }: { text: string }) {
+  const parts = text.split(/((?:https?:\/\/|www\.)[^\s<>"]+)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (i % 2 === 0) return <Fragment key={i}>{part}</Fragment>;
+        // A sentence's closing punctuation is not part of the address.
+        const url = part.replace(/[.,;:!?)\]]+$/, "");
+        const tail = part.slice(url.length);
+        const href = url.startsWith("www.") ? `https://${url}` : url;
+        return (
+          <Fragment key={i}>
+            <a href={href} target="_blank" rel="noopener noreferrer"
+              className="text-primary underline underline-offset-2 break-all">{url}</a>
+            {tail}
+          </Fragment>
+        );
+      })}
+    </>
+  );
+}
 
 /** One account's sync with its server: how far back Yorik keeps mail,
  *  whether it is in step with the server, mails it could not read, and
