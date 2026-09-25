@@ -1,16 +1,28 @@
 """prepare_email — stage an email draft (recipient, subject, body, one
 attachment) for the user to review and send themselves in the Email app.
 
-Never calls email_sender.send() and never touches SMTP. It only queues
-a `stash_pending_email` UI action — consumed client-side by
-EmailStashBridge, which writes it into the very sessionStorage key the
-AttachmentStashTray's "Send via email" button already uses. Net
-effect: the Email app's Composer opens pre-filled next time the user
-visits it. Nothing is sent, filed, or delivered by this skill itself.
+Never calls email_sender.send() and never touches SMTP. Stages the
+draft two ways:
+  1. Server-side in app_settings (key pending_email_draft_<user_id>),
+     read-and-cleared by GET /api/email/pending-draft on the Email
+     app's mount. This is the reliable path — it works no matter which
+     tab, window, or later moment the user opens Email in, unlike a
+     sessionStorage handoff tied to one browser tab. First version of
+     this skill used ONLY a `stash_pending_email` UI action into
+     sessionStorage; the user reported "I don't see the draft" because
+     that action landed in whichever tab happened to receive the
+     assistant's reply, not necessarily the tab they later checked
+     Email in (2026-09-25).
+  2. Still ALSO fires that `stash_pending_email` UI action (consumed
+     by EmailStashBridge) for the same-tab case, where it's instant —
+     no extra request needed if the user navigates to Email in the
+     very tab the reply arrived in.
+Nothing is sent, filed, or delivered by this skill itself.
 """
 
 from __future__ import annotations
 
+import json
 from typing import Any, Optional
 
 
@@ -50,9 +62,7 @@ async def execute(
                 f"default account will be pre-selected instead; mention that so they can double-check it."
             )
 
-    from backend.ui_tools import _append
-    _append({
-        "type":        "stash_pending_email",
+    payload = {
         "to":          to,
         "subject":     (subject or "").strip(),
         "body":        body or "",
@@ -62,7 +72,23 @@ async def execute(
             "filename": row["filename"],
             "mimetype": row["mime_type"] or "application/octet-stream",
         }],
-    })
+    }
+
+    # 1. Durable — survives a different tab, a reload, or the user
+    # coming back later. See module docstring for why this exists.
+    from backend.database import get_conn
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO app_settings (key, value, updated_at) "
+            "VALUES (?, ?, datetime('now'))",
+            (f"pending_email_draft_{user_id}", json.dumps(payload)),
+        )
+        conn.commit()
+
+    # 2. Instant same-tab hint, if the user is about to navigate to
+    # Email in the very tab this reply lands in.
+    from backend.ui_tools import _append
+    _append({"type": "stash_pending_email", **payload})
 
     return {
         "ok":            True,

@@ -1930,6 +1930,33 @@ def discard_drafts(msg_id: int, user: dict = Depends(current_user)):
     return {"discarded": cur.rowcount or 0}
 
 
+def _pending_draft_key(user_id: str) -> str:
+    return f"pending_email_draft_{user_id}"
+
+
+@router.get("/pending-draft")
+def get_pending_draft(user: dict = Depends(current_user)) -> dict:
+    """A draft prepare_email staged server-side (to/subject/body/
+    account_id/attachments), if any. Read-and-clear (one-shot), same
+    as the sessionStorage handoff it replaces for this path — but this
+    one survives a reload, a different tab, or the user coming back
+    later, because it lives in app_settings, not the browser. The
+    Composer reads this on mount in ADDITION to sessionStorage (used
+    by the older photo-handoff / documents 'send via email' paths)."""
+    key = _pending_draft_key(user["id"])
+    with get_conn() as conn:
+        row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
+        if row:
+            conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
+            conn.commit()
+    if not row:
+        return {"draft": None}
+    try:
+        return {"draft": json.loads(row["value"])}
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {"draft": None}
+
+
 @router.get("/briefing")
 async def briefing(hours: int = Query(24, ge=1, le=168),
                     user: dict = Depends(current_user)):

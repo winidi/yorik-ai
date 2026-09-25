@@ -259,6 +259,46 @@ export function EmailApp() {
      } catch { return null; }
    });
 
+  // Third source, checked after the synchronous ones above: a draft
+  // prepare_email staged server-side. sessionStorage only reaches the
+  // browser tab that happened to receive the assistant's reply — a
+  // user who asks Yorik to prepare a send, then opens Email in a
+  // different tab, a new window, or after a reload, saw nothing there
+  // (reported 2026-09-25). This survives all of that. Only applies
+  // when nothing already opened the composer synchronously, so it
+  // never clobbers a fresher ?to=… deep link or an in-tab handoff.
+  useEffect(() => {
+    if (composer) return;
+    interface PendingDraftResponse {
+      draft: {
+        to?: string; subject?: string; body?: string;
+        account_id?: number;
+        attachments?: ComposeDraft["pendingAttachments"];
+      } | null;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await api.get<PendingDraftResponse>("/api/email/pending-draft");
+        if (!cancelled && r.draft && !composer) {
+          setComposer({
+            to: r.draft.to || "",
+            subject: r.draft.subject || "",
+            body: r.draft.body || "",
+            accountId: r.draft.account_id,
+            pendingAttachments: r.draft.attachments,
+          });
+        }
+      } catch {
+        // No staged draft, or not signed in yet — nothing to do.
+      }
+    })();
+    return () => { cancelled = true; };
+    // Intentionally once on mount — this is a one-shot server read
+    // (the endpoint deletes it), not something to re-poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const accountsApi = useApi<EmailAccount[]>("/api/email/accounts", [], 10_000);
   // Aggregate unread count across all the user's accounts, semantic
   // inbox only (is_sent=0). Drives the badge on "All inboxes" /
