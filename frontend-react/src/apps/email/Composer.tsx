@@ -34,6 +34,7 @@ import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { cn } from "@/lib/utils";
 import type { EmailAccount } from "./types";
+import { PdfFormEditModal } from "./PdfFormEditModal";
 
 // Per-tone tint — mirrors AIDraftPanel's EMAIL_TONE_TINTS so the
 // new-compose draft panel feels like the reply panel.
@@ -209,6 +210,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
   const [restoredHint, setRestoredHint] = useState<boolean>(!!restored);
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [editingAttachment, setEditingAttachment] = useState<number | null>(null);
 
   // TipTap editor for the body. Initial content comes from restored
   // draft → reply prefill → blank. We persist HTML in autosave.
@@ -573,9 +575,31 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
       {attachments.length > 0 && (
         <div className="px-3 py-2 border-t border-border bg-muted/20 flex flex-wrap gap-1.5">
           {attachments.map((a, i) => (
-            <AttachmentChip key={i} att={a} onRemove={() => removeAttachment(i)} />
+            <AttachmentChip
+              key={i}
+              att={a}
+              onOpen={() => {
+                if (a.mimetype === "application/pdf") setEditingAttachment(i);
+                else openAttachmentPreview(a);
+              }}
+              onRemove={() => removeAttachment(i)}
+            />
           ))}
         </div>
+      )}
+
+      {editingAttachment !== null && attachments[editingAttachment] && (
+        <PdfFormEditModal
+          filename={attachments[editingAttachment].filename}
+          contentB64={attachments[editingAttachment].content_b64}
+          onClose={() => setEditingAttachment(null)}
+          onSave={(newB64, newSize) => {
+            setAttachments(prev => prev.map((a, idx) =>
+              idx === editingAttachment ? { ...a, content_b64: newB64, size: newSize } : a,
+            ));
+            setEditingAttachment(null);
+          }}
+        />
       )}
 
       {dragOver && (
@@ -744,19 +768,21 @@ function openAttachmentPreview(att: AttachmentDraft) {
   }
 }
 
-function AttachmentChip({ att, onRemove }: {
+function AttachmentChip({ att, onOpen, onRemove }: {
   att: AttachmentDraft;
+  onOpen: () => void;
   onRemove: () => void;
 }) {
+  const isPdf = att.mimetype === "application/pdf";
   return (
     <div
       className="inline-flex items-center gap-2 max-w-[220px] pl-2 pr-1 py-1 rounded-md border border-border bg-card text-xs"
-      title={`${att.filename} — anklicken zum Ansehen`}
+      title={isPdf ? `${att.filename} — anklicken zum Bearbeiten` : `${att.filename} — anklicken zum Ansehen`}
     >
       <Paperclip className="w-3 h-3 text-muted-foreground shrink-0" />
       <button
         type="button"
-        onClick={() => openAttachmentPreview(att)}
+        onClick={onOpen}
         className="flex-1 min-w-0 text-left hover:underline"
       >
         <div className="truncate font-medium">{att.filename}</div>
