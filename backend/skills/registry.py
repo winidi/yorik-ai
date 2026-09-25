@@ -345,7 +345,9 @@ class Registry:
             if s.name in disabled:
                 continue
             if role is not None and s.permissions:
-                if role not in s.permissions and "*" not in s.permissions:
+                # Same rule as invoke(): platform_admin inherits `admin`.
+                eff = "admin" if role == "platform_admin" and "admin" in s.permissions else role
+                if eff not in s.permissions and "*" not in s.permissions:
                     continue
             rows.append(s.to_index_entry())
         rows.sort(key=lambda r: (r["category"], r["name"]))

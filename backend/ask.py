@@ -1568,7 +1568,27 @@ async def _build_user_and_prompt(
     _active_language.set(user_language)
     _active_identified_name.set(identified_name)
     builder = _make_system_prompt_builder()
-    system_prompt = await builder.build_system_prompt(user=None, tools=None)
+    # The prompt names the person who asks. It used to get user=None, so
+    # a typed chat told the model "there's no logged-in user — don't
+    # assume who 'me' refers to", and "meine Aufgaben" came back as the
+    # whole household's (audit 2026-09-25, A1). The voice name only
+    # decides the greeting; the profile name says who "ich" is.
+    prompt_user = None
+    if user_id is not None:
+        from types import SimpleNamespace
+        from .database import get_conn
+        try:
+            with get_conn() as conn:
+                row = conn.execute(
+                    "SELECT name, first_name FROM user_profiles WHERE id = ?", (user_id,),
+                ).fetchone()
+        except Exception:  # noqa: BLE001 — a missing name must not break the chat
+            row = None
+        full = ((row["name"] if row else None) or identified_name or "").strip()
+        first = ((row["first_name"] if row else None) or (full.split(" ")[0] if full else "")).strip()
+        full = full or first
+        prompt_user = SimpleNamespace(role=role, name=full, first_name=first)
+    system_prompt = await builder.build_system_prompt(user=prompt_user, tools=None)
     return user, system_prompt
 
 
