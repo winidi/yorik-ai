@@ -1825,6 +1825,10 @@ def _calendar_context(days_ahead: int = 7, user_id: Any = None) -> list[dict[str
         with get_conn() as conn:
             role_row = conn.execute("SELECT role FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
             ev_sql, ev_params = _cal.visible_event_filter(str(user_id), (role_row["role"] if role_row else "") or "")
+            # The writer's own appointments only: a spouse's event on a
+            # calendar she shares is not "I'm busy then" (audit 2026-09-25).
+            own_sql, own_params = _cal.own_event_filter(str(user_id))
+            ev_sql, ev_params = f"{ev_sql} AND {own_sql}", [*ev_params, *own_params]
             rows = conn.execute(
                 "SELECT title, starts_at, ends_at, all_day, person "
                 "FROM events "

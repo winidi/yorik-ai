@@ -19,7 +19,8 @@ async def execute(
     person: Optional[str] = None,
     include_rows: bool = False,
     overdue_only: bool = False,
-    mine_only: bool = False,
+    mine_only: bool = True,
+    everyone: bool = False,
 ) -> dict[str, Any]:
     from backend.database import get_conn
 
@@ -34,9 +35,6 @@ async def execute(
 
     if not include_done:
         where.append("done = 0")
-    if person:
-        where.append("(person = ? OR person LIKE ?)")
-        params.extend([person, f"%{person}%"])
 
     # overdue_only is an explicit shortcut for "everything past due,
     # nothing today or future." Without it, small LLMs misbuild the
@@ -76,29 +74,39 @@ async def execute(
     # filter_query_by_role bypass only enforces table-allowlists, not
     # row-level scoping). Mirrors backend/main.py:3366's tasks-list
     # endpoint behaviour.
+    #
+    # Two questions, asked separately (audit 2026-09-25, A2): who may see
+    # a task (row_filter, always) and whose list it is on. By default the
+    # person's own list, the Tasks app's rule — "meine Aufgaben" used to
+    # come back as the whole household's. `person` asks for someone
+    # else's list, `everyone` for all the person may see.
+    from backend import spaces as _sp
     user_id = getattr(ctx, "user_id", None)
     role = getattr(ctx, "role", None)
-    if user_id is None:
-        where.append("1=0")           # no person, no tasks
-    elif mine_only:
-        # The person's own list, the Tasks app's rule: assigned to them,
-        # or unassigned and created by them. What they may merely see
-        # (a shared space, a child's chores) stays out — briefings.
-        where.append(
-            "(id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)"
-            " OR (created_by_user_id = ?"
-            "     AND NOT EXISTS (SELECT 1 FROM task_assignees a WHERE a.task_id = tasks.id)))"
-        )
-        params.extend([user_id, user_id])
+    clause, clause_params = _sp.row_filter(user_id, role, "tasks")
+    where.append(clause)
+    params.extend(clause_params)
+    scope = "mine"
+    if person:
+        who = _resolve_person(person)
+        if who:
+            where.append("(id IN (SELECT task_id FROM task_assignees WHERE user_id IN ("
+                         + ",".join("?" * len(who)) + ")))")
+            params.extend(who)
+        else:                          # not a household member: the free-text column
+            where.append("(person = ? OR person LIKE ?)")
+            params.extend([person, f"%{person}%"])
+        scope = f"person:{person}"
+    elif everyone or not mine_only:
+        scope = "everyone"
     else:
-        from backend import spaces as _sp
-        clause, clause_params = _sp.row_filter(user_id, role, "tasks")
-        where.append(clause)
-        params.extend(clause_params)
+        own, own_params = _sp.own_task_filter(user_id)
+        where.append(own)
+        params.extend(own_params)
 
     sql = (
         "SELECT id, title, due_date, done, person, category, priority, "
-        "       estimated_minutes, parent_task_id, recurrence_rule "
+        "       estimated_minutes, parent_task_id, recurrence_rule, created_by_user_id "
         "FROM tasks"
     )
     if where:
@@ -136,6 +144,9 @@ async def execute(
                 if pid in by_parent:
                     r["subtasks"] = by_parent[pid]
 
+    _label_whose(rows, user_id)
+    others = sum(1 for r in rows if r.get("person"))
+
     # Surface the same tasks as an interactive chat card so the LLM's prose
     # answer is mirrored by clickable rows (mark-done + jump-to-/tasks)
     # instead of a static markdown list the user can't act on. Cap at 20
@@ -148,6 +159,7 @@ async def execute(
             "tasks":  rows[:20],
             "total":  len(rows),
             "window": {"start_iso": start_iso, "end_iso": end_iso},
+            "scope":  scope,
         })
 
     # Briefing callers ask for include_rows=True because their renderer
@@ -160,15 +172,58 @@ async def execute(
             "tasks":  rows,
             "count":  len(rows),
             "window": {"start_iso": start_iso, "end_iso": end_iso},
+            "scope":  scope,
         }
 
+    whose = {
+        "mine":     "the person's OWN tasks only",
+        "everyone": f"everything the person may see; {others} of them belong to "
+                    f"someone else (their name is on the card)",
+    }.get(scope, f"the tasks of {person}")
     return {
         "_llm_hint": (
-            f"shown_to_user:{len(rows)} open task(s), rendered as cards. "
+            f"shown_to_user:{len(rows)} open task(s) — {whose} — rendered as cards. "
             f"Reply ONE short sentence with the count + 'siehe Karten unten'. "
             f"Do NOT enumerate titles or IDs in your text — you don't have "
             f"the row content here, only the count."
         ),
         "count": len(rows),
         "window": {"start_iso": start_iso, "end_iso": end_iso},
+        "scope": scope,
     }
+
+
+def _resolve_person(name: str) -> list[str]:
+    """Household members whose name or first name matches `name`."""
+    from backend.database import get_conn
+    n = (name or "").strip().lower()
+    if not n:
+        return []
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id FROM user_profiles WHERE lower(first_name) = ? OR lower(name) = ? "
+            "OR lower(name) LIKE ?", (n, n, f"{n} %")).fetchall()
+    return [str(r["id"]) for r in rows]
+
+
+def _label_whose(rows: list[dict[str, Any]], me: Any) -> None:
+    """Put the owner's first name into `person` — the card shows it — for
+    every task that isn't the asker's alone; their own stay unlabelled.
+    Owner: the assignees, else whoever created it. The old free-text
+    `person` column said nothing reliable (audit 2026-09-25, A3)."""
+    from backend import spaces as _sp
+    from backend.calendars import event_owner_names
+    me = str(me) if me is not None else None
+    people = _sp.task_people([r["id"] for r in rows])
+    creators = event_owner_names([r.get("created_by_user_id") for r in rows])
+    for r in rows:
+        who = people.get(r["id"]) or []
+        if who:
+            names = [p["first_name"] for p in who if p["user_id"] != me]
+            if names and len(names) < len(who):      # shared with the asker
+                names = ["+ " + ", ".join(names)]
+        else:
+            c = r.get("created_by_user_id")
+            names = [creators.get(str(c), "")] if c and str(c) != me else []
+        r["person"] = ", ".join(n for n in names if n) or None
+        r.pop("created_by_user_id", None)

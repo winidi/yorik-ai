@@ -8,7 +8,9 @@ when_to_use: |
   - "what tasks do I have today / tomorrow / this week"
   - "welche Aufgaben sind überfällig" / "what's overdue" → `overdue_only=true` (do NOT pass start_iso / end_iso for this — they'd build a wrong window)
   - "open tasks" / "offene Aufgaben" → no window, include_undated=true
-  - "was muss Anna noch erledigen" → person="Anna"
+  - "was muss Anna noch erledigen" → person="Anna" (her list: tasks assigned to her)
+  - "alle Aufgaben" / "was ist im Haushalt offen" / "die der Familie" → everyone=true
+  - Default ("meine Aufgaben", "was muss ich tun", "was steht heute an") → no person, no everyone: the asker's OWN list only
   - "did I finish anything yesterday" → include_done=true, start/end=yesterday
   - briefing templates needing the per-day task list
 
@@ -37,7 +39,7 @@ inputs:
   person:
     type: string
     required: false
-    description: Filter by assignee (admin / member / child / a name).
+    description: Someone else's list — a household member's first name ("Anna"). Tasks assigned to that person, among those the asker may see.
   overdue_only:
     type: boolean
     required: false
@@ -46,8 +48,13 @@ inputs:
   mine_only:
     type: boolean
     required: false
+    default: true
+    description: The asker's own list (assigned to them, or assigned to nobody and created by them) — the default, same as the Tasks app. Kept for briefings.
+  everyone:
+    type: boolean
+    required: false
     default: false
-    description: Only the caller's own list (assigned to them, or unassigned and created by them). Briefings set it.
+    description: Everything the asker may see — other members' tasks and the children's chores included, each labelled with whose it is. Only when they ask for the household / everyone.
 outputs:
   tasks:
     type: array
@@ -57,6 +64,6 @@ permissions: [admin, member, restricted]
 tags: [tasks, read]
 ---
 # check_tasks
-Read-only query against the tasks table. Date filter is INCLUSIVE on both sides (matches check_calendar). Returns a list shaped for direct briefing rendering.
+Read-only query against the tasks table. Answers "whose" as well as "when": by default only the asker's own list; tasks of other people carry the owner's first name on the card (`person`), so say "Beates Aufgabe", never "deine". Date filter is INCLUSIVE on both sides (matches check_calendar). Returns a list shaped for direct briefing rendering.
 
 UI: this skill ALSO emits a `tasks_found` ui_action that the chat renders as interactive task rows (checkbox to mark done, click → opens /tasks with that task highlighted). When you call this skill, do NOT mirror the full task list as a markdown bullet list in your reply — the user already sees the clickable cards. Keep your prose short: a one-line summary ("Du hast 7 überfällige Aufgaben — markier sie unten fertig oder öffne /tasks") is enough. The card is the answer.

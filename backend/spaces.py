@@ -387,6 +387,40 @@ def row_filter(
     return "(" + " OR ".join(parts) + ")", params
 
 
+def own_task_filter(user_id: Optional[str], *, table_alias: str = "tasks") -> tuple[str, list[Any]]:
+    """A person's own to-do list — the Tasks app's rule (TasksApp.tsx,
+    isMine): assigned to them, or assigned to nobody and created by them
+    or by no one (a household chore). A task someone made *for* another
+    person is that person's. AND it with `row_filter`: this says whose,
+    not who may see (audit 2026-09-25, A2)."""
+    if user_id is None:
+        return "1=0", []
+    t = table_alias
+    return (
+        f"({t}.id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)"
+        f" OR (NOT EXISTS (SELECT 1 FROM task_assignees a WHERE a.task_id = {t}.id)"
+        f"     AND ({t}.created_by_user_id = ? OR {t}.created_by_user_id IS NULL)))",
+        [user_id, user_id],
+    )
+
+
+def task_people(task_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
+    """task id → [{user_id, first_name}] of its assignees, for saying whose
+    a task is."""
+    if not task_ids:
+        return {}
+    ph = ",".join("?" * len(task_ids))
+    out: dict[int, list[dict[str, Any]]] = {}
+    with conn_ctx() as c:
+        for r in c.execute(
+            f"SELECT a.task_id, a.user_id, COALESCE(NULLIF(u.first_name, ''), u.name) AS first_name "
+            f"FROM task_assignees a LEFT JOIN user_profiles u ON u.id = a.user_id "
+            f"WHERE a.task_id IN ({ph})", list(task_ids)).fetchall():
+            out.setdefault(int(r["task_id"]), []).append(
+                {"user_id": str(r["user_id"]), "first_name": r["first_name"] or ""})
+    return out
+
+
 # ─── Phase B onboarding helpers ─────────────────────────────────────
 
 

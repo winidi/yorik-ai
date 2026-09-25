@@ -145,3 +145,130 @@ def test_known_provider_sees_only_visible_contacts(house):
     _contact(house, "beate", "Zahnarzt Dr. Beate-Privat")
     assert "Beate-Privat" in str(run(find_known_provider(ctx_for(house, "beate"), category="zahnarzt")))
     assert "Beate-Privat" not in str(run(find_known_provider(ctx_for(house, "dirk"), category="zahnarzt")))
+
+
+# ── A2–A6: "meine" means the person's own ────────────────────────────
+
+def _household_space():
+    from backend.database import get_conn
+    with get_conn() as conn:
+        return int(conn.execute("SELECT id FROM spaces WHERE slug = 'household'").fetchone()["id"])
+
+
+def _task(title, *, creator=None, assignees=(), space=None, due="2026-09-01"):
+    from backend.database import get_conn
+    with get_conn() as conn:
+        tid = conn.execute(
+            "INSERT INTO tasks (title, due_date, done, created_by_user_id, space_id) VALUES (?, ?, 0, ?, ?)",
+            (title, due, creator, space)).lastrowid
+        for u in assignees:
+            conn.execute("INSERT INTO task_assignees (task_id, user_id) VALUES (?, ?)", (tid, u))
+        conn.commit()
+    return tid
+
+
+@pytest.fixture
+def tasks(house):
+    from backend.database import get_conn
+    hh = _household_space()
+    for k in ("beate", "kid"):
+        with get_conn() as conn:
+            conn.execute("INSERT INTO space_members (space_id, user_id, level) VALUES (?, ?, 'write') "
+                         "ON CONFLICT DO NOTHING", (hh, house[k]))
+            conn.commit()
+    d, b, k = house["dirk"], house["beate"], house["kid"]
+    return {
+        "own":      _task("Steuer machen", creator=d, assignees=[d], space=hh),
+        "for_kid":  _task("Zimmer aufräumen", creator=d, assignees=[k], space=hh),
+        "beates":   _task("Arzttermin ausmachen", creator=b, assignees=[b], space=hh),
+        "together": _task("Urlaub buchen", creator=b, assignees=[b, d], space=hh),
+        "chore":    _task("Müll rausbringen", creator=None, space=hh),
+    }
+
+
+def _titles_and_people(house, who, **kw):
+    from backend.skills.check_tasks.skill import execute as check_tasks
+    got = run(check_tasks(ctx_for(house, who), include_undated=True, include_rows=True, **kw))
+    return {t["title"]: t["person"] for t in got["tasks"]}, got["scope"]
+
+
+def test_my_tasks_are_mine(house, tasks):
+    got, scope = _titles_and_people(house, "dirk")
+    assert scope == "mine"
+    assert set(got) == {"Steuer machen", "Urlaub buchen", "Müll rausbringen"}
+    assert got["Steuer machen"] is None and got["Urlaub buchen"] == "+ Beate"
+
+
+def test_everyone_names_whose(house, tasks):
+    got, scope = _titles_and_people(house, "dirk", everyone=True)
+    assert scope == "everyone"
+    assert got["Zimmer aufräumen"] == "Clara" and got["Arzttermin ausmachen"] == "Beate"
+
+
+def test_someone_elses_list_by_name(house, tasks):
+    got, _ = _titles_and_people(house, "dirk", person="Clara")
+    assert set(got) == {"Zimmer aufräumen"}
+
+
+def test_day_plan_holds_only_own_tasks(house, tasks):
+    from backend import day_plans
+    ctx = day_plans.context_for(house["dirk"], "2026-09-25", role="platform_admin")
+    titles = {t["title"] for t in ctx["open_tasks"]}
+    assert "Zimmer aufräumen" not in titles and "Arzttermin ausmachen" not in titles
+    assert "Steuer machen" in titles
+
+
+def test_today_counts_own_overdue(house, tasks, fresh_app):
+    from fastapi.testclient import TestClient
+    from backend import auth_sessions
+    c = TestClient(fresh_app)
+    c.cookies.set(auth_sessions.COOKIE_NAME, auth_sessions.create_session(house["dirk"], user_agent="t", ip="127.0.0.1"))
+    got = c.get("/api/today").json()
+    assert got["tasks_overdue_count"] == 3          # own, together, chore
+
+
+# ── calendar: own + household + invitations; others' private = Busy ──
+
+@pytest.fixture
+def events(house):
+    from backend import calendars as C
+    from backend.database import get_conn
+    fam = C.create_calendar(name="Familie", owner_user_id=house["dirk"], kind="shared")
+    dirk_cal = C.create_calendar(name="Dirk", owner_user_id=house["dirk"])
+    beate_cal = C.create_calendar(name="Beate", owner_user_id=house["beate"])
+    with get_conn() as conn:    # Beate lets Dirk see her personal space
+        conn.execute("INSERT INTO space_members (space_id, user_id, level) VALUES (?, ?, 'read')",
+                     (house["beate_space"], house["dirk"]))
+        conn.execute("INSERT INTO space_members (space_id, user_id, level) VALUES (?, ?, 'write') "
+                     "ON CONFLICT DO NOTHING", (_household_space(), house["beate"]))
+        def ev(title, cal, owner, vis="default"):
+            conn.execute("INSERT INTO events (title, starts_at, ends_at, calendar_id, owner_user_id, visibility, location) "
+                         "VALUES (?, '2026-10-02T10:00:00', '2026-10-02T11:00:00', ?, ?, ?, 'Praxis Mitte')",
+                         (title, cal, owner, vis))
+        ev("Elternabend", fam, house["beate"])
+        ev("Zahnarzt Dirk", dirk_cal, house["dirk"])
+        ev("Yoga Beate", beate_cal, house["beate"])
+        ev("Frauenarzt", fam, house["beate"], vis="private")
+        conn.commit()
+
+
+def _cal(house, who, **kw):
+    from backend.skills.check_calendar.skill import execute as check_calendar
+    return run(check_calendar(ctx_for(house, who), start_iso="2026-10-02", end_iso="2026-10-02T23:59:59", **kw))
+
+
+def test_my_calendar_is_mine_and_the_households(house, events):
+    got = {e["title"]: e["who"] for e in _cal(house, "dirk")["events"]}
+    assert "Yoga Beate" not in got                           # her personal calendar, though shared
+    assert got["Zahnarzt Dirk"] == "" and got["Elternabend"] == "Beate"
+    assert "Frauenarzt" not in got and got["Busy"] == "Beate"   # private → Busy, as in the app
+
+
+def test_everyone_calendar_names_whose(house, events):
+    got = {e["title"]: e["who"] for e in _cal(house, "dirk", everyone=True)["events"]}
+    assert got["Yoga Beate"] == "Beate"
+
+
+def test_private_title_cannot_be_probed(house, events):
+    assert _cal(house, "dirk", title_contains="Frauenarzt", everyone=True)["events"] == []
+    assert [e["title"] for e in _cal(house, "beate", title_contains="Frauenarzt")["events"]] == ["Frauenarzt"]

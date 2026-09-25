@@ -4,7 +4,8 @@ description: Check the user's calendar for events / free slots in a given window
 when_not_to_use: |
   Tasks → `check_tasks` (tasks have an optional due_date, events have date+time). Never use `run_sql` on the `events` table — gated runner blocks it.
 when_to_use: |
-  - User asks "what's on Thursday?" / "am I free at 3pm?"
+  - User asks "what's on Thursday?" / "am I free at 3pm?" → default scope (their own appointments)
+  - "Was hat Beate am Freitag?" / "was steht bei der Familie an?" → everyone=true; say whose each one is from `who`
   - Another skill (whatsapp_draft) needs availability before proposing meeting times
   - Briefing skill wants today's schedule for the morning summary
 inputs:
@@ -37,6 +38,11 @@ inputs:
     required: false
     default: false
     description: If true, also computes gaps between events (>= 30min) as candidate free slots.
+  everyone:
+    type: boolean
+    required: false
+    default: false
+    description: Default is the asker's own appointments — their calendars, the household calendar, invitations. Set true only for "was hat die Familie / was hat Beate" — then every calendar the asker may see, someone else's events labelled with their first name (`who`). Never for "passt mir / bin ich frei".
 outputs:
   events:
     type: array

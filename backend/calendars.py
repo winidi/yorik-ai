@@ -316,6 +316,35 @@ def visible_event_filter(user_id: str, user_role: str) -> tuple[str, list[Any]]:
     return "(" + " OR ".join(parts) + ")", params
 
 
+def own_event_filter(user_id: Optional[str]) -> tuple[str, list[Any]]:
+    """A person's own appointments: on a calendar they own, on a
+    household calendar (kind 'shared' or in a shared space), their own
+    event anywhere, or one they are invited to. Another member's
+    personal calendar stays out even when shared with them — Dirk's rule
+    for "passt mir?" (audit 2026-09-25). AND it with
+    `visible_event_filter`: this says whose, not who may see."""
+    if user_id is None:
+        return "1=0", []
+    return (
+        "(events.calendar_id IN (SELECT c.id FROM calendars c LEFT JOIN spaces s ON s.id = c.space_id"
+        "                        WHERE c.owner_user_id = ? OR c.kind = 'shared' OR s.kind = 'shared')"
+        " OR events.owner_user_id = ?"
+        " OR events.id IN (SELECT event_id FROM event_attendees WHERE user_id = ?))",
+        [user_id, user_id, user_id],
+    )
+
+
+def event_owner_names(owner_ids: list[Any]) -> dict[str, str]:
+    """owner user id → first name, for saying whose an appointment is."""
+    ids = sorted({str(i) for i in owner_ids if i})
+    if not ids:
+        return {}
+    ph = ",".join("?" * len(ids))
+    with conn_ctx() as c:
+        return {str(r["id"]): (r["first_name"] or r["name"] or "") for r in c.execute(
+            f"SELECT id, first_name, name FROM user_profiles WHERE id IN ({ph})", ids).fetchall()}
+
+
 def downgrade_for_privacy(
     event_row: Dict[str, Any], user_id: str, user_role: str,
     calendar: Optional[Dict[str, Any]] = None,
@@ -346,6 +375,7 @@ def _busy_only(event_row: Dict[str, Any]) -> Dict[str, Any]:
     redacted["title"]  = "Busy"
     redacted["notes"]  = None
     redacted["person"] = None
+    redacted["location"] = None     # where is as private as what (audit 2026-09-25)
     redacted["_busy_only"] = True
     return redacted
 

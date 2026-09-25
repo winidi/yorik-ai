@@ -303,28 +303,43 @@ def context_for(user_id: str, plan_date: str, role: str = "member") -> Dict[str,
     """Everything the planner needs from Yorik itself: fixed events of the
     day (not plan blocks), open tasks due by then, yesterday's review and
     the tasks yesterday's plan left open."""
-    from .calendars import visible_event_filter
-    where, params = visible_event_filter(user_id, role)
+    # The person's own day: their appointments (own calendars, household
+    # calendar, invitations — others' private ones as "Busy") and their
+    # own to-dos by the Tasks app's rule. Until 2026-09-25 a task Dirk
+    # made for a child landed in his plan, and Beate's appointments on a
+    # calendar she shares took his free time (audit 2026-09-25, A5).
+    from .calendars import visible_event_filter, own_event_filter, downgrade_for_privacy
+    from .spaces import own_task_filter, row_filter
+    vis, vis_params = visible_event_filter(user_id, role)
+    own_ev, own_ev_params = own_event_filter(user_id)
     day_start, day_end = f"{plan_date}T00:00:00", f"{plan_date}T23:59:59"
+    own_t, own_t_params = own_task_filter(user_id)
+    see_t, see_t_params = row_filter(user_id, role, "tasks")
+    mine = f"{own_t} AND {see_t} AND parent_task_id IS NULL AND (done = 0 OR done IS NULL)"
+    mine_params = (*own_t_params, *see_t_params)
     with get_conn() as conn:
-        events = [dict(r) for r in conn.execute(
-            f"SELECT id, title, starts_at, ends_at, all_day, location, calendar_id, plan_key "
-            f"FROM events WHERE ({where}) AND starts_at <= ? AND COALESCE(ends_at, starts_at) >= ? "
-            f"ORDER BY starts_at", (*params, day_end, day_start),
+        events = [downgrade_for_privacy(dict(r), user_id, role) for r in conn.execute(
+            f"SELECT id, title, starts_at, ends_at, all_day, location, calendar_id, plan_key, "
+            f"       owner_user_id, visibility, notes "
+            f"FROM events WHERE ({vis}) AND {own_ev} AND starts_at <= ? AND COALESCE(ends_at, starts_at) >= ? "
+            f"ORDER BY starts_at", (*vis_params, *own_ev_params, day_end, day_start),
         ).fetchall()]
-        mine = ("(created_by_user_id = ? OR id IN (SELECT task_id FROM task_assignees WHERE user_id = ?)) "
-                "AND parent_task_id IS NULL AND (done = 0 OR done IS NULL)")
+        for e in events:
+            if e.get("_busy_only"):
+                e["location"] = None
+            for k in ("owner_user_id", "visibility", "notes", "person", "_busy_only"):
+                e.pop(k, None)
         open_tasks = [dict(r) for r in conn.execute(
             "SELECT id, title, due_date, priority, category, estimated_minutes, plan_date, plan_key, person "
             f"FROM tasks WHERE {mine} AND (due_date IS NULL OR due_date <= ?) "
             "ORDER BY due_date NULLS LAST, priority DESC NULLS LAST, id LIMIT 60",
-            (user_id, user_id, plan_date),
+            (*mine_params, plan_date),
         ).fetchall()]
-        backlog_total = conn.execute(f"SELECT COUNT(*) AS n FROM tasks WHERE {mine}", (user_id, user_id)).fetchone()["n"]
+        backlog_total = conn.execute(f"SELECT COUNT(*) AS n FROM tasks WHERE {mine}", mine_params).fetchone()["n"]
         later = [dict(r) for r in conn.execute(
             "SELECT id, title, due_date FROM tasks "
             f"WHERE {mine} AND due_date > ? ORDER BY due_date, id LIMIT 15",
-            (user_id, user_id, plan_date),
+            (*mine_params, plan_date),
         ).fetchall()]
         rules_row = conn.execute("SELECT planning_rules FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
     yday = (date.fromisoformat(plan_date) - timedelta(days=1)).isoformat()

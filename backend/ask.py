@@ -954,6 +954,10 @@ class HomeOSSystemPromptBuilder(SystemPromptBuilder):
                 + f"refers to **{first_for_resolution}**. Use this name when calling "
                 + f"skills that take a `person` arg (e.g. find_photo) — e.g. "
                 + f"\"photos of me and Sara\" → find_photo(people='{first_for_resolution}, Sara')."
+                + f"\n\"Meine Aufgaben / meine Termine / was steht an\" means "
+                + f"**{first_for_resolution}'s own** — check_tasks and check_calendar return "
+                + f"exactly that by default. Other household members' things only when "
+                + f"asked for (person=… / everyone=true), and then always say whose they are."
             )
         else:
             ctx["identified_user_block"] = (

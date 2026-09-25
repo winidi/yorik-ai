@@ -9515,6 +9515,12 @@ def today_digest(
     ev_sql, ev_params = _cal_mod.visible_event_filter(str(user_id), role)
     task_sql, task_params = _sp.row_filter(user_id, role, "tasks")
     contact_sql, contact_params = _sp.row_filter(user_id, role, "contacts")
+    # …and "own" as the Tasks app and "passt mir?" mean it: not another
+    # member's personal calendar or a child's chores (audit 2026-09-25, A4).
+    own_ev_sql, own_ev_params = _cal_mod.own_event_filter(str(user_id) if user_id else None)
+    ev_sql, ev_params = f"{ev_sql} AND {own_ev_sql}", [*ev_params, *own_ev_params]
+    own_task_sql, own_task_params = _sp.own_task_filter(user_id)
+    task_sql, task_params = f"{task_sql} AND {own_task_sql}", [*task_params, *own_task_params]
 
     out: Dict[str, Any] = {
         "today_date":          today_iso,

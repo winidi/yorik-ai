@@ -17,6 +17,7 @@ async def execute(
     days: int = 7,
     title_contains: Optional[str] = None,
     include_free_slots: bool = False,
+    everyone: bool = False,
 ) -> dict[str, Any]:
     """Return events in a time window. Two robustness features for
     small-model date-math errors:
@@ -40,7 +41,7 @@ async def execute(
     user_id = getattr(ctx, "user_id", None)
     role = getattr(ctx, "role", None)
 
-    events = _query_events(start, end, title_needle, user_id=user_id, role=role)
+    events = _query_events(start, end, title_needle, user_id=user_id, role=role, mine=not everyone)
 
     nearby = None
     # Fallback: 0 hits in the requested window (after title filter) →
@@ -51,7 +52,7 @@ async def execute(
         wider_start = start - timedelta(days=2)
         wider_end = end + timedelta(days=2)
         nearby_events = _query_events(wider_start, wider_end, title_needle,
-                                      user_id=user_id, role=role)
+                                      user_id=user_id, role=role, mine=not everyone)
         if nearby_events:
             nearby = {
                 "events": nearby_events,
@@ -71,6 +72,7 @@ async def execute(
         "events": events,
         "window": {"start_iso": start.isoformat(), "end_iso": end.isoformat()},
         "title_filter": title_needle,
+        "scope": "everyone" if everyone else "mine",
     }
     if nearby:
         out["nearby"] = nearby
@@ -97,7 +99,10 @@ async def execute(
         })
         out["_llm_hint"] = (
             f"shown_to_user:{len(events)} event(s) in {start.date().isoformat()}"
-            f"..{end.date().isoformat()}, rendered as cards. Reply ONE short "
+            f"..{end.date().isoformat()} — "
+            + ("everything the person may see; someone else's carry their name on the card"
+               if everyone else "the person's own and the household calendar")
+            + f" — rendered as cards. Reply ONE short "
             f"sentence with the count + 'siehe unten' (or equivalent in user's "
             f"language). Optionally call show_calendar with the event ids to "
             f"also open the full view. Do NOT list titles or dates in text — "
@@ -111,6 +116,7 @@ def _query_events(start: datetime, end: datetime,
                   *,
                   user_id: Optional[int] = None,
                   role: Optional[str] = None,
+                  mine: bool = True,
                   ) -> list[dict[str, Any]]:
     """Pull the events table for a window, normalised to the shape the
     skill returns. Optional case-insensitive substring filter on title.
@@ -125,9 +131,8 @@ def _query_events(start: datetime, end: datetime,
     # composes cleanly.
     where: list[str] = ["starts_at >= ?", "starts_at <= ?"]
     params: list[Any] = [start.isoformat(), end.isoformat()]
-    if title_needle:
-        where.append("lower(title) LIKE ?")
-        params.append(f"%{title_needle}%")
+    # The title filter runs after the privacy downgrade below — in SQL it
+    # would let "title_contains=Frauenarzt" find a private "Busy" event.
 
     if user_id is not None:
         # every role, the operator included (audit 2026-09-22, 4.6)
@@ -136,16 +141,33 @@ def _query_events(start: datetime, end: datetime,
         if vis_clause:
             where.append(vis_clause)
             params.extend(vis_params)
+        if mine:
+            # "passt mir / meine Termine": own calendars, the household
+            # calendar, invitations — not another member's personal
+            # calendar even when shared (audit 2026-09-25).
+            own_clause, own_params = _cal.own_event_filter(user_id)
+            where.append(own_clause)
+            params.extend(own_params)
     else:
         where.append("1=0")           # no person, no events
 
-    sql = ("SELECT id, title, starts_at, ends_at, all_day, person "
+    sql = ("SELECT id, title, starts_at, ends_at, all_day, person, "
+           "       calendar_id, owner_user_id, visibility, notes "
            "FROM events WHERE " + " AND ".join(where) +
            " ORDER BY starts_at ASC")
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
+    # Private events of others read "Busy", as in the calendar app
+    # (audit 2026-09-25, L7); the owner's first name says whose it is.
+    from backend import calendars as _cal
+    rows = [_cal.downgrade_for_privacy(dict(r), user_id, role) for r in rows] if user_id is not None else []
+    if title_needle:
+        rows = [r for r in rows if title_needle in (r.get("title") or "").lower()]
+    owners = _cal.event_owner_names([r.get("owner_user_id") for r in rows])
     events = []
     for r in rows:
+        owner = str(r.get("owner_user_id") or "")
+        whose = owners.get(owner, "") if owner and owner != str(user_id) else ""
         starts = r["starts_at"] or ""
         events.append({
             "id":        r["id"],
@@ -153,11 +175,11 @@ def _query_events(start: datetime, end: datetime,
             "starts_at": starts,
             "ends_at":   r["ends_at"],
             "all_day":   bool(r["all_day"]),
-            "person":    r["person"],
+            "person":    whose or None,
             "date":      starts[:10] if starts else "",
             "weekday":   _WEEKDAY_NAMES[datetime.fromisoformat(starts).weekday()] if starts else "",
             "time":      "all day" if r["all_day"] else starts[11:16] if len(starts) >= 16 else "",
-            "who":       f" ({r['person']})" if r["person"] and r["person"] != "all" else "",
+            "who":       whose,
         })
     return events
 
