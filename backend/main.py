@@ -6602,7 +6602,8 @@ def address_suggestions(
     """
     _contact_for(contact_id, user, "view")
     from . import contact_address_scraper
-    return contact_address_scraper.scrape_and_cache(contact_id, use_cache=True)
+    return contact_address_scraper.scrape_and_cache(
+        contact_id, owner_user_id=user.get("id"), use_cache=True)
 
 
 @app.post("/api/contacts/{contact_id}/scrape-addresses")
@@ -7360,22 +7361,14 @@ def list_web_visits(
     """Per-user audit log of what Yorik searched / fetched on the open
     web. Powers Settings → Privacy → 'What did Yorik look up?'. Each
     web_lookup + web_fetch call inserts one row."""
-    role = user.get("role") or "viewer"
+    # The person's own log — admins too (rule 1; audit 2026-09-25, L10).
     with conn_ctx(DB_PATH) as conn:
-        if role in ("platform_admin", "admin"):
-            rows = conn.execute(
-                "SELECT id, user_id, action, query, url, provider, ok, "
-                "       status, bytes, error, at "
-                "FROM web_visits ORDER BY id DESC LIMIT ?",
-                (int(limit),),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT id, user_id, action, query, url, provider, ok, "
-                "       status, bytes, error, at "
-                "FROM web_visits WHERE user_id = ? ORDER BY id DESC LIMIT ?",
-                (user["id"], int(limit)),
-            ).fetchall()
+        rows = conn.execute(
+            "SELECT id, user_id, action, query, url, provider, ok, "
+            "       status, bytes, error, at "
+            "FROM web_visits WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+            (user["id"], int(limit)),
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -9395,7 +9388,7 @@ def chat_mentions(
             # so we inherit role filtering.
             try:
                 from . import documents as _doc
-                docs = _doc.list_documents(role=role)
+                docs = _doc.list_documents(role=role, owner_user_id=(user or {}).get("id") or "")   # own uploads (audit 2026-09-25, L9)
                 if q:
                     needle = q.lower()
                     docs = [d for d in docs
@@ -10009,23 +10002,15 @@ def compose_saved_drafts_list(
     no body_html (the sidebar only needs recipient/subject/kind/time).
     The full record loads via GET /api/compose/saved-draft/{id} when the
     user clicks one."""
-    role = user.get("role") or "viewer"
+    # The person's own drafts — admins too (rule 1; audit 2026-09-25, L10).
     with conn_ctx(DB_PATH) as conn:
-        if role in ("platform_admin", "admin"):
-            rows = conn.execute(
-                "SELECT id, user_id, kind, template_id, recipient, subject, "
-                "       created_at, updated_at "
-                "FROM compose_drafts ORDER BY updated_at DESC LIMIT ?",
-                (int(limit),),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT id, user_id, kind, template_id, recipient, subject, "
-                "       created_at, updated_at "
-                "FROM compose_drafts WHERE user_id = ? "
-                "ORDER BY updated_at DESC LIMIT ?",
-                (user["id"], int(limit)),
-            ).fetchall()
+        rows = conn.execute(
+            "SELECT id, user_id, kind, template_id, recipient, subject, "
+            "       created_at, updated_at "
+            "FROM compose_drafts WHERE user_id = ? "
+            "ORDER BY updated_at DESC LIMIT ?",
+            (user["id"], int(limit)),
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -10042,7 +10027,7 @@ def compose_saved_draft_delete(
         ).fetchone()
         if not owner:
             return {"ok": True, "deleted": False}
-        if owner["user_id"] != user["id"] and user.get("role") not in ("admin", "platform_admin"):
+        if str(owner["user_id"]) != str(user["id"]):      # owner only (audit 2026-09-25, L10)
             raise HTTPException(status_code=403, detail="not your draft")
         conn.execute("DELETE FROM compose_drafts WHERE id=?", (draft_id,))
         conn.commit()
@@ -10065,7 +10050,7 @@ def compose_saved_draft_get(
     if not row:
         raise HTTPException(status_code=404, detail="draft not found")
     # Only the owner OR an admin can load.
-    if row["user_id"] != user["id"] and user.get("role") not in ("admin", "platform_admin"):
+    if str(row["user_id"]) != str(user["id"]):            # owner only (audit 2026-09-25, L10)
         raise HTTPException(status_code=403, detail="not your draft")
     return {
         "id":          row["id"],
@@ -10092,7 +10077,7 @@ def compose_saved_draft_patch(
         owner = conn.execute("SELECT user_id FROM compose_drafts WHERE id=?", (draft_id,)).fetchone()
         if not owner:
             raise HTTPException(status_code=404, detail="draft not found")
-        if owner["user_id"] != user["id"] and user.get("role") not in ("admin", "platform_admin"):
+        if str(owner["user_id"]) != str(user["id"]):      # owner only (audit 2026-09-25, L10)
             raise HTTPException(status_code=403, detail="not your draft")
         conn.execute(
             "UPDATE compose_drafts SET "
@@ -10120,7 +10105,7 @@ def compose_saved_draft_versions(
         owner = conn.execute("SELECT user_id FROM compose_drafts WHERE id=?", (draft_id,)).fetchone()
         if not owner:
             raise HTTPException(404, "draft not found")
-        if owner["user_id"] != user["id"] and user.get("role") not in ("admin", "platform_admin"):
+        if str(owner["user_id"]) != str(user["id"]):      # owner only (audit 2026-09-25, L10)
             raise HTTPException(403, "not your draft")
         rows = conn.execute(
             "SELECT id, source, instruction, restored_from, created_at "
@@ -10149,7 +10134,7 @@ def compose_saved_draft_restore(
         owner = conn.execute("SELECT user_id FROM compose_drafts WHERE id=?", (draft_id,)).fetchone()
         if not owner:
             raise HTTPException(404, "draft not found")
-        if owner["user_id"] != user["id"] and user.get("role") not in ("admin", "platform_admin"):
+        if str(owner["user_id"]) != str(user["id"]):      # owner only (audit 2026-09-25, L10)
             raise HTTPException(403, "not your draft")
         version = conn.execute(
             "SELECT body_html FROM compose_draft_versions WHERE id=? AND draft_id=?",
@@ -10201,7 +10186,7 @@ async def compose_saved_draft_refine(
         ).fetchone()
     if not row:
         raise HTTPException(404, "draft not found")
-    if row["user_id"] != user["id"] and user.get("role") not in ("admin", "platform_admin"):
+    if str(row["user_id"]) != str(user["id"]):            # owner only (audit 2026-09-25, L10)
         raise HTTPException(403, "not your draft")
 
     instruction = body.instruction.strip()
@@ -10360,7 +10345,7 @@ async def compose_saved_draft_send(
         ).fetchone()
     if not row:
         raise HTTPException(404, "draft not found")
-    if row["user_id"] != user["id"] and user.get("role") not in ("admin", "platform_admin"):
+    if str(row["user_id"]) != str(user["id"]):            # owner only (audit 2026-09-25, L10)
         raise HTTPException(403, "not your draft")
     if not (row["body_html"] or "").strip():
         raise HTTPException(400, "draft body is empty")
@@ -10480,7 +10465,7 @@ def compose_saved_draft_pdf(
         owner = conn.execute("SELECT user_id FROM compose_drafts WHERE id=?", (draft_id,)).fetchone()
         if not owner:
             raise HTTPException(404, "draft not found")
-        if owner["user_id"] != user["id"] and user.get("role") not in ("admin", "platform_admin"):
+        if str(owner["user_id"]) != str(user["id"]):      # owner only (audit 2026-09-25, L10)
             raise HTTPException(403, "not your draft")
     # Sanitize: must be a bare basename starting with compose-{id}- so
     # there's no way to coax this into serving anything else from disk.
@@ -12410,7 +12395,8 @@ def list_documents_endpoint(
     # (Paperless unreachable / no token) but suppress them in the
     # normal merge.
     local_mirror = [] if (is_filtered or page > 1) else [
-        dict(d, source="local") for d in documents_mod.list_documents(role=role)
+        dict(d, source="local") for d in documents_mod.list_documents(
+            role=role, owner_user_id=(user or {}).get("id") or "")
     ]
     local: list[dict] = []
 
@@ -13262,7 +13248,7 @@ def search_documents_endpoint(body: SearchDocumentsIn, role: str = Depends(_auth
     normalize_role(role)
     from . import paperless_ingest as _pp
 
-    native = documents_mod.search(body.query, k=body.k, role=role)
+    native = documents_mod.search(body.query, k=body.k, role=role, owner_user_id=user.get("id") or "")
 
     pp_result: Dict[str, Any]
     creds = _pp.user_creds(user.get("id"))

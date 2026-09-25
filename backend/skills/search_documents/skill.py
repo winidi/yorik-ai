@@ -51,8 +51,9 @@ async def execute(ctx, query: str = "", k: int = 5) -> dict[str, Any]:
     if not q:
         # Empty-query path: recent N across both sources.
         try:
-            native_hits = documents_mod.recent(k=k, role=role)
-            native_total = len(documents_mod.list_documents(role=role))
+            # Local uploads: the person's own only (audit 2026-09-25, L9).
+            native_hits = documents_mod.recent(k=k, role=role, owner_user_id=user_id) if user_id is not None else []
+            native_total = len(documents_mod.list_documents(role=role, owner_user_id=user_id)) if user_id is not None else 0
         except Exception as exc:  # noqa: BLE001
             native_hits, native_total = [], 0
             log.warning("native recent failed: %s", exc)
@@ -66,7 +67,7 @@ async def execute(ctx, query: str = "", k: int = 5) -> dict[str, Any]:
     else:
         # Search-query path: hybrid (semantic + Paperless FTS via RRF).
         try:
-            native_hits = documents_mod.search(q, k=k, role=role)
+            native_hits = documents_mod.search(q, k=k, role=role, owner_user_id=user_id) if user_id is not None else []
             if native_hits and native_hits[0].get("ok") is False:
                 native_hits = []
         except Exception as exc:  # noqa: BLE001

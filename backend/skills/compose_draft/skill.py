@@ -159,36 +159,19 @@ async def _embed_yorik_photo_url(url: str, *, user_id: str) -> Optional[str]:
         return None
     asset_id = m.group(1)
 
-    # Resolve Immich creds the same way the proxy route does: per-user
-    # key first (Phase B ACL provisions one per Yorik user), then the
-    # global admin key, then the legacy app_settings keys.
+    # The person's own Immich key, nothing else — as the photo proxies
+    # since Paket 12. The admin key and the legacy app_settings key let
+    # any account embed any photo from the admin's library into a letter
+    # (audit 2026-09-22 1.19, 2026-09-25 L8). The global entry may still
+    # supply the server address, never the key.
     from backend import credential_store as _cs
     from backend import external_users as _xu
-    from backend.database import conn_ctx as _cctx, DEFAULT_DB_PATH as _ddb
-    creds: Optional[dict[str, Any]] = None
     try:
-        creds = _xu.get_user_immich_creds(user_id)
+        creds = _xu.get_user_immich_creds(user_id) if user_id is not None else None
     except Exception:
         creds = None
-    if not creds or not creds.get("api_key"):
-        creds = _cs.get("immich") or {}
-    base_url = (creds.get("base_url") or "").rstrip("/")
-    api_key = creds.get("api_key") or ""
-    if not (base_url and api_key):
-        try:
-            with _cctx(_ddb) as conn:
-                for k, dest in (("immich_base_url", "base_url"),
-                                 ("immich_api_key", "api_key")):
-                    row = conn.execute(
-                        "SELECT value FROM app_settings WHERE key = ?", (k,),
-                    ).fetchone()
-                    if row and row["value"]:
-                        if dest == "base_url" and not base_url:
-                            base_url = row["value"].rstrip("/")
-                        elif dest == "api_key" and not api_key:
-                            api_key = row["value"]
-        except Exception:
-            pass
+    api_key = (creds or {}).get("api_key") or ""
+    base_url = ((creds or {}).get("base_url") or (_cs.get("immich") or {}).get("base_url") or "").rstrip("/")
     if not (base_url and api_key):
         return None
 

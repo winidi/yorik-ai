@@ -272,3 +272,53 @@ def test_everyone_calendar_names_whose(house, events):
 def test_private_title_cannot_be_probed(house, events):
     assert _cal(house, "dirk", title_contains="Frauenarzt", everyone=True)["events"] == []
     assert [e["title"] for e in _cal(house, "beate", title_contains="Frauenarzt")["events"]] == ["Frauenarzt"]
+
+
+# ── L6: address suggestions are the searcher's ───────────────────────
+
+def test_address_suggestions_stay_with_the_searcher(house, monkeypatch):
+    from backend import contact_address_scraper as S
+    cid = _contact(house, "dirk", "Handwerker Meier")
+    monkeypatch.setattr(S, "gather_passages", lambda c, owner_user_id=None:
+                        [{"source_kind": "whatsapp", "source_ref": "m1", "text": "Musterweg 1"}])
+    monkeypatch.setattr(S, "call_llm_extract", lambda p:
+                        [{"line1": "Musterweg 1", "city": "Köln", "source_index": 0,
+                          "excerpt": "aus Beates Chat"}])
+    got = S.scrape_and_cache(cid, owner_user_id=house["beate"], use_cache=False)
+    assert got["candidates"][0]["excerpt"] == "aus Beates Chat"
+    monkeypatch.setattr(S, "call_llm_extract", lambda p: [])
+    dirk = S.scrape_and_cache(cid, owner_user_id=house["dirk"], use_cache=True)
+    assert "aus Beates Chat" not in str(dirk)
+    assert S.scrape_and_cache(cid, owner_user_id=None)["candidates"] == []
+
+
+# ── L9: local document lists hold the person's own uploads ───────────
+
+def test_local_documents_are_the_uploaders(house):
+    from backend import documents as D
+    with D.get_docs_conn(D.DOCS_DB_PATH) as conn:
+        conn.execute("INSERT INTO documents (title, path, allowed_roles, owner_user_id) VALUES ('Beates Vertrag', '', 'admin,member', ?)", (house["beate"],))
+        conn.commit()
+    titles = lambda who: {d["title"] for d in D.list_documents(role="admin", owner_user_id=house[who] if who else "")}
+    assert titles("beate") == {"Beates Vertrag"}
+    assert titles("dirk") == set() and titles(None) == set()
+
+
+# ── L10: no admin look into others' drafts and web lookups ───────────
+
+def test_admin_sees_own_drafts_and_web_log_only(house, fresh_app):
+    from fastapi.testclient import TestClient
+    from backend import auth_sessions
+    from backend.database import get_conn
+    with get_conn() as conn:
+        did = conn.execute("INSERT INTO compose_drafts (user_id, subject) VALUES (?, 'Kündigung Beate')", (house["beate"],)).lastrowid
+        conn.execute("INSERT INTO web_visits (user_id, action, query) VALUES (?, 'web_lookup', 'Beates Suche')", (house["beate"],))
+        conn.commit()
+    c = TestClient(fresh_app)
+    c.cookies.set(auth_sessions.COOKIE_NAME, auth_sessions.create_session(house["dirk"], user_agent="t", ip="127.0.0.1"))
+    assert c.get("/api/compose/saved-drafts").json() == []
+    assert c.get("/api/web/visits").json() == []
+    assert c.get(f"/api/compose/saved-draft/{did}").status_code in (403, 404)
+    from backend.skills.delete_compose_draft.skill import execute as delete_draft
+    with pytest.raises(ValueError):
+        run(delete_draft(ctx_for(house, "dirk"), draft_id=did))

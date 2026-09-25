@@ -36,14 +36,11 @@ async def execute(ctx, draft_id: int) -> dict[str, Any]:
         raise ValueError(f"draft {draft_id} not found (already deleted?)")
     draft = dict(row)
 
-    # Owner gate — a non-admin caller may only delete drafts they own.
-    caller_role = getattr(ctx, "role", None)
+    # Owner gate — only the owner, admins included (rule 1; audit
+    # 2026-09-25, L10). The refusal names nothing of the draft.
     caller_id = getattr(ctx, "user_id", None)
-    if caller_role not in ("platform_admin", "admin") and draft["user_id"] != caller_id:
-        raise PermissionError(
-            f"draft {draft_id} belongs to a different user; only the owner "
-            f"or an admin can delete it"
-        )
+    if caller_id is None or str(draft["user_id"]) != str(caller_id):
+        raise ValueError(f"draft {draft_id} not found (already deleted?)")
 
     from backend import pending_actions as pa
     pending_id = pa.stage_before_apply(

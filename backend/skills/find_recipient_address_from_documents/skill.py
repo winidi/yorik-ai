@@ -113,7 +113,7 @@ def _find_relevant_docs(contact: dict[str, Any], max_docs: int,
     return out[:max_docs]
 
 
-def _read_paperless_cache(contact_id: int) -> list[dict[str, Any]]:
+def _read_paperless_cache(contact_id: int, owner_user_id: Any) -> list[dict[str, Any]]:
     """Return cached paperless candidates if any exist AND aren't older
     than _CACHE_TTL_DAYS. Empty list otherwise."""
     from backend.database import get_conn
@@ -124,16 +124,16 @@ def _read_paperless_cache(contact_id: int) -> list[dict[str, Any]]:
             "SELECT line1, line2, postcode, city, region, country, "
             "       confidence, excerpt, source_kind, source_ref, scraped_at "
             "FROM contact_address_suggestions "
-            "WHERE contact_id = ? "
+            "WHERE contact_id = ? AND owner_user_id = ? "
             "  AND source_kind = 'paperless' "
             "  AND scraped_at >= ? "
             "ORDER BY confidence DESC NULLS LAST, scraped_at DESC",
-            (contact_id, cutoff),
+            (contact_id, owner_user_id, cutoff),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def _write_paperless_cache(contact_id: int, candidates: list[dict[str, Any]]) -> None:
+def _write_paperless_cache(contact_id: int, owner_user_id: Any, candidates: list[dict[str, Any]]) -> None:
     """Replace this contact's paperless cache entries with the new set.
     Leaves whatsapp/email entries alone so the two scraper paths don't
     clobber each other."""
@@ -142,17 +142,17 @@ def _write_paperless_cache(contact_id: int, candidates: list[dict[str, Any]]) ->
     with get_conn() as conn:
         conn.execute(
             "DELETE FROM contact_address_suggestions "
-            "WHERE contact_id = ? AND source_kind = 'paperless'",
-            (contact_id,),
+            "WHERE contact_id = ? AND owner_user_id = ? AND source_kind = 'paperless'",
+            (contact_id, owner_user_id),
         )
         for c in candidates:
             conn.execute(
                 "INSERT INTO contact_address_suggestions "
-                "(contact_id, source_kind, source_ref, line1, line2, postcode, "
+                "(contact_id, owner_user_id, source_kind, source_ref, line1, line2, postcode, "
                 " city, region, country, confidence, excerpt) "
-                "VALUES (?, 'paperless', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, 'paperless', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    contact_id,
+                    contact_id, owner_user_id,
                     str(c.get("source_doc_id") or ""),
                     c.get("line1"), c.get("line2"),
                     c.get("postcode"), c.get("city"),
@@ -336,7 +336,7 @@ async def execute(
 
     # ── Cache path ──
     if use_cache:
-        cached = _read_paperless_cache(cid)
+        cached = _read_paperless_cache(cid, getattr(ctx, "user_id", None))
         if cached:
             decorated = _decorate_cached(cached, ctx)
             _emit_needs_input(cid, name, decorated, template_id=None)
@@ -448,7 +448,7 @@ async def execute(
     candidates.sort(key=lambda c: (c.get("confidence") is None,
                                      -(c.get("confidence") or 0)))
 
-    _write_paperless_cache(cid, candidates)
+    _write_paperless_cache(cid, getattr(ctx, "user_id", None), candidates)
 
     _emit_needs_input(cid, name, candidates, template_id=None)
 

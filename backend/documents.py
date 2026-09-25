@@ -367,20 +367,27 @@ def add_document(
     return dict(row)
 
 
-def list_documents(role: Optional[str] = None) -> List[Dict[str, Any]]:
-    """List all documents the given role may read."""
+def list_documents(role: Optional[str] = None, *, owner_user_id: Any = None) -> List[Dict[str, Any]]:
+    """Local documents. With `owner_user_id`: the person's own uploads
+    only — the rule every caller with a person now uses (audit
+    2026-09-22 2.12, 2026-09-25 L9): a local row is a copy of what went
+    to Paperless, and everyone else reaches it there with their own
+    token. Without a person, the old role filter (no caller left)."""
     with get_docs_conn(DOCS_DB_PATH) as conn:
         rows = conn.execute(
-            "SELECT id, title, mime_type, bytes, tags, allowed_roles, chunk_count, created_at, indexed_at "
+            "SELECT id, title, mime_type, bytes, tags, allowed_roles, chunk_count, created_at, indexed_at, "
+            "       owner_user_id "
             "FROM documents ORDER BY created_at DESC"
         ).fetchall()
     out = [dict(r) for r in rows]
+    if owner_user_id is not None:
+        return [d for d in out if owned_by(d, owner_user_id)]
     if role and role not in ("platform_admin", "admin"):
         out = [d for d in out if role in (d["allowed_roles"] or "").split(",")]
     return out
 
 
-def recent(k: int = 5, role: Optional[str] = None) -> List[Dict[str, Any]]:
+def recent(k: int = 5, role: Optional[str] = None, *, owner_user_id: Any = None) -> List[Dict[str, Any]]:
     """Most-recently-added documents for the role. Returns a flat list
     shaped like search() hits (doc_id, doc_title, doc_mime, snippet) so
     SearchDocumentsTool can render the same UI cards. Used when the
@@ -389,7 +396,7 @@ def recent(k: int = 5, role: Optional[str] = None) -> List[Dict[str, Any]]:
 
     Snippet is the first chunk's text when available, otherwise empty.
     """
-    docs = list_documents(role=role)
+    docs = list_documents(role=role, owner_user_id=owner_user_id)
     if not docs:
         return []
     docs = docs[:max(1, min(int(k), 20))]
@@ -424,7 +431,7 @@ def owned_by(doc: Optional[Dict[str, Any]], user_id: Any) -> bool:
     """Is this local upload the person's own? A local row is a copy of
     what went to Paperless; anyone else reaches the document through
     Paperless with their own token, where its sharing is decided."""
-    return bool(doc) and user_id is not None and str(doc.get("owner_user_id") or "") == str(user_id)
+    return bool(doc) and user_id not in (None, "") and str(doc.get("owner_user_id") or "") == str(user_id)
 
 
 def delete_document(doc_id: int) -> bool:
@@ -523,7 +530,7 @@ def index_document(doc_id: int) -> Dict[str, Any]:
 
 # ─── search ────────────────────────────────────────────────────────────────
 
-def search(query: str, k: int = 5, role: Optional[str] = None) -> List[Dict[str, Any]]:
+def search(query: str, k: int = 5, role: Optional[str] = None, *, owner_user_id: Any = None) -> List[Dict[str, Any]]:
     """Semantic search across all chunks the role may read.
 
     Returns up to `k` results, each with the chunk text, its document
@@ -559,7 +566,7 @@ def search(query: str, k: int = 5, role: Optional[str] = None) -> List[Dict[str,
                 "       dc.doc_id, dc.chunk_index, dc.text AS chunk_text, "
                 "       dc.char_start, dc.char_end, "
                 "       d.title AS doc_title, d.mime_type AS doc_mime, "
-                "       d.allowed_roles AS doc_allowed_roles "
+                "       d.allowed_roles AS doc_allowed_roles, d.owner_user_id AS doc_owner "
                 "FROM document_chunks dc "
                 "JOIN documents d ON d.id = dc.doc_id "
                 "WHERE dc.embedding IS NOT NULL "
@@ -573,7 +580,10 @@ def search(query: str, k: int = 5, role: Optional[str] = None) -> List[Dict[str,
 
     out: List[Dict[str, Any]] = []
     for r in rows:
-        if role and role not in ("platform_admin", "admin"):
+        if owner_user_id is not None:
+            if not owner_user_id or str(r["doc_owner"] or "") != str(owner_user_id):
+                continue
+        elif role and role not in ("platform_admin", "admin"):
             allowed = (r["doc_allowed_roles"] or "").split(",")
             if role not in [x.strip() for x in allowed]:
                 continue

@@ -202,6 +202,27 @@ def call_llm_extract(passages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [c for c in parsed if isinstance(c, dict)]
 
 
+def _now_iso() -> str:
+    from datetime import datetime
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def _read_cache(contact_id: int, owner_user_id: Any) -> Dict[str, Any]:
+    """This person's cached candidates for the contact, newest scrape
+    time as `scraped_at` (None: they never searched)."""
+    with get_conn() as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT id, source_kind, source_ref, line1, line2, postcode, city, "
+            "       region, country, confidence, excerpt, scraped_at "
+            "FROM contact_address_suggestions "
+            "WHERE contact_id = ? AND owner_user_id = ? "
+            "ORDER BY confidence DESC NULLS LAST, scraped_at DESC",
+            (contact_id, owner_user_id),
+        ).fetchall()]
+    stamps = [str(r["scraped_at"]) for r in rows if r.get("scraped_at")]
+    return {"scraped_at": max(stamps) if stamps else None, "candidates": rows}
+
+
 def scrape_and_cache(
     contact_id: int,
     *,
@@ -216,28 +237,17 @@ def scrape_and_cache(
     AND a scraped_at timestamp on the contact, returns the cache without
     calling the LLM. Pass False to force a re-scrape.
     """
+    # The cache is the asking person's: it holds excerpts from their own
+    # messages (audit 2026-09-25, L6). No person, nothing to read.
+    if owner_user_id is None:
+        return {"scraped_at": None, "candidates": [], "error": "no person to search for"}
     with get_conn() as conn:
-        meta = conn.execute(
-            "SELECT address_scraped_at FROM contacts WHERE id = ?",
-            (contact_id,),
-        ).fetchone()
-        if not meta:
+        if not conn.execute("SELECT 1 FROM contacts WHERE id = ?", (contact_id,)).fetchone():
             return {"scraped_at": None, "candidates": [], "error": "contact not found"}
-
-        if use_cache and meta["address_scraped_at"]:
-            rows = conn.execute(
-                "SELECT id, source_kind, source_ref, line1, line2, postcode, city, "
-                "       region, country, confidence, excerpt, scraped_at "
-                "FROM contact_address_suggestions "
-                "WHERE contact_id = ? "
-                "ORDER BY confidence DESC NULLS LAST, scraped_at DESC",
-                (contact_id,),
-            ).fetchall()
-            return {
-                "scraped_at": meta["address_scraped_at"],
-                "from_cache": True,
-                "candidates": [dict(r) for r in rows],
-            }
+    if use_cache:
+        cached = _read_cache(contact_id, owner_user_id)
+        if cached["scraped_at"]:
+            return {**cached, "from_cache": True}
 
     # No cache (or forced refresh) — gather + LLM.
     passages = gather_passages(contact_id, owner_user_id=owner_user_id)
@@ -269,18 +279,21 @@ def scrape_and_cache(
     rows_to_insert = [r for r in rows_to_insert if r["line1"] or r["city"]]
 
     with get_conn() as conn:
+        # Only this person's message-derived rows; their Paperless rows
+        # (find_recipient_address_from_documents) stay.
         conn.execute(
-            "DELETE FROM contact_address_suggestions WHERE contact_id = ?",
-            (contact_id,),
+            "DELETE FROM contact_address_suggestions "
+            "WHERE contact_id = ? AND owner_user_id = ? AND source_kind <> 'paperless'",
+            (contact_id, owner_user_id),
         )
         for r in rows_to_insert:
             conn.execute(
                 "INSERT INTO contact_address_suggestions "
-                "(contact_id, source_kind, source_ref, line1, line2, postcode, city, "
+                "(contact_id, owner_user_id, source_kind, source_ref, line1, line2, postcode, city, "
                 " region, country, confidence, excerpt) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    contact_id, r["source_kind"], r["source_ref"], r["line1"],
+                    contact_id, owner_user_id, r["source_kind"], r["source_ref"], r["line1"],
                     r["line2"], r["postcode"], r["city"], r["region"],
                     r["country"], r["confidence"], r["excerpt"],
                 ),
@@ -291,26 +304,12 @@ def scrape_and_cache(
         )
         conn.commit()
 
-    # Read back so the returned shape matches the cached path.
-    with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT id, source_kind, source_ref, line1, line2, postcode, city, "
-            "       region, country, confidence, excerpt, scraped_at "
-            "FROM contact_address_suggestions "
-            "WHERE contact_id = ? "
-            "ORDER BY confidence DESC NULLS LAST, scraped_at DESC",
-            (contact_id,),
-        ).fetchall()
-        meta = conn.execute(
-            "SELECT address_scraped_at FROM contacts WHERE id = ?",
-            (contact_id,),
-        ).fetchone()
-    return {
-        "scraped_at": meta["address_scraped_at"] if meta else None,
-        "from_cache": False,
-        "candidates": [dict(r) for r in rows],
-        "passages_scanned": len(passages),
-    }
+    # Read back so the returned shape matches the cached path. A search
+    # that found nothing still says when it ran, so the form doesn't
+    # offer it again as if it never had.
+    out = _read_cache(contact_id, owner_user_id)
+    return {**out, "scraped_at": out["scraped_at"] or _now_iso(), "from_cache": False,
+            "passages_scanned": len(passages)}
 
 
 def _coerce_float(v: Any) -> Optional[float]:
