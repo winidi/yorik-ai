@@ -199,14 +199,13 @@ if (( ${#missing_apt[@]} > 0 )); then
 fi
 
 # ─────────────────────────────────────────────────────────────────────
-# PHASE 2 — LLM endpoint (bring your own)
-# Yorik is a CLIENT to any OpenAI-compatible local LLM. We don't bundle
-# an LLM here because installs vary wildly (CPU vs GPU, distro quirks,
-# model size) and were the #1 source of first-run failures. Configure
-# the endpoint from the UI at: Settings → LLM. The "Detect" button
-# scans common ports (Ollama 11434, LM Studio 1234, llama.cpp 8082).
+# PHASE 2 — LLM endpoint
+# start.sh only checks the model; install.sh is what installs one
+# (llama.cpp on an NVIDIA GPU, else Ollama). Running start.sh by hand
+# (development), point config.env at your own, or use Settings → LLM →
+# Scan now, which probes the common ports (8080, 11434, 1234, 8081, 5000).
 # ─────────────────────────────────────────────────────────────────────
-say "PHASE 2" "LLM endpoint (bring your own — configure at Settings → LLM)"
+say "PHASE 2" "LLM endpoint (install.sh installs one; or Settings → LLM)"
 
 if curl -fs --max-time 2 "$LLM_BASE_URL/models" >/dev/null 2>&1; then
   if [[ -n "$LLM_MODEL" ]]; then
@@ -220,8 +219,8 @@ else
   warn "  NO LLM REACHABLE at $LLM_BASE_URL"
   warn "  Yorik's chat will NOT work until you run a local LLM."
   warn ""
-  warn "  Yorik is a CLIENT — bring your own OpenAI-compatible backend."
-  warn "  Pick whichever fits your hardware + workflow:"
+  warn "  Easiest: bash install.sh (installs one for this machine)."
+  warn "  Or run any OpenAI-compatible server yourself:"
   warn ""
   warn "    Backend           Port    Notes"
   warn "    ─────────────────────────────────────────────────────────"
@@ -229,7 +228,7 @@ else
   warn "    Ollama            :11434  single-model, easiest install"
   warn "    LM Studio         :1234   GUI, good for desktop tinkering"
   warn "    llama.cpp server  :8081   single model, lowest deps"
-  warn "    vLLM              :8000   GPU-heavy production-grade"
+  warn "    vLLM              :8001   GPU-heavy (not :8000, that's Yorik)"
   warn ""
   warn "  Whichever you pick, edit config.env:"
   warn "      HOMEOS_LLM_BASE_URL=http://127.0.0.1:<port>/v1"
@@ -1159,9 +1158,9 @@ EOPROMPT
   read -r -p "Install yorik.service now? [y/N] " _yn
   if [[ "${_yn,,}" == "y" || "${_yn,,}" == "yes" ]]; then
     bash "$(dirname "$0")/scripts/install-systemd-service.sh" install || \
-      warn "service install failed — retry later with: yorik service install"
+      warn "service install failed — retry later with: ./scripts/yorik service install"
   else
-    echo "  → ok, skipping. Run later with: yorik service install"
+    echo "  → ok, skipping. Run later with: ./scripts/yorik service install"
   fi
 fi
 
