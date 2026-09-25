@@ -24,7 +24,7 @@ import {
   Pencil, Phone as PhoneIcon, Cake, ExternalLink, MessageSquare,
   CalendarDays, Pin as PinIcon, PinOff,
   Briefcase, User as UserIcon, FileText, Send, Upload,
-  Wand2, StopCircle, ChevronDown, AlertTriangle, Sparkles,
+  Wand2, StopCircle, ChevronDown, AlertTriangle, Sparkles, RefreshCw,
 } from "lucide-react";
 import { VcardImportModal } from "@/components/VcardImportModal";
 import { ContactProposals } from "@/components/ContactProposals";
@@ -86,6 +86,29 @@ export function ContactsApp() {
       toast(`Scan failed: ${e?.message || e}`);
     } finally {
       setScanning(false);
+    }
+  }
+  // Ask WhatsApp for the address book again and put the names it
+  // returns on the chats, the channels and the contacts that still
+  // show a bare number. The chat list keeps WhatsApp's own name, so
+  // this is the only way a renamed contact reaches it.
+  const [refreshingWaNames, setRefreshingWaNames] = useState(false);
+  async function refreshWhatsappNames() {
+    setRefreshingWaNames(true);
+    try {
+      const r = await api.post<{ updated_chats: number; updated_contacts: number;
+                                 updated_channels: number; inspected: number }>(
+        "/api/contacts/backfill-whatsapp-names", {},
+      );
+      const touched = (r.updated_chats || 0) + (r.updated_contacts || 0) + (r.updated_channels || 0);
+      toast(touched > 0
+        ? `${r.updated_chats || 0} chat${r.updated_chats === 1 ? "" : "s"} and ${r.updated_contacts || 0} contact${r.updated_contacts === 1 ? "" : "s"} renamed from WhatsApp.`
+        : `Nothing to rename — the ${r.inspected || 0} WhatsApp contacts already carry WhatsApp's name.`);
+      await refresh();
+    } catch (e: any) {
+      toast(`Refresh failed: ${e?.message || e}`);
+    } finally {
+      setRefreshingWaNames(false);
     }
   }
   const canPickFromPhone = typeof navigator !== "undefined"
@@ -368,6 +391,16 @@ export function ContactsApp() {
               <Upload className="w-3.5 h-3.5" /> From phone
             </button>
           )}
+          <button
+            onClick={refreshWhatsappNames}
+            disabled={refreshingWaNames}
+            className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5 disabled:opacity-60"
+            title="Ask WhatsApp for the address book again and rename chats and contacts that still show a number"
+          >
+            {refreshingWaNames
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <RefreshCw className="w-3.5 h-3.5" />} WhatsApp names
+          </button>
           <button
             onClick={() => { setImporting(true); }}
             className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5"

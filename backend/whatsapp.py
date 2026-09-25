@@ -168,39 +168,103 @@ def _is_phantom_self_chat(jid: Optional[str], name: Optional[str],
     return name.strip().casefold() == self_name.strip().casefold()
 
 
+# Where a chat's name came from, strongest last. The same order the
+# bridge uses (whatsapp-bridge/names.js) and the same one WhatsApp
+# itself follows: the address book, then a verified business name,
+# then whatever the other person calls themselves.
+_NAME_RANK = {"push": 1, "chat": 2, "business": 2, "book": 3}
+
+
+def _name_rank(source: Optional[str]) -> int:
+    return _NAME_RANK.get((source or "").strip(), 0)
+
+
+def _name_wins(new_name: Optional[str], new_source: Optional[str],
+               cur_name: Optional[str], cur_source: Optional[str]) -> bool:
+    """Whether a name that just arrived replaces the stored one.
+
+    A weaker source never wins — that is what kept every chat named
+    after the pushName. An equally strong one does, so renaming someone
+    on the phone arrives here. Nothing never beats something."""
+    new_clean = (new_name or "").strip()
+    if not new_clean:
+        return False
+    cur_clean = (cur_name or "").strip()
+    if not cur_clean:
+        return True
+    if _name_rank(new_source) < _name_rank(cur_source):
+        return False
+    return new_clean != cur_clean or (new_source or "") != (cur_source or "")
+
+
 def _upsert_chat(jid: str, name: Optional[str], is_group: bool, ts: Optional[int],
-                 last_text: Optional[str], owner_user_id: str) -> None:
-    """Idempotent chat upsert. Bumps last_message_ts only if the new ts is
-    newer; name always backfills (COALESCE-on-NULL semantics so a name
-    update never overwrites an existing name with NULL)."""
+                 last_text: Optional[str], owner_user_id: str,
+                 name_source: Optional[str] = None) -> None:
+    """Idempotent chat upsert. Bumps last_message_ts only if the new ts
+    is newer. The name follows the ranking above: a weaker source is
+    dropped, an equal or stronger one replaces what is stored."""
     with get_conn() as conn:
         if _is_phantom_self_chat(jid, name, owner_user_id, conn):
             log.info("wa: skipping phantom self-LID chat jid=%s name=%s", jid, name)
             return
-        row = conn.execute("SELECT last_message_ts FROM wa_chats WHERE jid=?", (jid,)).fetchone()
+        row = conn.execute(
+            "SELECT last_message_ts, name, name_source FROM wa_chats WHERE jid=?",
+            (jid,),
+        ).fetchone()
         if row is None:
             conn.execute(
-                "INSERT INTO wa_chats (jid, name, is_group, last_message_ts, last_message_text, owner_user_id) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (jid, name, 1 if is_group else 0, ts, last_text, owner_user_id),
+                "INSERT INTO wa_chats (jid, name, name_source, is_group, last_message_ts, "
+                "last_message_text, owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (jid, name, name_source if name else None,
+                 1 if is_group else 0, ts, last_text, owner_user_id),
             )
         else:
             prev = row["last_message_ts"] or 0
             if (ts or 0) >= prev:
-                # Newer activity — update ts + preview text + (re-)backfill name.
+                # Newer activity. COALESCE on the preview text because a
+                # chat event carries none and used to blank the last
+                # message out of the list.
                 conn.execute(
-                    "UPDATE wa_chats SET name=COALESCE(?, name), last_message_ts=?, "
-                    "last_message_text=? WHERE jid=?",
-                    (name, ts, last_text, jid),
+                    "UPDATE wa_chats SET last_message_ts=?, "
+                    "last_message_text=COALESCE(?, last_message_text) WHERE jid=?",
+                    (ts, last_text, jid),
                 )
-            elif name:
-                # Older event (or chat-only update) but it has a name — still
-                # backfill it so contact updates land even on stale events.
+            if _name_wins(name, name_source, row["name"], row["name_source"]):
                 conn.execute(
-                    "UPDATE wa_chats SET name=COALESCE(?, name) WHERE jid=?",
-                    (name, jid),
+                    "UPDATE wa_chats SET name=?, name_source=? WHERE jid=?",
+                    (name.strip(), name_source, jid),
                 )
         conn.commit()
+
+
+def _name_chat_if_known(jid: Optional[str], name: Optional[str],
+                        name_source: Optional[str]) -> bool:
+    """Name a chat that already exists, without creating one.
+
+    An address-book entry is not a conversation: writing one used to
+    add a chat row per contact. This only renames what is already
+    there, which is how a contact's name reaches the LID-addressed chat
+    the person actually writes in."""
+    if not jid or not (name or "").strip():
+        return False
+    try:
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT name, name_source FROM wa_chats WHERE jid=?", (jid,)
+            ).fetchone()
+            if row is None:
+                return False
+            if not _name_wins(name, name_source, row["name"], row["name_source"]):
+                return False
+            conn.execute(
+                "UPDATE wa_chats SET name=?, name_source=? WHERE jid=?",
+                (name.strip(), name_source, jid),
+            )
+            conn.commit()
+            return True
+    except Exception as exc:  # noqa: BLE001
+        log.debug("wa: naming chat %s failed: %s", jid, exc)
+        return False
 
 
 def _insert_message(m: dict[str, Any], owner_user_id: str) -> None:
@@ -241,10 +305,17 @@ def _insert_message(m: dict[str, Any], owner_user_id: str) -> None:
             ),
         )
         conn.commit()
-    # Bump the chat's recency.
+    # Bump the chat's recency. A message says who wrote it, not what
+    # the chat is called: in a group the pushName is the member who
+    # spoke, and on our own messages it is the user — naming the chat
+    # after either is how people ended up carrying the wrong name.
+    chat_name = None
+    if not m.get("fromMe") and not jid.endswith("@g.us"):
+        chat_name = m.get("pushName")
     _upsert_chat(
         jid=jid,
-        name=m.get("pushName"),
+        name=chat_name,
+        name_source="push" if chat_name else None,
         is_group=jid.endswith("@g.us"),
         ts=int(m.get("timestamp") or 0),
         last_text=m.get("text") or _media_placeholder(m),
@@ -501,8 +572,8 @@ async def _handle_event(evt: dict[str, Any]) -> None:
                                 "reason": "manual_reply"},
                 }, user_id=owner_user_id)
     elif t == "chat":
-        # Bridge sends this on history sync, contacts.upsert, and chat
-        # name updates. Refresh the chat row's name/group flag AND
+        # A real conversation, from the history sync or a chat-name
+        # update. Refresh the chat row's name/group flag AND
         # opportunistically upgrade the linked contact's display_name
         # when it's still the JID-prefix fallback. This is the always-on
         # half of the "self-healing names" pipeline — any new name
@@ -513,6 +584,7 @@ async def _handle_event(evt: dict[str, Any]) -> None:
             _upsert_chat(
                 jid=jid,
                 name=name,
+                name_source=p.get("nameSource"),
                 is_group=bool(p.get("isGroup")),
                 ts=p.get("lastMessageTs"),
                 last_text=None,
@@ -520,6 +592,33 @@ async def _handle_event(evt: dict[str, Any]) -> None:
             )
             if name and (name or "").strip():
                 _maybe_promote_contact_name(jid, name.strip())
+    elif t == "contact":
+        # An entry from the address book — not a conversation. It used
+        # to arrive as a "chat" and added a row per contact: 509 of the
+        # 532 number-addressed chats here had never carried a message,
+        # while the real conversation ran under the person's LID.
+        #
+        # So: name the chats this person already has, under both of
+        # their addresses, and create none. The `lid` arm is what
+        # finally puts the address-book name on the LID-addressed chat
+        # they actually write in.
+        jid = (p.get("jid") or "").strip()
+        name = (p.get("name") or "").strip()
+        source = p.get("nameSource") or "book"
+        if jid and name:
+            renamed = [
+                target for target in (jid, (p.get("lid") or "").strip())
+                if target and _name_chat_if_known(target, name, source)
+            ]
+            _maybe_promote_contact_name(jid, name)
+            # The browser knows how to update a chat, not a contact —
+            # tell it in those terms, once per row we actually renamed.
+            for target in renamed:
+                await _broadcast_to_browsers(
+                    {"type": "chat",
+                     "payload": {"jid": target, "name": name, "nameSource": source}},
+                    user_id=owner_user_id,
+                )
     elif t == "ready":
         me = p.get("me") or {}
         log.info("bridge reports WA ready for user=%s: %s", owner_user_id, me)
@@ -1336,6 +1435,22 @@ async def list_chats(
     to the logged-in user's WhatsApp session. Ordered by most-recent
     message."""
     uid = user["id"]
+    cols = ("jid, name, name_source, is_group, last_message_ts, "
+            "last_message_text, unread_count")
+    # Two kinds of row never belong in the list:
+    #
+    #   * no timestamp — never carried a message. These were the
+    #     address-book entries the bridge used to send as chats.
+    #   * no name AND no message — a stub WhatsApp hands over in the
+    #     history sync for someone who is not in the address book. All
+    #     it could show is a 15-digit LID, and there is nothing behind
+    #     it to open (84 of them after the re-pairing on 2026-09-25).
+    #
+    # A nameless chat that does hold messages stays: it is a real
+    # conversation, and hiding it would put its content out of reach.
+    where = ("owner_user_id=? AND archived=0 AND last_message_ts IS NOT NULL "
+             "AND (COALESCE(TRIM(name), '') <> '' "
+             "     OR EXISTS (SELECT 1 FROM wa_messages m WHERE m.chat_jid = wa_chats.jid))")
     with get_conn() as conn:
         self_name = _get_self_pushname(conn, uid)
         # Soft phantom filter at query time — belt-and-braces in case a
@@ -1344,17 +1459,15 @@ async def list_chats(
         # physically removes them; this just hides them.
         if self_name:
             rows = conn.execute(
-                "SELECT jid, name, is_group, last_message_ts, last_message_text, unread_count "
-                "FROM wa_chats WHERE owner_user_id=? AND archived=0 "
+                f"SELECT {cols} FROM wa_chats WHERE {where} "
                 "AND NOT (jid LIKE '%@lid' AND LOWER(TRIM(name)) = LOWER(TRIM(?))) "
-                "ORDER BY last_message_ts DESC NULLS LAST LIMIT ?",
+                "ORDER BY last_message_ts DESC LIMIT ?",
                 (uid, self_name, limit),
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT jid, name, is_group, last_message_ts, last_message_text, unread_count "
-                "FROM wa_chats WHERE owner_user_id=? AND archived=0 "
-                "ORDER BY last_message_ts DESC NULLS LAST LIMIT ?",
+                f"SELECT {cols} FROM wa_chats WHERE {where} "
+                "ORDER BY last_message_ts DESC LIMIT ?",
                 (uid, limit),
             ).fetchall()
     return [dict(r) for r in rows]

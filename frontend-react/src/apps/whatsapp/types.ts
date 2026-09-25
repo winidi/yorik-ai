@@ -12,6 +12,10 @@ export interface WaStatus {
 export interface WaChat {
   jid: string;
   name?: string | null;
+  /** Where `name` came from: 'book' (the phone's address book),
+   *  'business', 'chat', or 'push' (the name the other person chose
+   *  for themselves). See whatsapp-bridge/names.js. */
+  name_source?: string | null;
   is_group: number;
   last_message_ts?: number | null;
   last_message_text?: string | null;

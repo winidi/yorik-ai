@@ -6579,10 +6579,12 @@ def seed_contacts_from_whatsapp(
 def backfill_whatsapp_names(
     user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
-    """Refresh display_name for contacts that still show a raw phone
-    number / JID prefix. Pulls wa_chats.name (preferred) or the latest
-    wa_messages.push_name as the new name. Idempotent — only touches
-    rows whose display_name is purely digits."""
+    """Give the WhatsApp rows the name WhatsApp shows for them: the
+    address book first, then a business name, then the name the other
+    person chose. Refreshes the chat list, the per-channel name, and a
+    contact's own name while that is still the raw number. Asks the
+    bridge for the address book again first, so the LID-addressed chats
+    can be matched to the number that carries the name. Idempotent."""
     from . import contact_autocapture
     return contact_autocapture.backfill_whatsapp_display_names(
         owner_user_id=user.get("id"),

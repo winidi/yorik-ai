@@ -63,6 +63,9 @@ import {
 } from "@whiskeysockets/baileys";
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "fs";
 import { join } from "path";
+// How a name is chosen and where a person's second address comes in —
+// see names.js for the source ranking.
+import { nameRank, bareJid, resolveName, nextName } from "./names.js";
 
 const PORT = process.env.BRIDGE_PORT ? Number(process.env.BRIDGE_PORT) : 3001;
 const DATA_DIR = process.env.BRIDGE_DATA_DIR || "/data";
@@ -212,19 +215,65 @@ async function startSession(userId) {
   // Persistence is debounced: writing on every _learn() would thrash
   // disk during init-sync bursts (thousands of names in seconds).
   // We schedule one write per ~500ms instead.
-  session.nameByJid = new Map();
-  const nameMapPath = join(SESSIONS_DIR, userId, "name-map.json");
+  session.nameByJid = new Map();   // jid  -> {name, source}
+  session.pnByLid   = new Map();   // @lid -> phone jid
+  session.lidByPn   = new Map();   // phone jid -> @lid  (derived, not saved)
+  const nameMapPath  = join(SESSIONS_DIR, userId, "name-map.json");
+  const aliasMapPath = join(SESSIONS_DIR, userId, "alias-map.json");
   try {
     const { readFileSync } = await import("fs");
     if (existsSync(nameMapPath)) {
       const loaded = JSON.parse(readFileSync(nameMapPath, "utf-8"));
-      for (const [jid, name] of Object.entries(loaded || {})) {
-        if (typeof name === "string" && name) session.nameByJid.set(jid, name);
+      for (const [jid, entry] of Object.entries(loaded || {})) {
+        // Until 2026-09-24 the file held plain strings and nothing said
+        // where a name came from. Read those as `push`, the weakest
+        // source, so anything better that arrives later wins.
+        if (typeof entry === "string" && entry) {
+          session.nameByJid.set(jid, { name: entry, source: "push" });
+        } else if (entry?.name) {
+          session.nameByJid.set(jid, { name: entry.name, source: entry.source || "push" });
+        }
       }
       session.logger.info(`name-map: loaded ${session.nameByJid.size} entries from disk`);
     }
+    if (existsSync(aliasMapPath)) {
+      const loaded = JSON.parse(readFileSync(aliasMapPath, "utf-8"));
+      for (const [lid, pn] of Object.entries(loaded || {})) {
+        if (typeof pn === "string" && pn) {
+          session.pnByLid.set(lid, pn);
+          session.lidByPn.set(pn, lid);
+        }
+      }
+      session.logger.info(`alias-map: loaded ${session.pnByLid.size} LID↔number pairs from disk`);
+    }
   } catch (e) {
-    session.logger.warn({ err: String(e) }, "name-map: load failed (continuing with empty map)");
+    session.logger.warn({ err: String(e) }, "name-map: load failed (continuing with empty maps)");
+  }
+
+  // One-off repair. Until 2026-09-24 every message taught its pushName
+  // to the JID it belonged to — including our own outgoing ones, whose
+  // pushName is the user. Other people ended up carrying the user's own
+  // name. Drop those entries; the real name comes back from the app
+  // state. Only `push` entries are touched, so a contact who genuinely
+  // shares the user's first name survives once it is known from the
+  // address book.
+  const meName = (authState.creds?.me?.name || "").trim();
+  if (meName) {
+    const meIds = new Set(
+      [authState.creds?.me?.id, authState.creds?.me?.lid].filter(Boolean).map(bareJid),
+    );
+    let dropped = 0;
+    for (const [jid, entry] of session.nameByJid) {
+      if (meIds.has(bareJid(jid))) continue;               // the user's own chat
+      if (entry?.source !== "push") continue;
+      if ((entry.name || "").trim().toLowerCase() !== meName.toLowerCase()) continue;
+      session.nameByJid.delete(jid);
+      dropped++;
+    }
+    if (dropped) {
+      session.logger.info(`name-map: dropped ${dropped} entries that carried the user's own name`);
+      session._nameMapDirty = true;
+    }
   }
 
   let _saveTimer = null;
@@ -234,8 +283,8 @@ async function startSession(userId) {
       _saveTimer = null;
       try {
         const { writeFileSync } = await import("fs");
-        const obj = Object.fromEntries(session.nameByJid);
-        writeFileSync(nameMapPath, JSON.stringify(obj));
+        writeFileSync(nameMapPath, JSON.stringify(Object.fromEntries(session.nameByJid)));
+        writeFileSync(aliasMapPath, JSON.stringify(Object.fromEntries(session.pnByLid)));
       } catch (e) {
         session.logger.warn({ err: String(e) }, "name-map: save failed");
       }
@@ -243,16 +292,50 @@ async function startSession(userId) {
   };
   session._saveNameMap = _scheduleSave;
 
-  const _learn = (jid, name) => {
+  const _learn = (jid, name, source = "push") => {
     if (!jid || typeof name !== "string") return;
     const n = name.trim();
     if (!n) return;
     if (n === jid) return;
-    const prev = session.nameByJid.get(jid);
-    if (prev === n) return;  // no-op, skip the disk write
-    session.nameByJid.set(jid, n);
+    const next = nextName(session.nameByJid.get(jid), n, source);
+    if (!next) return;
+    session.nameByJid.set(jid, next);
     _scheduleSave();
   };
+
+  // Both addresses of one person, as the app state hands them to us.
+  const _learnAlias = (lid, pn) => {
+    if (!lid || !pn) return;
+    const l = bareJid(lid), p = bareJid(pn);
+    if (!l.endsWith("@lid") || l === p) return;
+    if (session.pnByLid.get(l) === p) return;
+    session.pnByLid.set(l, p);
+    session.lidByPn.set(p, l);
+    _scheduleSave();
+  };
+
+  // A contact from the address book (`contacts.upsert`, the contacts
+  // array of the history sync). `name` is what the user saved on the
+  // phone, `verifiedName` a business, `notify` the person's own choice.
+  // Returns what was learned so the caller can pass it on.
+  const _learnContact = (c) => {
+    if (!c?.id) return null;
+    if (c.lid) _learnAlias(c.lid, c.id);
+    const tries = [
+      ["book", c.name],
+      ["business", c.verifiedName],
+      ["push", c.notify],
+    ];
+    for (const [source, raw] of tries) {
+      const n = (raw || "").trim();
+      if (!n) continue;
+      _learn(c.id, n, source);
+      return { name: n, source };
+    }
+    return null;
+  };
+
+  if (session._nameMapDirty) { session._nameMapDirty = false; _scheduleSave(); }
 
   sock.ev.on("creds.update", saveCreds);
 
@@ -321,8 +404,11 @@ async function startSession(userId) {
       const remote = m.key?.remoteJid;
       const participant = m.key?.participant || null;
       const pushName = m.pushName;
-      if (pushName) {
-        _learn(participant || remote, pushName);
+      // Our own outgoing messages carry OUR pushName. Learning it here
+      // named the person we wrote to after the user — six people in
+      // this household ended up called "Dirk" that way.
+      if (pushName && !m.key?.fromMe) {
+        _learn(participant || remote, pushName, "push");
       }
       if (type === "notify" || type === "append") {
         const s = serializeMessage(m);
@@ -334,19 +420,20 @@ async function startSession(userId) {
   sock.ev.on("messaging-history.set", (payload) => {
     const { chats = [], contacts = [], messages = [], isLatest = false } = payload;
     let kept = 0;
+    // The contacts array is the address book — read it BEFORE the
+    // chats, so a chat row cannot claim a name the address book
+    // answers better, and so the LID↔number pairs are known when the
+    // chats get serialized.
+    for (const ct of contacts) _learnContact(ct);
     for (const c of chats) {
-      _learn(c.id, c.name || c.subject);
-      broadcast(userId, "chat", serializeChat(c));
+      _learn(c.id, c.name || c.subject, c.id?.endsWith("@g.us") ? "book" : "chat");
+      broadcast(userId, "chat", serializeChat(c, session));
     }
-    // The history payload also carries a contacts array — Baileys'
-    // initial-sync snapshot of the user's address book. Most reliable
-    // place to populate the name map after a restart.
-    for (const ct of contacts) _learn(ct.id, ct.name || ct.notify || ct.verifiedName);
     for (const m of messages) {
       cacheMessage(session, m);
       const remote = m.key?.remoteJid;
       const participant = m.key?.participant || null;
-      if (m.pushName) _learn(participant || remote, m.pushName);
+      if (m.pushName && !m.key?.fromMe) _learn(participant || remote, m.pushName, "push");
       const s = serializeMessage(m);
       if (s) { broadcast(userId, "message", s); kept++; }
     }
@@ -357,29 +444,34 @@ async function startSession(userId) {
 
   sock.ev.on("chats.upsert", (chats) => {
     for (const c of chats) {
-      _learn(c.id, c.name || c.subject);
-      broadcast(userId, "chat", serializeChat(c));
+      _learn(c.id, c.name || c.subject, c.id?.endsWith("@g.us") ? "book" : "chat");
+      broadcast(userId, "chat", serializeChat(c, session));
     }
   });
   sock.ev.on("chats.update", (chats) => {
     for (const c of chats) {
-      _learn(c.id, c.name || c.subject);
-      broadcast(userId, "chat", serializeChat(c));
+      _learn(c.id, c.name || c.subject, c.id?.endsWith("@g.us") ? "book" : "chat");
+      broadcast(userId, "chat", serializeChat(c, session));
     }
   });
-  sock.ev.on("contacts.upsert", (contacts) => {
-    for (const c of contacts) {
-      const name = c.name || c.notify || c.verifiedName;
-      _learn(c.id, name);
-      if (!c.id || !name) continue;
-      broadcast(userId, "chat", { jid: c.id, name, isGroup: false });
-    }
-  });
-  sock.ev.on("contacts.update", (updates) => {
-    for (const c of updates) {
-      _learn(c.id, c.name || c.notify || c.verifiedName);
-    }
-  });
+  // An address-book entry is not a conversation. Sending it as a
+  // "chat" created a row per contact: 509 of the 532 number-addressed
+  // chats in this household had never carried a single message, while
+  // the real conversation ran under the person's LID. It goes out as
+  // its own event now, carrying the other address so the backend can
+  // name the LID-addressed chat that person actually writes in.
+  const _onContact = (c) => {
+    const learned = _learnContact(c);
+    if (!c?.id || !learned) return;
+    broadcast(userId, "contact", {
+      jid: c.id,
+      name: learned.name,
+      nameSource: learned.source,
+      lid: c.lid ? bareJid(c.lid) : (session.lidByPn.get(bareJid(c.id)) || null),
+    });
+  };
+  sock.ev.on("contacts.upsert", (contacts) => { for (const c of contacts) _onContact(c); });
+  sock.ev.on("contacts.update", (updates)  => { for (const c of updates)  _onContact(c); });
 
   return session;
 }
@@ -510,12 +602,16 @@ function serializeMessage(m) {
   };
 }
 
-function serializeChat(c) {
+function serializeChat(c, session) {
+  const isGroup = c.id?.endsWith("@g.us") || false;
+  const resolved = resolveName(session, c.id);
+  const direct = (c.name || c.subject || "").trim() || null;
   return {
     jid: c.id,
-    name: c.name || c.subject || null,
+    name: resolved?.name || direct,
+    nameSource: resolved?.source || (direct ? (isGroup ? "book" : "chat") : null),
     unread: c.unreadCount || 0,
-    isGroup: c.id?.endsWith("@g.us") || false,
+    isGroup,
     lastMessageTs: Number(c.conversationTimestamp) || null,
   };
 }
@@ -616,7 +712,8 @@ app.get("/users/:userId/qr", async (req, res) => {
 // Each entry can carry up to three name fields: `name` (the contact's
 // WhatsApp profile name), `notify` (the pushName the contact has
 // configured), and `verifiedName` (only for business accounts).
-// First non-empty wins.
+// Only used as a fallback for contacts our own map never saw — the
+// ranked map (see NAME_RANK) answers first.
 //
 // Two response shapes:
 //   GET /users/:userId/contact-names           → {jid: name, ...}
@@ -639,19 +736,59 @@ function _pickContactName(c) {
 app.get("/users/:userId/contact-names", (req, res) => {
   const s = sessions.get(req.params.userId);
   if (!s) return res.status(503).json({ error: "no_session" });
-  // Prefer our accumulator (populated from every event with a name);
-  // fall back to Baileys' sock.contacts if it happens to be populated.
-  const out = {};
+  // `names` carries where each name came from, `contacts` is the old
+  // {jid: name} shape a pre-2026-09-24 backend still asks for.
+  const names = {};
   if (s.nameByJid) {
-    for (const [jid, name] of s.nameByJid.entries()) out[jid] = name;
+    for (const [jid, entry] of s.nameByJid.entries()) {
+      if (entry?.name) names[jid] = { name: entry.name, source: entry.source || "push" };
+    }
+  }
+  // Every LID we know a number for, answered from that number's entry.
+  // These are the rows the backend cannot fill from anywhere else: the
+  // conversation runs under the LID, the name sits on the number.
+  for (const lid of s.pnByLid?.keys() || []) {
+    if (names[lid]) continue;
+    const r = resolveName(s, lid);
+    if (r?.name) names[lid] = { name: r.name, source: r.source };
   }
   const store = s.sock?.contacts || {};
   for (const jid of Object.keys(store)) {
-    if (out[jid]) continue;
+    if (names[jid]) continue;
     const n = _pickContactName(store[jid]);
-    if (n) out[jid] = n;
+    if (n) names[jid] = { name: n, source: "push" };
   }
-  res.json({ count: Object.keys(out).length, contacts: out });
+  const contacts = {};
+  for (const [jid, entry] of Object.entries(names)) contacts[jid] = entry.name;
+  res.json({
+    count: Object.keys(names).length,
+    contacts,
+    names,
+    aliases: Object.fromEntries(s.pnByLid || []),
+  });
+});
+
+// Pull the address book down again. WhatsApp sends it as an app-state
+// collection; after a bridge restart only deltas arrive, so a fresh
+// install of this code would sit on an empty alias table until someone
+// edits a contact on the phone. This asks for the whole collection.
+// Idempotent, and cheap enough to run from the settings page.
+app.post("/users/:userId/resync-contacts", async (req, res) => {
+  const s = sessions.get(req.params.userId);
+  if (!s || !s.connected) return res.status(503).json({ error: "not_connected" });
+  const before = { names: s.nameByJid?.size || 0, aliases: s.pnByLid?.size || 0 };
+  const started = Date.now();
+  try {
+    await s.sock.resyncAppState(["critical_unblock_low"], true);
+  } catch (e) {
+    s.logger.warn({ err: String(e) }, "resync-contacts failed");
+    return res.status(502).json({ error: "resync_failed", detail: String(e) });
+  }
+  const after = { names: s.nameByJid?.size || 0, aliases: s.pnByLid?.size || 0 };
+  s.logger.info(
+    `resync-contacts: names ${before.names}→${after.names}, aliases ${before.aliases}→${after.aliases} in ${Date.now() - started} ms`,
+  );
+  res.json({ before, after, took_ms: Date.now() - started });
 });
 
 // Active per-JID name lookup. The passive listener stack
@@ -751,11 +888,11 @@ app.get("/users/:userId/contact-names/:jid", (req, res) => {
   const s = sessions.get(req.params.userId);
   if (!s) return res.status(503).json({ error: "no_session" });
   const { jid } = req.params;
-  const fromMap = s.nameByJid?.get(jid);
-  if (fromMap) return res.json({ jid, name: fromMap });
+  const resolved = resolveName(s, jid);
+  if (resolved) return res.json({ jid, name: resolved.name, source: resolved.source });
   const n = _pickContactName(s.sock?.contacts?.[jid]);
   if (!n) return res.status(404).json({ error: "no_name" });
-  res.json({ jid, name: n });
+  res.json({ jid, name: n, source: "push" });
 });
 
 app.get("/users/:userId/chats", (req, res) => {
@@ -768,9 +905,11 @@ app.get("/users/:userId/chats", (req, res) => {
     const ts = Number(m.messageTimestamp) || 0;
     const prev = byJid.get(jid);
     if (!prev || ts > prev.lastMessageTs) {
+      const resolved = resolveName(s, jid);
       byJid.set(jid, {
         jid,
-        name: m.pushName || null,
+        name: resolved?.name || (m.key?.fromMe ? null : m.pushName) || null,
+        nameSource: resolved?.source || (m.key?.fromMe ? null : "push"),
         isGroup: jid.endsWith("@g.us"),
         lastMessageTs: ts,
       });

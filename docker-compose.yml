@@ -275,7 +275,11 @@ services:
       - BRIDGE_PORT=3015
       - BRIDGE_TOKEN=${YORIK_WA_BRIDGE_TOKEN:-}
       - BRIDGE_AUTH_DIR=/data/baileys-auth
-      - LOG_LEVEL=warn
+      # `warn` in normal operation. Set YORIK_WA_BRIDGE_LOG_LEVEL=debug
+      # and re-run the compose command to see what WhatsApp answers to
+      # the app-state sync — that is where the address-book names come
+      # from, and it is silent at `warn`.
+      - LOG_LEVEL=${YORIK_WA_BRIDGE_LOG_LEVEL:-warn}
     volumes:
       - whatsapp_bridge_data:/data
 

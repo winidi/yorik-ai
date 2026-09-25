@@ -17,7 +17,7 @@ COPY package.json ./
 RUN npm install --omit=dev --no-audit --no-fund
 
 # Then the server itself.
-COPY server.js ./
+COPY server.js names.js ./
 
 # Bridge listens on 3001 internally; the compose file maps it.
 EXPOSE 3001

@@ -380,6 +380,16 @@ function ChatListPane({
   );
 }
 
+/** WhatsApp writes a "~" in front of a name the other person chose for
+ *  themselves, to say it is not from your address book. Yorik does the
+ *  same, so a chat titled "~Ela" reads as what it is. Display only —
+ *  the avatar's initials and the filter keep the plain name. */
+function withPushMark(chat: WaChat, text: string) {
+  return chat.name && chat.name_source === "push" ? `~${text}` : text;
+}
+
+const PUSH_NAME_HINT = "The name this contact chose for themselves — not from your address book";
+
 function ChatRow({ chat, active, draftCount, ambiguousName, onClick }:
   { chat: WaChat; active: boolean; draftCount: number; ambiguousName: boolean; onClick: () => void }) {
   const rawName = chat.name || chat.jid.split("@")[0];
@@ -394,6 +404,7 @@ function ChatRow({ chat, active, draftCount, ambiguousName, onClick }:
     ? ` · ${isLid ? "@lid " : ""}…${digits.slice(-4)}`
     : "";
   const name = rawName + suffix;
+  const shown = withPushMark(chat, name);
   const ts = chat.last_message_ts ? new Date(chat.last_message_ts * 1000) : null;
   const tsLabel = ts ? formatChatListTime(ts) : "";
   return (
@@ -411,8 +422,9 @@ function ChatRow({ chat, active, draftCount, ambiguousName, onClick }:
       </PersonHover>
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline justify-between gap-2">
-          <span className={cn("text-sm truncate", chat.unread_count > 0 && "font-semibold")}>
-            {name}
+          <span className={cn("text-sm truncate", chat.unread_count > 0 && "font-semibold")}
+                title={shown !== name ? PUSH_NAME_HINT : undefined}>
+            {shown}
           </span>
           <span className={cn(
             "text-[11px] tabular-nums shrink-0",
@@ -510,6 +522,7 @@ function Thread({ jid, chat, onSent }:
   }
 
   const name = chat.name || jid.split("@")[0];
+  const shown = withPushMark(chat, name);
 
   return (
     <>
@@ -520,7 +533,8 @@ function Thread({ jid, chat, onSent }:
         </PersonHover>
         <div className="flex-1 min-w-0">
           <PersonHover identifier={jid}>
-            <div className="font-semibold leading-none cursor-default inline-block">{name}</div>
+            <div className="font-semibold leading-none cursor-default inline-block"
+                 title={shown !== name ? PUSH_NAME_HINT : undefined}>{shown}</div>
           </PersonHover>
           <div className="text-xs text-muted-foreground mt-1 truncate">
             {chat.is_group ? "Group chat" : jid.replace(/@.+/, "")}
