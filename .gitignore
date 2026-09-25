@@ -76,3 +76,6 @@ infra/caddy/tenants/*.caddy
 # Locally-installed LLM weights (downloaded by install.sh). Multi-GB
 # binaries — never check these into the repo.
 models/
+
+# What install.sh set up (read by scripts/uninstall.sh)
+.install-record

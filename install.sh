@@ -68,6 +68,16 @@ fatal() {
   exit 1
 }
 
+# What this installer set up beyond the clone, so scripts/uninstall.sh
+# can take exactly that away again (and nothing it didn't set up).
+record() {  # key value — one line per key in <install dir>/.install-record
+  local f="${INSTALL_DIR:-.}/.install-record"
+  touch "$f"
+  grep -v "^$1=" "$f" > "$f.tmp" 2>/dev/null || true
+  printf "%s=%s\n" "$1" "$2" >> "$f.tmp"
+  mv "$f.tmp" "$f"
+}
+
 # ─── flag parsing ─────────────────────────────────────────────────────
 # No questions by default. --ask brings the prompts back.
 FLAG_YES=1
@@ -905,6 +915,11 @@ fi
 
 cd "$INSTALL_DIR"
 
+case "$DECIDED_LLM" in
+  cuda)   record llm cuda; record model_dir "$INSTALL_DIR/models/qwen3.5-9b" ;;
+  ollama) record llm ollama; record ollama_model "${OLLAMA_MODEL:-}" ;;
+esac
+
 if [[ ! -f config.env ]]; then
   cp config.env.example config.env
 fi
@@ -1166,6 +1181,7 @@ else
         skip "$3 already on ${shown}"
       elif sudo tailscale serve --bg --https="$1" "$2" >/dev/null 2>&1; then
         ok "$3 on ${shown}"
+        record "ts_serve_$1" 1
       else
         warn "couldn't publish $3 over HTTPS"
         info "allow HTTPS certificates: https://login.tailscale.com/admin/dns (Enable HTTPS), then re-run"
@@ -1194,6 +1210,7 @@ else
       skip "public join page already on"
     elif sudo tailscale funnel --bg --https=10000 "$INSTALL_DIR/join-page" >/dev/null 2>&1; then
       ok "public join page on https://${TS_NAME}:10000"
+      record ts_funnel_10000 1
     else
       warn "public join page is off (Funnel isn't allowed for this machine yet)"
       info "allow it once: https://login.tailscale.com/admin/acls (nodeAttrs \"funnel\"), then re-run install.sh"
