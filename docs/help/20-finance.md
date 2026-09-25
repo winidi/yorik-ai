@@ -33,7 +33,17 @@ Tick **Gemeinsames Konto** when adding an account that belongs to more than one 
 
 Yorik pulls transactions in the background every few hours, so a chat question never has to wait on your bank or trigger a TAN prompt mid-conversation. The first sync after connecting an account looks back 6 months; later syncs top up the last two weeks (overlapping bookings are recognised and not duplicated).
 
-Each transaction gets a rough category (Lebensmittel, Wohnen, Abos, …) from a small built-in keyword list. Anything that doesn't match stays "unkategorisiert" — this is expected for a first version and will show up honestly rather than being guessed at.
+Each transaction gets a category (Lebensmittel, Wohnen, Verträge & Abos, …). A small built-in keyword list catches the obvious cases instantly; anything it misses goes to Yorik's own local AI, the same one used for chat — never a cloud service, and never anything more than "which of these ten buckets fits." A wrong guess is low-stakes: worst case a transaction sits in the wrong bucket, correctable by reconnecting or asking for a re-run.
+
+## Übersicht — the dashboard
+
+The **Übersicht** tab is the at-a-glance view: net income/spending for the chosen period, two quick-stat categories you pick yourself (tap the pencil — defaults to Lebensmittel and Verträge & Abos), and a preview of detected recurring payments. **Konten** and **Umsätze** hold the full account list and transaction/category breakdown; **Verträge** lists every recurring payment Yorik has found.
+
+With more than one account connected, a row of chips under the tabs lets you switch between "Alle Konten" and a single account — every number on the page (including the dashboard) follows that choice.
+
+## Verträge & Abos — recurring payments
+
+Yorik flags a payment as recurring when the same counterparty charged a similar amount (within 5%) in at least two different months of the last six — no separate setup, computed straight from your synced transactions. It can miss a subscription whose merchant text changes on every charge, and it can occasionally flag something that isn't really a subscription (e.g. a bank's own automatic round-up-savings transfer); both are expected limitations of a first version, not bugs to report.
 
 ## Asking in chat
 

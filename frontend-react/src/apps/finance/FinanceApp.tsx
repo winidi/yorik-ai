@@ -1,11 +1,13 @@
 /**
- * FinanceApp — connect a bank account (read-only, FinTS) and see
- * synced transactions. The PIN field here is the ONLY place it's ever
- * typed; it goes straight to POST /api/bank/accounts in the user's own
- * browser, never through chat (see docs/plans/2026-09-25-finanzen.md).
+ * FinanceApp — connect a bank account (read-only, FinTS), see a
+ * configurable Übersicht dashboard, browse categorised transactions
+ * and detected recurring payments. The PIN field here is the ONLY
+ * place it's ever typed; it goes straight to POST /api/bank/accounts
+ * in the user's own browser, never through chat (see
+ * docs/plans/2026-09-25-finanzen.md).
  */
 import { useEffect, useRef, useState } from "react";
-import { Landmark, Plus, RefreshCw, Trash2, X, Loader2, Search, Check } from "lucide-react";
+import { Landmark, Plus, RefreshCw, Trash2, X, Loader2, Search, Check, Pencil } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -37,8 +39,34 @@ interface Transaction {
   account_id: number;
 }
 
+interface Recurring {
+  account_id: number;
+  counterparty: string;
+  category: string | null;
+  latest_amount: number;
+  avg_amount: number;
+  months_seen: number;
+  last_date: string;
+  avg_interval_days: number | null;
+  next_expected: string | null;
+}
+
+// Mirrors backend/bank_sync.py's _LLM_CATEGORIES -- keep both lists in
+// sync if you add a category, or the focus-category picker will offer
+// choices the AI never actually assigns.
+const ALL_CATEGORIES = [
+  "Lebensmittel", "Wohnen", "Versicherung", "Telekommunikation",
+  "Verträge & Abos", "Auto", "Freizeit", "Gesundheit", "Einkommen", "Sonstiges",
+];
+
+type Tab = "uebersicht" | "konten" | "umsaetze" | "vertraege";
+
 function eur(n: number): string {
   return n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+}
+
+function fmtDate(iso: string): string {
+  return new Date(iso + "T00:00:00").toLocaleDateString("de-DE", { day: "numeric", month: "short" });
 }
 
 function dateHeading(iso: string): string {
@@ -49,32 +77,52 @@ function dateHeading(iso: string): string {
 export function FinanceApp() {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [recurring, setRecurring] = useState<Recurring[]>([]);
+  const [focusCategories, setFocusCategories] = useState<string[]>(["Lebensmittel", "Verträge & Abos"]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [days, setDays] = useState(30);
   const [syncingId, setSyncingId] = useState<number | null>(null);
+  const [tab, setTab] = useState<Tab>("uebersicht");
+  const [selectedAccount, setSelectedAccount] = useState<number | "all">("all");
+  const [editingFocus, setEditingFocus] = useState(false);
 
   async function refresh() {
     setLoading(true);
     try {
-      const [accs, txs] = await Promise.all([
+      const acctQuery = selectedAccount === "all" ? "" : `&account_id=${selectedAccount}`;
+      const [accs, txs, rec] = await Promise.all([
         api.get<BankAccount[]>("/api/bank/accounts"),
         // Postgres NUMERIC comes over the wire as a JSON string (to
         // avoid float precision loss), not a number — treating it as
         // one turned category totals into concatenated digit soup
         // ("0-388.21-425.22...") instead of a sum. Parse once, here.
         api.get<Array<Omit<Transaction, "amount"> & { amount: string }>>(
-          `/api/bank/transactions?days=${days}`,
+          `/api/bank/transactions?days=${days}${acctQuery}`,
         ),
+        api.get<Recurring[]>(`/api/bank/recurring?${selectedAccount === "all" ? "" : `account_id=${selectedAccount}`}`),
       ]);
       setAccounts(accs);
       setTransactions(txs.map(t => ({ ...t, amount: Number(t.amount) })));
+      setRecurring(rec);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [days]);
+  useEffect(() => { refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [days, selectedAccount]);
+
+  useEffect(() => {
+    api.get<{ categories: string[] }>("/api/bank/focus-categories")
+      .then(r => setFocusCategories(r.categories))
+      .catch(() => {});
+  }, []);
+
+  async function saveFocusCategories(cats: string[]) {
+    const res = await api.put<{ categories: string[] }>("/api/bank/focus-categories", { categories: cats });
+    setFocusCategories(res.categories);
+    setEditingFocus(false);
+  }
 
   async function handleSync(id: number) {
     setSyncingId(id);
@@ -111,10 +159,13 @@ export function FinanceApp() {
     else txByDay.push([t.booking_date, [t]]);
   }
 
+  const hasAccounts = accounts.length > 0;
+  const showSidebar = hasAccounts && (tab === "uebersicht" || tab === "umsaetze");
+
   return (
     <div className="h-screen overflow-y-auto bg-background">
-    <div className="px-6 pt-6 pb-24 max-w-2xl mx-auto w-full">
-      <div className="flex items-center justify-between mb-8">
+    <div className="px-6 pt-6 pb-24 max-w-2xl lg:max-w-4xl mx-auto w-full">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2.5">
           <Landmark className="w-5 h-5 text-muted-foreground" />
           <h1 className="text-lg font-semibold">Finance</h1>
@@ -134,130 +185,348 @@ export function FinanceApp() {
         />
       )}
 
-      {accounts.length > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-4 sm:gap-0 mb-10">
-          <div>
-            <div className="text-[13px] text-muted-foreground mb-1">Einnahmen · {days} Tage</div>
-            <div className="text-3xl font-semibold tabular-nums text-emerald-600">{eur(totalIn)}</div>
-          </div>
-          <div className="sm:text-right">
-            <div className="text-[13px] text-muted-foreground mb-1">Ausgaben</div>
-            <div className="text-3xl font-semibold tabular-nums text-rose-500">{eur(totalOut)}</div>
-          </div>
-        </div>
-      )}
-
-      <section className="mb-9">
-        <h2 className="text-[13px] font-medium text-muted-foreground mb-3">Konten</h2>
-        {accounts.length === 0 && !loading && (
-          <p className="text-sm text-muted-foreground">
-            Noch kein Konto verbunden. Nur lesend — Yorik kann nichts überweisen.
-          </p>
-        )}
-        <div className="divide-y divide-border">
-          {accounts.map(a => (
-            <div
-              key={a.id}
-              className={cn(
-                "group flex items-center gap-3 py-2.5 pl-3 border-l-2",
-                a.space_id ? "border-l-teal-500" : "border-l-transparent",
-              )}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="font-medium truncate">{a.display_name}</span>
-                  <span className="text-[11px] text-muted-foreground shrink-0">
-                    {a.space_id ? "geteilt" : "privat"}
-                  </span>
-                </div>
-                <div className="text-[12px] text-muted-foreground truncate">
-                  {a.iban || "IBAN noch nicht bekannt"}
-                </div>
-                {a.last_sync_error ? (
-                  <div className="text-[12px] text-rose-500 mt-0.5 truncate">Sync-Fehler: {a.last_sync_error}</div>
-                ) : a.last_synced_at ? (
-                  <div className="text-[11px] text-muted-foreground/80 mt-0.5">Synchronisiert: {a.last_synced_at}</div>
-                ) : null}
-              </div>
-              <button
-                onClick={() => handleSync(a.id)}
-                disabled={syncingId === a.id}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50 transition-opacity"
-                title="Jetzt synchronisieren"
-              >
-                {syncingId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={() => handleDelete(a.id)}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-                title="Konto entfernen"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {accounts.length > 0 && (
+      {hasAccounts && (
         <>
-          <section className="mb-9">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[13px] font-medium text-muted-foreground">Nach Kategorie</h2>
-              <select
-                value={days}
-                onChange={e => setDays(Number(e.target.value))}
-                className="text-xs rounded-md border border-border bg-background px-2 py-1"
+          <div className="flex border-b border-border mb-6">
+            {([
+              ["uebersicht", "Übersicht"], ["konten", "Konten"],
+              ["umsaetze", "Umsätze"], ["vertraege", "Verträge"],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={cn(
+                  "px-3.5 py-2 text-sm border-b-2 -mb-px transition-colors",
+                  tab === id
+                    ? "border-foreground font-medium text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
               >
-                <option value={30}>30 Tage</option>
-                <option value={90}>90 Tage</option>
-                <option value={180}>180 Tage</option>
-              </select>
-            </div>
-            {categoryRows.length === 0 && <p className="text-sm text-muted-foreground">Noch keine Umsätze.</p>}
-            <div className="space-y-2.5">
-              {categoryRows.map(([cat, total]) => (
-                <div key={cat}>
-                  <div className="flex items-baseline justify-between text-sm mb-1">
-                    <span className={cn(cat === "unkategorisiert" && "text-muted-foreground italic")}>{cat}</span>
-                    <span className="tabular-nums">{eur(total)}</span>
-                  </div>
-                  <div className="h-1 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className={cn("h-full rounded-full", total < 0 ? "bg-rose-500/70" : "bg-emerald-500/70")}
-                      style={{ width: `${Math.max(3, (Math.abs(total) / maxAbs) * 100)}%` }}
-                    />
-                  </div>
-                </div>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {accounts.length > 1 && (
+            <div className="flex items-center gap-1.5 flex-wrap mb-8">
+              <button
+                onClick={() => setSelectedAccount("all")}
+                className={cn(
+                  "rounded-full px-3 py-1 text-[13px] border transition-colors",
+                  selectedAccount === "all"
+                    ? "bg-foreground text-background border-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Alle Konten
+              </button>
+              {accounts.map(a => (
+                <button
+                  key={a.id}
+                  onClick={() => setSelectedAccount(a.id)}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-[13px] border transition-colors",
+                    selectedAccount === a.id
+                      ? "bg-foreground text-background border-foreground"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {a.display_name}
+                </button>
               ))}
             </div>
-          </section>
+          )}
+        </>
+      )}
 
-          <section>
-            <h2 className="text-[13px] font-medium text-muted-foreground mb-3">Umsätze</h2>
-            {txByDay.map(([day, txs]) => (
-              <div key={day} className="mb-4">
-                <div className="text-[11px] font-medium text-muted-foreground/80 mb-1.5">{dateHeading(day)}</div>
-                <div className="divide-y divide-border/60">
-                  {txs.map(t => (
-                    <div key={t.id} className="flex items-center justify-between text-sm py-1.5">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate">{t.counterparty || t.purpose || "—"}</div>
-                        {t.category && <div className="text-[11px] text-muted-foreground truncate">{t.category}</div>}
+      {!hasAccounts && !loading && (
+        <p className="text-sm text-muted-foreground pt-8">
+          Noch kein Konto verbunden. Nur lesend — Yorik kann nichts überweisen.
+        </p>
+      )}
+
+      <div className={cn(showSidebar && "lg:grid lg:grid-cols-[1fr_20rem] lg:gap-10 lg:items-start")}>
+        <div className="min-w-0">
+          {tab === "uebersicht" && hasAccounts && (
+            <>
+              <div className={cn("mb-9", accounts.length <= 1 && "pt-2")}>
+                <div className="flex items-end justify-between mb-1">
+                  <div className="flex flex-col sm:flex-row sm:items-baseline gap-4 sm:gap-10">
+                    <div>
+                      <div className="text-[13px] text-muted-foreground mb-1">Einnahmen</div>
+                      <div className="text-4xl font-semibold tabular-nums text-emerald-600">{eur(totalIn)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[13px] text-muted-foreground mb-1">Ausgaben</div>
+                      <div className="text-4xl font-semibold tabular-nums text-rose-500">{eur(totalOut)}</div>
+                    </div>
+                  </div>
+                  <PeriodSelect days={days} onChange={setDays} />
+                </div>
+              </div>
+
+              <QuickStats
+                byCategory={byCategory}
+                focusCategories={focusCategories}
+                editing={editingFocus}
+                onEdit={() => setEditingFocus(true)}
+                onCancel={() => setEditingFocus(false)}
+                onSave={saveFocusCategories}
+              />
+
+              <RecurringSection
+                items={recurring}
+                limit={3}
+                onShowAll={() => setTab("vertraege")}
+              />
+            </>
+          )}
+
+          {tab === "konten" && (
+            <AccountsList accounts={accounts} syncingId={syncingId} onSync={handleSync} onDelete={handleDelete} />
+          )}
+
+          {tab === "umsaetze" && hasAccounts && (
+            <>
+              <section className="mb-9">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-[13px] font-medium text-muted-foreground">Nach Kategorie</h2>
+                  <PeriodSelect days={days} onChange={setDays} />
+                </div>
+                {categoryRows.length === 0 && <p className="text-sm text-muted-foreground">Noch keine Umsätze.</p>}
+                <div className="space-y-2.5">
+                  {categoryRows.map(([cat, total]) => (
+                    <div key={cat}>
+                      <div className="flex items-baseline justify-between text-sm mb-1">
+                        <span className={cn(cat === "unkategorisiert" && "text-muted-foreground italic")}>{cat}</span>
+                        <span className="tabular-nums">{eur(total)}</span>
                       </div>
-                      <span className={cn("tabular-nums shrink-0 ml-3", t.amount < 0 ? "text-rose-500" : "text-emerald-600")}>
-                        {eur(t.amount)}
-                      </span>
+                      <div className="h-1 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={cn("h-full rounded-full", total < 0 ? "bg-rose-500/70" : "bg-emerald-500/70")}
+                          style={{ width: `${Math.max(3, (Math.abs(total) / maxAbs) * 100)}%` }}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
+              </section>
+
+              <section>
+                <h2 className="text-[13px] font-medium text-muted-foreground mb-3">Umsätze</h2>
+                {txByDay.map(([day, txs]) => (
+                  <div key={day} className="mb-4">
+                    <div className="text-[11px] font-medium text-muted-foreground/80 mb-1.5">{dateHeading(day)}</div>
+                    <div className="divide-y divide-border/60">
+                      {txs.map(t => (
+                        <div key={t.id} className="flex items-center justify-between text-sm py-1.5">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate">{t.counterparty || t.purpose || "—"}</div>
+                            {t.category && <div className="text-[11px] text-muted-foreground truncate">{t.category}</div>}
+                          </div>
+                          <span className={cn("tabular-nums shrink-0 ml-3", t.amount < 0 ? "text-rose-500" : "text-emerald-600")}>
+                            {eur(t.amount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </section>
+            </>
+          )}
+
+          {tab === "vertraege" && (
+            <section className="pt-2">
+              <h2 className="text-[13px] font-medium text-muted-foreground mb-1">Verträge & Abos</h2>
+              <p className="text-[12px] text-muted-foreground mb-5">
+                Automatisch erkannt: gleicher Empfänger, ähnlicher Betrag, in mindestens zwei
+                verschiedenen Monaten der letzten 6 Monate.
+              </p>
+              <RecurringSection items={recurring} hideHeading />
+            </section>
+          )}
+        </div>
+
+        {showSidebar && (
+          <aside className="hidden lg:block pt-2 space-y-9">
+            <div>
+              <h2 className="text-[13px] font-medium text-muted-foreground mb-3">Konten</h2>
+              <AccountsList accounts={accounts} syncingId={syncingId} onSync={handleSync} onDelete={handleDelete} compact />
+            </div>
+            {tab === "umsaetze" && (
+              <div>
+                <h2 className="text-[13px] font-medium text-muted-foreground mb-3">Verträge & Abos</h2>
+                <RecurringSection items={recurring} limit={4} onShowAll={() => setTab("vertraege")} compact />
               </div>
-            ))}
-          </section>
-        </>
-      )}
+            )}
+          </aside>
+        )}
+      </div>
     </div>
     <Dock activeAppId="finance" />
+    </div>
+  );
+}
+
+function PeriodSelect({ days, onChange }: { days: number; onChange: (n: number) => void }) {
+  return (
+    <select
+      value={days}
+      onChange={e => onChange(Number(e.target.value))}
+      className="text-xs rounded-md border border-border bg-background px-2 py-1 shrink-0"
+    >
+      <option value={30}>30 Tage</option>
+      <option value={90}>90 Tage</option>
+      <option value={180}>180 Tage</option>
+    </select>
+  );
+}
+
+function AccountsList({ accounts, syncingId, onSync, onDelete, compact }: {
+  accounts: BankAccount[]; syncingId: number | null;
+  onSync: (id: number) => void; onDelete: (id: number) => void; compact?: boolean;
+}) {
+  return (
+    <div className="divide-y divide-border">
+      {accounts.map(a => (
+        <div
+          key={a.id}
+          className={cn(
+            "group flex items-center gap-3 py-2.5 pl-3 border-l-2",
+            a.space_id ? "border-l-teal-500" : "border-l-transparent",
+          )}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-1.5">
+              <span className={cn("font-medium truncate", compact && "text-sm")}>{a.display_name}</span>
+              <span className="text-[11px] text-muted-foreground shrink-0">
+                {a.space_id ? "geteilt" : "privat"}
+              </span>
+            </div>
+            {!compact && (
+              <div className="text-[12px] text-muted-foreground truncate">
+                {a.iban || "IBAN noch nicht bekannt"}
+              </div>
+            )}
+            {a.last_sync_error ? (
+              <div className="text-[12px] text-rose-500 mt-0.5 truncate">Sync-Fehler: {a.last_sync_error}</div>
+            ) : (!compact && a.last_synced_at) ? (
+              <div className="text-[11px] text-muted-foreground/80 mt-0.5">Synchronisiert: {a.last_synced_at}</div>
+            ) : null}
+          </div>
+          <button
+            onClick={() => onSync(a.id)}
+            disabled={syncingId === a.id}
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50 transition-opacity"
+            title="Jetzt synchronisieren"
+          >
+            {syncingId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          </button>
+          {!compact && (
+            <button
+              onClick={() => onDelete(a.id)}
+              className="p-1.5 rounded-md text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+              title="Konto entfernen"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Quickstats: the "configurable" part of the dashboard -- which two
+// categories get pinned here is a per-user preference (GET/PUT
+// /api/bank/focus-categories), not hardcoded, so "Lebensmittel" and
+// "Verträge & Abos" are just the defaults, not the only options.
+function QuickStats({ byCategory, focusCategories, editing, onEdit, onCancel, onSave }: {
+  byCategory: Map<string, number>; focusCategories: string[]; editing: boolean;
+  onEdit: () => void; onCancel: () => void; onSave: (cats: string[]) => void;
+}) {
+  const [draft, setDraft] = useState(focusCategories);
+  useEffect(() => { setDraft(focusCategories); }, [focusCategories, editing]);
+
+  if (editing) {
+    return (
+      <div className="border-y border-border py-4 mb-9 space-y-3">
+        <div className="text-[13px] font-medium text-muted-foreground">Im Blick — auswählen</div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          {[0, 1].map(i => (
+            <select
+              key={i}
+              value={draft[i] || ALL_CATEGORIES[0]}
+              onChange={e => setDraft(d => { const next = [...d]; next[i] = e.target.value; return next; })}
+              className="text-sm rounded-md border border-border bg-background px-2 py-1.5 flex-1"
+            >
+              {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => onSave(draft)} className="rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium">
+            Speichern
+          </button>
+          <button onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground">
+            Abbrechen
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative border-y border-border mb-9">
+      <div className="grid grid-cols-2 divide-x divide-border">
+        {focusCategories.slice(0, 2).map(cat => (
+          <div key={cat} className="py-4 first:pr-4 last:pl-4">
+            <div className="text-[13px] text-muted-foreground mb-1 truncate">{cat}</div>
+            <div className="text-xl font-semibold tabular-nums">{eur(Math.abs(byCategory.get(cat) || 0))}</div>
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={onEdit}
+        className="absolute -top-3 right-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+        title="Andere Kategorien auswählen"
+      >
+        <Pencil className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function RecurringSection({ items, limit, onShowAll, compact, hideHeading }: {
+  items: Recurring[]; limit?: number; onShowAll?: () => void; compact?: boolean; hideHeading?: boolean;
+}) {
+  const shown = limit ? items.slice(0, limit) : items;
+  if (shown.length === 0) {
+    return <p className="text-sm text-muted-foreground">Noch keine wiederkehrenden Zahlungen erkannt.</p>;
+  }
+  return (
+    <div className={cn(!compact && "mb-9")}>
+      {!compact && !hideHeading && <h2 className="text-[13px] font-medium text-muted-foreground mb-3">Verträge & Abos</h2>}
+      <div className="divide-y divide-border">
+        {shown.map(r => (
+          <div key={`${r.account_id}-${r.counterparty}`} className="flex items-center gap-3 py-2.5 pl-3 border-l-2 border-l-amber-500">
+            <div className="min-w-0 flex-1">
+              <div className={cn("font-medium truncate", compact && "text-sm")}>{r.counterparty}</div>
+              <div className="text-[11px] text-muted-foreground truncate">
+                {r.category || "unkategorisiert"}
+                {r.next_expected && !compact && ` · ca. ${fmtDate(r.next_expected)}`}
+              </div>
+            </div>
+            <span className="tabular-nums shrink-0 text-sm text-rose-500">{eur(r.avg_amount)}</span>
+          </div>
+        ))}
+      </div>
+      {limit && items.length > limit && onShowAll && (
+        <button onClick={onShowAll} className="text-[13px] text-muted-foreground hover:text-foreground mt-2">
+          Alle {items.length} anzeigen →
+        </button>
+      )}
     </div>
   );
 }

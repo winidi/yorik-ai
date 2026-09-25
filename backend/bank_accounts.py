@@ -111,6 +111,14 @@ def _test_connection(bank_url: str, blz: str, login_name: str, pin: str,
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
+FOCUS_CATEGORIES_DEFAULT = ["Lebensmittel", "Verträge & Abos"]
+FOCUS_CATEGORIES_MAX = 4
+
+
+def _focus_categories_key(user_id: str) -> str:
+    return f"finance_focus_categories_{user_id}"
+
+
 def dedup_hash(booking_date: str, amount: float, counterparty: str, purpose: str) -> str:
     """FinTS gives no stable transaction id. Hash the fields that make a
     booking unique in practice so a re-sync of an overlapping date
@@ -286,3 +294,151 @@ def list_transactions(days: int = 30, account_id: Optional[int] = None,
         d["amount"] = float(d["amount"])
         out.append(d)
     return out
+
+
+def _normalize_counterparty(name: str) -> str:
+    return " ".join((name or "").strip().lower().split())
+
+
+def detect_recurring(rows: list[dict[str, Any]], months: int = 6) -> list[dict[str, Any]]:
+    """Wiederkehrende Zahlungen — computed on the fly from bank_transactions,
+    no schema change and no ML: group outgoing transactions by (account,
+    normalized counterparty), keep groups seen in >= 2 distinct calendar
+    months with a stable amount (+/-5%, floor 1 EUR so cent-level FX
+    rounding doesn't disqualify a real subscription). Misses subscriptions
+    whose merchant string changes between charges (e.g. a payment
+    processor appending a random reference) — acceptable for v1, a real
+    "same merchant, always slightly different text" case would need
+    fuzzy matching we don't have data yet to tune.
+    """
+    from collections import defaultdict
+    from datetime import date as _date, timedelta as _timedelta
+
+    groups: dict[tuple[Any, str], list[dict[str, Any]]] = defaultdict(list)
+    for r in rows:
+        if r["amount"] >= 0:
+            continue
+        key = (r["account_id"], _normalize_counterparty(r["counterparty"] or r["purpose"] or ""))
+        if not key[1]:
+            continue
+        groups[key].append(r)
+
+    out = []
+    for (account_id, _norm), items in groups.items():
+        items.sort(key=lambda r: r["booking_date"])
+        months_seen = {r["booking_date"][:7] for r in items}
+        if len(months_seen) < 2:
+            continue
+        amounts = [abs(r["amount"]) for r in items]
+        mean_amt = sum(amounts) / len(amounts)
+        tolerance = max(mean_amt * 0.05, 1.0)
+        if max(abs(a - mean_amt) for a in amounts) > tolerance:
+            continue
+
+        dates = [_date.fromisoformat(r["booking_date"]) for r in items]
+        diffs = [(b - a).days for a, b in zip(dates, dates[1:])]
+        avg_interval = sum(diffs) / len(diffs) if diffs else None
+        last_date = dates[-1]
+        next_expected = (last_date + _timedelta(days=round(avg_interval))) if avg_interval else None
+
+        categories = [r.get("category") for r in items if r.get("category")]
+        category = max(set(categories), key=categories.count) if categories else None
+
+        out.append({
+            "account_id": account_id,
+            "counterparty": items[-1]["counterparty"] or items[-1]["purpose"] or "—",
+            "category": category,
+            "latest_amount": items[-1]["amount"],
+            "avg_amount": round(-mean_amt, 2),
+            "months_seen": len(months_seen),
+            "last_date": last_date.isoformat(),
+            "avg_interval_days": round(avg_interval) if avg_interval else None,
+            "next_expected": next_expected.isoformat() if next_expected else None,
+        })
+
+    out.sort(key=lambda d: d["avg_amount"])  # most expensive (most negative) first
+    return out
+
+
+@router.get("/recurring")
+def list_recurring(months: int = 6, account_id: Optional[int] = None,
+                   user: dict = Depends(current_user)) -> list[dict[str, Any]]:
+    """Verträge & Abos — see detect_recurring() for the heuristic."""
+    from datetime import date, timedelta
+    since = (date.today() - timedelta(days=months * 31)).isoformat()
+    frag, params = spaces.row_filter(user["id"], user.get("role"), "bank_accounts",
+                                      table_alias="a")
+    q = (
+        "SELECT t.account_id, t.booking_date, t.amount, t.counterparty, t.purpose, t.category "
+        "FROM bank_transactions t JOIN bank_accounts a ON a.id = t.account_id "
+        f"WHERE {frag} AND t.booking_date >= ?"
+    )
+    params = list(params) + [since]
+    if account_id is not None:
+        q += " AND t.account_id = ?"
+        params.append(account_id)
+    with get_conn() as conn:
+        rows = conn.execute(q, params).fetchall()
+    parsed = []
+    for r in rows:
+        d = dict(r)
+        d["amount"] = float(d["amount"])
+        d["booking_date"] = str(d["booking_date"])
+        parsed.append(d)
+    return detect_recurring(parsed, months=months)
+
+
+class FocusCategoriesBody(BaseModel):
+    categories: list[str]
+
+
+@router.get("/focus-categories")
+def get_focus_categories(user: dict = Depends(current_user)) -> dict[str, list[str]]:
+    """Which categories the Übersicht dashboard's quick-stats pin — a
+    per-user preference, not a real table (same app_settings pattern as
+    prepare_email's staged draft)."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT value FROM app_settings WHERE key = ?",
+            (_focus_categories_key(user["id"]),),
+        ).fetchone()
+    if not row:
+        return {"categories": FOCUS_CATEGORIES_DEFAULT}
+    try:
+        cats = json.loads(row["value"])
+        if isinstance(cats, list) and cats:
+            return {"categories": cats}
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+    return {"categories": FOCUS_CATEGORIES_DEFAULT}
+
+
+@router.put("/focus-categories")
+def set_focus_categories(body: FocusCategoriesBody, user: dict = Depends(current_user)) -> dict[str, list[str]]:
+    cats = [c.strip() for c in body.categories if c.strip()][:FOCUS_CATEGORIES_MAX]
+    if not cats:
+        cats = FOCUS_CATEGORIES_DEFAULT
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO app_settings (key, value, updated_at) "
+            "VALUES (?, ?, datetime('now'))",
+            (_focus_categories_key(user["id"]), json.dumps(cats)),
+        )
+        conn.commit()
+    return {"categories": cats}
+
+
+@router.post("/accounts/{account_id}/recategorize")
+async def recategorize(account_id: int, user: dict = Depends(current_user)) -> dict[str, Any]:
+    """Re-run categorisation (keyword rules + local-AI fallback) over an
+    account's existing transactions — for the backfill after this
+    feature shipped, and for anyone who wants a redo after the rules
+    changed. Read-only w.r.t. the bank itself; only touches our own
+    bank_transactions.category column."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT owner_user_id FROM bank_accounts WHERE id=?", (account_id,)).fetchone()
+        if not row or str(row["owner_user_id"]) != str(user["id"]):
+            raise HTTPException(404, "account not found")
+    from . import bank_sync
+    result = await asyncio.to_thread(bank_sync.recategorize_account, account_id)
+    return result

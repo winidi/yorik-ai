@@ -29,6 +29,26 @@ worklist.
   `spending_summary`. Read-only everywhere, by design — no code path
   can initiate a transfer. Details and build log in
   `docs/plans/2026-09-25-finanzen.md`.
+- **Finance: configurable Übersicht dashboard, local-AI categorisation,
+  recurring-payment detection.** New Übersicht/Konten/Umsätze/Verträge
+  tabs; an account switcher ("Alle Konten" vs. one) that every number
+  on the page follows; two quick-stat categories the user picks
+  themselves (`GET/PUT /api/bank/focus-categories`, `app_settings`-
+  backed, defaults to Lebensmittel + Verträge & Abos). Categorisation
+  is now two-stage: the existing keyword table catches the obvious
+  cases free and instantly, everything else goes to Yorik's own local
+  LLM in one batched call per sync (`bank_sync._categorize_missing_via_llm`,
+  reads `HOMEOS_MODEL`/`HOMEOS_LLM_BASE_URL` like the rest of the
+  codebase — never hardcoded, never a cloud call); a
+  `POST /api/bank/accounts/{id}/recategorize` backfill route re-runs it
+  over rows that never got a category. Recurring payments (`Verträge &
+  Abos`) are detected on the fly from `bank_transactions` — same
+  counterparty, amount stable within 5%, seen in ≥2 of the last 6
+  calendar months (`backend/bank_accounts.py:detect_recurring`,
+  `GET /api/bank/recurring`) — no schema change, no ML. Verified live
+  against a real connected ING account (214 previously-uncategorised
+  transactions backfilled, 6 recurring payments correctly detected).
+  Details in `docs/plans/2026-09-25-finanzen.md` "Runde 2".
 - **Schreiben: invoices, quotes and a valid e-invoice (third stage).**
   Line items as data (any number of them), sums in `Decimal` by the
   app, never by the model; § 14 UStG checklist beside the sheet;
