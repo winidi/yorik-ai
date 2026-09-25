@@ -317,6 +317,18 @@ register(App(
 ))
 
 register(App(
+    id="finance",
+    name="Finance",
+    icon="💶",
+    description="Connect a bank account (read-only, FinTS) and see balances, transactions and spending by category.",
+    view_kind="native",
+    chrome="embedded",
+    tags=["bundled", "optional"],
+    aliases=["finance", "finanzen", "bank", "konto", "konten", "umsätze", "umsatz"],
+    opt_in=True,
+))
+
+register(App(
     id="board",
     name="Family board",
     icon="🗓",

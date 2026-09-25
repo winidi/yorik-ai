@@ -131,6 +131,10 @@ app.include_router(_space_routes.router)
 from . import email_routes as _email_routes
 app.include_router(_email_routes.router)
 
+# Finance — read-only FinTS bank accounts, multi-account, private/shared.
+from . import bank_accounts as _bank_accounts
+app.include_router(_bank_accounts.router)
+
 # Universal cross-channel search — fan-out over email + WA + Paperless
 # + Immich + calendar. One endpoint, ⌘K palette in the React shell.
 from . import search_routes as _search_routes
@@ -2848,6 +2852,10 @@ def _startup() -> None:
     _chat_attachments.start_scheduler(_aio.get_event_loop())
     # Subscribed calendars (a secret iCal address, e.g. Google) → read-only mirrors.
     _calendar_import.start_scheduler(_aio.get_event_loop())
+    # Finance: pull new bank transactions every few hours so chat/UI
+    # queries never hit FinTS live (TAN friction, latency).
+    from . import bank_sync as _bank_sync
+    _bank_sync.start_scheduler(_aio.get_event_loop())
     # Voice acks: pre-synthesize the "klar Moment / on it / ..." pool
     # so the streaming voice endpoint can emit an instant audio reply
     # the moment STT finishes (masking LLM latency). Run in a thread

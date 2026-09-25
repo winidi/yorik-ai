@@ -76,7 +76,8 @@ AREAS = ("tasks", "calendar", "contacts", "documents")
 # table → sharing area. Tables outside the four areas (bills, …) are only
 # reached through an unscoped membership (the whole space).
 TABLE_AREA = {"tasks": "tasks", "events": "calendar", "calendars": "calendar",
-              "contacts": "contacts", "documents": "documents", "paperless_docs": "documents"}
+              "contacts": "contacts", "documents": "documents", "paperless_docs": "documents",
+              "bank_accounts": "finance"}
 
 
 def _membership_space_ids(c, user_id, area: Optional[str]) -> list[int]:
@@ -364,6 +365,7 @@ def row_filter(
         "events":   "owner_user_id",
         "calendars": "owner_user_id",
         "recordings": "owner_user_id",
+        "bank_accounts": "owner_user_id",
     }.get(table)
     if owner_col:
         parts.append(f"{t}.{owner_col} = ?")

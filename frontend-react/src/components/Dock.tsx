@@ -18,7 +18,7 @@ import {
   House, Calendar, ListTodo, MessageSquare, FolderOpen,
   FilePlus, Camera, MessageCircle, Inbox, Contact,
   Newspaper, Settings,
-  Mic, type LucideIcon, LayoutGrid, PenLine } from "lucide-react";
+  Mic, type LucideIcon, LayoutGrid, PenLine, Landmark } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -61,6 +61,7 @@ const APP_VISUAL: Record<string, { Icon: LucideIcon; gradient: string; activeGra
   briefing: { Icon: Newspaper,     gradient: "from-fuchsia-500/30 to-purple-500/30", activeGradient: "from-fuchsia-500/50 to-purple-500/50", text: "text-fuchsia-500", ring: "ring-fuchsia-400/40", activeRing: "ring-fuchsia-400/80" },
   recordings: { Icon: Mic,           gradient: "from-red-500/30 to-rose-500/30",       activeGradient: "from-red-500/50 to-rose-500/50",       text: "text-red-500",     ring: "ring-red-400/40",     activeRing: "ring-red-400/80" },
   board:    { Icon: LayoutGrid,    gradient: "from-lime-500/30 to-emerald-500/30",   activeGradient: "from-lime-500/50 to-emerald-500/50",   text: "text-lime-600",    ring: "ring-lime-400/40",    activeRing: "ring-lime-400/80" },
+  finance:  { Icon: Landmark,      gradient: "from-teal-500/30 to-cyan-500/30",      activeGradient: "from-teal-500/50 to-cyan-500/50",      text: "text-teal-600",    ring: "ring-teal-400/40",    activeRing: "ring-teal-400/80" },
   settings: { Icon: Settings,      gradient: "from-slate-500/30 to-zinc-500/30",     activeGradient: "from-slate-500/50 to-zinc-500/50",     text: "text-slate-500",   ring: "ring-slate-400/40",   activeRing: "ring-slate-400/80" },
 };
 
