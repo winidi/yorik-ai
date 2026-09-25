@@ -302,7 +302,7 @@ export function ComposeAgentChat({
             {msgs.length > 0 && (
               <button
                 onClick={clearConversation}
-                className="text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/60 inline-flex items-center gap-1"
+                className="text-2xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/60 inline-flex items-center gap-1"
                 title="Reset conversation"
               >
                 <X className="w-3 h-3" /> reset
@@ -323,7 +323,7 @@ export function ComposeAgentChat({
         <div className="px-3 pt-2 flex justify-end">
           <button
             onClick={clearConversation}
-            className="text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/60 inline-flex items-center gap-1"
+            className="text-2xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted/60 inline-flex items-center gap-1"
             title="Reset conversation"
           >
             <X className="w-3 h-3" /> reset
@@ -425,7 +425,7 @@ function ChatBubble({
       </div>
       <div className={cn("max-w-[78%] min-w-0 space-y-2", isUser && "items-end flex flex-col")}>
         {!isUser && message.drafted && (
-          <div className="text-[9px] uppercase tracking-wider text-emerald-600 font-semibold mb-1 ml-1">
+          <div className="text-2xs text-emerald-600 font-semibold mb-1 ml-1">
             ✓ Editor updated
           </div>
         )}

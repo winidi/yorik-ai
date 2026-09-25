@@ -111,7 +111,7 @@ export function InvoiceEditor({ doc, onChanged, onBack, onOpen, say, extra }: {
         <button onClick={onBack} className="md:hidden p-1.5 rounded-md hover:bg-muted" aria-label="Zur Liste"><ArrowLeft className="w-5 h-5" /></button>
         <div className="min-w-0 mr-auto">
           <div className="font-semibold truncate flex items-center gap-2"><Receipt className="w-4 h-4 text-primary shrink-0" /> {word} {doc.number || ""} {subject && <span className="font-normal text-muted-foreground truncate">· {subject}</span>}</div>
-          <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
             {final ? <><Check className="w-3 h-3 text-emerald-500" /> Fertig seit {(doc.finalised_at || "").slice(0, 10).split("-").reverse().join(".")} · wird nicht mehr geändert</>
               : saving === "saving" ? <><Loader2 className="w-3 h-3 animate-spin" /> speichert …</>
               : saving === "dirty" ? "ungespeichert …" : saving === "failed" ? <span className="text-red-400">nicht gespeichert</span>
@@ -150,20 +150,20 @@ export function InvoiceEditor({ doc, onChanged, onBack, onOpen, say, extra }: {
                              onPicked={d => { setTo(recipientOf(d)); onChanged(d); void refresh(); }} />
 
             <section className="grid gap-2 sm:grid-cols-4">
-              <label className="grid gap-1 text-[11px] text-muted-foreground sm:col-span-2">Betreff
+              <label className="grid gap-1 text-xs text-muted-foreground sm:col-span-2">Betreff
                 <input disabled={final} value={subject} onChange={ev => { setSubject(ev.target.value); touch(); }} placeholder="Worum geht es?" className={input} /></label>
-              <label className="grid gap-1 text-[11px] text-muted-foreground">Kundennummer
+              <label className="grid gap-1 text-xs text-muted-foreground">Kundennummer
                 <input disabled={final} value={dates.customer_no} onChange={ev => { setDates(d => ({ ...d, customer_no: ev.target.value })); touch(); }} placeholder="optional" className={input} /></label>
               {quote ? (
-                <label className="grid gap-1 text-[11px] text-muted-foreground">Gültig bis
+                <label className="grid gap-1 text-xs text-muted-foreground">Gültig bis
                   <input type="date" disabled={final} value={dates.valid_until} onChange={ev => { setDates(d => ({ ...d, valid_until: ev.target.value })); touch(); }} className={input} /></label>
               ) : <span />}
               {!quote && (
                 <>
-                  <label className="grid gap-1 text-[11px] text-muted-foreground sm:col-span-2">Leistung vom
+                  <label className="grid gap-1 text-xs text-muted-foreground sm:col-span-2">Leistung vom
                     <input type="date" disabled={final} value={dates.service_from} onChange={ev => { setDates(d => ({ ...d, service_from: ev.target.value })); touch(); }}
                            className={cn(input, !final && !dates.service_from && !dates.service_to && "border-amber-500/50")} /></label>
-                  <label className="grid gap-1 text-[11px] text-muted-foreground sm:col-span-2">bis (leer = ein Tag)
+                  <label className="grid gap-1 text-xs text-muted-foreground sm:col-span-2">bis (leer = ein Tag)
                     <input type="date" disabled={final} value={dates.service_to} onChange={ev => { setDates(d => ({ ...d, service_to: ev.target.value })); touch(); }} className={input} /></label>
                 </>
               )}
@@ -174,7 +174,7 @@ export function InvoiceEditor({ doc, onChanged, onBack, onOpen, say, extra }: {
                         className="w-full resize-y bg-transparent text-[15px] placeholder:text-zinc-400 outline-none mb-3" />
               <div className="overflow-x-auto -mx-1 px-1">
                 <table className="w-full min-w-[560px] border-collapse">
-                  <thead><tr className="text-[11px] uppercase tracking-wide text-zinc-500 text-left">
+                  <thead><tr className="text-xs text-zinc-500 text-left">
                     <th className="py-1.5 px-2 w-8">Pos.</th><th className="py-1.5 px-2">Beschreibung</th><th className="py-1.5 px-2 w-20 text-right">Menge</th>
                     <th className="py-1.5 px-2 w-24">Einheit</th><th className="py-1.5 px-2 w-28 text-right">Einzelpreis €</th>
                     {!state?.totals?.small_business && <th className="py-1.5 px-2 w-16 text-right">USt %</th>}<th className="py-1.5 px-2 w-28 text-right">Gesamt</th><th className="w-8" />

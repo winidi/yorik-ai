@@ -324,17 +324,17 @@ function DeviceCard({
               {device.device_label || trimUA(ua)}
             </span>
             {device.is_kiosk && (
-              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-medium">
+              <span className="text-2xs px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-medium">
                 Kiosk
               </span>
             )}
             {device.is_kiosk && device.show_today && (
-              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-medium">
+              <span className="text-2xs px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-medium">
                 Today
               </span>
             )}
             {device.trusted_until && (
-              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 font-medium">
+              <span className="text-2xs px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 font-medium">
                 Trusted
               </span>
             )}
@@ -462,7 +462,7 @@ function DeviceCard({
               ))}
             </select>
             {albums.length === 0 && (
-              <div className="text-[11px] text-muted-foreground mt-1">
+              <div className="text-xs text-muted-foreground mt-1">
                 No albums visible. Configure Immich under Settings → Connectors first.
               </div>
             )}
@@ -479,7 +479,7 @@ function DeviceCard({
             />
             <div className="flex-1 min-w-0">
               <div className="text-xs font-medium">Also show today's photos</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">
+              <div className="text-xs text-muted-foreground mt-0.5">
                 Surface photos taken today from your Immich library first,
                 then cycle the curated album. The family-wall mode — walk
                 past, see what happened today.
@@ -498,7 +498,7 @@ function DeviceCard({
               placeholder="medicine, prescription bottle, receipt, screenshot"
               className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring/40 resize-y"
             />
-            <div className="text-[11px] text-muted-foreground mt-1">
+            <div className="text-xs text-muted-foreground mt-1">
               Comma-separated phrases. Uses Immich's CLIP smart search to
               recognise photo content — so "medicine" hides pill bottles
               and prescription packaging even if they aren't tagged.
@@ -535,7 +535,7 @@ function DeviceCard({
               Cancel
             </button>
           </div>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-xs text-muted-foreground">
             Enabling kiosk mode extends this session's trust to 365 days and
             unlocks PIN-based user switching from the wall. Disable any time
             from here.

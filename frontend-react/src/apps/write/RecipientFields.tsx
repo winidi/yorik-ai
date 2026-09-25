@@ -49,7 +49,7 @@ export function RecipientFields({ docId, value, onChange, onPicked, disabled, la
   return (
     <section className="grid gap-2 sm:grid-cols-2">
       <div className="relative grid gap-1 content-start">
-        <label className="text-[11px] text-muted-foreground" htmlFor="w-name">{label}</label>
+        <label className="text-xs text-muted-foreground" htmlFor="w-name">{label}</label>
         <div className="relative">
           <input id="w-name" disabled={disabled} value={value.name} onChange={e => onChange({ ...value, name: e.target.value, contactId: null })}
                  placeholder="Name oder Firma" autoComplete="off" className={cn(input, "w-full pr-8")} />
@@ -61,15 +61,15 @@ export function RecipientFields({ docId, value, onChange, onPicked, disabled, la
                   {c.display_name}{c.legal_name && c.legal_name !== c.display_name ? <span className="text-muted-foreground"> · {c.legal_name}</span> : null}
                 </button></li>
               ))}
-              <li><button onMouseDown={e => e.preventDefault()} onClick={() => setHits(null)} className="w-full text-left px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted flex items-center gap-1"><X className="w-3 h-3" /> keiner davon</button></li>
+              <li><button onMouseDown={e => e.preventDefault()} onClick={() => setHits(null)} className="w-full text-left px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted flex items-center gap-1"><X className="w-3 h-3" /> keiner davon</button></li>
             </ul>
           )}
         </div>
-        <label className="text-[11px] text-muted-foreground mt-1" htmlFor="w-mail">E-Mail (für „Senden“)</label>
+        <label className="text-xs text-muted-foreground mt-1" htmlFor="w-mail">E-Mail (für „Senden“)</label>
         <input id="w-mail" disabled={disabled} value={value.email} onChange={e => onChange({ ...value, email: e.target.value })} placeholder="optional" className={input} />
       </div>
       <div className="grid gap-1 content-start">
-        <label className="text-[11px] text-muted-foreground" htmlFor="w-addr">Adresse (eine Zeile pro Teil)</label>
+        <label className="text-xs text-muted-foreground" htmlFor="w-addr">Adresse (eine Zeile pro Teil)</label>
         <textarea id="w-addr" disabled={disabled} value={value.address} onChange={e => onChange({ ...value, address: e.target.value })} rows={4} placeholder={"Straße und Hausnummer\nPLZ Ort"}
                   className={cn(input, "resize-none", !disabled && !value.address.trim() && "border-amber-500/50")} />
       </div>

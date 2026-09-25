@@ -123,7 +123,7 @@ export function SeriesManager({ onClose, onChanged, toast, initialKind, inline =
             <Hash className="w-4 h-4 text-rose-500" />
             <span className="font-semibold">Document numbering</span>
             {initialKind && (
-              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500">
+              <span className="text-2xs px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500">
                 {initialKind}
               </span>
             )}
@@ -177,7 +177,7 @@ export function SeriesManager({ onClose, onChanged, toast, initialKind, inline =
       </div>
 
       {!loading && !allocationsFor && (
-        <footer className="px-5 py-3 border-t border-border bg-muted/20 text-[11px] text-muted-foreground flex items-center justify-between">
+        <footer className="px-5 py-3 border-t border-border bg-muted/20 text-xs text-muted-foreground flex items-center justify-between">
           <span className="flex items-center gap-1.5">
             <AlertCircle className="w-3 h-3" />
             Numbers are consumed only when you Save to Paperless or Send — drafts never burn a number.
@@ -283,7 +283,7 @@ function WizardView({
               {p.series.map(s => (
                 <span
                   key={s.kind}
-                  className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-muted/60 text-foreground/70"
+                  className="text-2xs px-1.5 py-0.5 rounded-full bg-muted/60 text-foreground/70"
                 >
                   {s.kind}
                 </span>
@@ -351,7 +351,7 @@ function ListView({
 
       {groups.map(([kind, group]) => (
         <section key={kind}>
-          <h4 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+          <h4 className="text-2xs text-muted-foreground font-semibold mb-2">
             {kind}
           </h4>
           <div className="space-y-2">
@@ -388,7 +388,7 @@ function SeriesRow({
           <div className="flex items-center gap-2 mb-1">
             <span className="font-medium text-sm">{series.name}</span>
             {series.is_default && (
-              <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
+              <span className="text-2xs px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
                 Default
               </span>
             )}
@@ -399,10 +399,10 @@ function SeriesRow({
               {series.preview?.formatted || "—"}
             </code>
             {series.year_reset && (
-              <span className="text-[10px] text-muted-foreground">↻ resets each year</span>
+              <span className="text-2xs text-muted-foreground">↻ resets each year</span>
             )}
           </div>
-          <div className="text-[10px] text-muted-foreground mt-1 font-mono">
+          <div className="text-2xs text-muted-foreground mt-1 font-mono">
             scheme: {series.scheme} · padding: {series.seq_padding}
           </div>
         </div>
@@ -551,7 +551,7 @@ function SeriesEditor({
                 placeholder="rechnung · angebot · invoice · quote · faktura"
                 className="w-full h-9 px-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
               />
-              <div className="text-[10px] text-muted-foreground mt-1">
+              <div className="text-2xs text-muted-foreground mt-1">
                 The category. Templates whose args use names like <code>rechnungsnummer</code> /
                 <code> invoice_number</code> will auto-pick the matching kind's default series.
               </div>
@@ -595,7 +595,7 @@ function SeriesEditor({
               placeholder="{year}-{seq}"
               className="w-full h-9 px-3 rounded-md bg-muted/60 text-sm font-mono focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
             />
-            <div className="text-[10px] text-muted-foreground mt-1">
+            <div className="text-2xs text-muted-foreground mt-1">
               Placeholders: <code>{"{year}"}</code> · <code>{"{seq}"}</code> · <code>{"{prefix}"}</code>.
               Must contain <code>{"{seq}"}</code>.
             </div>
@@ -702,13 +702,13 @@ function AllocationsView({
         <div className="flex items-center gap-2 ml-auto">
           <Hash className="w-3.5 h-3.5 text-rose-500" />
           <span className="font-semibold">{series.name}</span>
-          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-muted/60 text-foreground/70">
+          <span className="text-2xs px-1.5 py-0.5 rounded-full bg-muted/60 text-foreground/70">
             {series.kind}
           </span>
         </div>
       </div>
 
-      <div className="text-[11px] text-muted-foreground bg-muted/30 border border-border rounded-md px-3 py-2 leading-relaxed">
+      <div className="text-xs text-muted-foreground bg-muted/30 border border-border rounded-md px-3 py-2 leading-relaxed">
         Audit trail of every number consumed from this series. Each row links to the
         Paperless document it was used for (when applicable), with a PDF SHA-256
         hash for Steuerprüfungs proof.
@@ -733,7 +733,7 @@ function AllocationsView({
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-2">
               <code className="font-mono text-sm text-foreground">{a.formatted}</code>
-              <span className="text-[11px] text-muted-foreground">{formatDate(a.consumed_at)}</span>
+              <span className="text-xs text-muted-foreground">{formatDate(a.consumed_at)}</span>
             </div>
             {a.title && (
               <div className="text-sm text-foreground/80 truncate mt-0.5">{a.title}</div>
@@ -744,13 +744,13 @@ function AllocationsView({
                   href={`/paperless/documents/${a.paperless_doc_id}/`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[10px] inline-flex items-center gap-1 text-rose-500 hover:underline"
+                  className="text-2xs inline-flex items-center gap-1 text-rose-500 hover:underline"
                 >
                   <ExternalLink className="w-2.5 h-2.5" /> Paperless #{a.paperless_doc_id}
                 </a>
               )}
               {a.pdf_sha256 && (
-                <span className="text-[10px] text-muted-foreground font-mono" title={a.pdf_sha256}>
+                <span className="text-2xs text-muted-foreground font-mono" title={a.pdf_sha256}>
                   sha256:{a.pdf_sha256.slice(0, 12)}…
                 </span>
               )}
@@ -767,7 +767,7 @@ function AllocationsView({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="text-[11px] text-muted-foreground mb-1">{label}</div>
+      <div className="text-xs text-muted-foreground mb-1">{label}</div>
       {children}
     </label>
   );

@@ -158,7 +158,7 @@ export function PipelineDetail({ id }: { id: number }) {
       </div>
       {p.goal && <p className="text-sm text-muted-foreground mb-1">Ziel: {p.goal}</p>}
       {p.last_check && (
-        <p className="text-[12px] text-muted-foreground mb-5 flex items-center gap-1.5">
+        <p className="text-xs text-muted-foreground mb-5 flex items-center gap-1.5">
           <Search className="w-3.5 h-3.5" /> Zuletzt geprüft {timeShort(p.last_check.at)}: {p.last_check.summary}
         </p>
       )}
@@ -173,7 +173,7 @@ export function PipelineDetail({ id }: { id: number }) {
           <Loader2 className="w-4 h-4 animate-spin text-primary mt-0.5 shrink-0" />
           <div>
             <div className="text-sm font-medium">Yorik schreibt die Erinnerungen…</div>
-            <p className="text-[12px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Er liest deine Mail, überlegt, welche Antwort du erwartest, und schlägt Abstände und Texte vor. Das dauert meist unter einer Minute.
             </p>
           </div>
@@ -190,7 +190,7 @@ export function PipelineDetail({ id }: { id: number }) {
               void run("redraft", post("/redraft"));
             }}
             disabled={busy !== null || dirty}
-            className="text-[12px] rounded-md border border-border px-2.5 py-1 hover:bg-muted disabled:opacity-40"
+            className="text-xs rounded-md border border-border px-2.5 py-1 hover:bg-muted disabled:opacity-40"
           >
             Neu schreiben lassen
           </button>
@@ -200,7 +200,7 @@ export function PipelineDetail({ id }: { id: number }) {
             onClick={approveAll}
             disabled={!allOpened || busy !== null}
             title={allOpened ? "" : "Öffne erst jede Mail einmal"}
-            className="text-[12px] rounded-md border border-border px-2.5 py-1 hover:bg-muted disabled:opacity-40"
+            className="text-xs rounded-md border border-border px-2.5 py-1 hover:bg-muted disabled:opacity-40"
           >
             {busy === "approveAll" ? "…" : allOpened ? "Alle freigeben" : "Alle freigeben (erst jede öffnen)"}
           </button>
@@ -219,7 +219,7 @@ export function PipelineDetail({ id }: { id: number }) {
               <span className="text-muted-foreground"> · {dateShort(s.done_at)}</span>
             </div>
             {s.action === "mail_senden" && (
-              <div className="text-[12px] text-muted-foreground truncate">{s.payload.subject} → {(s.payload.to || []).join(", ")}</div>
+              <div className="text-xs text-muted-foreground truncate">{s.payload.subject} → {(s.payload.to || []).join(", ")}</div>
             )}
           </TimelineItem>
         ))}
@@ -278,7 +278,7 @@ export function PipelineDetail({ id }: { id: number }) {
             {busy === "start" ? "Startet…" : "Starten"}
           </button>
           {(!allApproved || dirty) && (
-            <span className="text-[12px] text-muted-foreground ml-3">
+            <span className="text-xs text-muted-foreground ml-3">
               {dirty ? "Erst speichern." : "Erst jede Erinnerung freigeben."}
             </span>
           )}
@@ -308,7 +308,7 @@ function StateChip({ p }: { p: Pipeline }) {
   const label = p.state === "laeuft" ? "Läuft" : stateLabel(p.state).split(" —")[0];
   return (
     <span className={cn(
-      "shrink-0 text-[11px] rounded-full px-2 py-0.5 border",
+      "shrink-0 text-xs rounded-full px-2 py-0.5 border",
       p.state === "laeuft" ? "border-primary/40 text-primary" :
       p.state === "erledigt" ? "border-emerald-500/40 text-emerald-600" : "border-border text-muted-foreground",
     )}>{label}</span>
@@ -333,10 +333,10 @@ function OriginCard({ p }: { p: Pipeline }) {
     <div>
       <button onClick={() => setOpen(v => !v)} className="text-left w-full">
         <div className="text-sm">Deine Mail <span className="text-muted-foreground">· {dateShort(p.origin.sent_at || p.since_at)}</span></div>
-        <div className="text-[12px] text-muted-foreground truncate">{p.origin.subject} → {(p.origin.to || []).join(", ")}</div>
+        <div className="text-xs text-muted-foreground truncate">{p.origin.subject} → {(p.origin.to || []).join(", ")}</div>
       </button>
       {open && p.origin.body_excerpt && (
-        <pre className="mt-2 text-[12px] whitespace-pre-wrap font-sans text-muted-foreground bg-muted/40 rounded-md p-3 max-h-64 overflow-y-auto">{p.origin.body_excerpt}</pre>
+        <pre className="mt-2 text-xs whitespace-pre-wrap font-sans text-muted-foreground bg-muted/40 rounded-md p-3 max-h-64 overflow-y-auto">{p.origin.body_excerpt}</pre>
       )}
     </div>
   );
@@ -366,8 +366,8 @@ function StepCard({ step, index, editable, dirty, expanded, quote, busy, onToggl
   if (!isMail) {
     return (
       <div>
-        <div className="text-sm flex items-center gap-1.5 flex-wrap">Übergabe an dich <span className="text-muted-foreground text-[12px]">· {days}{step.due_at && !dirty ? `, ${relDay(step.due_at)}` : ""}</span></div>
-        <div className="text-[12px] text-muted-foreground">Kommt bis dahin keine Antwort, meldet sich Yorik bei dir.</div>
+        <div className="text-sm flex items-center gap-1.5 flex-wrap">Übergabe an dich <span className="text-muted-foreground text-xs">· {days}{step.due_at && !dirty ? `, ${relDay(step.due_at)}` : ""}</span></div>
+        <div className="text-xs text-muted-foreground">Kommt bis dahin keine Antwort, meldet sich Yorik bei dir.</div>
       </div>
     );
   }
@@ -378,18 +378,18 @@ function StepCard({ step, index, editable, dirty, expanded, quote, busy, onToggl
         <div className="min-w-0 flex-1">
           <div className="text-sm flex items-center gap-1.5 flex-wrap">
             {index === 0 ? "Erinnerung" : `${index + 1}. Erinnerung`}
-            <span className="text-muted-foreground text-[12px]">· {step.after_days} {step.after_days === 1 ? "Tag" : "Tage"} danach{step.due_at && !dirty ? `, ${relDay(step.due_at)}` : ""}</span>
+            <span className="text-muted-foreground text-xs">· {step.after_days} {step.after_days === 1 ? "Tag" : "Tage"} danach{step.due_at && !dirty ? `, ${relDay(step.due_at)}` : ""}</span>
           </div>
-          <div className="text-[12px] text-muted-foreground truncate">{step.payload.subject}</div>
+          <div className="text-xs text-muted-foreground truncate">{step.payload.subject}</div>
         </div>
         {step.approved
-          ? <span className="text-[11px] text-emerald-600 flex items-center gap-1 shrink-0"><Check className="w-3.5 h-3.5" /> freigegeben</span>
-          : <span className="text-[11px] text-amber-600 shrink-0">nicht freigegeben</span>}
+          ? <span className="text-xs text-emerald-600 flex items-center gap-1 shrink-0"><Check className="w-3.5 h-3.5" /> freigegeben</span>
+          : <span className="text-xs text-amber-600 shrink-0">nicht freigegeben</span>}
         {expanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
       </button>
       {expanded && (
         <div className="px-3.5 pb-3.5 space-y-2.5 border-t border-border pt-3">
-          <div className="text-[12px] text-muted-foreground">
+          <div className="text-xs text-muted-foreground">
             {days} der vorigen Nachricht{step.payload.why ? <> · <span className="italic">{step.payload.why}</span></> : null}
           </div>
           <SourceNote source={step.payload.source} />
@@ -420,20 +420,20 @@ function StepCard({ step, index, editable, dirty, expanded, quote, busy, onToggl
           </Field>
           {quote && (
             <div>
-              <button onClick={() => setShowQuote(v => !v)} className="text-[12px] text-muted-foreground hover:text-foreground">
+              <button onClick={() => setShowQuote(v => !v)} className="text-xs text-muted-foreground hover:text-foreground">
                 {showQuote ? "Zitat ausblenden" : "Darunter steht deine erste Mail als Zitat"}
               </button>
-              {showQuote && <pre className="mt-1.5 text-[11px] whitespace-pre-wrap font-sans text-muted-foreground bg-muted/40 rounded-md p-2.5 max-h-48 overflow-y-auto">{quote.trim()}</pre>}
+              {showQuote && <pre className="mt-1.5 text-xs whitespace-pre-wrap font-sans text-muted-foreground bg-muted/40 rounded-md p-2.5 max-h-48 overflow-y-auto">{quote.trim()}</pre>}
             </div>
           )}
           {editable && (
             <div className="flex items-center justify-between gap-2 pt-1">
-              <button onClick={onRemove} className="text-[12px] text-muted-foreground hover:text-rose-500 flex items-center gap-1">
+              <button onClick={onRemove} className="text-xs text-muted-foreground hover:text-rose-500 flex items-center gap-1">
                 <Trash2 className="w-3.5 h-3.5" /> Entfernen
               </button>
               {step.id && !dirty ? (
                 step.approved ? (
-                  <button onClick={() => onApprove(false)} disabled={busy !== null} className="text-[12px] rounded-md border border-border px-2.5 py-1.5 hover:bg-muted">
+                  <button onClick={() => onApprove(false)} disabled={busy !== null} className="text-xs rounded-md border border-border px-2.5 py-1.5 hover:bg-muted">
                     Freigabe zurücknehmen
                   </button>
                 ) : (
@@ -442,7 +442,7 @@ function StepCard({ step, index, editable, dirty, expanded, quote, busy, onToggl
                   </button>
                 )
               ) : (
-                <span className="text-[12px] text-muted-foreground">Erst speichern, dann freigeben</span>
+                <span className="text-xs text-muted-foreground">Erst speichern, dann freigeben</span>
               )}
             </div>
           )}
@@ -460,13 +460,13 @@ function SourceNote({ source }: { source?: string }) {
     bearbeitet: "Von dir bearbeitet.",
   }[source || ""];
   if (!text) return null;
-  return <div className={cn("text-[11px]", source === "vorlage" ? "text-amber-600" : "text-muted-foreground")}>{text}</div>;
+  return <div className={cn("text-xs", source === "vorlage" ? "text-amber-600" : "text-muted-foreground")}>{text}</div>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
       {children}
     </label>
   );
@@ -507,14 +507,14 @@ function AttentionCard({ p, busy, run, post, onAddReminder }: {
             <div key={c.id} className="rounded-lg border border-border bg-card p-3">
               <div className="flex items-baseline justify-between gap-2">
                 <div className="text-sm font-medium truncate">{c.subject || "(ohne Betreff)"}</div>
-                <div className="text-[11px] text-muted-foreground shrink-0">{relDay(c.date)}</div>
+                <div className="text-xs text-muted-foreground shrink-0">{relDay(c.date)}</div>
               </div>
-              <div className="text-[12px] text-muted-foreground truncate">
+              <div className="text-xs text-muted-foreground truncate">
                 von {c.from_name ? `${c.from_name} <${c.from}>` : c.from}{c.folder ? ` · ${c.folder}` : ""}
               </div>
-              {c.snippet && <div className="text-[12px] mt-1 line-clamp-2">{c.snippet}</div>}
+              {c.snippet && <div className="text-xs mt-1 line-clamp-2">{c.snippet}</div>}
               <div className="flex flex-wrap gap-1 mt-1.5">
-                {c.why.map(w => <span key={w} className="text-[10px] rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{w}</span>)}
+                {c.why.map(w => <span key={w} className="text-2xs rounded-full bg-muted px-2 py-0.5 text-muted-foreground">{w}</span>)}
               </div>
               <div className="flex flex-wrap gap-2 mt-2.5">
                 <button className={primary} disabled={busy !== null}
@@ -525,7 +525,7 @@ function AttentionCard({ p, busy, run, post, onAddReminder }: {
                   onClick={() => run("answer", post("/answer", { mail_id: c.id, is_answer: false }))}>
                   Nein, weiter warten
                 </button>
-                <a href={`/r/email?msg=${c.id}`} target="_blank" rel="noreferrer" className="text-[12px] text-muted-foreground hover:text-foreground self-center">
+                <a href={`/r/email?msg=${c.id}`} target="_blank" rel="noreferrer" className="text-xs text-muted-foreground hover:text-foreground self-center">
                   Mail öffnen
                 </a>
               </div>
@@ -541,9 +541,9 @@ function AttentionCard({ p, busy, run, post, onAddReminder }: {
             {step.payload.source === "llm_frisch" && " Yorik hat die Erinnerung für heute neu geschrieben."}
           </p>
           <div className="rounded-lg border border-border bg-card p-3 mb-3">
-            <div className="text-[12px] text-muted-foreground">an {(step.payload.to || []).join(", ")}</div>
+            <div className="text-xs text-muted-foreground">an {(step.payload.to || []).join(", ")}</div>
             <div className="text-sm font-medium">{step.payload.subject}</div>
-            <pre className="text-[12px] whitespace-pre-wrap font-sans mt-1.5 max-h-40 overflow-y-auto">{step.payload.body}</pre>
+            <pre className="text-xs whitespace-pre-wrap font-sans mt-1.5 max-h-40 overflow-y-auto">{step.payload.body}</pre>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button className={cn(primary, "flex items-center gap-1.5")} disabled={busy !== null}
@@ -552,8 +552,8 @@ function AttentionCard({ p, busy, run, post, onAddReminder }: {
               {busy === "send" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               {step.approved ? "Jetzt senden" : "Freigeben und senden"}
             </button>
-            <span className="text-[12px] text-muted-foreground">Ändern kannst du den Text unten im Ablauf.</span>
-            <span className="text-[11px] text-muted-foreground">Yorik prüft direkt vor dem Senden noch einmal.</span>
+            <span className="text-xs text-muted-foreground">Ändern kannst du den Text unten im Ablauf.</span>
+            <span className="text-xs text-muted-foreground">Yorik prüft direkt vor dem Senden noch einmal.</span>
           </div>
         </div>
       )}
@@ -563,7 +563,7 @@ function AttentionCard({ p, busy, run, post, onAddReminder }: {
           <ul className="text-[13px] text-muted-foreground list-disc ml-5 mb-3">
             {(d.problems || []).map((x: string) => <li key={x}>{x}</li>)}
           </ul>
-          <p className="text-[12px] text-muted-foreground mb-3">
+          <p className="text-xs text-muted-foreground mb-3">
             Solange Yorik deine Post nicht sicher überblickt, schickt er keine Erinnerung. Er versucht es alle 15 Minuten wieder.
           </p>
           <div className="flex flex-wrap gap-2">
@@ -656,7 +656,7 @@ function FeaturesPanel({ p, editable, onSaved }: { p: Pipeline; editable: boolea
 
   return (
     <Panel title="Woran Yorik die Antwort erkennt" open={open} onToggle={() => setOpen(v => !v)}>
-      <p className="text-[12px] text-muted-foreground mb-3">
+      <p className="text-xs text-muted-foreground mb-3">
         Gesucht wird in allen deinen Postfächern samt Spam, seit {dateShort(p.since_at)}. Jede Mail, die hierzu passt, zeigt Yorik dir, bevor er erinnert.
       </p>
       <div className="space-y-3">
@@ -664,10 +664,10 @@ function FeaturesPanel({ p, editable, onSaved }: { p: Pipeline; editable: boolea
           const values = (f[g.key] as string[] | undefined) || [];
           return (
             <div key={g.key}>
-              <div className="text-[12px] font-medium">{g.label} <span className="text-muted-foreground font-normal">· {g.hint}</span></div>
+              <div className="text-xs font-medium">{g.label} <span className="text-muted-foreground font-normal">· {g.hint}</span></div>
               <div className="flex flex-wrap gap-1.5 mt-1">
                 {values.map(v => (
-                  <span key={v} className="text-[12px] rounded-full border border-border px-2 py-0.5 flex items-center gap-1">
+                  <span key={v} className="text-xs rounded-full border border-border px-2 py-0.5 flex items-center gap-1">
                     {v}
                     {editable && (
                       <button aria-label={`${v} entfernen`} onClick={() => setF({ ...f, [g.key]: values.filter(x => x !== v) })}>
@@ -688,7 +688,7 @@ function FeaturesPanel({ p, editable, onSaved }: { p: Pipeline; editable: boolea
                         setAdding({ ...adding, [g.key]: "" });
                       }
                     }}
-                    className="text-[12px] bg-transparent border border-dashed border-border rounded-full px-2 py-0.5 w-32"
+                    className="text-xs bg-transparent border border-dashed border-border rounded-full px-2 py-0.5 w-32"
                   />
                 )}
               </div>
@@ -734,7 +734,7 @@ function WindowPanel({ p, editable, onSaved }: { p: Pipeline; editable: boolean;
           Uhr
         </span>
       </div>
-      <p className="text-[12px] text-muted-foreground mt-2">Außerhalb dieser Zeiten fragt Yorik nicht nach dem Senden, sondern wartet.</p>
+      <p className="text-xs text-muted-foreground mt-2">Außerhalb dieser Zeiten fragt Yorik nicht nach dem Senden, sondern wartet.</p>
     </Panel>
   );
 }
@@ -802,7 +802,7 @@ function History({ events }: { events: PipelineEvent[] }) {
       <div className="text-[13px] font-medium text-muted-foreground mb-2">Verlauf</div>
       <ul className="space-y-1">
         {events.map(e => (
-          <li key={e.id} className="text-[12px]">
+          <li key={e.id} className="text-xs">
             <button onClick={() => setOpen(o => (o === e.id ? null : e.id))} className="w-full text-left flex gap-2 hover:bg-muted/40 rounded px-1 py-0.5">
               <span className="text-muted-foreground tabular-nums shrink-0 w-28">{timeShort(e.at)}</span>
               <span className={cn(e.kind === "aktion" && "font-medium", e.kind === "mensch" && "text-primary")}>{e.text}</span>

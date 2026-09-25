@@ -338,7 +338,7 @@ export function FinanceApp() {
                   {filterCategory && (
                     <button
                       onClick={() => setFilterCategory(null)}
-                      className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground hover:bg-muted/70"
+                      className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground hover:bg-muted/70"
                     >
                       {filterCategory} <X className="w-3 h-3" />
                     </button>
@@ -349,13 +349,13 @@ export function FinanceApp() {
                 )}
                 {txByDay.map(([day, txs]) => (
                   <div key={day} className="mb-4">
-                    <div className="text-[11px] font-medium text-muted-foreground/80 mb-1.5">{dateHeading(day)}</div>
+                    <div className="text-xs font-medium text-muted-foreground/80 mb-1.5">{dateHeading(day)}</div>
                     <div className="divide-y divide-border/60">
                       {txs.map(t => (
                         <div key={t.id} className="flex items-center justify-between text-sm py-1.5">
                           <div className="min-w-0 flex-1">
                             <div className="truncate">{t.counterparty || t.purpose || "—"}</div>
-                            {t.category && <div className="text-[11px] text-muted-foreground truncate">{t.category}</div>}
+                            {t.category && <div className="text-xs text-muted-foreground truncate">{t.category}</div>}
                           </div>
                           <span className={cn("tabular-nums shrink-0 ml-3", t.amount < 0 ? "text-rose-500" : "text-emerald-600")}>
                             {eur(t.amount)}
@@ -372,7 +372,7 @@ export function FinanceApp() {
           {tab === "vertraege" && (
             <section className="pt-2">
               <h2 className="text-[13px] font-medium text-muted-foreground mb-1">Verträge & Abos</h2>
-              <p className="text-[12px] text-muted-foreground mb-5">
+              <p className="text-xs text-muted-foreground mb-5">
                 Automatisch erkannt: gleicher Empfänger, ähnlicher Betrag, in mindestens zwei
                 verschiedenen Monaten der letzten 6 Monate.
               </p>
@@ -433,19 +433,19 @@ function AccountsList({ accounts, syncingId, onSync, onDelete, compact }: {
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-1.5">
               <span className={cn("font-medium truncate", compact && "text-sm")}>{a.display_name}</span>
-              <span className="text-[11px] text-muted-foreground shrink-0">
+              <span className="text-xs text-muted-foreground shrink-0">
                 {a.space_id ? "geteilt" : "privat"}
               </span>
             </div>
             {!compact && (
-              <div className="text-[12px] text-muted-foreground truncate">
+              <div className="text-xs text-muted-foreground truncate">
                 {a.iban || "IBAN noch nicht bekannt"}
               </div>
             )}
             {a.last_sync_error ? (
-              <div className="text-[12px] text-rose-500 mt-0.5 truncate">Sync-Fehler: {a.last_sync_error}</div>
+              <div className="text-xs text-rose-500 mt-0.5 truncate">Sync-Fehler: {a.last_sync_error}</div>
             ) : (!compact && a.last_synced_at) ? (
-              <div className="text-[11px] text-muted-foreground/80 mt-0.5">Synchronisiert: {a.last_synced_at}</div>
+              <div className="text-xs text-muted-foreground/80 mt-0.5">Synchronisiert: {a.last_synced_at}</div>
             ) : null}
           </div>
           <button
@@ -552,7 +552,7 @@ function RecurringSection({ items, limit, onShowAll, compact, hideHeading }: {
           <div key={`${r.account_id}-${r.counterparty}`} className="flex items-center gap-3 py-2.5 pl-3 border-l-2 border-l-amber-500">
             <div className="min-w-0 flex-1">
               <div className={cn("font-medium truncate", compact && "text-sm")}>{r.counterparty}</div>
-              <div className="text-[11px] text-muted-foreground truncate">
+              <div className="text-xs text-muted-foreground truncate">
                 {r.category || "unkategorisiert"}
                 {r.next_expected && !compact && ` · ca. ${fmtDate(r.next_expected)}`}
               </div>
@@ -725,7 +725,7 @@ function BankSearchField({ onPick }: { onPick: (inst: Institute) => void }) {
               className="w-full text-left px-2.5 py-1.5 text-sm hover:bg-muted"
             >
               <div className="font-medium truncate">{inst.name}</div>
-              <div className="text-[11px] text-muted-foreground truncate">{inst.city} · BLZ {inst.blz}</div>
+              <div className="text-xs text-muted-foreground truncate">{inst.city} · BLZ {inst.blz}</div>
             </button>
           ))}
         </div>
@@ -739,7 +739,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <label className="block text-sm">
       <div className="mb-1 text-xs font-medium text-muted-foreground">{label}</div>
       {children}
-      {hint && <div className="text-[11px] text-muted-foreground mt-1">{hint}</div>}
+      {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
     </label>
   );
 }

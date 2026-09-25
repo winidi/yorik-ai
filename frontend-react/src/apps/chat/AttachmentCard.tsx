@@ -71,7 +71,7 @@ export function AttachmentCard({ id }: { id: number }) {
   }
 
   if (gone) {
-    return <div className="mt-1.5 text-[11px] text-muted-foreground italic">Anhang #{id} ist nicht mehr da (gelöscht oder abgelaufen).</div>;
+    return <div className="mt-1.5 text-xs text-muted-foreground italic">Anhang #{id} ist nicht mehr da (gelöscht oder abgelaufen).</div>;
   }
   if (!att) return null;
   const until = new Date(att.expires_at).toLocaleDateString([], { day: "numeric", month: "long" });
@@ -84,7 +84,7 @@ export function AttachmentCard({ id }: { id: number }) {
           : <span className="w-12 h-12 rounded-md bg-amber-500/10 text-amber-600 grid place-items-center shrink-0"><FileText className="w-5 h-5" /></span>}
         <span className="min-w-0">
           <span className="block text-sm font-medium truncate">{att.filename}</span>
-          <span className="block text-[11px] text-muted-foreground">{att.is_image ? <ImageIcon className="inline w-3 h-3 mr-1 -mt-0.5" /> : null}{size(att.bytes)}</span>
+          <span className="block text-xs text-muted-foreground">{att.is_image ? <ImageIcon className="inline w-3 h-3 mr-1 -mt-0.5" /> : null}{size(att.bytes)}</span>
         </span>
       </a>
       <div className="px-3 pb-3">
@@ -95,8 +95,8 @@ export function AttachmentCard({ id }: { id: number }) {
           </div>
         ) : (
           <>
-            <div className="text-[11px] text-muted-foreground mb-2">Nur in diesem Gespräch · wird am {until} gelöscht</div>
-            <div className="text-[11px] font-medium mb-1">In Dokumente ablegen, sichtbar für</div>
+            <div className="text-xs text-muted-foreground mb-2">Nur in diesem Gespräch · wird am {until} gelöscht</div>
+            <div className="text-xs font-medium mb-1">In Dokumente ablegen, sichtbar für</div>
             <div className="flex flex-wrap gap-2">
               {FILE_AS.map(({ v, label, hint }) => {
                 const primary = att.suggest === "file" && att.default_visibility === v;
@@ -116,7 +116,7 @@ export function AttachmentCard({ id }: { id: number }) {
               </button>
             </div>
             {(error || att.paperless_error) && (
-              <div className="mt-2 text-[11px] text-red-500">
+              <div className="mt-2 text-xs text-red-500">
                 {error || "Die Datei konnte nicht abgelegt werden."}
               </div>
             )}

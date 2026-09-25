@@ -978,7 +978,7 @@ export function ComposeApp() {
             </div>
             <div>
               <div className="font-semibold leading-none">Compose</div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+              <div className="text-2xs text-muted-foreground mt-0.5">
                 {templates.length} template{templates.length === 1 ? "" : "s"}
               </div>
             </div>
@@ -1048,7 +1048,7 @@ export function ComposeApp() {
                     <Sparkles className="w-5 h-5 text-rose-500" />
                   </div>
                   <div className="text-sm font-medium text-foreground mb-1">No templates yet</div>
-                  <div className="text-[11px] text-muted-foreground leading-relaxed">
+                  <div className="text-xs text-muted-foreground leading-relaxed">
                     Use <strong className="text-foreground/80">Browse community templates</strong> above
                     to pick a ready-made template (invoice, quote, letter…), or drop
                     a JSON template into <code className="text-foreground/80">templates/</code>.
@@ -1078,21 +1078,21 @@ export function ComposeApp() {
                         <div className="flex-1 min-w-0 pr-6">
                           <div className="text-sm font-medium truncate">{tpl.name}</div>
                           {tpl.vertical && (
-                            <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                            <div className="text-2xs text-muted-foreground mt-0.5 truncate">
                               {tpl.vertical}
                             </div>
                           )}
                         </div>
                       </div>
                       {tpl.description && (
-                        <div className="text-[11px] text-muted-foreground mt-1.5 line-clamp-2 leading-snug">
+                        <div className="text-xs text-muted-foreground mt-1.5 line-clamp-2 leading-snug">
                           {tpl.description}
                         </div>
                       )}
                       {(tpl.tags?.length || 0) > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {tpl.tags.slice(0, 3).map(t => (
-                            <span key={t} className="text-[9px] uppercase tracking-wider bg-muted/60 text-muted-foreground px-1.5 py-0.5 rounded">
+                            <span key={t} className="text-2xs bg-muted/60 text-muted-foreground px-1.5 py-0.5 rounded">
                               {t}
                             </span>
                           ))}
@@ -1207,7 +1207,7 @@ export function ComposeApp() {
               <div className="flex items-start gap-2.5">
                 <span className="text-base leading-none mt-0.5">📝</span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[11px] uppercase tracking-wider text-amber-700 dark:text-amber-400 font-semibold mb-1">
+                  <div className="text-xs text-amber-700 dark:text-amber-400 font-semibold mb-1">
                     About this template
                   </div>
                   <div
@@ -1335,19 +1335,19 @@ export function ComposeApp() {
           <div className="text-xs text-foreground mb-1">
             <span className="font-medium">{saveAddressPrompt.name}</span> isn't on your contacts list.
           </div>
-          <div className="text-[10px] text-muted-foreground whitespace-pre-line mb-3 line-clamp-3 leading-tight">
+          <div className="text-2xs text-muted-foreground whitespace-pre-line mb-3 line-clamp-3 leading-tight">
             {saveAddressPrompt.address}
           </div>
           <div className="flex gap-2 justify-end">
             <button
               onClick={dismissSaveRecipient}
-              className="text-[11px] px-2.5 py-1 rounded-md border border-border bg-card hover:bg-muted text-muted-foreground"
+              className="text-xs px-2.5 py-1 rounded-md border border-border bg-card hover:bg-muted text-muted-foreground"
             >
               Not now
             </button>
             <button
               onClick={confirmSaveRecipient}
-              className="text-[11px] px-2.5 py-1 rounded-md bg-amber-500 text-white hover:opacity-90 font-medium"
+              className="text-xs px-2.5 py-1 rounded-md bg-amber-500 text-white hover:opacity-90 font-medium"
             >
               Save contact
             </button>
@@ -1969,13 +1969,13 @@ function AskYorikPanel({
             <X className="w-3.5 h-3.5" />
           </button>
         </header>
-        <div className="px-4 py-3 text-[11px] text-muted-foreground italic line-clamp-2 bg-muted/30 shrink-0">
+        <div className="px-4 py-3 text-xs text-muted-foreground italic line-clamp-2 bg-muted/30 shrink-0">
           {mode === "write"
             ? <>Template placeholder — will be ignored. Tell Yorik below what you want to write.</>
             : <>"{selectedText.slice(0, 200)}{selectedText.length > 200 ? "…" : ""}"</>}
         </div>
-        <div className="px-3 pt-3 flex items-center gap-1 text-[10px] text-muted-foreground border-t border-border shrink-0">
-          <span className="mr-1 uppercase tracking-wider">Length</span>
+        <div className="px-3 pt-3 flex items-center gap-1 text-2xs text-muted-foreground border-t border-border shrink-0">
+          <span className="mr-1">Length</span>
           {(["short", "medium", "long"] as RevLength[]).map(opt => (
             <button
               key={opt}
@@ -2065,7 +2065,7 @@ function AskYorikPanel({
               <div key={i} className="p-3 border-b border-border/60 last:border-0">
                 <div className="text-sm leading-relaxed mb-2 whitespace-pre-wrap">{s.text}</div>
                 {s.rationale && (
-                  <div className="text-[10px] text-muted-foreground italic mb-2">{s.rationale}</div>
+                  <div className="text-2xs text-muted-foreground italic mb-2">{s.rationale}</div>
                 )}
                 <button
                   onClick={() => accept(s)}
@@ -2256,12 +2256,12 @@ function WriteArgModal({
           </button>
         </header>
         {currentValue.trim() && (
-          <div className="px-4 py-3 text-[11px] text-muted-foreground italic line-clamp-2 bg-muted/30 shrink-0">
+          <div className="px-4 py-3 text-xs text-muted-foreground italic line-clamp-2 bg-muted/30 shrink-0">
             Current: "{currentValue.slice(0, 200)}{currentValue.length > 200 ? "…" : ""}" — will be replaced.
           </div>
         )}
-        <div className="px-3 pt-3 flex items-center gap-1 text-[10px] text-muted-foreground border-t border-border shrink-0">
-          <span className="mr-1 uppercase tracking-wider">Length</span>
+        <div className="px-3 pt-3 flex items-center gap-1 text-2xs text-muted-foreground border-t border-border shrink-0">
+          <span className="mr-1">Length</span>
           {(["short", "medium", "long"] as RevLength[]).map(opt => (
             <button
               key={opt}
@@ -2612,7 +2612,7 @@ function AiPane({
         </div>
         <div className="min-w-0">
           <div className="font-semibold leading-none text-sm truncate">{template.name}</div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+          <div className="text-2xs text-muted-foreground mt-0.5">
             Template · arguments · data
           </div>
         </div>
@@ -2625,7 +2625,7 @@ function AiPane({
 
         {unmatchedNumberingArgs.length > 0 && (
           <section>
-            <h4 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+            <h4 className="text-2xs text-muted-foreground font-semibold mb-2">
               Numbering setup
             </h4>
             <div className="space-y-2">
@@ -2638,9 +2638,9 @@ function AiPane({
                   <div className="flex items-center gap-2 text-xs">
                     <Hash className="w-3.5 h-3.5 text-amber-600" />
                     <span className="font-medium text-foreground">Set up <code className="bg-card/60 px-1 rounded">{kind}</code> numbering</span>
-                    <span className="ml-auto text-[10px] text-amber-600 group-hover:underline">Configure →</span>
+                    <span className="ml-auto text-2xs text-amber-600 group-hover:underline">Configure →</span>
                   </div>
-                  <div className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                  <div className="text-xs text-muted-foreground mt-1 leading-snug">
                     This template uses <code className="text-foreground/70">{key}</code> — Yorik can
                     auto-allocate sequential numbers and log them for tax-audit proof.
                   </div>
@@ -2653,13 +2653,13 @@ function AiPane({
         {argKeys.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              <h4 className="text-2xs text-muted-foreground font-semibold">
                 Arguments
               </h4>
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => onOpenNumbering()}
-                  className="text-[10px] inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground transition"
+                  className="text-2xs inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground transition"
                   title="Manage document numbering"
                 >
                   <Hash className="w-2.5 h-2.5" /> Numbering
@@ -2667,7 +2667,7 @@ function AiPane({
                 <button
                   onClick={() => onRerender()}
                   disabled={drafting}
-                  className="text-[10px] inline-flex items-center gap-1 px-2 py-0.5 rounded bg-violet-500/10 hover:bg-violet-500/20 text-violet-500 transition disabled:opacity-50"
+                  className="text-2xs inline-flex items-center gap-1 px-2 py-0.5 rounded bg-violet-500/10 hover:bg-violet-500/20 text-violet-500 transition disabled:opacity-50"
                   title="Re-run the template with the current arguments"
                 >
                   {drafting ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <RefreshCw className="w-2.5 h-2.5" />}
@@ -2733,7 +2733,7 @@ function AiPane({
 
         {dataKeys.length > 0 && (
           <section>
-            <h4 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+            <h4 className="text-2xs text-muted-foreground font-semibold mb-2">
               Pulled data
             </h4>
             <div className="space-y-1.5">
@@ -2746,12 +2746,12 @@ function AiPane({
 
         {template.requires_extensions?.length > 0 && (
           <section>
-            <h4 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+            <h4 className="text-2xs text-muted-foreground font-semibold mb-2">
               Requires extensions
             </h4>
             <div className="flex flex-wrap gap-1">
               {template.requires_extensions.map(e => (
-                <span key={e} className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                <span key={e} className="text-2xs px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
                   {e}
                 </span>
               ))}
@@ -2759,7 +2759,7 @@ function AiPane({
           </section>
         )}
 
-        <div className="pt-4 mt-2 border-t border-border text-[11px] text-muted-foreground leading-relaxed">
+        <div className="pt-4 mt-2 border-t border-border text-xs text-muted-foreground leading-relaxed">
           Highlight any text in the editor → an <strong className="text-foreground/80">Ask Yorik</strong> pill
           appears to revise that selection (formal, shorter, in German, etc).
         </div>
@@ -2863,7 +2863,7 @@ function ExtractFromTextPanel({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full px-2.5 py-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition"
+        className="w-full px-2.5 py-1.5 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition"
       >
         <Wand2 className="w-3 h-3 text-violet-500" />
         <span className="font-medium">Paste entire text</span>
@@ -2890,7 +2890,7 @@ function ExtractFromTextPanel({
               type="button"
               onClick={() => run(false)}
               disabled={busy || !text.trim()}
-              className="h-7 px-2.5 rounded-md bg-violet-500 text-white text-[11px] font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
+              className="h-7 px-2.5 rounded-md bg-violet-500 text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
             >
               {busy
                 ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -2902,14 +2902,14 @@ function ExtractFromTextPanel({
                 type="button"
                 onClick={() => run(true)}
                 disabled={busy || !text.trim()}
-                className="h-7 px-2 rounded-md text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50 flex items-center gap-1"
+                className="h-7 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 flex items-center gap-1"
                 title="Also overwrite fields that are already filled"
               >
                 Overwrite
               </button>
             )}
             {extractedOnce && lastFilled.length === 0 && !busy && (
-              <span className="text-[10px] text-amber-600">
+              <span className="text-2xs text-amber-600">
                 Nothing matched — the text may not contain any known fields.
               </span>
             )}
@@ -2919,7 +2919,7 @@ function ExtractFromTextPanel({
               "nothing happened". Also dismissable so re-runs feel fresh. */}
           {lastFilled.length > 0 && (
             <div className="rounded-md border border-emerald-500/30 bg-emerald-500/[0.06] p-2">
-              <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-semibold mb-1">
+              <div className="flex items-center justify-between text-2xs text-emerald-700 dark:text-emerald-400 font-semibold mb-1">
                 <span className="flex items-center gap-1">
                   <Check className="w-2.5 h-2.5" />
                   {lastFilled.length} field{lastFilled.length === 1 ? "" : "s"} filled
@@ -2932,7 +2932,7 @@ function ExtractFromTextPanel({
                   <X className="w-2.5 h-2.5" />
                 </button>
               </div>
-              <ul className="text-[10px] space-y-0.5">
+              <ul className="text-2xs space-y-0.5">
                 {lastFilled.map(({ key, value }) => (
                   <li key={key} className="truncate">
                     <code className="opacity-70">{key}</code>:{" "}
@@ -2944,7 +2944,7 @@ function ExtractFromTextPanel({
           )}
 
           {error && (
-            <div className="text-[10px] text-rose-500">{error}</div>
+            <div className="text-2xs text-rose-500">{error}</div>
           )}
         </div>
       )}
@@ -3055,7 +3055,7 @@ function RecipientGroupsSection({
     <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-4 space-y-3">
       <div className="flex items-center gap-2">
         <UsersRound className="w-4 h-4 text-amber-600" />
-        <div className="text-[11px] uppercase tracking-wider font-semibold text-amber-700 dark:text-amber-400">
+        <div className="text-xs font-semibold text-amber-700 dark:text-amber-400">
           Recipients
         </div>
       </div>
@@ -3090,7 +3090,7 @@ function RecipientGroupsSection({
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">{label}</div>
                 {currentName ? (
-                  <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 min-w-0">
+                  <div className="text-2xs text-muted-foreground flex items-center gap-1.5 min-w-0">
                     <span className="truncate">{currentName}</span>
                     {(hasEmail || hasPhone || hasAddress) && (
                       <span className="inline-flex items-center gap-1 shrink-0 text-muted-foreground/70">
@@ -3101,7 +3101,7 @@ function RecipientGroupsSection({
                     )}
                   </div>
                 ) : (
-                  <div className="text-[10px] text-muted-foreground italic">
+                  <div className="text-2xs text-muted-foreground italic">
                     Pick a contact or type a name in the field below
                   </div>
                 )}
@@ -3207,7 +3207,7 @@ function GroupExtractor({
         onClick={() => { setOpen(open === "paste" ? null : "paste"); setErr(null); }}
         disabled={!!busy}
         className={cn(
-          "text-xs md:text-[9px] inline-flex items-center gap-1 px-2.5 md:px-1.5 h-8 md:h-auto md:py-0.5 rounded-full transition border",
+          "text-xs md:text-2xs inline-flex items-center gap-1 px-2.5 md:px-1.5 h-8 md:h-auto md:py-0.5 rounded-full transition border",
           open === "paste"
             ? "bg-sky-500/20 text-sky-600 border-sky-500/40"
             : "bg-sky-500/10 text-sky-600 border-sky-500/20 hover:bg-sky-500/15",
@@ -3222,7 +3222,7 @@ function GroupExtractor({
         type="button"
         onClick={() => fileRef.current?.click()}
         disabled={!!busy}
-        className="text-xs md:text-[9px] inline-flex items-center gap-1 px-2.5 md:px-1.5 h-8 md:h-auto md:py-0.5 rounded-full transition border bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/15"
+        className="text-xs md:text-2xs inline-flex items-center gap-1 px-2.5 md:px-1.5 h-8 md:h-auto md:py-0.5 rounded-full transition border bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/15"
         title="Upload a document (PDF / Word / text) — LLM extracts only this slot's fields"
       >
         {busy === "upload"
@@ -3251,7 +3251,7 @@ function GroupExtractor({
             autoFocus
           />
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-2xs text-muted-foreground">
               Targets: {targets.map(t => t.key).join(", ")}
             </span>
             <div className="flex gap-1.5">
@@ -3276,10 +3276,10 @@ function GroupExtractor({
         </div>
       )}
       {err && (
-        <span className="text-[10px] text-rose-600 ml-1">{err}</span>
+        <span className="text-2xs text-rose-600 ml-1">{err}</span>
       )}
       {lastFilled && !err && (
-        <span className="text-[10px] text-emerald-600 ml-1">filled: {lastFilled.join(", ")}</span>
+        <span className="text-2xs text-emerald-600 ml-1">filled: {lastFilled.join(", ")}</span>
       )}
     </div>
   );
@@ -3422,10 +3422,10 @@ function ArgsList({
     title: string, hint: string, showHairline: boolean,
   ) => (
     <div className={showHairline ? "pt-4 mt-3 border-t border-border/60" : ""}>
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-1">
+      <div className="text-2xs text-muted-foreground/70 mb-1">
         {title}
       </div>
-      <div className="text-[10px] text-muted-foreground/60 mb-2">
+      <div className="text-2xs text-muted-foreground/60 mb-2">
         {hint}
       </div>
     </div>
@@ -3579,7 +3579,7 @@ function LineItemsEditor({
     );
     return (
       <div key={field.key} className="flex-1 min-w-[120px]">
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-0.5">
+        <div className="text-2xs text-muted-foreground/70 mb-0.5">
           {field.label || field.key}
           {required && (
             <span className="text-rose-500 ml-0.5">*</span>
@@ -3605,12 +3605,12 @@ function LineItemsEditor({
         </button>
       </div>
       {hint && (
-        <div className="text-[10px] text-muted-foreground/70 mb-2">{hint}</div>
+        <div className="text-2xs text-muted-foreground/70 mb-2">{hint}</div>
       )}
       <div className="space-y-3">
         {items.length === 0 && (
           <div className="rounded border border-dashed border-border/60 p-3 text-center">
-            <div className="text-[11px] text-muted-foreground mb-2">
+            <div className="text-xs text-muted-foreground mb-2">
               No rows yet. Add one to start.
             </div>
             <button
@@ -3626,7 +3626,7 @@ function LineItemsEditor({
             className="rounded border border-border/70 bg-muted/20 p-2"
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-2xs text-muted-foreground">
                 Row {rowIdx + 1}
               </span>
               <div className="flex items-center gap-1">
@@ -3634,7 +3634,7 @@ function LineItemsEditor({
                   type="button"
                   onClick={() => moveRow(rowIdx, -1)}
                   disabled={rowIdx === 0}
-                  className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-30 px-1"
+                  className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-30 px-1"
                   aria-label="Move up"
                   title="Move up"
                 >↑</button>
@@ -3642,7 +3642,7 @@ function LineItemsEditor({
                   type="button"
                   onClick={() => moveRow(rowIdx, 1)}
                   disabled={rowIdx === items.length - 1}
-                  className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-30 px-1"
+                  className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-30 px-1"
                   aria-label="Move down"
                   title="Move down"
                 >↓</button>
@@ -3650,7 +3650,7 @@ function LineItemsEditor({
                   type="button"
                   onClick={() => removeRow(rowIdx)}
                   disabled={!canRemove}
-                  className="text-[11px] text-rose-500 hover:text-rose-600 disabled:opacity-30 px-1"
+                  className="text-xs text-rose-500 hover:text-rose-600 disabled:opacity-30 px-1"
                   aria-label="Remove row"
                   title={canRemove ? "Remove this row" : `At least ${minItems} row(s) required`}
                 >×</button>
@@ -3738,11 +3738,11 @@ function ArgInput({ k, v, label, required, numbering, onChange, allArgKeys, onWr
   return (
     <label className="block">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] text-muted-foreground">{labelWithRequired}</span>
+        <span className="text-2xs text-muted-foreground">{labelWithRequired}</span>
         <div className="flex items-center gap-1">
           {numbering && (
             <span
-              className="text-[9px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+              className="text-2xs inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
               title={`Auto-allocated from the ${numbering.kind} series on Save / Send`}
             >
               <Hash className="w-2 h-2" />
@@ -3753,7 +3753,7 @@ function ArgInput({ k, v, label, required, numbering, onChange, allArgKeys, onWr
             <button
               type="button"
               onClick={onWriteArg}
-              className="text-xs md:text-[9px] inline-flex items-center gap-1 px-2.5 md:px-1.5 h-8 md:h-auto md:py-0.5 rounded-full transition border bg-violet-500/10 text-violet-600 border-violet-500/20 hover:bg-violet-500/20"
+              className="text-xs md:text-2xs inline-flex items-center gap-1 px-2.5 md:px-1.5 h-8 md:h-auto md:py-0.5 rounded-full transition border bg-violet-500/10 text-violet-600 border-violet-500/20 hover:bg-violet-500/20"
               title="Yorik will write this field for you — just tell him what it's about."
               aria-label="Write field with AI"
             >
@@ -3767,7 +3767,7 @@ function ArgInput({ k, v, label, required, numbering, onChange, allArgKeys, onWr
               type="button"
               onClick={onAutoGenerate}
               disabled={autoGenerating}
-              className="text-xs md:text-[9px] inline-flex items-center gap-1 px-2.5 md:px-1.5 h-8 md:h-auto md:py-0.5 rounded-full transition border bg-violet-500/10 text-violet-600 border-violet-500/20 hover:bg-violet-500/20 disabled:opacity-60 disabled:cursor-wait"
+              className="text-xs md:text-2xs inline-flex items-center gap-1 px-2.5 md:px-1.5 h-8 md:h-auto md:py-0.5 rounded-full transition border bg-violet-500/10 text-violet-600 border-violet-500/20 hover:bg-violet-500/20 disabled:opacity-60 disabled:cursor-wait"
               title="Yorik suggests a subject — based on the current letter text. No typing needed, just click."
               aria-label="Auto-generate subject"
             >
@@ -3831,7 +3831,7 @@ function DataRow({ k, v }: { k: string; v: unknown }) {
   return (
     <div className="flex items-baseline justify-between gap-2 text-xs">
       <span className="text-muted-foreground truncate min-w-0">{k}</span>
-      <span className="text-foreground/80 font-mono text-[11px] text-right">{preview}</span>
+      <span className="text-foreground/80 font-mono text-xs text-right">{preview}</span>
     </div>
   );
 }
@@ -3846,14 +3846,14 @@ function EmptyAi({ onOpenNumbering, templateCount }: { onOpenNumbering: () => vo
       <div className="flex-1 flex flex-col items-center justify-center text-center text-xs text-muted-foreground p-8">
         <Sparkles className="w-8 h-8 mb-3 opacity-30" />
         <div className="text-sm font-medium text-foreground mb-1">No templates yet</div>
-        <div className="text-[11px] max-w-xs leading-relaxed">
+        <div className="text-xs max-w-xs leading-relaxed">
           Use <strong className="text-foreground/80">Browse community templates</strong> in the
           sidebar to pull a ready-made template, or drop a JSON template into the
           <code className="text-foreground/80">templates/</code> folder.
         </div>
         <button
           onClick={onOpenNumbering}
-          className="mt-6 inline-flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-md bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition"
+          className="mt-6 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition"
         >
           <Hash className="w-3 h-3" /> Document numbering
         </button>
@@ -3866,7 +3866,7 @@ function EmptyAi({ onOpenNumbering, templateCount }: { onOpenNumbering: () => vo
       Pick a template to see its arguments and the data it pulled.
       <button
         onClick={onOpenNumbering}
-        className="mt-6 inline-flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-md bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition"
+        className="mt-6 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition"
       >
         <Hash className="w-3 h-3" /> Document numbering
       </button>
@@ -4097,7 +4097,7 @@ function DeliveryOption({
       <div className="flex items-center gap-1.5 font-medium text-[13px]">
         <span>{icon}</span> {title}
       </div>
-      <div className="text-[11px] mt-0.5 opacity-80">{sub}</div>
+      <div className="text-xs mt-0.5 opacity-80">{sub}</div>
     </button>
   );
 }
@@ -4117,7 +4117,7 @@ function SidebarTabButton({
     >
       {label}
       <span className={cn(
-        "text-[10px] px-1.5 rounded-full",
+        "text-2xs px-1.5 rounded-full",
         active ? "bg-rose-500/15 text-rose-600" : "bg-muted text-muted-foreground",
       )}>{count}</span>
       {active && (
@@ -4257,13 +4257,13 @@ function ComposeFooter({
               <span className="text-foreground font-medium">{activeTemplate.name}</span>
             </>
           ) : allRequiredFilled ? (
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-[11px] font-medium">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 text-xs font-medium">
               <CheckCircle2 className="w-3 h-3" />
               Ready · {readiness.required}/{readiness.required} required fields filled
             </span>
           ) : (
             <span
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 text-[11px] font-medium min-w-0"
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 text-xs font-medium min-w-0"
               title={`First missing field: ${readiness.firstMissingLabel}`}
             >
               <AlertCircle className="w-3 h-3 shrink-0" />
@@ -4424,7 +4424,7 @@ function DraftsListPanel({
           <FileText className="w-5 h-5 text-rose-500" />
         </div>
         <div className="text-sm font-medium text-foreground mb-1">No drafts</div>
-        <div className="text-[11px] text-muted-foreground leading-relaxed">
+        <div className="text-xs text-muted-foreground leading-relaxed">
           Every letter you start with Yorik lands here automatically — you can
           reopen and finish them any time.
         </div>
@@ -4461,15 +4461,15 @@ function DraftsListPanel({
                   <div className="text-sm font-medium truncate">
                     {d.recipient?.trim() || "(unknown recipient)"}
                   </div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                  <div className="text-2xs text-muted-foreground mt-0.5 truncate">
                     {subtitle}
                   </div>
                 </div>
               </div>
-              <div className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-1.5">
+              <div className="text-2xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
                 <span>{relativeTime(d.updated_at)}</span>
                 <span className="opacity-50">·</span>
-                <span className="uppercase tracking-wider">{d.kind}</span>
+                <span className="">{d.kind}</span>
               </div>
             </button>
             <button
@@ -4536,7 +4536,7 @@ function SignatureUpsellBanner() {
         </div>
         <button
           onClick={() => navigate("/settings")}
-          className="text-[11px] px-2.5 py-1 rounded-md bg-violet-500/15 hover:bg-violet-500/25 text-violet-600 dark:text-violet-300 font-medium transition shrink-0"
+          className="text-xs px-2.5 py-1 rounded-md bg-violet-500/15 hover:bg-violet-500/25 text-violet-600 dark:text-violet-300 font-medium transition shrink-0"
         >
           Open in Settings
         </button>
@@ -4583,7 +4583,7 @@ function ConfirmReplaceTemplateModal({
         discard your changes.
       </p>
       <p className="text-xs text-muted-foreground">
-        Tip: save the current letter first with <kbd className="px-1 py-0.5 rounded bg-muted text-[10px]">Save</kbd>, then switch templates — you'll find it anytime under <span className="font-medium">Drafts</span>.
+        Tip: save the current letter first with <kbd className="px-1 py-0.5 rounded bg-muted text-2xs">Save</kbd>, then switch templates — you'll find it anytime under <span className="font-medium">Drafts</span>.
       </p>
       <DialogFooter
         primary="Replace"
@@ -4639,7 +4639,7 @@ function DialogShell({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="text-[11px] text-muted-foreground mb-1">{label}</div>
+      <div className="text-xs text-muted-foreground mb-1">{label}</div>
       {children}
     </label>
   );
@@ -4801,7 +4801,7 @@ function CommunityTemplatesDialog({
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-semibold leading-none">Community templates</div>
-            <div className="text-[11px] text-muted-foreground mt-1 truncate">
+            <div className="text-xs text-muted-foreground mt-1 truncate">
               {data?.source || "loading…"}
             </div>
           </div>
@@ -4836,13 +4836,13 @@ function CommunityTemplatesDialog({
 
         {availableCountries.length > 0 && (
           <div className="px-5 py-2 border-b border-border shrink-0 flex flex-wrap gap-1.5 items-center">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mr-1">
+            <span className="text-2xs text-muted-foreground font-semibold mr-1">
               Country
             </span>
             <button
               onClick={() => setCountryFilter(null)}
               className={cn(
-                "text-[11px] px-2.5 py-1 rounded-full border transition",
+                "text-xs px-2.5 py-1 rounded-full border transition",
                 countryFilter === null
                   ? "bg-rose-500 text-white border-rose-500"
                   : "bg-card border-border text-muted-foreground hover:text-foreground",
@@ -4856,7 +4856,7 @@ function CommunityTemplatesDialog({
                 onClick={() => setCountryFilter(cc)}
                 title={`Templates valid in ${cc} (plus universal ones)`}
                 className={cn(
-                  "text-[11px] px-2.5 py-1 rounded-full border transition font-mono uppercase",
+                  "text-xs px-2.5 py-1 rounded-full border transition font-mono",
                   countryFilter === cc
                     ? "bg-rose-500 text-white border-rose-500"
                     : "bg-card border-border text-muted-foreground hover:text-foreground",
@@ -4899,7 +4899,7 @@ function CommunityTemplatesDialog({
                     <div className="font-medium text-sm flex items-center gap-2">
                       <span className="truncate">{t.name}</span>
                       {isInstalled && (
-                        <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500 text-[10px] font-medium">
+                        <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500 text-2xs font-medium">
                           <CheckCircle2 className="w-2.5 h-2.5" /> installed
                         </span>
                       )}
@@ -4907,7 +4907,7 @@ function CommunityTemplatesDialog({
                     {t.description && (
                       <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.description}</div>
                     )}
-                    <div className="text-[10px] text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
+                    <div className="text-2xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
                       <span>by {t.author}</span>
                       <span>·</span>
                       <span>v{t.version}</span>
@@ -4974,7 +4974,7 @@ function CommunityTemplatesDialog({
           </div>
         </div>
 
-        <footer className="px-5 py-3 border-t border-border bg-muted/20 text-[11px] text-muted-foreground flex items-center justify-between shrink-0">
+        <footer className="px-5 py-3 border-t border-border bg-muted/20 text-xs text-muted-foreground flex items-center justify-between shrink-0">
           <div>
             {data && !data.error && (
               <>{data.templates.length} template{data.templates.length === 1 ? "" : "s"} available

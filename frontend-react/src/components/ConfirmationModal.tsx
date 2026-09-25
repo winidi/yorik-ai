@@ -130,7 +130,7 @@ export function ConfirmationModal() {
             </div>
             <div>
               <div className="text-sm font-semibold">Does this look right?</div>
-              <div className="text-[10px] text-muted-foreground font-mono">
+              <div className="text-2xs text-muted-foreground font-mono">
                 {pending.skill}
                 {pending.llm_model && ` · ${pending.llm_model}`}
               </div>
@@ -154,7 +154,7 @@ export function ConfirmationModal() {
               <span>{err}</span>
             </div>
           )}
-          <div className="mt-3 text-[10px] text-muted-foreground italic">
+          <div className="mt-3 text-2xs text-muted-foreground italic">
             Listening for "ja" / "nein" / "passt" / "abbrechen"…
           </div>
         </div>
@@ -217,7 +217,7 @@ function SkillPreview({ skill, preview }: { skill: string; preview: any }) {
 
   // Generic fallback for skills we haven't tailored yet.
   return (
-    <pre className="text-[11px] bg-muted/40 border border-border rounded p-2 font-mono whitespace-pre-wrap break-words">
+    <pre className="text-xs bg-muted/40 border border-border rounded p-2 font-mono whitespace-pre-wrap break-words">
       {JSON.stringify(preview, null, 2)}
     </pre>
   );
@@ -285,7 +285,7 @@ function CalendarDeletePreview({ p }: { p: any }) {
         </div>
         {p.event?.notes && <div className="mt-1 text-muted-foreground">{p.event.notes}</div>}
       </div>
-      <div className="text-[10px] text-amber-600">This will be deleted permanently.</div>
+      <div className="text-2xs text-amber-600">This will be deleted permanently.</div>
     </div>
   );
 }

@@ -21,7 +21,7 @@ export function WritingDraftCard({ documentId, kind = "letter", recipient, subje
           <div className="font-semibold truncate">{kind === "letter" ? (subject || label) : `${label}${subject && subject !== label ? ` · ${subject}` : ""}`}</div>
           <div className="text-xs text-muted-foreground truncate">an {recipient || "— Empfänger fehlt"}</div>
           {preview && <p className="mt-2 text-sm text-muted-foreground line-clamp-3">{preview}</p>}
-          {missing.length > 0 && <p className="mt-2 text-[11px] rounded-md bg-amber-500/15 text-amber-300 px-2 py-1 inline-block">Auf dem Blatt noch markiert: {missing.join(", ")}</p>}
+          {missing.length > 0 && <p className="mt-2 text-xs rounded-md bg-amber-500/15 text-amber-300 px-2 py-1 inline-block">Auf dem Blatt noch markiert: {missing.join(", ")}</p>}
         </div>
       </div>
       <div className="mt-3 flex justify-end">

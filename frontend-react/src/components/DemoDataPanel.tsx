@@ -115,7 +115,7 @@ export function DemoDataPanel() {
         <button
           onClick={remove}
           disabled={busy}
-          className="text-[11px] px-2 py-0.5 rounded border border-violet-500/30 hover:bg-violet-500/10 transition flex items-center gap-1 disabled:opacity-50"
+          className="text-xs px-2 py-0.5 rounded border border-violet-500/30 hover:bg-violet-500/10 transition flex items-center gap-1 disabled:opacity-50"
         >
           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
           Remove

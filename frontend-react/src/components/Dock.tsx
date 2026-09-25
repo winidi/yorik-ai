@@ -46,7 +46,7 @@ const VANILLA_PATHS: Record<string, string> = {};
 // need. Tailwind v4 JIT can't expand dynamic class names, so the full
 // strings live here verbatim. Active tile bumps gradient opacity
 // (/30 → /50) and ring opacity (/40 → /80) for a "lit" feel.
-const APP_VISUAL: Record<string, { Icon: LucideIcon; gradient: string; activeGradient: string; text: string; ring: string; activeRing: string }> = {
+export const APP_VISUAL: Record<string, { Icon: LucideIcon; gradient: string; activeGradient: string; text: string; ring: string; activeRing: string }> = {
   home:     { Icon: House,         gradient: "from-slate-500/30 to-zinc-500/30",     activeGradient: "from-slate-500/50 to-zinc-500/50",     text: "text-slate-500",   ring: "ring-slate-400/40",   activeRing: "ring-slate-400/80" },
   calendar: { Icon: Calendar,      gradient: "from-blue-500/30 to-cyan-500/30",      activeGradient: "from-blue-500/50 to-cyan-500/50",      text: "text-blue-500",    ring: "ring-blue-400/40",    activeRing: "ring-blue-400/80" },
   tasks:    { Icon: ListTodo,      gradient: "from-emerald-500/30 to-teal-500/30",   activeGradient: "from-emerald-500/50 to-teal-500/50",   text: "text-emerald-500", ring: "ring-emerald-400/40", activeRing: "ring-emerald-400/80" },

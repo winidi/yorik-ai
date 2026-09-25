@@ -164,7 +164,7 @@ export function StoragePicker({
           {(isOnExternal || !status.all_healthy) && (
             <div className="mt-3 pt-3 border-t border-current/15 space-y-1">
               {status.subtrees.map(s => (
-                <div key={s.subtree} className="flex items-center gap-2 text-[11px]">
+                <div key={s.subtree} className="flex items-center gap-2 text-xs">
                   {s.healthy
                     ? <Check className="w-3 h-3 text-emerald-500" />
                     : <AlertTriangle className="w-3 h-3 text-red-500" />}
@@ -180,7 +180,7 @@ export function StoragePicker({
       {/* Move-to-external picker (when currently internal) */}
       {!isOnExternal && (
         <div className="space-y-3">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+          <div className="text-xs text-muted-foreground font-semibold">
             Move to external storage
           </div>
           {volumes.length > 0 ? (
@@ -206,9 +206,9 @@ export function StoragePicker({
                     <div className="text-sm font-medium">
                       {v.label || v.name}
                       {v.size && <span className="ml-2 text-xs text-muted-foreground">{v.size}</span>}
-                      {v.hotplug && <span className="ml-2 text-[9px] px-1 rounded bg-sky-500/15 text-sky-500 uppercase tracking-wider">external</span>}
+                      {v.hotplug && <span className="ml-2 text-2xs px-1 rounded bg-sky-500/15 text-sky-500">external</span>}
                     </div>
-                    <div className="text-[10px] text-muted-foreground font-mono break-all">{v.suggested_target}</div>
+                    <div className="text-2xs text-muted-foreground font-mono break-all">{v.suggested_target}</div>
                   </div>
                 </label>
               ))}
@@ -239,7 +239,7 @@ export function StoragePicker({
                 placeholder="/mnt/yorik-storage"
                 className="mt-1 w-full h-8 px-2 bg-background border border-border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ring/40"
               />
-              <div className="text-[10px] text-muted-foreground mt-1">
+              <div className="text-2xs text-muted-foreground mt-1">
                 Must already exist and be on a different filesystem than the project. Yorik creates a <code className="font-mono">yorik/</code> subdir under it.
               </div>
             </div>
@@ -288,7 +288,7 @@ export function StoragePicker({
         <button
           type="button"
           onClick={refresh}
-          className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+          className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
         >
           <RefreshCw className="w-3 h-3" /> Refresh
         </button>

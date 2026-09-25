@@ -75,13 +75,13 @@ export function DocBucketPill() {
       {expanded && (
         <div className="mb-2 w-[300px] max-h-[50vh] overflow-y-auto rounded-xl border border-border bg-card shadow-2xl">
           <div className="px-3 py-2 border-b border-border flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="text-xs font-semibold text-muted-foreground">
               Bucket · {ids.length}
             </span>
             <button
               type="button"
               onClick={() => { clear(); setExpanded(false); }}
-              className="text-[11px] text-rose-500 hover:underline"
+              className="text-xs text-rose-500 hover:underline"
             >
               clear all
             </button>

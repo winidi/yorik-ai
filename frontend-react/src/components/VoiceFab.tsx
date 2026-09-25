@@ -1135,24 +1135,24 @@ function ResultPopover({
           <span className="text-xs font-semibold">Yorik · voice</span>
           {result?.identifiedName && (
             <span
-              className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 inline-flex items-center gap-1"
+              className="text-2xs px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 inline-flex items-center gap-1"
               title="Speaker matched a voice-enrolled profile"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               {result.identifiedName}
               {result.identifiedLanguage && (
-                <span className="text-emerald-600/60 font-mono uppercase">{result.identifiedLanguage}</span>
+                <span className="text-emerald-600/60 font-mono">{result.identifiedLanguage}</span>
               )}
             </span>
           )}
           {statusLabel && (
-            <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600 inline-flex items-center gap-1">
+            <span className="text-2xs px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600 inline-flex items-center gap-1">
               <Loader2 className="w-2.5 h-2.5 animate-spin" />
               {statusLabel}
             </span>
           )}
           {result?.degraded && (
-            <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600">
+            <span className="text-2xs px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600">
               offline
             </span>
           )}
@@ -1184,13 +1184,13 @@ function ResultPopover({
           >
             {t.transcript && (
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">You said</div>
+                <div className="text-2xs text-muted-foreground font-semibold mb-0.5">You said</div>
                 <div className="text-sm italic">"{t.transcript}"</div>
               </div>
             )}
             {t.response && (
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">Yorik</div>
+                <div className="text-2xs text-muted-foreground font-semibold mb-0.5">Yorik</div>
                 <div className="text-sm leading-relaxed whitespace-pre-wrap">{t.response}</div>
               </div>
             )}
@@ -1199,13 +1199,13 @@ function ResultPopover({
         {/* Active turn (live transcript + streaming response + pending action). */}
         {result?.transcript && (
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">You said</div>
+            <div className="text-2xs text-muted-foreground font-semibold mb-0.5">You said</div>
             <div className="text-sm italic">"{result.transcript}"</div>
           </div>
         )}
         {result?.response && (
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">Yorik</div>
+            <div className="text-2xs text-muted-foreground font-semibold mb-0.5">Yorik</div>
             <div className="text-sm leading-relaxed whitespace-pre-wrap">{result.response}</div>
           </div>
         )}
@@ -1236,7 +1236,7 @@ function ResultPopover({
           <footer className="px-4 py-2.5 border-t border-border bg-muted/20 flex items-center justify-between gap-2 flex-wrap">
             <button
               onClick={onNewConversation}
-              className="text-[10px] text-muted-foreground hover:text-foreground transition"
+              className="text-2xs text-muted-foreground hover:text-foreground transition"
               title="Start a fresh conversation (forget context)"
             >
               New conversation

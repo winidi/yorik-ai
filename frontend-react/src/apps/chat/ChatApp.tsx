@@ -151,7 +151,7 @@ export function ChatApp() {
             </div>
             <div>
               <div className="font-semibold leading-none">Chat</div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+              <div className="text-2xs text-muted-foreground mt-0.5">
                 {conversations.length} thread{conversations.length === 1 ? "" : "s"}
               </div>
             </div>
@@ -344,7 +344,7 @@ function ConversationList({
         )}
         {grouped.map(([groupLabel, items]) => (
           <div key={groupLabel} className="mt-2 first:mt-0">
-            <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground/80 font-semibold flex items-center gap-1.5">
+            <div className="px-3 py-1 text-2xs text-muted-foreground/80 font-semibold flex items-center gap-1.5">
               {groupLabel === "Pinned" && <Pin className="w-2.5 h-2.5" />}
               {groupLabel}
             </div>
@@ -369,7 +369,7 @@ function ConversationList({
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-0.5">
-                    <span className="text-[11px] text-muted-foreground truncate flex-1 min-w-0">
+                    <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
                       {c.title && c.preview
                         ? <span className="italic opacity-80">{c.preview.slice(0, 50)}{c.preview.length > 50 ? "…" : ""}</span>
                         : `${c.message_count} message${c.message_count === 1 ? "" : "s"} · ${formatRelative(c.updated_at)}`}
@@ -1041,7 +1041,7 @@ function Thread({
                     || "Conversation")
                 : "New conversation"}
             </div>
-            <div className="text-[11px] text-muted-foreground">
+            <div className="text-xs text-muted-foreground">
               {messages.length === 0
                 ? "Ask me anything — calendar, docs, tasks…"
                 : `${messages.length} message${messages.length === 1 ? "" : "s"}`}
@@ -1213,13 +1213,13 @@ function Thread({
       >
         <div className="max-w-3xl mx-auto w-full relative">
           {dragOver && (
-            <div className="text-[11px] text-amber-700 dark:text-amber-400 text-center mb-2 flex items-center justify-center gap-1.5">
+            <div className="text-xs text-amber-700 dark:text-amber-400 text-center mb-2 flex items-center justify-center gap-1.5">
               <Upload className="w-3.5 h-3.5" /> Drop here — .vcf, .pdf, image, or .ics
             </div>
           )}
           {uploadToast && (
             <div className={cn(
-              "absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full text-[11px] flex items-center gap-1.5 shadow-md border",
+              "absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full text-xs flex items-center gap-1.5 shadow-md border",
               uploadToast.kind === "ok"
                 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
                 : "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30",
@@ -1233,19 +1233,19 @@ function Thread({
               transcribing state shows a quiet "transcribing…" line; any
               error renders as a dismissible bar above the composer. */}
           {voiceState === "recording" && (
-            <div className="text-[11px] text-red-600 text-center mb-2 flex items-center justify-center gap-1.5">
+            <div className="text-xs text-red-600 text-center mb-2 flex items-center justify-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
               Recording — {voiceSeconds}s — tap the mic again to insert the text
             </div>
           )}
           {voiceState === "transcribing" && (
-            <div className="text-[11px] text-muted-foreground text-center mb-2 flex items-center justify-center gap-1.5">
+            <div className="text-xs text-muted-foreground text-center mb-2 flex items-center justify-center gap-1.5">
               <Loader2 className="w-3 h-3 animate-spin" />
               Transcribing…
             </div>
           )}
           {voiceError && voiceState === "idle" && (
-            <div className="text-[11px] text-rose-600 text-center mb-2 flex items-center justify-center gap-1.5">
+            <div className="text-xs text-rose-600 text-center mb-2 flex items-center justify-center gap-1.5">
               <AlertCircle className="w-3 h-3" />
               {voiceError}
               <button
@@ -1385,7 +1385,7 @@ function Thread({
               Enter/Shift+Enter on a phone soft keyboard, and drag-drop
               isn't available. The line just ate one composer's worth
               of vertical space for noise. */}
-          <div className="hidden md:block text-[10px] text-muted-foreground mt-1.5 text-center">
+          <div className="hidden md:block text-2xs text-muted-foreground mt-1.5 text-center">
             Enter to send · Shift+Enter newline · @ mention · / commands · drop files
           </div>
         </div>
@@ -1628,7 +1628,7 @@ function MessageBubble({
                 autoFocus
                 className="w-full bg-background border border-border rounded-md p-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-violet-500/40 resize-y min-w-[280px]"
               />
-              <div className="flex items-center gap-2 text-[11px]">
+              <div className="flex items-center gap-2 text-xs">
                 <button
                   type="button"
                   onClick={saveEdit}
@@ -1690,7 +1690,7 @@ function MessageBubble({
             <button
               type="button"
               onClick={copyContent}
-              className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition"
+              className="inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition"
               title="Copy reply"
             >
               {copied
@@ -1701,7 +1701,7 @@ function MessageBubble({
               <button
                 type="button"
                 onClick={startEdit}
-                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition"
+                className="inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition"
                 title="Edit this message inline (local only)"
               >
                 <Pencil className="w-3 h-3" /> edit
@@ -1712,7 +1712,7 @@ function MessageBubble({
                 type="button"
                 onClick={onRegenerate}
                 disabled={regenDisabled}
-                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition disabled:opacity-50"
+                className="inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition disabled:opacity-50"
                 title="Try another answer (re-runs from the previous user message)"
               >
                 {regenBusy
@@ -2045,13 +2045,13 @@ function DebugTracePane({ trace }: { trace: NonNullable<ChatMessage["agent_trace
 
   return (
     <details className="mt-2 group/dbg">
-      <summary className="cursor-pointer text-[11px] font-mono text-muted-foreground hover:text-foreground select-none flex items-center gap-1.5 py-0.5">
+      <summary className="cursor-pointer text-xs font-mono text-muted-foreground hover:text-foreground select-none flex items-center gap-1.5 py-0.5">
         <span className="group-open/dbg:hidden">▶</span>
         <span className="hidden group-open/dbg:inline">▼</span>
         <span className="opacity-80">Debug</span>
         <span className="opacity-60">({summary})</span>
       </summary>
-      <div className="mt-1.5 ml-2 pl-3 border-l border-border/60 font-mono text-[11px] leading-relaxed text-muted-foreground space-y-2 overflow-x-auto">
+      <div className="mt-1.5 ml-2 pl-3 border-l border-border/60 font-mono text-xs leading-relaxed text-muted-foreground space-y-2 overflow-x-auto">
         {trace.from_cache && trace.note && (
           <div className="italic opacity-80">{trace.note}</div>
         )}
@@ -2198,7 +2198,7 @@ function WebResultsCard({
         <Globe className="w-3.5 h-3.5 text-blue-500" />
         <span className="font-medium">Web search:</span>
         <span className="text-muted-foreground truncate">{query}</span>
-        <span className="ml-auto text-[10px] text-muted-foreground uppercase tracking-wider">
+        <span className="ml-auto text-2xs text-muted-foreground">
           via {provider}
         </span>
       </div>
@@ -2213,7 +2213,7 @@ function WebResultsCard({
             >
               {r.title}
             </a>
-            <div className="text-[10px] text-muted-foreground truncate">
+            <div className="text-2xs text-muted-foreground truncate">
               {shortHost(r.url)}
             </div>
             {r.snippet && (
@@ -2223,7 +2223,7 @@ function WebResultsCard({
             )}
             <button
               onClick={() => ask(r.url, r.title)}
-              className="mt-1.5 text-[11px] px-2 py-0.5 rounded bg-blue-500/15 hover:bg-blue-500/25 text-blue-700 dark:text-blue-300 transition"
+              className="mt-1.5 text-xs px-2 py-0.5 rounded bg-blue-500/15 hover:bg-blue-500/25 text-blue-700 dark:text-blue-300 transition"
             >
               Details holen
             </button>
@@ -2254,7 +2254,7 @@ function VenueSavedCard({
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">{name} gespeichert</div>
-        <div className="text-[11px] text-muted-foreground truncate">
+        <div className="text-xs text-muted-foreground truncate">
           {category && <>as "{category}" · </>}
           {hasPrices ? "Prices saved · " : ""}
           {url ? (
@@ -2267,7 +2267,7 @@ function VenueSavedCard({
       </div>
       <a
         href={`/r/contacts?id=${contactId}`}
-        className="text-[11px] text-emerald-700 dark:text-emerald-300 underline hover:no-underline shrink-0"
+        className="text-xs text-emerald-700 dark:text-emerald-300 underline hover:no-underline shrink-0"
       >
         Open
       </a>
@@ -2333,7 +2333,7 @@ function PriceSummaryCard({
       {title && (
         <div className="px-4 py-2.5 border-b border-emerald-500/20 flex items-center gap-2 text-xs">
           <span className="font-medium">{title}</span>
-          <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+          <span className="ml-auto text-2xs text-muted-foreground tabular-nums">
             {totalCount} {totalCount === 1 ? "Person" : "Personen"}
           </span>
         </div>
@@ -2344,7 +2344,7 @@ function PriceSummaryCard({
             <span className="text-foreground/85 truncate flex-1 min-w-0">
               {li.count}× {li.label}
             </span>
-            <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+            <span className="text-xs text-muted-foreground tabular-nums shrink-0">
               {fmt(li.unit_eur)} {symbol}
             </span>
             <span className="font-medium tabular-nums shrink-0 w-20 text-right">
@@ -2358,7 +2358,7 @@ function PriceSummaryCard({
         <span className="tabular-nums">{fmt(totalEur)} {symbol}</span>
       </div>
       {sourceUrl && (
-        <div className="px-4 py-1.5 text-[10px] text-muted-foreground border-t border-emerald-500/15 truncate">
+        <div className="px-4 py-1.5 text-2xs text-muted-foreground border-t border-emerald-500/15 truncate">
           Preise laut{" "}
           <a href={sourceUrl} target="_blank" rel="noopener nofollow"
               className="text-blue-600 dark:text-blue-300 hover:underline">
@@ -2408,7 +2408,7 @@ function ComposeDraftCard({
         <div className="flex items-center gap-1.5 mb-1.5">
           <span className="text-base leading-none">{kindIcon}</span>
           <span className="text-xs font-semibold">{kindLabel[kind] || "Dokument"} vorbereitet</span>
-          <span className="text-[9px] text-muted-foreground font-mono ml-auto">#{draftId}</span>
+          <span className="text-2xs text-muted-foreground font-mono ml-auto">#{draftId}</span>
         </div>
         <div className="space-y-0.5 text-xs">
           {recipient && (
@@ -2421,13 +2421,13 @@ function ComposeDraftCard({
             <div className="text-muted-foreground italic mt-1 line-clamp-2">{preview}…</div>
           )}
           {(missingArgs?.length ?? 0) > 0 && (
-            <div className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+            <div className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
               Still empty: {missingArgs!.join(", ")} — open in Compose to fill in
             </div>
           )}
         </div>
         {(templateName || hasAlts) && (
-          <div className="mt-2 pt-2 border-t border-border/50 text-[11px]">
+          <div className="mt-2 pt-2 border-t border-border/50 text-xs">
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <span>Template:</span>
               <span className="font-medium text-foreground">{templateName || "none"}</span>
@@ -2464,7 +2464,7 @@ function ComposeDraftCard({
       <div className="px-3 pb-2.5 pt-1.5 border-t border-border bg-muted/20 flex items-center justify-end gap-1.5">
         <button
           onClick={() => navigate(`/compose?draft_id=${draftId}`)}
-          className="text-[11px] px-3 py-1.5 rounded-md bg-violet-500 hover:bg-violet-600 text-white font-medium transition inline-flex items-center gap-1 shadow-sm"
+          className="text-xs px-3 py-1.5 rounded-md bg-violet-500 hover:bg-violet-600 text-white font-medium transition inline-flex items-center gap-1 shadow-sm"
         >
           Bearbeiten <span aria-hidden>→</span>
         </button>
@@ -2529,7 +2529,7 @@ function TemplatePickerCard({
 
   return (
     <div className="mt-2 border border-blue-500/30 rounded-xl bg-blue-500/[0.04] overflow-hidden max-w-md">
-      <div className="px-3 pt-2.5 pb-1.5 text-[11px] text-blue-500 font-semibold uppercase tracking-wider">
+      <div className="px-3 pt-2.5 pb-1.5 text-xs text-blue-500 font-semibold">
         Welche Vorlage? {query ? `(„${query}")` : ""}
       </div>
       <div className="divide-y divide-blue-500/10">
@@ -2548,12 +2548,12 @@ function TemplatePickerCard({
               <div className="flex items-center gap-2">
                 <span className="text-base leading-none">{kindIcon(t.kind)}</span>
                 <span className="text-sm font-medium flex-1 truncate">{t.name}</span>
-                <span className="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition">
+                <span className="text-2xs text-blue-500 opacity-0 group-hover:opacity-100 transition">
                   pick →
                 </span>
               </div>
               {subline && (
-                <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
+                <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                   {subline}
                 </div>
               )}
@@ -2563,7 +2563,7 @@ function TemplatePickerCard({
       </div>
       <button
         onClick={findMore}
-        className="w-full text-center px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-blue-500/[0.06] transition border-t border-blue-500/10"
+        className="w-full text-center px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-blue-500/[0.06] transition border-t border-blue-500/10"
       >
         Andere Vorlage suchen…
       </button>
@@ -2629,7 +2629,7 @@ function PoiPickerCard({
 
   return (
     <div className="mt-2 border border-violet-500/30 rounded-xl bg-violet-500/[0.04] overflow-hidden max-w-md">
-      <div className="px-3 pt-2.5 pb-1.5 text-[11px] text-violet-500 font-semibold uppercase tracking-wider">
+      <div className="px-3 pt-2.5 pb-1.5 text-xs text-violet-500 font-semibold">
         {poiCategory}{near ? ` near ${near}` : ""} — please pick one
       </div>
       {pois.length > 5 && (
@@ -2656,17 +2656,17 @@ function PoiPickerCard({
           >
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium flex-1 truncate">{p.name}</span>
-              <span className="text-[10px] text-violet-500 opacity-0 group-hover:opacity-100 transition">
+              <span className="text-2xs text-violet-500 opacity-0 group-hover:opacity-100 transition">
                 pick →
               </span>
             </div>
             {p.address && (
-              <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
+              <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                 {p.address}
               </div>
             )}
             {p.phone && (
-              <div className="text-[11px] text-muted-foreground/80 mt-0.5 line-clamp-1">
+              <div className="text-xs text-muted-foreground/80 mt-0.5 line-clamp-1">
                 {p.phone}
               </div>
             )}
@@ -2675,7 +2675,7 @@ function PoiPickerCard({
       </div>
       <button
         onClick={pickOwn}
-        className="w-full text-left px-3 py-2 border-t border-violet-500/10 text-[11px] text-violet-500 hover:bg-violet-500/[0.06] transition font-medium"
+        className="w-full text-left px-3 py-2 border-t border-violet-500/10 text-xs text-violet-500 hover:bg-violet-500/[0.06] transition font-medium"
       >
         Keiner davon — eigenen Kontakt eintragen
       </button>
@@ -2745,7 +2745,7 @@ function ContactPickerCard({
   return (
     <>
       <div className="mt-2 border border-violet-500/30 rounded-xl bg-violet-500/[0.04] overflow-hidden max-w-md">
-        <div className="px-3 pt-2.5 pb-1.5 text-[11px] text-violet-500 font-semibold uppercase tracking-wider">
+        <div className="px-3 pt-2.5 pb-1.5 text-xs text-violet-500 font-semibold">
           {ranked ? "Meinst du" : "Welcher Kontakt?"} {query ? `(„${query}")` : ""}
         </div>
         <div className="divide-y divide-violet-500/10 max-h-72 overflow-y-auto">
@@ -2772,12 +2772,12 @@ function ContactPickerCard({
                 className="w-full text-left px-3 py-2 hover:bg-violet-500/[0.06] transition group"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 w-6 text-right">{i + 1}.</span>
+                  <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-6 text-right">{i + 1}.</span>
                   <span className="text-sm font-medium flex-1 truncate">{c.display_name}</span>
                   {conf !== null && (
                     <span
                       className={cn(
-                        "text-[10px] px-1.5 py-0.5 rounded-full font-medium tabular-nums shrink-0",
+                        "text-2xs px-1.5 py-0.5 rounded-full font-medium tabular-nums shrink-0",
                         confTone,
                       )}
                       title={c.reason || "LLM-Konfidenz"}
@@ -2785,25 +2785,25 @@ function ContactPickerCard({
                       {conf}%
                     </span>
                   )}
-                  <span className="text-[10px] text-violet-500 opacity-0 group-hover:opacity-100 transition">
+                  <span className="text-2xs text-violet-500 opacity-0 group-hover:opacity-100 transition">
                     pick →
                   </span>
                 </div>
-                <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
+                <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                   {header}
                 </div>
                 {c.reason && (
-                  <div className="text-[11px] text-violet-500/80 mt-0.5 line-clamp-2 italic">
+                  <div className="text-xs text-violet-500/80 mt-0.5 line-clamp-2 italic">
                     {c.reason}
                   </div>
                 )}
                 {c.address && (
-                  <div className="text-[11px] text-muted-foreground/80 mt-0.5 line-clamp-1">
+                  <div className="text-xs text-muted-foreground/80 mt-0.5 line-clamp-1">
                     {c.address}
                   </div>
                 )}
                 {channels && (
-                  <div className="text-[11px] text-muted-foreground/80 mt-0.5 line-clamp-1">
+                  <div className="text-xs text-muted-foreground/80 mt-0.5 line-clamp-1">
                     {channels}
                   </div>
                 )}
@@ -2814,7 +2814,7 @@ function ContactPickerCard({
         <button
           type="button"
           onClick={() => setBrowseOpen(true)}
-          className="w-full px-3 py-2 text-[11px] text-violet-500 hover:bg-violet-500/[0.06] border-t border-violet-500/10 text-left flex items-center gap-1.5"
+          className="w-full px-3 py-2 text-xs text-violet-500 hover:bg-violet-500/[0.06] border-t border-violet-500/10 text-left flex items-center gap-1.5"
         >
           <Search className="w-3 h-3" />
           Keiner davon — aus Kontaktliste wählen →
@@ -2945,11 +2945,11 @@ function AllContactsBrowserModal({
                 className="w-full text-left px-4 py-2.5 hover:bg-violet-500/[0.06] transition border-b border-violet-500/10 last:border-b-0"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 w-6 text-right">{i + 1}.</span>
+                  <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-6 text-right">{i + 1}.</span>
                   <span className="text-sm font-medium flex-1 truncate">{c.display_name}</span>
-                  <span className="text-[10px] text-violet-500 shrink-0">pick →</span>
+                  <span className="text-2xs text-violet-500 shrink-0">pick →</span>
                 </div>
-                <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1 pl-8">
+                <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1 pl-8">
                   {header}
                 </div>
               </button>
@@ -3021,7 +3021,7 @@ function TasksFoundCard({
 
   return (
     <div className="mt-2 border border-emerald-500/30 rounded-xl bg-emerald-500/[0.04] overflow-hidden max-w-md">
-      <div className="px-3 pt-2.5 pb-1.5 text-[11px] text-emerald-500 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+      <div className="px-3 pt-2.5 pb-1.5 text-xs text-emerald-500 font-semibold flex items-center gap-1.5">
         <CheckSquare className="w-3 h-3" />
         Aufgaben ({total})
       </div>
@@ -3059,7 +3059,7 @@ function TasksFoundCard({
                 )}>
                   {t.title}
                 </div>
-                <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
                   <span className={cn(
                     overdue && "text-red-500 font-medium",
                     today && "text-amber-500 font-medium",
@@ -3083,7 +3083,7 @@ function TasksFoundCard({
         <button
           type="button"
           onClick={() => navigate("/tasks")}
-          className="w-full px-3 py-2 text-[11px] text-emerald-500 hover:bg-emerald-500/[0.06] border-t border-emerald-500/10 text-left"
+          className="w-full px-3 py-2 text-xs text-emerald-500 hover:bg-emerald-500/[0.06] border-t border-emerald-500/10 text-left"
         >
           Open all {total} in /tasks →
         </button>
@@ -3145,7 +3145,7 @@ function EventsFoundCard({
 
   return (
     <div className="mt-2 border border-sky-500/30 rounded-xl bg-sky-500/[0.04] overflow-hidden max-w-md">
-      <div className="px-3 pt-2.5 pb-1.5 text-[11px] text-sky-500 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+      <div className="px-3 pt-2.5 pb-1.5 text-xs text-sky-500 font-semibold flex items-center gap-1.5">
         <Calendar className="w-3 h-3" />
         Termine ({total})
         {allOnOneDate && (
@@ -3167,11 +3167,11 @@ function EventsFoundCard({
             >
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium flex-1 truncate">{e.title}</span>
-                <span className="text-[10px] text-sky-500 opacity-0 group-hover:opacity-100 transition shrink-0">
+                <span className="text-2xs text-sky-500 opacity-0 group-hover:opacity-100 transition shrink-0">
                   open →
                 </span>
               </div>
-              <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap tabular-nums">
+              <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap tabular-nums">
                 <span>{fmtTime(e.starts_at, e.ends_at, e.all_day)}</span>
                 {!allOnOneDate && <span>· {fmtDate(dateIso)}</span>}
                 {who && <span>· {who}</span>}
@@ -3184,7 +3184,7 @@ function EventsFoundCard({
         <button
           type="button"
           onClick={() => navigate("/calendar")}
-          className="w-full px-3 py-2 text-[11px] text-sky-500 hover:bg-sky-500/[0.06] border-t border-sky-500/10 text-left"
+          className="w-full px-3 py-2 text-xs text-sky-500 hover:bg-sky-500/[0.06] border-t border-sky-500/10 text-left"
         >
           Open all {total} in /calendar →
         </button>
@@ -3250,7 +3250,7 @@ function ContactsFoundCard({
 
   return (
     <div className="mt-2 border border-violet-500/30 rounded-xl bg-violet-500/[0.04] overflow-hidden max-w-md">
-      <div className="px-3 pt-2.5 pb-1.5 text-[11px] text-violet-500 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+      <div className="px-3 pt-2.5 pb-1.5 text-xs text-violet-500 font-semibold flex items-center gap-1.5">
         <UsersRound className="w-3 h-3" />
         Kontakte ({total}{filter ? ` · ${filter}` : ""})
       </div>
@@ -3277,14 +3277,14 @@ function ContactsFoundCard({
               className="w-full text-left px-3 py-2 hover:bg-violet-500/[0.06] transition group"
             >
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-muted-foreground tabular-nums shrink-0 w-7 text-right">{i + 1}.</span>
+                <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-7 text-right">{i + 1}.</span>
                 <span className="text-sm font-medium flex-1 truncate">{c.display_name}</span>
-                <span className="text-[10px] text-violet-500 opacity-0 group-hover:opacity-100 transition shrink-0">
+                <span className="text-2xs text-violet-500 opacity-0 group-hover:opacity-100 transition shrink-0">
                   {pickToChat ? "pick →" : "open →"}
                 </span>
               </div>
               {tag && (
-                <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1 pl-9">
+                <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1 pl-9">
                   {tag}
                 </div>
               )}
@@ -3292,7 +3292,7 @@ function ContactsFoundCard({
           );
         })}
         {shown.length === 0 && q && (
-          <div className="px-3 py-3 text-[11px] text-muted-foreground text-center">
+          <div className="px-3 py-3 text-xs text-muted-foreground text-center">
             No matches for "{q}"
           </div>
         )}
@@ -3301,7 +3301,7 @@ function ContactsFoundCard({
         <button
           type="button"
           onClick={() => navigate("/contacts")}
-          className="w-full px-3 py-2 text-[11px] text-violet-500 hover:bg-violet-500/[0.06] border-t border-violet-500/10 text-left"
+          className="w-full px-3 py-2 text-xs text-violet-500 hover:bg-violet-500/[0.06] border-t border-violet-500/10 text-left"
         >
           Open all {total} in /contacts →
         </button>
@@ -3460,7 +3460,7 @@ function PhotoResultGrid({
         </div>
       )}
       {(photos[0].original_name || photos[0].taken_at) && (
-        <div className="text-[10px] text-muted-foreground mt-1.5 truncate">
+        <div className="text-2xs text-muted-foreground mt-1.5 truncate">
           {photos[0].original_name}
           {photos[0].taken_at && (
             <span className="opacity-70"> · {photos[0].taken_at.slice(0, 10)}</span>
@@ -3671,7 +3671,7 @@ function PhotoLightbox({
           <div className="text-xs text-white/85 bg-black/60 px-3 py-1 rounded-full">{hint}</div>
         )}
         {(photo.original_name || photo.taken_at) && (
-          <div className="text-[11px] text-white/60">
+          <div className="text-xs text-white/60">
             {photo.original_name}
             {photo.taken_at && <span className="opacity-70"> · {photo.taken_at.slice(0, 10)}</span>}
           </div>
@@ -3770,7 +3770,7 @@ function DocumentResultCard({
                   </div>
                   {date && (
                     <span
-                      className="shrink-0 text-[10px] tabular-nums px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border"
+                      className="shrink-0 text-2xs tabular-nums px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border"
                       title="Document date (from Paperless)"
                     >
                       {date}
@@ -3780,21 +3780,21 @@ function DocumentResultCard({
               );
             })()}
             {doc.snippet && (
-              <div className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5 leading-snug">
+              <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5 leading-snug">
                 {doc.snippet}
               </div>
             )}
             <div className="flex items-center gap-1.5 mt-2 flex-wrap">
               <button
                 onClick={() => setPreviewing(true)}
-                className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-muted hover:bg-muted/70 transition"
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-muted hover:bg-muted/70 transition"
                 title="Preview"
               >
                 <Eye className="w-3 h-3" /> Preview
               </button>
               <a
                 href={downloadUrl}
-                className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-violet-500/10 hover:bg-violet-500/20 text-violet-500 transition"
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-violet-500/10 hover:bg-violet-500/20 text-violet-500 transition"
                 title="Download"
               >
                 <Download className="w-3 h-3" /> Download
@@ -3819,7 +3819,7 @@ function DocumentResultCard({
                       if (!attached) onAttach({ url: downloadUrl, filename, mimetype: mime });
                     }}
                     className={cn(
-                      "inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md transition",
+                      "inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition",
                       attached
                         ? "bg-violet-500/20 text-violet-600 dark:text-violet-300"
                         : "hover:bg-muted/70 text-muted-foreground hover:text-foreground",
@@ -3837,13 +3837,13 @@ function DocumentResultCard({
                   decides when to leave the chat. */}
               <a
                 href={`/r/documents?doc=${encodeURIComponent(doc.doc_id)}&source=${encodeURIComponent(doc.source || "paperless")}`}
-                className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md hover:bg-muted/70 transition text-muted-foreground hover:text-foreground"
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-muted/70 transition text-muted-foreground hover:text-foreground"
                 title="Open in Documents"
               >
                 <FileText className="w-3 h-3" /> Open
               </a>
               {typeof doc.distance === "number" && (
-                <span className="ml-auto text-[10px] text-muted-foreground" title="Cosine distance — lower is closer">
+                <span className="ml-auto text-2xs text-muted-foreground" title="Cosine distance — lower is closer">
                   {doc.distance.toFixed(2)}
                 </span>
               )}
@@ -4031,7 +4031,7 @@ function ToolTraceSummary({ entries }: { entries: ToolTraceEntry[] }) {
   const [open, setOpen] = useState(false);
   const n = entries.length;
   return (
-    <div className="mt-1.5 text-[11px] text-muted-foreground">
+    <div className="mt-1.5 text-xs text-muted-foreground">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
@@ -4058,7 +4058,7 @@ function ToolTraceSummary({ entries }: { entries: ToolTraceEntry[] }) {
               {/* The raw call stays one switch away for whoever debugs
                   Yorik (Settings → Profile → developer mode). */}
               {devMode && (
-                <div className="font-mono text-[10px] opacity-70 whitespace-pre-wrap break-words">
+                <div className="font-mono text-2xs opacity-70 whitespace-pre-wrap break-words">
                   {toolIcon(e.name)} <span className="font-semibold">{e.name}</span>
                   ({(() => {
                     try {
@@ -4211,7 +4211,7 @@ function TodayDigest({ onPick }: { onPick: (s: string) => void }) {
           />
         )}
       </div>
-      <div className="text-[10px] text-muted-foreground/70 text-center mt-4">
+      <div className="text-2xs text-muted-foreground/70 text-center mt-4">
         Or just ask something else ↓
       </div>
     </div>
@@ -4241,7 +4241,7 @@ function DigestCard({
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium leading-snug">{title}</div>
         {subtitle && (
-          <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
+          <div className="text-xs text-muted-foreground mt-0.5 truncate">
             {subtitle}
           </div>
         )}
@@ -4308,7 +4308,7 @@ function TurnFeedback({ conversationId, messageIdx }:
         <ThumbsDown className="w-3 h-3" />
       </button>
       {rated && (
-        <span className="text-[10px] text-muted-foreground ml-1">
+        <span className="text-2xs text-muted-foreground ml-1">
           {rated === 1 ? "Thanks!" : "Logged · we'll improve it"}
         </span>
       )}
@@ -4556,13 +4556,13 @@ function DebugBundleModal({
               value={editedJson}
               onChange={e => setEditedJson(e.target.value)}
               spellCheck={false}
-              className="w-full h-full font-mono text-[11px] leading-snug p-3 rounded-md bg-muted/40 border border-border focus:outline-none focus:ring-2 focus:ring-ring/30 resize-none"
+              className="w-full h-full font-mono text-xs leading-snug p-3 rounded-md bg-muted/40 border border-border focus:outline-none focus:ring-2 focus:ring-ring/30 resize-none"
             />
           )}
         </div>
 
         <footer className="px-5 py-3 border-t border-border flex items-center justify-between gap-3 bg-muted/20">
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-xs text-muted-foreground">
             {bundle ? `${bundle.message_count} messages · ${(editedJson.length / 1024).toFixed(1)} KB` : ""}
           </div>
           <div className="flex items-center gap-2">

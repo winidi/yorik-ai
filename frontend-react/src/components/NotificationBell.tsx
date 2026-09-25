@@ -204,7 +204,7 @@ export function NotificationBell() {
         >
           <Bell className="w-4 h-4" />
           {unread > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center shadow">
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-2xs font-semibold flex items-center justify-center shadow">
               {unread > 99 ? "99+" : unread}
             </span>
           )}
@@ -221,7 +221,7 @@ export function NotificationBell() {
               {list && list.some(n => !n.is_read) && (
                 <button
                   onClick={markAllRead}
-                  className="text-[11px] text-primary hover:underline flex items-center gap-1"
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
                 >
                   <CheckCheck className="w-3 h-3" />
                   Mark all read
@@ -230,7 +230,7 @@ export function NotificationBell() {
               {list && list.length > 0 && (
                 <button
                   onClick={clearAll}
-                  className="text-[11px] text-muted-foreground hover:text-foreground hover:underline flex items-center gap-1"
+                  className="text-xs text-muted-foreground hover:text-foreground hover:underline flex items-center gap-1"
                   title="Remove all entries"
                 >
                   <Trash2 className="w-3 h-3" />
@@ -298,7 +298,7 @@ export function NotificationBell() {
                     {n.body && (
                       <div className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{n.body}</div>
                     )}
-                    <div className="text-[10px] text-muted-foreground mt-1">
+                    <div className="text-2xs text-muted-foreground mt-1">
                       {formatTime(n.created_at)}
                     </div>
                     {isAgentPending && (
@@ -306,7 +306,7 @@ export function NotificationBell() {
                         <button
                           disabled={busyId === n.id}
                           onClick={(e) => { e.stopPropagation(); resolveAgentPending(n, "confirm"); }}
-                          className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded bg-rose-600 text-white hover:opacity-90 disabled:opacity-50"
+                          className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded bg-rose-600 text-white hover:opacity-90 disabled:opacity-50"
                         >
                           {busyId === n.id
                             ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -316,7 +316,7 @@ export function NotificationBell() {
                         <button
                           disabled={busyId === n.id}
                           onClick={(e) => { e.stopPropagation(); resolveAgentPending(n, "cancel"); }}
-                          className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-border hover:bg-muted/40 disabled:opacity-50"
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-border hover:bg-muted/40 disabled:opacity-50"
                         >
                           <X className="w-3 h-3" /> Keep
                         </button>
@@ -327,7 +327,7 @@ export function NotificationBell() {
                         <button
                           disabled={busyId === n.id}
                           onClick={(e) => { e.stopPropagation(); acceptProposal(n); }}
-                          className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                          className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
                         >
                           {busyId === n.id
                             ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -337,7 +337,7 @@ export function NotificationBell() {
                         <button
                           disabled={busyId === n.id}
                           onClick={(e) => { e.stopPropagation(); void dismiss(n.id); }}
-                          className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-border hover:bg-muted/40 disabled:opacity-50"
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-border hover:bg-muted/40 disabled:opacity-50"
                         >
                           <X className="w-3 h-3" /> Dismiss
                         </button>
@@ -345,7 +345,7 @@ export function NotificationBell() {
                           <button
                             disabled={busyId === n.id}
                             onClick={(e) => { e.stopPropagation(); setSpamConfirmId(n.id); }}
-                            className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-rose-500/40 text-rose-500 hover:bg-rose-500/10 disabled:opacity-50"
+                            className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-rose-500/40 text-rose-500 hover:bg-rose-500/10 disabled:opacity-50"
                             title="Block this sender + move email to junk"
                           >
                             <ShieldAlert className="w-3 h-3" /> Spam
@@ -354,7 +354,7 @@ export function NotificationBell() {
                         {n.navigate_to && (
                           <button
                             onClick={(e) => { e.stopPropagation(); setOpen(false); window.location.assign(n.navigate_to!); }}
-                            className="text-[11px] text-primary hover:underline ml-auto"
+                            className="text-xs text-primary hover:underline ml-auto"
                           >
                             view email
                           </button>
@@ -402,12 +402,12 @@ function SpamConfirmPanel({
       className="mt-2 p-2.5 rounded-md border border-rose-500/30 bg-rose-500/[0.04] space-y-2"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="text-[11px] text-foreground">
+      <div className="text-xs text-foreground">
         Sender <span className="font-mono text-rose-600 dark:text-rose-400">{senderEmail || "(unknown)"}</span> blockieren
         und Mail in den Junk-Ordner verschieben?
       </div>
       {domain && (
-        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <input
             type="checkbox"
             checked={blockDomain}
@@ -421,7 +421,7 @@ function SpamConfirmPanel({
         <button
           disabled={busy}
           onClick={() => onConfirm(blockDomain)}
-          className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded bg-rose-500 text-white hover:opacity-90 disabled:opacity-50"
+          className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded bg-rose-500 text-white hover:opacity-90 disabled:opacity-50"
         >
           {busy
             ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -431,7 +431,7 @@ function SpamConfirmPanel({
         <button
           disabled={busy}
           onClick={onCancel}
-          className="text-[11px] px-2 py-1 rounded border border-border hover:bg-muted/40 disabled:opacity-50"
+          className="text-xs px-2 py-1 rounded border border-border hover:bg-muted/40 disabled:opacity-50"
         >
           Abbrechen
         </button>

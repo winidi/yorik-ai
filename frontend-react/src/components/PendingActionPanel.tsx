@@ -96,14 +96,14 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
           <AlertCircle className="w-3.5 h-3.5 text-violet-500" />
           <span className="text-xs font-semibold">{deferred ? "Delete this?" : "Does this look right?"}</span>
           {devMode && (
-            <span className="text-[9px] text-muted-foreground font-mono ml-auto">
+            <span className="text-2xs text-muted-foreground font-mono ml-auto">
               {action.skill}{action.llm_model && ` · ${action.llm_model}`}
             </span>
           )}
         </div>
         <PendingPreview skill={action.skill} preview={action.preview} />
         {err && (
-          <div className="mt-2 text-[11px] text-red-600 flex items-start gap-1.5">
+          <div className="mt-2 text-xs text-red-600 flex items-start gap-1.5">
             <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
             <span>{err}</span>
           </div>
@@ -117,7 +117,7 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
           onClick={() => resolve("test")}
           disabled={busy !== null}
           className={cn(
-            "text-[11px] px-2 py-1.5 rounded-md border border-border bg-card",
+            "text-xs px-2 py-1.5 rounded-md border border-border bg-card",
             "hover:bg-muted transition inline-flex items-center justify-center gap-1",
             busy === "test" && "opacity-60 cursor-wait",
           )}
@@ -132,7 +132,7 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
           onClick={() => resolve("cancelled")}
           disabled={busy !== null}
           className={cn(
-            "text-[11px] px-2 py-1.5 rounded-md border border-border bg-card text-muted-foreground",
+            "text-xs px-2 py-1.5 rounded-md border border-border bg-card text-muted-foreground",
             "hover:bg-muted hover:text-foreground transition",
             busy === "cancelled" && "opacity-60 cursor-wait",
           )}
@@ -143,7 +143,7 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
           onClick={() => resolve("confirmed")}
           disabled={busy !== null}
           className={cn(
-            "text-[11px] px-2 py-1.5 rounded-md text-white font-medium",
+            "text-xs px-2 py-1.5 rounded-md text-white font-medium",
             deferred ? "bg-rose-600 hover:bg-rose-700" : "bg-violet-500 hover:bg-violet-600",
             "transition inline-flex items-center justify-center gap-1 shadow-sm",
             busy === "confirmed" && "opacity-80 cursor-wait",
@@ -168,7 +168,7 @@ function ResolvedStamp({ kind, compact, deferred }: { kind: Resolution; compact?
   const Icon = data.icon;
   return (
     <div className={cn(
-      "mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] border border-border bg-muted/30",
+      "mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-2xs border border-border bg-muted/30",
       data.color, compact ? "" : "",
     )}>
       <Icon className="w-3 h-3" />
@@ -238,7 +238,7 @@ function CalendarUpdatePreview({ p }: { p: any }) {
         const before = k.includes("_at") ? fmtDateTime(p.before[k]) : String(p.before[k] ?? "—");
         const after  = k.includes("_at") ? fmtDateTime(p.after[k])  : String(p.after[k] ?? "—");
         return (
-          <div key={k} className="text-[11px]">
+          <div key={k} className="text-xs">
             <span className="text-muted-foreground">{k.replace("_", " ")}:</span>{" "}
             <span className="line-through text-red-500/80">{before}</span>{" → "}
             <span className="font-medium text-emerald-600">{after}</span>
@@ -253,7 +253,7 @@ function CalendarDeletePreview({ p }: { p: any }) {
   return (
     <div className="space-y-0.5 text-xs">
       <div className="text-muted-foreground">Delete this event:</div>
-      <div className="p-1.5 bg-red-500/5 border border-red-500/20 rounded text-[11px]">
+      <div className="p-1.5 bg-red-500/5 border border-red-500/20 rounded text-xs">
         <div className="font-medium">{p.event?.title}</div>
         <div className="text-muted-foreground">{fmtDateTime(p.event?.starts_at)}{p.event?.person && ` · ${p.event.person}`}</div>
       </div>
@@ -293,7 +293,7 @@ function TaskUpdatePreview({ p }: { p: any }) {
         const before = k === "due_date" ? fmtDate(p.before[k]) : String(p.before[k] ?? "—");
         const after  = k === "due_date" ? fmtDate(p.after[k])  : String(p.after[k] ?? "—");
         return (
-          <div key={k} className="text-[11px]">
+          <div key={k} className="text-xs">
             <span className="text-muted-foreground">{k.replace("_", " ")}:</span>{" "}
             <span className="line-through text-red-500/80">{before}</span>{" → "}
             <span className="font-medium text-emerald-600">{after}</span>
@@ -308,7 +308,7 @@ function TaskDeletePreview({ p }: { p: any }) {
   return (
     <div className="space-y-0.5 text-xs">
       <div className="text-muted-foreground">Delete this task:</div>
-      <div className="p-1.5 bg-red-500/5 border border-red-500/20 rounded text-[11px]">
+      <div className="p-1.5 bg-red-500/5 border border-red-500/20 rounded text-xs">
         <div className="font-medium">{p.task?.title}</div>
         <div className="text-muted-foreground">
           {p.task?.due_date && `Due ${fmtDate(p.task.due_date)}`}
@@ -357,7 +357,7 @@ function BillUpdatePreview({ p }: { p: any }) {
         : k === "due_date" ? fmtDate(v)
         : String(v ?? "—");
         return (
-          <div key={k} className="text-[11px]">
+          <div key={k} className="text-xs">
             <span className="text-muted-foreground">{k.replace("_", " ")}:</span>{" "}
             <span className="line-through text-red-500/80">{fmt(p.before[k])}</span>{" → "}
             <span className="font-medium text-emerald-600">{fmt(p.after[k])}</span>
@@ -372,7 +372,7 @@ function BillDeletePreview({ p }: { p: any }) {
   return (
     <div className="space-y-0.5 text-xs">
       <div className="text-muted-foreground">Delete this bill:</div>
-      <div className="p-1.5 bg-red-500/5 border border-red-500/20 rounded text-[11px]">
+      <div className="p-1.5 bg-red-500/5 border border-red-500/20 rounded text-xs">
         <div className="font-medium">{p.bill?.name}</div>
         <div className="text-muted-foreground">
           {fmtMoney(p.bill?.amount, p.bill?.currency)}

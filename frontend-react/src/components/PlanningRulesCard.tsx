@@ -41,7 +41,7 @@ export function PlanningRulesCard({ toast }: { toast: (text: string, kind?: "inf
   if (rules === null) return null;
   return (
     <div className="bg-card border border-border rounded-xl p-5">
-      <h3 className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-3">Planning rules</h3>
+      <h3 className="text-xs font-semibold text-muted-foreground mb-3">Planning rules</h3>
       <div className="mb-3 flex items-start gap-2">
         <CalendarCheck className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
         <div className="flex-1">

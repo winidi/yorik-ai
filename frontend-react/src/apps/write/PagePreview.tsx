@@ -27,7 +27,7 @@ export function PagePreview({ html, note }: { html: string; note?: string }) {
         <iframe title="Vorschau" sandbox="" srcDoc={html} tabIndex={-1}
                 style={{ width: SHEET_PX, height: 1190, border: 0, transform: `scale(${scale})`, transformOrigin: "top left", pointerEvents: "none" }} />
       </div>
-      <p className="mt-2 text-center text-[11px] text-muted-foreground">{note || "So wird die erste Seite gedruckt. Das Aussehen kommt aus deinem Briefpapier."}</p>
+      <p className="mt-2 text-center text-xs text-muted-foreground">{note || "So wird die erste Seite gedruckt. Das Aussehen kommt aus deinem Briefpapier."}</p>
     </>
   );
 }

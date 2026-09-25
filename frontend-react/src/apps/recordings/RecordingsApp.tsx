@@ -91,11 +91,11 @@ export function RecordingsApp() {
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-medium truncate">{r.title || KIND_LABEL[r.kind] || "Recording"}</div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">{KIND_LABEL[r.kind] || r.kind}</span>
+                    <span className="rounded-full border border-border px-1.5 py-0.5 text-2xs text-muted-foreground">{KIND_LABEL[r.kind] || r.kind}</span>
                     <StatusPill r={r} />
                   </div>
                 </div>
-                <div className="text-[11px] text-muted-foreground mt-0.5">
+                <div className="text-xs text-muted-foreground mt-0.5">
                   {fmtDate(r.started_at)}{r.duration_s ? ` · ${fmtDuration(r.duration_s)}` : ""} · {[r.owner_name, ...r.participants.map(p => p.name)].filter(Boolean).join(", ")}
                 </div>
               </button>
@@ -120,7 +120,7 @@ function StatusPill({ r }: { r: Recording }) {
     done: "bg-emerald-500/15 text-emerald-600", failed: "bg-red-500/15 text-red-500",
   };
   const label = r.status === "processing" ? (r.progress || "processing") : r.status === "done" ? (r.has_report ? "report" : "transcript") : r.status;
-  return <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", map[r.status] || "bg-muted")}>{label}</span>;
+  return <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-2xs font-semibold", map[r.status] || "bg-muted")}>{label}</span>;
 }
 
 function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => void; onDeleted: () => void }) {
@@ -300,7 +300,7 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
               {report.dates.map((d, i) => <Line key={i} text={d.text} meta={[d.date, d.time].filter(Boolean).join(" ")} />)}
             </Section>
           )}
-          <div className="text-[11px] text-muted-foreground flex items-center gap-3">
+          <div className="text-xs text-muted-foreground flex items-center gap-3">
             <span>Report written {fmtDate(report.generated_at)}</span>
             <button onClick={() => buildReport(true)} disabled={busy === "report"} className="flex items-center gap-1 hover:text-foreground">
               {busy === "report" ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} write again
@@ -318,7 +318,7 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
             <div className="mt-2 space-y-2 text-sm">
               {segments.map(s => (
                 <div key={s.seq} className="grid grid-cols-[3.2rem_7rem_1fr] gap-2">
-                  <span className="text-[11px] text-muted-foreground tabular-nums pt-0.5">{Math.floor(s.start_s / 60)}:{String(Math.floor(s.start_s % 60)).padStart(2, "0")}</span>
+                  <span className="text-xs text-muted-foreground tabular-nums pt-0.5">{Math.floor(s.start_s / 60)}:{String(Math.floor(s.start_s % 60)).padStart(2, "0")}</span>
                   <span className={cn("font-medium truncate", s.user_id ? "" : "text-muted-foreground")}>{s.speaker}</span>
                   <span>{s.text}</span>
                 </div>
@@ -336,8 +336,8 @@ function Section({ title, hint, tone, children }: { title: string; hint?: string
   return (
     <div className="rounded-xl border border-border p-4">
       <div className="flex items-baseline justify-between gap-2 mb-1">
-        <h3 className={cn("text-xs uppercase tracking-wider font-semibold", tone || "text-muted-foreground")}>{title}</h3>
-        {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
+        <h3 className={cn("text-xs font-semibold", tone || "text-muted-foreground")}>{title}</h3>
+        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
       </div>
       <div className="text-sm">{children}</div>
     </div>

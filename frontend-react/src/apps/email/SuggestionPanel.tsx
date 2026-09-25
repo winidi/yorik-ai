@@ -63,7 +63,7 @@ export function SuggestionPanel({
 
   return (
     <div className="mt-4 space-y-2">
-      <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+      <div className="text-xs text-muted-foreground font-medium">
         Yorik suggests
       </div>
       {items.map((s) => (
@@ -155,7 +155,7 @@ function SuggestionCard({
       )}
 
       {suggestion.evidence?.length > 0 && (
-        <div className="text-[11px] text-muted-foreground flex flex-wrap gap-1">
+        <div className="text-xs text-muted-foreground flex flex-wrap gap-1">
           {suggestion.evidence.map((e) => (
             <span key={e.id} className="px-1.5 py-0.5 bg-muted/40 rounded" title={e.snippet}>
               {e.kind}{e.ref_id ? `#${e.ref_id}` : ""}

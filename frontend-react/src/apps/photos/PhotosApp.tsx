@@ -76,7 +76,7 @@ export function PhotosApp() {
           <Camera className="w-3.5 h-3.5 text-emerald-500" />
         </div>
         <span className="text-sm font-medium">Photos</span>
-        <span className="text-[10px] text-muted-foreground hidden sm:inline">
+        <span className="text-2xs text-muted-foreground hidden sm:inline">
           via Immich
         </span>
         <div className="ml-auto">
@@ -84,7 +84,7 @@ export function PhotosApp() {
             href={src}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition"
+            className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition"
             title="Open Immich in a new tab"
           >
             <ExternalLink className="w-3 h-3" /> New tab
@@ -107,7 +107,7 @@ export function PhotosApp() {
                 # in the yorik-ai directory{"\n"}
                 docker compose up -d immich-server immich-machine-learning immich-postgres immich-redis
               </div>
-              <div className="text-[11px] text-muted-foreground mt-3">
+              <div className="text-xs text-muted-foreground mt-3">
                 Already running on a different host? Update <code>HOMEOS_IMMICH_BASE_URL</code> in <code>config.env</code>.
               </div>
             </div>

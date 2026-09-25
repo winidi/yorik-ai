@@ -62,7 +62,7 @@ export function ProfileLookCard({ toast }: { toast: (text: string, kind?: "info"
   if (!look) return null;
   return (
     <div className="bg-card border border-border rounded-xl p-5">
-      <h3 className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-3">Your colour and photo</h3>
+      <h3 className="text-xs font-semibold text-muted-foreground mb-3">Your colour and photo</h3>
       <div className="flex items-start gap-4">
         <PersonAvatar name={name} color={look.color} avatarUrl={look.avatar_url} size={72} className="ring-4 ring-background shadow" />
         <div className="flex-1 min-w-0">
@@ -99,7 +99,7 @@ export function ProfileLookCard({ toast }: { toast: (text: string, kind?: "info"
               </button>
             )}
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">Square crop, 256 px, stays on your Yorik box.</p>
+          <p className="mt-2 text-xs text-muted-foreground">Square crop, 256 px, stays on your Yorik box.</p>
         </div>
       </div>
     </div>

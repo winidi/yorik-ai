@@ -250,7 +250,7 @@ export function RecipientPicker({ allArgKeys, nameKey, onPick, precomputedAddres
         className={cn(
           // h-8 on mobile clears HIG minimum; desktop stays compact
           // at its previous ~18pt pill.
-          "text-xs md:text-[9px] inline-flex items-center gap-1 px-2.5 md:px-1.5 h-8 md:h-auto md:py-0.5 rounded-full transition border",
+          "text-xs md:text-2xs inline-flex items-center gap-1 px-2.5 md:px-1.5 h-8 md:h-auto md:py-0.5 rounded-full transition border",
           open
             ? "bg-amber-500/20 text-amber-600 border-amber-500/40"
             : "bg-amber-500/10 text-amber-600 border-amber-500/20 hover:bg-amber-500/15",
@@ -293,7 +293,7 @@ export function RecipientPicker({ allArgKeys, nameKey, onPick, precomputedAddres
               </div>
             )}
             {!loading && results.length === 0 && (
-              <div className="text-center py-3 text-[11px] text-muted-foreground italic">
+              <div className="text-center py-3 text-xs text-muted-foreground italic">
                 {query ? "No matches." : "No active contacts yet — add some in /r/contacts."}
               </div>
             )}
@@ -311,7 +311,7 @@ export function RecipientPicker({ allArgKeys, nameKey, onPick, precomputedAddres
                   className="w-full text-left rounded-md px-2 py-1.5 hover:bg-muted/60 transition flex gap-2 items-start"
                 >
                   <div className={cn(
-                    "w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[10px] font-semibold mt-0.5",
+                    "w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-2xs font-semibold mt-0.5",
                     c.kind === "business" ? "bg-blue-500/15 text-blue-500" : "bg-amber-500/15 text-amber-500",
                   )}>
                     {c.kind === "business"
@@ -330,9 +330,9 @@ export function RecipientPicker({ allArgKeys, nameKey, onPick, precomputedAddres
                       )}
                     </div>
                     {addr ? (
-                      <div className="text-[10px] text-muted-foreground leading-tight whitespace-pre-line line-clamp-2">{addr}</div>
+                      <div className="text-2xs text-muted-foreground leading-tight whitespace-pre-line line-clamp-2">{addr}</div>
                     ) : (
-                      <div className="text-[10px] text-muted-foreground italic">no address on file</div>
+                      <div className="text-2xs text-muted-foreground italic">no address on file</div>
                     )}
                   </div>
                 </button>

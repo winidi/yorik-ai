@@ -276,12 +276,12 @@ function OwnedDataBlock({
         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
         <span>
           Private database tables in{" "}
-          <span className="font-mono text-[11px] text-muted-foreground">
+          <span className="font-mono text-xs text-muted-foreground">
             {schema}
           </span>
           : {tables.map((t, i) => (
             <span key={t}>
-              <span className="font-mono text-[11px] text-muted-foreground">
+              <span className="font-mono text-xs text-muted-foreground">
                 {t}
               </span>
               {i < tables.length - 1 && ", "}
@@ -317,7 +317,7 @@ function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
     return (
       <>
         <strong>Read</strong> your{" "}
-        <span className="font-mono text-[11px]">{scope.table}</span>
+        <span className="font-mono text-xs">{scope.table}</span>
         {scope.columns.length > 0 && (
           <>
             {" "}(<span className="text-muted-foreground">
@@ -337,7 +337,7 @@ function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
     return (
       <>
         <strong className="text-red-600 dark:text-red-400">Write</strong> to{" "}
-        <span className="font-mono text-[11px]">{scope.table}</span>{" "}
+        <span className="font-mono text-xs">{scope.table}</span>{" "}
         <span className="text-xs text-muted-foreground">
           (not allowed in v1 — declared but ignored)
         </span>
@@ -348,7 +348,7 @@ function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
     return (
       <>
         Ask Yorik to run{" "}
-        <span className="font-mono text-[11px]">{scope.skill}</span>
+        <span className="font-mono text-xs">{scope.skill}</span>
       </>
     );
   }
@@ -356,7 +356,7 @@ function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
     return (
       <>
         Use the{" "}
-        <span className="font-mono text-[11px]">{scope.connector}</span>{" "}
+        <span className="font-mono text-xs">{scope.connector}</span>{" "}
         connector
       </>
     );
@@ -365,14 +365,14 @@ function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
     return (
       <>
         Get realtime updates for{" "}
-        <span className="font-mono text-[11px]">{scope.table}</span>
+        <span className="font-mono text-xs">{scope.table}</span>
       </>
     );
   }
   if (scope.kind === "scheduled") {
     return (
       <>
-        Run <span className="font-mono text-[11px]">{scope.invokes}</span>{" "}
+        Run <span className="font-mono text-xs">{scope.invokes}</span>{" "}
         on schedule{" "}
         <span className="text-muted-foreground">({scope.cron})</span>
         {scope.purpose && (
@@ -387,7 +387,7 @@ function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
   return (
     <>
       Expose webhook at{" "}
-      <span className="font-mono text-[11px]">{scope.path}</span>
+      <span className="font-mono text-xs">{scope.path}</span>
       {scope.purpose && (
         <div className="text-xs text-muted-foreground mt-0.5">
           Why: {scope.purpose}
@@ -417,7 +417,7 @@ function NetworkBlock({ network }: { network: PreflightSummary["network"] }) {
       <ul className="space-y-1 text-[13px] ml-5">
         {network.outbound.map((o, i) => (
           <li key={i}>
-            <span className="font-mono text-[11px]">{o.url}</span>
+            <span className="font-mono text-xs">{o.url}</span>
             {o.purpose && (
               <span className="text-xs text-muted-foreground"> — {o.purpose}</span>
             )}
@@ -431,7 +431,7 @@ function NetworkBlock({ network }: { network: PreflightSummary["network"] }) {
 function CannotBlock({ cannot }: { cannot: string[] }) {
   return (
     <Section title="This app cannot">
-      <ul className="space-y-1 text-[12.5px] text-muted-foreground">
+      <ul className="space-y-1 text-[13px] text-muted-foreground">
         {cannot.map((line, i) => (
           <li key={i} className="flex items-start gap-2">
             <Lock className="w-3 h-3 shrink-0 mt-0.5" />
@@ -446,7 +446,7 @@ function CannotBlock({ cannot }: { cannot: string[] }) {
 function CspBlock({ csp }: { csp: string }) {
   return (
     <Section title="Browser sandbox (Content-Security-Policy)">
-      <div className="font-mono text-[10px] text-muted-foreground bg-muted/40 rounded p-2 break-all leading-relaxed">
+      <div className="font-mono text-2xs text-muted-foreground bg-muted/40 rounded p-2 break-all leading-relaxed">
         {csp}
       </div>
     </Section>
@@ -456,7 +456,7 @@ function CspBlock({ csp }: { csp: string }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="border-t border-border pt-4">
-      <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
+      <div className="text-2xs font-semibold text-muted-foreground mb-2">
         {title}
       </div>
       {children}
@@ -467,14 +467,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function ManifestErrors({ errors }: { errors: string[] }) {
   return (
     <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3">
-      <div className="text-[11px] uppercase tracking-wider font-semibold text-red-600 dark:text-red-400 mb-1.5">
+      <div className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1.5">
         Manifest errors
       </div>
       <ul className="text-[13px] space-y-1">
         {errors.map((e, i) => (
           <li key={i} className="flex items-start gap-2">
             <span className="text-red-500 shrink-0">•</span>
-            <span className="font-mono text-[11px]">{e}</span>
+            <span className="font-mono text-xs">{e}</span>
           </li>
         ))}
       </ul>

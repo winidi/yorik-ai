@@ -179,7 +179,7 @@ export function VcardImportModal({ onClose, onApplied, initialFile, initialText,
                 </span>
               </label>
               {filename && (
-                <div className="text-[11px] text-muted-foreground mt-3">
+                <div className="text-xs text-muted-foreground mt-3">
                   Selected: {filename}
                 </div>
               )}
@@ -199,7 +199,7 @@ export function VcardImportModal({ onClose, onApplied, initialFile, initialText,
               </div>
 
               {plan.summary.name_conflict > 0 && (
-                <div className="flex items-start gap-2 text-[11px] text-muted-foreground bg-amber-500/[0.06] border border-amber-500/20 rounded-md p-2">
+                <div className="flex items-start gap-2 text-xs text-muted-foreground bg-amber-500/[0.06] border border-amber-500/20 rounded-md p-2">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                   <span>
                     Name conflicts are skipped — the existing contact has a
@@ -259,7 +259,7 @@ export function VcardImportModal({ onClose, onApplied, initialFile, initialText,
                 )}
               </div>
               {result.errors.length > 0 && (
-                <ul className="text-[11px] text-rose-500 text-left max-h-32 overflow-y-auto space-y-0.5 px-3">
+                <ul className="text-xs text-rose-500 text-left max-h-32 overflow-y-auto space-y-0.5 px-3">
                   {result.errors.slice(0, 5).map((e, i) => (
                     <li key={i}>· {e.display_name || "(unnamed)"}: {e.error}</li>
                   ))}
@@ -294,7 +294,7 @@ function SummaryTile({ icon, label, value }: {
     <div className="bg-muted/40 rounded-lg p-3 flex flex-col items-center gap-1">
       {icon}
       <div className="text-lg font-semibold tabular-nums">{value}</div>
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-2xs text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -314,24 +314,24 @@ function PlanEntryRow({ entry }: { entry: VcardImportPlanEntry }) {
       <div className="flex-1 min-w-0">
         <div className="font-medium truncate">{card.display_name}</div>
         {outcome === "new" && card.channels && card.channels.length > 0 && (
-          <div className="text-muted-foreground text-[11px] truncate">
+          <div className="text-muted-foreground text-xs truncate">
             {card.channels.map(c => c.value).slice(0, 3).join(" · ")}
             {card.channels.length > 3 && ` +${card.channels.length - 3}`}
           </div>
         )}
         {outcome === "merge" && (
-          <div className="text-muted-foreground text-[11px] truncate">
+          <div className="text-muted-foreground text-xs truncate">
             Matches <span className="font-medium">{existing_name}</span>
-            {matched_via && <> via <code className="text-[10px] bg-muted px-1 rounded">{matched_via}</code></>}
+            {matched_via && <> via <code className="text-2xs bg-muted px-1 rounded">{matched_via}</code></>}
             {new_channels && new_channels.length > 0 && (
               <> · adds {new_channels.length} channel{new_channels.length === 1 ? "" : "s"}</>
             )}
           </div>
         )}
         {outcome === "name_conflict" && (
-          <div className="text-muted-foreground text-[11px] truncate">
+          <div className="text-muted-foreground text-xs truncate">
             Conflicts with existing <span className="font-medium">{existing_name}</span>
-            {matched_via && <> on <code className="text-[10px] bg-muted px-1 rounded">{matched_via}</code></>} — skipped
+            {matched_via && <> on <code className="text-2xs bg-muted px-1 rounded">{matched_via}</code></>} — skipped
           </div>
         )}
       </div>

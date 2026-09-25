@@ -138,7 +138,7 @@ export function MorningBriefingCard() {
     <div className="w-full bg-gradient-to-br from-violet-500/[0.06] to-blue-500/[0.06] border border-violet-500/20 rounded-2xl p-5 mb-6">
       <div className="flex items-baseline justify-between gap-3 mb-1">
         <div className="text-sm text-muted-foreground">{data.greeting}.</div>
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
+        <div className="text-2xs text-muted-foreground/70 font-semibold">
           {data.title}
         </div>
       </div>
@@ -260,7 +260,7 @@ export function MorningBriefingCard() {
         <div className="mt-4 pt-4 border-t border-violet-500/15">
           <button
             onClick={() => navigate("/photos")}
-            className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition mb-2 inline-flex items-center gap-1.5"
+            className="text-2xs text-muted-foreground hover:text-foreground transition mb-2 inline-flex items-center gap-1.5"
           >
             <ImageIcon className="w-3 h-3" /> {L.photos_today}
             <span className="opacity-50">· {data.photos_today.length}</span>
@@ -330,7 +330,7 @@ function BillDetailModal({ bill, onClose, onPaid, onOpenEmail }: {
             </div>
             <div className="min-w-0">
               <div className="font-semibold leading-tight truncate" title={bill.name}>{bill.name}</div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">Bill</div>
+              <div className="text-2xs text-muted-foreground mt-0.5">Bill</div>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition" aria-label="Close">
@@ -380,7 +380,7 @@ function DetailRow({ label, value, valueClassName }: {
 }) {
   return (
     <div className="flex items-baseline gap-3">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold w-20 shrink-0">{label}</div>
+      <div className="text-2xs text-muted-foreground font-semibold w-20 shrink-0">{label}</div>
       <div className={cn("flex-1 break-words", valueClassName)}>{value}</div>
     </div>
   );
@@ -400,12 +400,12 @@ function BriefingSection({
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <Icon className={cn("w-3.5 h-3.5", tint)} />
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{title}</div>
+          <div className="text-xs text-muted-foreground font-semibold">{title}</div>
         </div>
         {onAll && (
           <button
             onClick={onAll}
-            className="text-[11px] text-muted-foreground hover:text-foreground transition flex items-center gap-0.5"
+            className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-0.5"
           >
             open <ArrowRight className="w-3 h-3" />
           </button>
@@ -423,7 +423,7 @@ function BriefingRow({ primary, secondary, onClick }: { primary: string; seconda
       className="w-full text-left flex items-baseline justify-between gap-3 px-2 py-1 rounded-md hover:bg-muted/50 transition"
     >
       <span className="text-sm truncate min-w-0 flex-1">{primary}</span>
-      <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{secondary}</span>
+      <span className="text-xs text-muted-foreground tabular-nums shrink-0">{secondary}</span>
     </button>
   );
 }

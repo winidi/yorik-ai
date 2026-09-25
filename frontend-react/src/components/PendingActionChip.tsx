@@ -79,7 +79,7 @@ export function PendingActionChip({ action }: Props) {
 
   return (
     <div className={cn(
-      "mt-2 inline-flex items-center gap-2 rounded-full pl-2.5 pr-1.5 py-1 text-[11px]",
+      "mt-2 inline-flex items-center gap-2 rounded-full pl-2.5 pr-1.5 py-1 text-xs",
       "border transition",
       undone
         ? "border-muted-foreground/20 bg-muted/40 text-muted-foreground"
@@ -110,7 +110,7 @@ export function PendingActionChip({ action }: Props) {
             disabled={busy || expired}
             className={cn(
               "ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full",
-              "text-[10px] font-medium transition",
+              "text-2xs font-medium transition",
               expired
                 ? "text-muted-foreground/40 cursor-not-allowed"
                 : "text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/15",

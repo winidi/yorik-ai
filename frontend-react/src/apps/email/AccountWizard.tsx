@@ -233,7 +233,7 @@ export function AccountWizard({ onClose, onSaved }: Props) {
 
           {/* IMAP — always visible */}
           <div className="p-3 bg-muted/40 rounded-md space-y-3 text-sm">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Incoming (IMAP)</div>
+            <div className="text-xs font-semibold text-muted-foreground">Incoming (IMAP)</div>
             <div className="grid grid-cols-[1fr_5rem_4rem] gap-2 items-end">
               <Field label="Host">
                 <input value={imap.host} onChange={e => setImap({ ...imap, host: e.target.value })}
@@ -260,7 +260,7 @@ export function AccountWizard({ onClose, onSaved }: Props) {
 
           {/* SMTP — always visible */}
           <div className="p-3 bg-muted/40 rounded-md space-y-3 text-sm">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Outgoing (SMTP)</div>
+            <div className="text-xs font-semibold text-muted-foreground">Outgoing (SMTP)</div>
             <div className="grid grid-cols-[1fr_5rem_4rem] gap-2 items-end">
               <Field label="Host">
                 <input value={smtp.host} onChange={e => setSmtp({ ...smtp, host: e.target.value })}
@@ -296,7 +296,7 @@ export function AccountWizard({ onClose, onSaved }: Props) {
               className="w-full h-9 px-3 rounded-md bg-muted text-sm focus:outline-none focus:ring-2 focus:ring-ring/40">
               {IMPORT_SCOPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <span className="text-[11px] text-muted-foreground block mt-1">
+            <span className="text-xs text-muted-foreground block mt-1">
               In every folder. Older mail stays on the server and can be brought in later. Yorik never deletes anything there.
             </span>
           </Field>
@@ -334,7 +334,7 @@ export function AccountWizard({ onClose, onSaved }: Props) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-1">
+      <span className="text-xs font-medium text-muted-foreground block mb-1">
         {label}
       </span>
       {children}

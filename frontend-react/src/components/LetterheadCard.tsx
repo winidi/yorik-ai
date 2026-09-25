@@ -25,7 +25,7 @@ const SHEET_PX = 794 + 60;     // 210 mm at 96 dpi plus the preview's grey edge
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <fieldset className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-      <legend className="col-span-2 mb-1.5 text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">{title}</legend>
+      <legend className="col-span-2 mb-1.5 text-xs font-semibold text-muted-foreground">{title}</legend>
       {children}
     </fieldset>
   );
@@ -115,7 +115,7 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
   // a plain function, not a component: a component declared in here would
   // be a new one on every render and the field would lose the cursor
   const field = (k: string, label: string, wide = false) => (
-    <label key={k} className={cn("grid gap-1 text-[11px] text-muted-foreground", wide && "col-span-2")}>
+    <label key={k} className={cn("grid gap-1 text-xs text-muted-foreground", wide && "col-span-2")}>
       {label}
       <input value={text(k)} onChange={e => set(k, e.target.value)}
              className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary" />
@@ -124,7 +124,7 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
 
   return (
     <div className="bg-card border border-border rounded-xl p-5">
-      <h3 className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1">Your letterhead</h3>
+      <h3 className="text-xs font-semibold text-muted-foreground mb-1">Your letterhead</h3>
       <p className="text-xs text-muted-foreground mb-4">
         How your letters, invoices and quotes look — always the same, whoever or whatever writes the text. Started from your profile; change what you like.
       </p>
@@ -140,21 +140,21 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
               <input type="color" value={text("accent") || "#1f3a5f"} onChange={e => set("accent", e.target.value)}
                      className="w-8 h-8 rounded-full border-0 bg-transparent cursor-pointer" aria-label="Custom accent colour" />
             </div>
-            <label className="grid gap-1 text-[11px] text-muted-foreground">
+            <label className="grid gap-1 text-xs text-muted-foreground">
               Font
               <select value={text("font")} onChange={e => set("font", e.target.value)}
                       className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary">
                 {fonts.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
               </select>
             </label>
-            <label className="grid gap-1 text-[11px] text-muted-foreground">
+            <label className="grid gap-1 text-xs text-muted-foreground">
               Logo position
               <select value={text("logo_place")} onChange={e => set("logo_place", e.target.value)}
                       className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary">
                 <option value="right">Right</option><option value="left">Left</option><option value="center">Centred</option>
               </select>
             </label>
-            <label className="col-span-2 grid gap-1 text-[11px] text-muted-foreground">
+            <label className="col-span-2 grid gap-1 text-xs text-muted-foreground">
               Letter style
               <select value={text("style") || "auto"} onChange={e => set("style", e.target.value)}
                       className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary">
@@ -202,7 +202,7 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
           <Section title="Standard sentences">
             {field("closing", "Closing")}
             {field("signature_name", "Name under the closing")}
-            <label className="grid gap-1 text-[11px] text-muted-foreground">
+            <label className="grid gap-1 text-xs text-muted-foreground">
               Payment within (days)
               <input type="number" min={0} max={365} value={Number(form.payment_days ?? 14)} onChange={e => set("payment_days", Number(e.target.value))}
                      className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary" />
@@ -211,7 +211,7 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
               <input type="checkbox" checked={!!form.small_business} onChange={e => set("small_business", e.target.checked)} />
               Small business (§ 19 UStG, no VAT)
             </label>
-            <label className="col-span-2 grid gap-1 text-[11px] text-muted-foreground">
+            <label className="col-span-2 grid gap-1 text-xs text-muted-foreground">
               Payment sentence — {"{faellig}"} becomes the due date, {"{betrag}"} the amount
               <textarea value={text("payment_text")} onChange={e => set("payment_text", e.target.value)} rows={2}
                         className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary resize-y" />
@@ -228,7 +228,7 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
                title={dirty ? "Save first: the PDF shows the saved letterhead" : "Open a sample PDF"}>
               <FileDown className="w-4 h-4" /> Sample PDF
             </a>
-            {dirty && <span className="text-[11px] text-muted-foreground">Not saved yet — the preview already shows it.</span>}
+            {dirty && <span className="text-xs text-muted-foreground">Not saved yet — the preview already shows it.</span>}
           </div>
         </div>
 

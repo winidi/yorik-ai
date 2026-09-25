@@ -164,7 +164,7 @@ export function WhatsAppApp() {
             </div>
             <div>
               <div className="font-semibold leading-none">WhatsApp</div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+              <div className="text-2xs text-muted-foreground mt-0.5">
                 {chats.length} chat{chats.length === 1 ? "" : "s"}
               </div>
             </div>
@@ -427,7 +427,7 @@ function ChatRow({ chat, active, draftCount, ambiguousName, onClick }:
             {shown}
           </span>
           <span className={cn(
-            "text-[11px] tabular-nums shrink-0",
+            "text-xs tabular-nums shrink-0",
             chat.unread_count > 0 ? "text-emerald-500 font-medium" : "text-muted-foreground"
           )}>
             {tsLabel}
@@ -441,12 +441,12 @@ function ChatRow({ chat, active, draftCount, ambiguousName, onClick }:
             {chat.last_message_text || <span className="italic opacity-60">—</span>}
           </div>
           {draftCount > 0 && (
-            <span className="inline-flex items-center gap-0.5 text-[10px] text-primary font-semibold shrink-0">
+            <span className="inline-flex items-center gap-0.5 text-2xs text-primary font-semibold shrink-0">
               <Sparkles className="w-2.5 h-2.5" />{draftCount}
             </span>
           )}
           {chat.unread_count > 0 && (
-            <span className="inline-flex items-center justify-center text-[10px] bg-emerald-500 text-white rounded-full px-1.5 min-w-[18px] h-[18px] font-semibold shrink-0">
+            <span className="inline-flex items-center justify-center text-2xs bg-emerald-500 text-white rounded-full px-1.5 min-w-[18px] h-[18px] font-semibold shrink-0">
               {chat.unread_count}
             </span>
           )}
@@ -675,7 +675,7 @@ function DateSeparator({ date }: { date: Date }) {
   return (
     <div className="flex items-center gap-3 my-5">
       <div className="flex-1 h-px bg-border" />
-      <span className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
+      <span className="text-2xs font-medium text-muted-foreground">
         {label}
       </span>
       <div className="flex-1 h-px bg-border" />
@@ -740,7 +740,7 @@ function Bubble({ m, contactName, isFirstInGroup, isLastInGroup }:
         <div className="opacity-80 italic flex items-center gap-1.5"><Mic className="w-3.5 h-3.5" /> Voice message</div>
         {m.transcript && (
           <div className={cn(
-            "mt-1.5 pl-2 border-l-2 text-[12px] italic leading-relaxed",
+            "mt-1.5 pl-2 border-l-2 text-xs italic leading-relaxed",
             out ? "border-white/40 text-white/90" : "border-emerald-500/40 text-foreground/80"
           )}>{m.transcript}</div>
         )}
@@ -779,11 +779,11 @@ function Bubble({ m, contactName, isFirstInGroup, isLastInGroup }:
           : "bg-card border border-border"
       )}>
         {!out && isFirstInGroup && m.push_name && (
-          <div className="text-[10px] font-semibold text-emerald-500 mb-0.5">{m.push_name}</div>
+          <div className="text-2xs font-semibold text-emerald-500 mb-0.5">{m.push_name}</div>
         )}
         {body}
         <div className={cn(
-          "text-[10px] mt-1 tabular-nums flex items-center gap-1 justify-end",
+          "text-2xs mt-1 tabular-nums flex items-center gap-1 justify-end",
           out ? "text-white/70" : "text-muted-foreground",
           // Only the last message in a group always shows time;
           // earlier ones show on hover.
@@ -915,7 +915,7 @@ function DraftPanel({ jid, chat, onPicked }:
           </div>
           <div>
             <div className="text-sm font-semibold leading-none">Draft a reply</div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+            <div className="text-2xs text-muted-foreground mt-0.5">
               {generating ? "thinking…" : "pick a tone"}
             </div>
           </div>
@@ -924,7 +924,7 @@ function DraftPanel({ jid, chat, onPicked }:
 
       {chat?.last_message_text && (
         <div className="px-5 pt-4 pb-3 border-b border-border bg-muted/30">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+          <div className="text-2xs text-muted-foreground font-semibold mb-1.5">
             Replying to
           </div>
           <div className="text-xs italic text-muted-foreground line-clamp-3 pl-2 border-l-2 border-primary/40">
@@ -953,7 +953,7 @@ function DraftPanel({ jid, chat, onPicked }:
                 )}
               >
                 <span>{s.label_en}</span>
-                <span className="text-[10px] opacity-70 font-normal">{s.label_de}</span>
+                <span className="text-2xs opacity-70 font-normal">{s.label_de}</span>
               </button>
             );
           })}
@@ -993,7 +993,7 @@ function DraftPanel({ jid, chat, onPicked }:
             className="w-full text-left p-3.5 rounded-xl bg-card border border-border hover:border-primary/60 hover:shadow-md hover:-translate-y-px transition group"
           >
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary">
+              <span className="text-2xs font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary">
                 Option {idx + 1}
               </span>
             </div>
@@ -1249,7 +1249,7 @@ function QrModal({
                     <><Power className="w-4 h-4" /> {actionLabel}</>
                   )}
                 </button>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   {busy
                     ? "First-time start downloads the bridge image — can take a minute or two. The QR will appear here automatically when the bridge is ready."
                     : isRunning
@@ -1257,7 +1257,7 @@ function QrModal({
                       : "Will run `docker compose up -d whatsapp-bridge` for you. First start can take 1–2 minutes while the image builds."}
                 </p>
                 {bridgeInfo && (
-                  <p className="text-[10px] text-muted-foreground/70 font-mono">
+                  <p className="text-2xs text-muted-foreground/70 font-mono">
                     container: {bridgeInfo.container_name} · state: {cs}
                   </p>
                 )}
@@ -1729,7 +1729,7 @@ function ContactBanner({ jid, fallbackName }: { jid: string; fallbackName: strin
         <button
           onClick={promote}
           disabled={busy}
-          className="ml-auto px-2.5 py-1 rounded-md bg-emerald-500 text-white text-[11px] font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
+          className="ml-auto px-2.5 py-1 rounded-md bg-emerald-500 text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
         >
           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
           Confirm
@@ -1737,7 +1737,7 @@ function ContactBanner({ jid, fallbackName }: { jid: string; fallbackName: strin
         <button
           onClick={markSpam}
           disabled={busy}
-          className="px-2.5 py-1 rounded-md border border-border bg-card text-[11px] hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-500 disabled:opacity-50 flex items-center gap-1"
+          className="px-2.5 py-1 rounded-md border border-border bg-card text-xs hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-500 disabled:opacity-50 flex items-center gap-1"
         >
           <ShieldAlert className="w-3 h-3" /> Spam
         </button>
@@ -1762,7 +1762,7 @@ function ContactBanner({ jid, fallbackName }: { jid: string; fallbackName: strin
         <button
           onClick={restoreFromSpam}
           disabled={busy}
-          className="ml-auto px-2.5 py-1 rounded-md border border-border bg-card text-[11px] hover:bg-muted disabled:opacity-50"
+          className="ml-auto px-2.5 py-1 rounded-md border border-border bg-card text-xs hover:bg-muted disabled:opacity-50"
         >
           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : "Restore to active"}
         </button>
@@ -1787,7 +1787,7 @@ function ContactBanner({ jid, fallbackName }: { jid: string; fallbackName: strin
         <button
           onClick={saveUnknown}
           disabled={busy}
-          className="ml-auto px-2.5 py-1 rounded-md bg-blue-500 text-white text-[11px] font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
+          className="ml-auto px-2.5 py-1 rounded-md bg-blue-500 text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
         >
           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
           Save to contacts

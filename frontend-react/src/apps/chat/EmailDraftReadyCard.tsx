@@ -28,7 +28,7 @@ export function EmailDraftReadyCard({ to, subject, preview, attachmentFilename }
           <div className="text-xs text-muted-foreground truncate">an {to}</div>
           {preview && <p className="mt-2 text-sm text-muted-foreground line-clamp-3">{preview}</p>}
           {attachmentFilename && (
-            <div className="mt-2 text-[11px] text-muted-foreground truncate">📎 {attachmentFilename}</div>
+            <div className="mt-2 text-xs text-muted-foreground truncate">📎 {attachmentFilename}</div>
           )}
         </div>
       </div>

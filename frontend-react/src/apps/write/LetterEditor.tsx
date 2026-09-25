@@ -105,7 +105,7 @@ export function LetterEditor({ doc, onChanged, onBack, say, extra }: {
         <button onClick={onBack} className="md:hidden p-1.5 rounded-md hover:bg-muted" aria-label="Zur Liste"><ArrowLeft className="w-5 h-5" /></button>
         <div className="min-w-0 mr-auto">
           <div className="font-semibold truncate">{subject || "Ohne Betreff"}</div>
-          <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
             {final ? <><Check className="w-3 h-3 text-emerald-500" /> Fertig seit {(doc.finalised_at || "").slice(0, 10).split("-").reverse().join(".")} · wird nicht mehr geändert</>
               : saving === "saving" ? <><Loader2 className="w-3 h-3 animate-spin" /> speichert …</>
               : saving === "dirty" ? "ungespeichert …" : saving === "failed" ? <span className="text-red-400">nicht gespeichert</span> : "Entwurf · gespeichert"}

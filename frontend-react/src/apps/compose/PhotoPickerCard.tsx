@@ -142,7 +142,7 @@ export function PhotoPickerCard({ action, onSubmit }: Props) {
                 </div>
               )}
               {date && (
-                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent text-[11px] md:text-[10px] text-white px-1.5 py-1 text-right">
+                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent text-xs md:text-2xs text-white px-1.5 py-1 text-right">
                   {date}
                 </div>
               )}
@@ -157,7 +157,7 @@ export function PhotoPickerCard({ action, onSubmit }: Props) {
       </div>
 
       <div>
-        <label className="block text-[11px] text-muted-foreground mb-1">
+        <label className="block text-xs text-muted-foreground mb-1">
           Caption (optional)
         </label>
         <input
@@ -183,7 +183,7 @@ export function PhotoPickerCard({ action, onSubmit }: Props) {
           Use this photo
         </button>
         {!picked && (
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             Click a photo.
           </span>
         )}

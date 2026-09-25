@@ -30,7 +30,7 @@ import {
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/AuthGate";
-import { Dock } from "@/components/Dock";
+import { Dock, APP_VISUAL } from "@/components/Dock";
 import { DemoDataPanel } from "@/components/DemoDataPanel";
 import { useHouseHealth, type SystemStatus, type HealthIssue } from "@/components/SystemStatusPanel";
 
@@ -72,6 +72,15 @@ const APPS: AppTile[] = [
   { id: "settings",  label: "Settings",   route: "/settings",  icon: Cog,           color: "from-slate-500/30 to-zinc-500/30 text-slate-500",       blurb: "Your profile, family and connections." },
 ];
 
+
+// Same gradient, glyph colour and ring as the app's Dock tile, so a
+// person learns one picture per app. `color` is the fallback for an
+// app the Dock doesn't know.
+const DOCK_ID: Record<string, string> = { documents: "docs" };
+function tileVisual(app: AppTile): string {
+  const v = APP_VISUAL[DOCK_ID[app.id] || app.id];
+  return v ? `${v.gradient} ${v.text} ${v.ring}` : app.color;
+}
 
 export function HomeApp() {
   const auth = useAuth();
@@ -122,7 +131,6 @@ export function HomeApp() {
                 alt="Yorik"
                 className="w-10 h-10 object-contain dark:invert"
               />
-              <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Yorik · home</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-semibold leading-tight">
               {greeting}, <span className="bg-gradient-to-r from-violet-500 to-blue-500 bg-clip-text text-transparent">{firstName}</span>.
@@ -144,7 +152,7 @@ export function HomeApp() {
             >
               <Search className="w-3.5 h-3.5" />
               <span>Search</span>
-              <kbd className="text-[10px] px-1.5 py-0.5 rounded bg-background border border-border">
+              <kbd className="text-2xs px-1.5 py-0.5 rounded bg-background border border-border">
                 {navigator.platform.includes("Mac") ? "⌘K" : "Ctrl K"}
               </kbd>
             </button>
@@ -184,7 +192,7 @@ export function HomeApp() {
 
         {/* App grid */}
         <section className="mb-10">
-          <h2 className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-3">
+          <h2 className="text-sm font-semibold text-muted-foreground mb-3">
             Apps
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -195,24 +203,24 @@ export function HomeApp() {
                 <>
                   <div className="flex items-center justify-between mb-3">
                     <div className={cn(
-                      "w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br",
-                      app.color,
+                      "w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ring-1",
+                      tileVisual(app),
                     )}>
                       <app.icon className="w-5 h-5" />
                     </div>
                     {typeof count === "number" && (
-                      <span className="text-[10px] tabular-nums px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
+                      <span className="text-2xs tabular-nums px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
                         {count}
                       </span>
                     )}
                     {app.external && (
-                      <span className="text-[10px] inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
+                      <span className="text-2xs inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
                         ↗
                       </span>
                     )}
                   </div>
                   <div className="font-medium text-sm">{app.label}</div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2 leading-snug">
+                  <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-snug">
                     {app.blurb}
                   </div>
                 </>
@@ -254,7 +262,7 @@ export function HomeApp() {
 
         {/* Quick actions */}
         <section>
-          <h2 className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-3">
+          <h2 className="text-sm font-semibold text-muted-foreground mb-3">
             Quick actions
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">

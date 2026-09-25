@@ -78,7 +78,7 @@ export function AssistantMarkdown({
             const isBlock = /language-/.test(className || "");
             if (isBlock) {
               return (
-                <pre className="bg-muted/60 border border-border rounded-md p-2 overflow-x-auto text-[12px] my-1">
+                <pre className="bg-muted/60 border border-border rounded-md p-2 overflow-x-auto text-xs my-1">
                   <code className={className} {...rest}>{children}</code>
                 </pre>
               );

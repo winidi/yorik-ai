@@ -48,38 +48,52 @@
   --sidebar-ring:         oklch(0.46 0.18 277);
 }
 
+/* Dark = Yorik's own look. The ground sits a touch warmer (hue 290,
+   towards plum, instead of a cold blue-grey 270) and a step lighter,
+   so cards separate from the page; the violet accent is unchanged.
+   Quiet text is lighter than before (0.62 → 0.72): grey-on-near-black
+   at 12px was hard to read at arm's length. */
 .dark {
   /* Tells the browser to render native form-control chrome (date-picker
      icon, scrollbars, time inputs, autofill yellow) against a dark
      background. Without this the calendar icon on <input type="date">
      stays black-on-dark and is effectively invisible. */
   color-scheme: dark;
-  --background:           oklch(0.10 0.01 270);
+  --background:           oklch(0.13 0.014 290);
   --foreground:           oklch(0.97 0 0);
-  --card:                 oklch(0.14 0.01 270);
+  --card:                 oklch(0.17 0.016 290);
   --card-foreground:      oklch(0.97 0 0);
-  --popover:              oklch(0.14 0.01 270);
+  --popover:              oklch(0.18 0.016 290);
   --popover-foreground:   oklch(0.97 0 0);
   --primary:              oklch(0.66 0.18 277);
   --primary-foreground:   oklch(0.97 0 0);
-  --secondary:            oklch(0.20 0.01 270);
+  --secondary:            oklch(0.23 0.018 290);
   --secondary-foreground: oklch(0.97 0 0);
-  --muted:                oklch(0.20 0.01 270);
-  --muted-foreground:     oklch(0.62 0 0);
-  --accent:               oklch(0.20 0.01 270);
+  --muted:                oklch(0.23 0.018 290);
+  --muted-foreground:     oklch(0.72 0.012 290);
+  --accent:               oklch(0.23 0.018 290);
   --accent-foreground:    oklch(0.97 0 0);
   --destructive:          oklch(0.65 0.22 27);
   --border:               oklch(0.97 0 0 / 8%);
   --input:                oklch(0.97 0 0 / 12%);
   --ring:                 oklch(0.66 0.18 277);
-  --sidebar:              oklch(0.12 0.01 270);
+  --sidebar:              oklch(0.15 0.015 290);
   --sidebar-foreground:   oklch(0.97 0 0);
   --sidebar-primary:      oklch(0.66 0.18 277);
   --sidebar-primary-foreground: oklch(0.97 0 0);
-  --sidebar-accent:       oklch(0.20 0.01 270);
+  --sidebar-accent:       oklch(0.23 0.018 290);
   --sidebar-accent-foreground: oklch(0.97 0 0);
   --sidebar-border:       oklch(0.97 0 0 / 8%);
   --sidebar-ring:         oklch(0.66 0.18 277);
+}
+
+/* Type scale. Tailwind's own steps (xs 12, sm 14, base 16, lg 18,
+   2xl 24, 4xl 36) plus one below xs: 2xs (11px) for counters,
+   timestamps and badges in tight rows. Nothing in the app goes under
+   it; running text starts at xs. */
+@theme {
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
 }
 
 @theme inline {

@@ -148,7 +148,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
           </div>
 
           <div className="bg-card border border-amber-500/40 rounded-2xl shadow-xl p-6 space-y-4">
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+            <div className="text-xs text-muted-foreground">
               Paperless password (one-time display)
             </div>
             <div className="flex items-center gap-2">
@@ -165,7 +165,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
                   : <Copy className="w-4 h-4" />}
               </button>
             </div>
-            <div className="text-[11px] text-muted-foreground leading-relaxed">
+            <div className="text-xs text-muted-foreground leading-relaxed">
               {paperlessFallback.note}
             </div>
             <button
@@ -176,7 +176,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
             </button>
           </div>
 
-          <div className="text-[11px] text-muted-foreground text-center mt-6">
+          <div className="text-xs text-muted-foreground text-center mt-6">
             Stored encrypted on this machine. Find it later under Settings → Connectors → Paperless.
           </div>
         </div>
@@ -228,7 +228,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
           {!resetToken && (
             <>
               <label className="block">
-                <div className="text-[11px] text-muted-foreground mb-1">Your name</div>
+                <div className="text-xs text-muted-foreground mb-1">Your name</div>
                 <div className="relative">
                   <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                   <input
@@ -243,7 +243,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
               </label>
 
               <label className="block">
-                <div className="text-[11px] text-muted-foreground mb-1">Email</div>
+                <div className="text-xs text-muted-foreground mb-1">Email</div>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                   <input
@@ -260,7 +260,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
           )}
 
           <label className="block">
-            <div className="text-[11px] text-muted-foreground mb-1">Password</div>
+            <div className="text-xs text-muted-foreground mb-1">Password</div>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <input
@@ -279,12 +279,12 @@ export function SetupScreen({ onSetupComplete }: Props) {
               />
             </div>
             <div className={cn(
-              "text-[10px] mt-1",
+              "text-2xs mt-1",
               tooShort ? "text-red-500" : "text-muted-foreground",
             )}>
               At least 8 characters.
             </div>
-            <div className="mt-2 text-[10px] text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-1.5 flex items-start gap-1.5 leading-relaxed">
+            <div className="mt-2 text-2xs text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-1.5 flex items-start gap-1.5 leading-relaxed">
               <Info className="w-3 h-3 mt-0.5 shrink-0" />
               <span>
                 <strong>Alpha note:</strong> 8 characters is the current minimum. Beta will require
@@ -295,7 +295,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
           </label>
 
           <label className="block">
-            <div className="text-[11px] text-muted-foreground mb-1">Confirm password</div>
+            <div className="text-xs text-muted-foreground mb-1">Confirm password</div>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <input
@@ -313,7 +313,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
               />
             </div>
             {mismatch && (
-              <div className="text-[10px] text-red-500 mt-1">Passwords don't match.</div>
+              <div className="text-2xs text-red-500 mt-1">Passwords don't match.</div>
             )}
           </label>
 
@@ -344,7 +344,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
           </button>
         </form>
 
-        <div className="text-[11px] text-muted-foreground text-center mt-6">
+        <div className="text-xs text-muted-foreground text-center mt-6">
           This password is hashed with bcrypt and stored only on this machine.
         </div>
       </div>

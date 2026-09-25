@@ -84,7 +84,7 @@ export function RecordingStartDialog({ onClose, onStarted, defaultKind = "dinner
                className={cn("mt-3 w-full rounded-lg border px-3 py-2 text-sm bg-transparent",
                              dark ? "border-white/20 placeholder:text-white/40" : "border-border")} />
 
-        <div className="mt-4 text-xs uppercase tracking-wider font-semibold opacity-70">Who is here</div>
+        <div className="mt-4 text-xs font-semibold opacity-70">Who is here</div>
         {!members && !err && <Loader2 className="w-4 h-4 animate-spin mt-2" />}
         {members && members.length === 0 && <p className="text-sm mt-2 opacity-70">Only you. The recording stays yours.</p>}
         <div className="mt-2 grid grid-cols-2 gap-2">
@@ -95,7 +95,7 @@ export function RecordingStartDialog({ onClose, onStarted, defaultKind = "dinner
                       onClick={() => setChosen(prev => { const n = new Set(prev); on ? n.delete(m.id) : n.add(m.id); return n; })}
                       className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-left",
                                     on ? "border-red-500 bg-red-500/10" : dark ? "border-white/15 hover:bg-white/5" : "border-border hover:bg-muted")}>
-                <span className={cn("w-4 h-4 rounded border flex items-center justify-center text-[10px]",
+                <span className={cn("w-4 h-4 rounded border flex items-center justify-center text-2xs",
                                     on ? "bg-red-500 border-red-500 text-white" : "border-current opacity-50")}>{on ? "✓" : ""}</span>
                 <span className="truncate">{m.name}</span>
               </button>

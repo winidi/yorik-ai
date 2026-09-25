@@ -358,7 +358,7 @@ export function RecorderDock() {
             : <Circle className={cn("w-3 h-3", live ? "fill-red-500 text-red-500 animate-pulse" : "fill-amber-400 text-amber-400")} />}
         <div className="min-w-0">
           <div className="font-medium truncate max-w-[12rem]">{s.title || "Recording"}</div>
-          <div className="text-[11px] text-white/70">
+          <div className="text-xs text-white/70">
             {s.phase === "starting" && "starting…"}
             {(live || s.phase === "paused") && (<>{fmt(s.seconds)}{s.phase === "paused" && " · paused"}{s.pendingUploads > 0 && ` · uploading ${s.pendingUploads}`}</>)}
             {s.phase === "finishing" && "uploading the last piece…"}

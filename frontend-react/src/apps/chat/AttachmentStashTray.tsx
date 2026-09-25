@@ -142,14 +142,14 @@ export function AttachmentStashTray({ items, onRemove, onClear }: TrayProps) {
     <div className="mb-2 rounded-2xl border border-violet-500/30 bg-violet-500/[0.06] px-3 py-2">
       <div className="flex items-center gap-2 mb-1.5">
         <Paperclip className="w-3.5 h-3.5 text-violet-500" />
-        <div className="text-[11px] font-medium text-foreground/80">
+        <div className="text-xs font-medium text-foreground/80">
           {items.length} {items.length === 1 ? "attachment" : "attachments"} ready to send
         </div>
         <div className="flex-1" />
         <button
           type="button"
           onClick={onClear}
-          className="text-[11px] text-muted-foreground hover:text-foreground transition px-1.5 py-0.5 rounded"
+          className="text-xs text-muted-foreground hover:text-foreground transition px-1.5 py-0.5 rounded"
         >
           Clear all
         </button>
@@ -157,7 +157,7 @@ export function AttachmentStashTray({ items, onRemove, onClear }: TrayProps) {
           type="button"
           onClick={sendAll}
           disabled={sending}
-          className="text-[11px] inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-violet-500 hover:bg-violet-600 text-white shadow-sm transition disabled:opacity-50"
+          className="text-xs inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-violet-500 hover:bg-violet-600 text-white shadow-sm transition disabled:opacity-50"
         >
           {sending
             ? <><Loader2 className="w-3 h-3 animate-spin" /> Opening…</>
@@ -168,7 +168,7 @@ export function AttachmentStashTray({ items, onRemove, onClear }: TrayProps) {
         {items.map((it, i) => (
           <span
             key={`${it.url}-${i}`}
-            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-background border border-border max-w-[200px]"
+            className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-background border border-border max-w-[200px]"
             title={it.filename}
           >
             <span className="truncate">{it.filename}</span>

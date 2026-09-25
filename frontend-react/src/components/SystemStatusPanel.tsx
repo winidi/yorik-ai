@@ -117,7 +117,7 @@ export function SystemStatusPanel() {
       </div>
 
       <section>
-        <h2 className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-3">
+        <h2 className="text-xs text-muted-foreground font-semibold mb-3">
           Services
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -183,7 +183,7 @@ function StatusChip({ icon: Icon, label, detail, tone, hint }: {
     <div className="bg-card border border-border rounded-xl p-3 text-left" title={hint}>
       <div className="flex items-center gap-2 mb-1.5">
         <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex-1">
+        <span className="text-2xs text-muted-foreground font-semibold flex-1">
           {label}
         </span>
         <span className={cn("w-2 h-2 rounded-full", dotClass)} />

@@ -294,7 +294,7 @@ function TenantCard({
             <span className="font-medium truncate">
               {tenant.invite?.display_label || tenant.name}
             </span>
-            <span className={cn("text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 rounded", inviteStatus.color)}>
+            <span className={cn("text-2xs font-medium px-1.5 py-0.5 rounded", inviteStatus.color)}>
               {inviteStatus.label}
             </span>
           </div>
@@ -381,7 +381,7 @@ function DropTenantConfirmModal({
         <div className="p-5 space-y-4">
           <div className="text-sm leading-relaxed">
             This <strong className="text-red-600 dark:text-red-400">permanently deletes</strong> the Postgres database{" "}
-            <span className="font-mono text-[12px]">yorik_tenant_{tenant.name}</span>,
+            <span className="font-mono text-xs">yorik_tenant_{tenant.name}</span>,
             tears down the systemd unit, and removes the household's Paperless + Immich users.
             Backups already taken are kept; live data is gone.
           </div>
@@ -568,7 +568,7 @@ function CreateHouseholdModal({
           </div>
           <div className="px-5 py-4 space-y-4">
             <label className="block">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Slug</span>
+              <span className="text-xs font-medium text-muted-foreground">Slug</span>
               <input
                 value={name}
                 onChange={e => setName(e.target.value)}
@@ -577,24 +577,24 @@ function CreateHouseholdModal({
                 autoFocus
                 required
               />
-              <span className="block text-[11px] text-muted-foreground mt-1">
+              <span className="block text-xs text-muted-foreground mt-1">
                 Becomes <code>yorik_tenant_{name || "<slug>"}</code> in Postgres. Cannot be changed later.
               </span>
             </label>
             <label className="block">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Display label</span>
+              <span className="text-xs font-medium text-muted-foreground">Display label</span>
               <input
                 value={displayLabel}
                 onChange={e => setDisplayLabel(e.target.value)}
                 placeholder="Mom, Parents, Alex's family"
                 className="mt-1 w-full px-3 py-2 text-sm bg-background border border-border rounded-lg"
               />
-              <span className="block text-[11px] text-muted-foreground mt-1">
+              <span className="block text-xs text-muted-foreground mt-1">
                 Shown to the household on their setup page. Optional.
               </span>
             </label>
             <label className="block">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Invite expires after</span>
+              <span className="text-xs font-medium text-muted-foreground">Invite expires after</span>
               <select
                 value={expiresHours}
                 onChange={e => setExpiresHours(Number(e.target.value))}

@@ -427,21 +427,21 @@ export function InlineComposeDraft({
         <div className="flex items-center gap-1.5 mb-1.5">
           <span className="text-base leading-none">{kindIcon(k)}</span>
           <span className="text-xs font-semibold">{KIND_LABEL[k] || "Dokument"}</span>
-          <span className="text-[9px] text-muted-foreground font-mono">#{draftId}</span>
+          <span className="text-2xs text-muted-foreground font-mono">#{draftId}</span>
           {saveState === "saving" && (
-            <span className="ml-auto text-[10px] text-muted-foreground inline-flex items-center gap-1">
+            <span className="ml-auto text-2xs text-muted-foreground inline-flex items-center gap-1">
               <Loader2 className="w-2.5 h-2.5 animate-spin" /> saving
             </span>
           )}
           {saveState === "saved" && (
-            <span className="ml-auto text-[10px] text-emerald-600 inline-flex items-center gap-1">
+            <span className="ml-auto text-2xs text-emerald-600 inline-flex items-center gap-1">
               <Check className="w-2.5 h-2.5" /> saved
             </span>
           )}
           {saveState === "idle" && (
             <button
               onClick={() => navigate(`/compose?draft_id=${draftId}`)}
-              className="ml-auto text-[10px] text-muted-foreground hover:text-foreground transition inline-flex items-center gap-1"
+              className="ml-auto text-2xs text-muted-foreground hover:text-foreground transition inline-flex items-center gap-1"
               title="Open in Compose for the full editor"
             >
               <ExternalLink className="w-2.5 h-2.5" /> Compose
@@ -462,14 +462,14 @@ export function InlineComposeDraft({
             </div>
           )}
           {(missingArgs?.length ?? 0) > 0 && (
-            <div className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400 inline-flex items-center gap-1">
+            <div className="mt-1.5 text-xs text-amber-600 dark:text-amber-400 inline-flex items-center gap-1">
               <AlertCircle className="w-3 h-3" />
               Still empty: {missingArgs!.join(", ")} — open in Compose to fill in
             </div>
           )}
         </div>
         {templateName && (
-          <div className="mt-1.5 text-[10px] text-muted-foreground">
+          <div className="mt-1.5 text-2xs text-muted-foreground">
             Vorlage: <span className="text-foreground/80 font-medium">{templateName}</span>
           </div>
         )}
@@ -479,7 +479,7 @@ export function InlineComposeDraft({
       {versions.length > 1 && (
         <div className="px-3 py-1.5 border-b border-border/40 flex items-center gap-1 overflow-x-auto bg-muted/30">
           <History className="w-3 h-3 text-muted-foreground shrink-0" />
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">
+          <span className="text-2xs text-muted-foreground shrink-0">
             History
           </span>
           {versions.map((v, idx) => {
@@ -498,7 +498,7 @@ export function InlineComposeDraft({
                 disabled={refining || isCurrent}
                 title={labelTip}
                 className={cn(
-                  "text-[10px] px-1.5 py-0.5 rounded-full tabular-nums shrink-0 transition",
+                  "text-2xs px-1.5 py-0.5 rounded-full tabular-nums shrink-0 transition",
                   isCurrent
                     ? "bg-violet-500/20 text-violet-700 dark:text-violet-300 ring-1 ring-violet-500/40 font-semibold cursor-default"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -515,7 +515,7 @@ export function InlineComposeDraft({
               onClick={() => restoreVersion(versions[versions.length - 1].id)}
               disabled={refining}
               title="Jump to the most recent version"
-              className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground inline-flex items-center gap-0.5 shrink-0"
+              className="ml-1 text-2xs px-1.5 py-0.5 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground inline-flex items-center gap-0.5 shrink-0"
             >
               <RotateCcw className="w-2.5 h-2.5" /> Latest
             </button>
@@ -536,11 +536,11 @@ export function InlineComposeDraft({
           </div>
           {refining && (
             <div className="absolute inset-0 overflow-y-auto p-3 bg-background/95 backdrop-blur-[2px]">
-              <div className="flex items-center gap-1.5 text-[10px] text-violet-700 dark:text-violet-300 mb-1.5 uppercase tracking-wider">
+              <div className="flex items-center gap-1.5 text-2xs text-violet-700 dark:text-violet-300 mb-1.5">
                 <Sparkles className="w-3 h-3 animate-pulse" /> LLM is rewriting…
                 <button
                   onClick={stopRefine}
-                  className="ml-auto text-red-600 hover:underline normal-case tracking-normal text-[11px]"
+                  className="ml-auto text-red-600 hover:underline normal-case tracking-normal text-xs"
                 >
                   Stop
                 </button>
@@ -572,7 +572,7 @@ export function InlineComposeDraft({
             onClick={handleRefine}
             disabled={refining || !refineInput.trim()}
             className={cn(
-              "text-[11px] h-7 px-2.5 rounded-md font-medium inline-flex items-center gap-1 transition",
+              "text-xs h-7 px-2.5 rounded-md font-medium inline-flex items-center gap-1 transition",
               refining || !refineInput.trim()
                 ? "bg-muted text-muted-foreground cursor-not-allowed"
                 : "bg-violet-500/15 text-violet-700 dark:text-violet-300 hover:bg-violet-500/25",
@@ -584,7 +584,7 @@ export function InlineComposeDraft({
           </button>
         </div>
         {refineError && (
-          <div className="mt-1 text-[10px] text-red-600">{refineError}</div>
+          <div className="mt-1 text-2xs text-red-600">{refineError}</div>
         )}
       </div>
 
@@ -600,7 +600,7 @@ export function InlineComposeDraft({
             </div>
             {sendResult.method === "pdf" && sendResult.pdf_url && (
               <a href={sendResult.pdf_url} target="_blank" rel="noopener"
-                 className="text-[11px] underline mt-0.5 inline-block">
+                 className="text-xs underline mt-0.5 inline-block">
                 Re-open PDF
               </a>
             )}
@@ -659,12 +659,12 @@ export function InlineComposeDraft({
             </button>
           </div>
           {sendError && (
-            <div className="text-[11px] text-red-600 flex items-center gap-1">
+            <div className="text-xs text-red-600 flex items-center gap-1">
               <AlertCircle className="w-3 h-3" /> {sendError}
             </div>
           )}
           {method !== "pdf" && pickedContact && !methodReachable && (
-            <div className="text-[10px] text-amber-600">
+            <div className="text-2xs text-amber-600">
               {pickedContact.display_name} has no {method} channel on file.
             </div>
           )}
@@ -695,7 +695,7 @@ function MethodChip({
     <button
       onClick={onClick}
       className={cn(
-        "px-2 py-1 rounded-md text-[11px] inline-flex items-center gap-1 transition",
+        "px-2 py-1 rounded-md text-xs inline-flex items-center gap-1 transition",
         chosen
           ? `${tintClasses[tint]} ring-1 font-medium`
           : "text-muted-foreground hover:bg-muted/60",
@@ -772,7 +772,7 @@ function RecipientInlinePicker({
       <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/40 border border-border/60 text-xs">
         <div className="flex-1 min-w-0">
           <div className="font-medium truncate">{picked.display_name}</div>
-          <div className="text-[10px] text-muted-foreground truncate">
+          <div className="text-2xs text-muted-foreground truncate">
             {picked.channels.length === 0
               ? "no channels"
               : picked.channels
@@ -803,7 +803,7 @@ function RecipientInlinePicker({
       {open && (loading || results.length > 0) && (
         <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-card border border-border rounded-md shadow-lg overflow-hidden max-h-[240px] overflow-y-auto">
           {loading && (
-            <div className="px-2 py-1.5 text-[10px] text-muted-foreground">
+            <div className="px-2 py-1.5 text-2xs text-muted-foreground">
               <Loader2 className="w-3 h-3 animate-spin inline" /> searching…
             </div>
           )}
@@ -814,7 +814,7 @@ function RecipientInlinePicker({
               className="w-full text-left px-2 py-1.5 hover:bg-muted/60 border-b border-border/40 last:border-b-0"
             >
               <div className="text-xs font-medium">{c.display_name}</div>
-              <div className="text-[10px] text-muted-foreground truncate">
+              <div className="text-2xs text-muted-foreground truncate">
                 {c.channels
                   .filter(ch => ["email", "phone", "whatsapp"].includes(ch.kind))
                   .map(ch => `${ch.kind}: ${ch.value}`)
@@ -823,7 +823,7 @@ function RecipientInlinePicker({
             </button>
           ))}
           {!loading && results.length === 0 && query.length >= 2 && (
-            <div className="px-2 py-1.5 text-[10px] text-muted-foreground italic">
+            <div className="px-2 py-1.5 text-2xs text-muted-foreground italic">
               No matches for "{query}".
             </div>
           )}

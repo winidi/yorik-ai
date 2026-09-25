@@ -147,7 +147,7 @@ function SlashPanel({ prefix, onPick, onCancel }: {
   return (
     <Shell title="Slash commands" icon={<Slash className="w-3 h-3" />}>
       {matches.length === 0 ? (
-        <div className="px-3 py-4 text-[11px] text-muted-foreground text-center italic">
+        <div className="px-3 py-4 text-xs text-muted-foreground text-center italic">
           No commands match.
         </div>
       ) : matches.map((c, i) => (
@@ -167,10 +167,10 @@ function SlashPanel({ prefix, onPick, onCancel }: {
         >
           <div className="flex-1 min-w-0">
             <div className="font-medium text-foreground flex items-center gap-1.5">
-              <code className="text-[10px] bg-muted px-1 rounded">/{c.name}</code>
+              <code className="text-2xs bg-muted px-1 rounded">/{c.name}</code>
               <span>{c.label}</span>
             </div>
-            <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+            <div className="text-2xs text-muted-foreground mt-0.5 truncate">
               {c.description}
             </div>
           </div>
@@ -243,12 +243,12 @@ function AtPanel({ prefix, onPick, onCancel }: {
     <Shell title={`Mention${prefix ? ` "${prefix}"` : ""}`}
            icon={<AtSign className="w-3 h-3" />}>
       {loading && flat.length === 0 && (
-        <div className="px-3 py-3 text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
+        <div className="px-3 py-3 text-xs text-muted-foreground inline-flex items-center gap-1.5">
           <Loader2 className="w-3 h-3 animate-spin" /> searching…
         </div>
       )}
       {!loading && flat.length === 0 && (
-        <div className="px-3 py-4 text-[11px] text-muted-foreground text-center italic">
+        <div className="px-3 py-4 text-xs text-muted-foreground text-center italic">
           No matches{prefix && ` for "${prefix}"`}.
         </div>
       )}
@@ -257,7 +257,7 @@ function AtPanel({ prefix, onPick, onCancel }: {
         if (!items.length) return null;
         return (
           <div key={kind}>
-            <div className="px-3 pt-1.5 pb-1 text-[9px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
+            <div className="px-3 pt-1.5 pb-1 text-2xs text-muted-foreground font-semibold flex items-center gap-1">
               {kind === "contact" && <UsersRound className="w-2.5 h-2.5" />}
               {kind === "event"   && <CalendarDays className="w-2.5 h-2.5" />}
               {kind === "doc"     && <FileText className="w-2.5 h-2.5" />}
@@ -279,7 +279,7 @@ function AtPanel({ prefix, onPick, onCancel }: {
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-foreground truncate">{it.label}</div>
                     {it.sub && (
-                      <div className="text-[10px] text-muted-foreground truncate">{it.sub}</div>
+                      <div className="text-2xs text-muted-foreground truncate">{it.sub}</div>
                     )}
                   </div>
                   {i === highlight && (
@@ -313,12 +313,12 @@ function Shell({ title, icon, children }: {
                     rounded-xl border border-border bg-popover shadow-2xl overflow-hidden">
       <div className="px-3 py-1.5 border-b border-border bg-muted/30 flex items-center gap-1.5">
         {icon}
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+        <span className="text-2xs text-muted-foreground font-semibold">
           {title}
         </span>
         {/* Keyboard hint only on desktop — soft keyboards don't have
             arrow keys / Enter / Esc as discoverable affordances. */}
-        <span className="ml-auto text-[10px] text-muted-foreground/70 hidden md:inline">
+        <span className="ml-auto text-2xs text-muted-foreground/70 hidden md:inline">
           ↑↓ · Enter · Esc
         </span>
       </div>

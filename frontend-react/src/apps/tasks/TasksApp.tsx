@@ -533,7 +533,6 @@ export function TasksApp() {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/30 to-teal-500/30 flex items-center justify-center shadow-md">
               <ListTodo className="w-5 h-5 text-emerald-500" />
             </div>
-            <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Yorik · tasks</span>
           </div>
           {openCount > 0 ? (
             // Mobile: compact "N open tasks" line — gets the first task
@@ -663,7 +662,7 @@ export function TasksApp() {
             {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             <span className="hidden sm:inline">{adding ? "Yorik liest…" : "Add"}</span>
             {defaultAction === "add" && !adding && (
-              <span className="hidden md:inline text-[10px] opacity-70" aria-hidden="true">↵</span>
+              <span className="hidden md:inline text-2xs opacity-70" aria-hidden="true">↵</span>
             )}
           </button>
           <button
@@ -679,7 +678,7 @@ export function TasksApp() {
             {magicLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             <span className="hidden sm:inline">Ask</span>
             {defaultAction === "ask" && !magicLoading && (
-              <span className="hidden md:inline text-[10px] opacity-70" aria-hidden="true">↵</span>
+              <span className="hidden md:inline text-2xs opacity-70" aria-hidden="true">↵</span>
             )}
           </button>
         </form>
@@ -689,7 +688,7 @@ export function TasksApp() {
             doneToday is the trophy line that used to sit above the
             bottom composer. Both are auto-dismissed / data-driven. */}
         {(parseHint || doneToday >= 1) && (
-          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] px-1">
+          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs px-1">
             {parseHint && (
               <span className="text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-1">
                 <Sparkles className="w-3 h-3" />
@@ -719,7 +718,7 @@ export function TasksApp() {
                   key={p.q}
                   type="button"
                   onClick={() => runPreset(p.q)}
-                  className="text-[11px] px-2.5 py-1 rounded-full bg-card border border-border text-muted-foreground hover:text-foreground hover:border-violet-500/30 transition flex items-center gap-1"
+                  className="text-xs px-2.5 py-1 rounded-full bg-card border border-border text-muted-foreground hover:text-foreground hover:border-violet-500/30 transition flex items-center gap-1"
                   disabled={magicLoading}
                 >
                   <Sparkles className="w-3 h-3 text-violet-500" />
@@ -876,7 +875,7 @@ export function TasksApp() {
               {view === "today" && !magicResult && (
                 <button
                   onClick={() => setView("all")}
-                  className="mt-3 inline-flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-md bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition"
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition"
                 >
                   View all tasks
                 </button>
@@ -893,7 +892,7 @@ export function TasksApp() {
                 className="task-group-enter"
                 style={{ animationDelay: `${gi * 60}ms` }}
               >
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5 px-1 flex items-center justify-between">
+                <div className="text-2xs text-muted-foreground font-semibold mb-1.5 px-1 flex items-center justify-between">
                   <span>{g.label}</span>
                   <span className="opacity-60">{g.tasks.length}{groupEstimate(g.tasks)}</span>
                 </div>
@@ -1115,7 +1114,7 @@ function ViewTab({ icon, label, count, active, onClick, danger, dangerTitle }: {
       {icon}
       {label}
       <span className={cn(
-        "text-[10px] tabular-nums",
+        "text-2xs tabular-nums",
         active ? "opacity-80" : "opacity-60",
       )}>
         {count}
@@ -1124,7 +1123,7 @@ function ViewTab({ icon, label, count, active, onClick, danger, dangerTitle }: {
         <span
           title={dangerTitle}
           className={cn(
-            "text-[10px] tabular-nums px-1.5 py-0.5 rounded-full font-semibold leading-none",
+            "text-2xs tabular-nums px-1.5 py-0.5 rounded-full font-semibold leading-none",
             active
               ? "bg-white/20 text-white"
               : "bg-red-500/15 text-red-600 dark:text-red-400",
@@ -1159,7 +1158,7 @@ function SnoozeChip({ label, onClick }: { label: string; onClick: () => void }) 
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className="text-[11px] md:text-[10px] px-2 py-1 md:px-1.5 md:py-0.5 rounded bg-muted/60 hover:bg-violet-500/15 hover:text-violet-500 text-muted-foreground transition"
+      className="text-xs md:text-2xs px-2 py-1 md:px-1.5 md:py-0.5 rounded bg-muted/60 hover:bg-violet-500/15 hover:text-violet-500 text-muted-foreground transition"
       title="Snooze: push the due date forward"
       aria-label={`Snooze to ${label}`}
     >
@@ -1367,7 +1366,7 @@ function TaskRow({
               priority flag is already inline above, subtask count.
               The rest (recurrence, estimate, category, assignees)
               show on md+ and inside the expanded editor on mobile. */}
-          <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5 flex-wrap">
+          <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5 flex-wrap">
             {task.due_date && (
               <span className={cn(
                 "flex items-center gap-1",
@@ -1506,7 +1505,7 @@ function TaskRow({
           <button
             type="button"
             onClick={() => setChildrenOpen(o => !o)}
-            className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground flex items-center gap-1 mb-1"
+            className="text-2xs text-muted-foreground hover:text-foreground flex items-center gap-1 mb-1"
           >
             <ChevronDown className={cn(
               "w-2.5 h-2.5 transition",
@@ -1545,7 +1544,7 @@ function TaskRow({
                   </span>
                   {c.estimated_minutes != null && c.estimated_minutes > 0 && (
                     <span
-                      className="text-[11px] md:text-[10px] text-muted-foreground shrink-0 inline-flex items-center gap-0.5"
+                      className="text-xs md:text-2xs text-muted-foreground shrink-0 inline-flex items-center gap-0.5"
                       title={`Estimated ${formatMinutes(c.estimated_minutes)}`}
                     >
                       <Clock className="w-3 h-3 md:w-2.5 md:h-2.5" />
@@ -1553,7 +1552,7 @@ function TaskRow({
                     </span>
                   )}
                   {c.due_date && (
-                    <span className="text-[11px] md:text-[10px] text-muted-foreground shrink-0">
+                    <span className="text-xs md:text-2xs text-muted-foreground shrink-0">
                       {formatDue(c.due_date)}
                     </span>
                   )}
@@ -1758,7 +1757,7 @@ function SubtaskComposer({ onAdd }: {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-[11px] h-7 px-2.5 rounded-full border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-emerald-500/40 transition inline-flex items-center gap-1"
+        className="text-xs h-7 px-2.5 rounded-full border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-emerald-500/40 transition inline-flex items-center gap-1"
       >
         <Plus className="w-3 h-3" />
         Add subtask
@@ -1851,7 +1850,7 @@ function RepeatPicker({
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap gap-1.5 items-center">
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1 flex items-center gap-1">
+        <span className="text-2xs text-muted-foreground mr-1 flex items-center gap-1">
           <Repeat className="w-3 h-3" /> Repeat
         </span>
         {REPEAT_PRESETS.map(p => {
@@ -1998,7 +1997,7 @@ function UpdateConfirmPanel({
           <span className="font-medium text-violet-500">Yorik proposes:</span>{" "}
           <span className="text-foreground">{result.summary}</span>
         </div>
-        <span className="text-[10px] text-muted-foreground">{items.length} change{items.length !== 1 ? "s" : ""}</span>
+        <span className="text-2xs text-muted-foreground">{items.length} change{items.length !== 1 ? "s" : ""}</span>
       </div>
       <div className="max-h-80 overflow-y-auto divide-y divide-violet-500/10">
         {items.map(({ task, changes }) => {
@@ -2010,7 +2009,7 @@ function UpdateConfirmPanel({
           return (
             <div key={task.id} className="px-3 py-2 text-xs flex items-center gap-2">
               <span className="flex-1 truncate font-medium">{task.title}</span>
-              <span className="flex items-center gap-1.5 text-[10px]">
+              <span className="flex items-center gap-1.5 text-2xs">
                 {changes.estimated_minutes != null && (
                   <span className="inline-flex items-center rounded bg-violet-500/15 text-violet-500 font-medium overflow-hidden">
                     <input
@@ -2055,7 +2054,7 @@ function UpdateConfirmPanel({
                 disabled={applying || !minsValid}
                 title="Apply just this one"
                 aria-label={`Apply update for ${task.title}`}
-                className="text-[10px] px-2 py-1 rounded-md border border-violet-500/40 text-violet-500 hover:bg-violet-500/10 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                className="text-2xs px-2 py-1 rounded-md border border-violet-500/40 text-violet-500 hover:bg-violet-500/10 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
               >
                 <Check className="w-3 h-3" />
                 Apply

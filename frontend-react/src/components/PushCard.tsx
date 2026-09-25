@@ -119,7 +119,7 @@ export function PushCard({ toast }: { toast: (text: string, kind?: "info" | "suc
 
   return (
     <div className="bg-card border border-border rounded-xl p-5">
-      <h3 className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-3">Notifications on your phone</h3>
+      <h3 className="text-xs font-semibold text-muted-foreground mb-3">Notifications on your phone</h3>
       <div className="mb-3 flex items-start gap-2">
         <BellRing className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
         <div className="flex-1">
@@ -133,7 +133,7 @@ export function PushCard({ toast }: { toast: (text: string, kind?: "info" | "suc
       </div>
 
       {!supported && (
-        <p className="text-[11px] text-amber-600 mb-3">This browser does not support Web Push. Open Yorik in Chrome or Safari and add it to the home screen.</p>
+        <p className="text-xs text-amber-600 mb-3">This browser does not support Web Push. Open Yorik in Chrome or Safari and add it to the home screen.</p>
       )}
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -161,7 +161,7 @@ export function PushCard({ toast }: { toast: (text: string, kind?: "info" | "suc
               <Smartphone className="w-4 h-4 text-muted-foreground shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm truncate">{(d.user_agent || "Device").replace(/^Mozilla\/5\.0 \(([^)]+)\).*$/, "$1")}{d.endpoint === thisEndpoint ? " · this device" : ""}</div>
-                <div className="text-[11px] text-muted-foreground">added {d.created_at.slice(0, 10)}{d.last_ok_at ? ` · last push ${d.last_ok_at.slice(0, 16)}` : ""}</div>
+                <div className="text-xs text-muted-foreground">added {d.created_at.slice(0, 10)}{d.last_ok_at ? ` · last push ${d.last_ok_at.slice(0, 16)}` : ""}</div>
               </div>
               <button onClick={() => removeDevice(d.endpoint)} disabled={busy} className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-red-600 disabled:opacity-50">
                 <Trash2 className="w-3.5 h-3.5" /> Remove
@@ -173,16 +173,16 @@ export function PushCard({ toast }: { toast: (text: string, kind?: "info" | "suc
 
       <div className="border-t border-border pt-3">
         <div className="text-xs font-medium mb-1">Daily nudges</div>
-        <p className="text-[11px] text-muted-foreground mb-2">
+        <p className="text-xs text-muted-foreground mb-2">
           Morning: "Shall I plan your day?" opens the chat with the planner. Evening: a short review of what you got done. Times in {status?.timezone || "your timezone"}; leave empty to switch off.
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <label className="block">
-            <div className="text-[11px] text-muted-foreground mb-1">Morning</div>
+            <div className="text-xs text-muted-foreground mb-1">Morning</div>
             <input type="time" value={morning} onChange={e => setMorning(e.target.value)} className="h-9 px-3 rounded-md bg-muted/60 text-sm" />
           </label>
           <label className="block">
-            <div className="text-[11px] text-muted-foreground mb-1">Evening</div>
+            <div className="text-xs text-muted-foreground mb-1">Evening</div>
             <input type="time" value={evening} onChange={e => setEvening(e.target.value)} className="h-9 px-3 rounded-md bg-muted/60 text-sm" />
           </label>
           <button onClick={saveNudges} disabled={busy} className="h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm disabled:opacity-60">Save</button>

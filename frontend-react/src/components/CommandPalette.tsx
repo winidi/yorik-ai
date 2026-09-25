@@ -187,7 +187,7 @@ export function CommandPalette() {
                 const meta = SOURCE_META[source];
                 return (
                   <div key={source}>
-                    <div className="px-4 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-2 bg-muted/30">
+                    <div className="px-4 py-1.5 text-2xs text-muted-foreground font-semibold flex items-center gap-2 bg-muted/30">
                       <meta.icon className={cn("w-3 h-3", meta.tint)} />
                       {meta.label} · {hits.length}
                     </div>
@@ -221,7 +221,7 @@ export function CommandPalette() {
                               <div className="text-xs text-muted-foreground truncate mt-0.5">{hit.snippet}</div>
                             )}
                           </div>
-                          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 mt-1">
+                          <span className="text-2xs text-muted-foreground tabular-nums shrink-0 mt-1">
                             {formatTs(hit.timestamp)}
                           </span>
                           {active && (
@@ -237,7 +237,7 @@ export function CommandPalette() {
           )}
         </div>
 
-        <div className="px-4 py-2 border-t border-border text-[10px] text-muted-foreground flex items-center gap-3">
+        <div className="px-4 py-2 border-t border-border text-2xs text-muted-foreground flex items-center gap-3">
           <span>↑↓ navigate</span>
           <span>↵ open</span>
           <span>ESC close</span>

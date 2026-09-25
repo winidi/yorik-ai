@@ -128,7 +128,7 @@ export function SettingsApp() {
           </div>
           <div>
             <div className="font-semibold leading-none">Settings</div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+            <div className="text-2xs text-muted-foreground mt-0.5">
               {auth.user.name} · {auth.user.role}
             </div>
           </div>
@@ -715,7 +715,7 @@ function ApiTokensCard({ toast }: {
             <li key={t.id} className="py-2 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="text-sm truncate">{t.name}</div>
-                <div className="text-[11px] text-muted-foreground font-mono">
+                <div className="text-xs text-muted-foreground font-mono">
                   {t.prefix}
                   <span className="font-sans"> · created {t.created_at?.slice(0, 10) ?? "?"}
                     {t.last_used_at ? ` · last used ${t.last_used_at.slice(0, 16)}` : " · never used"}
@@ -736,11 +736,11 @@ function ApiTokensCard({ toast }: {
         </ul>
       )}
       {live.length === 0 && !fresh && (
-        <p className="mt-3 text-[11px] text-muted-foreground">No tokens yet.</p>
+        <p className="mt-3 text-xs text-muted-foreground">No tokens yet.</p>
       )}
       {isAdmin && household.some(t => t.owner_id !== String(auth.user?.id)) && (
         <div className="mt-4 pt-3 border-t border-border">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">
+          <div className="text-xs text-muted-foreground mb-1">
             Other members' tokens
           </div>
           <ul className="divide-y divide-border">
@@ -748,7 +748,7 @@ function ApiTokensCard({ toast }: {
               <li key={t.id} className="py-2 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="text-sm truncate">{t.owner}: {t.name}</div>
-                  <div className="text-[11px] text-muted-foreground font-mono">
+                  <div className="text-xs text-muted-foreground font-mono">
                     {t.prefix}
                     <span className="font-sans">
                       {t.last_used_at ? ` · last used ${t.last_used_at.slice(0, 16)}` : " · never used"}
@@ -845,7 +845,7 @@ function ChangePasswordCard({ toast }: {
           />
         </Field>
         {newTooShort && (
-          <p className="text-[11px] text-amber-600 dark:text-amber-500 -mt-1.5">
+          <p className="text-xs text-amber-600 dark:text-amber-500 -mt-1.5">
             Too short — needs ≥8 characters.
           </p>
         )}
@@ -860,7 +860,7 @@ function ChangePasswordCard({ toast }: {
           />
         </Field>
         {mismatch && (
-          <p className="text-[11px] text-amber-600 dark:text-amber-500 -mt-1.5">
+          <p className="text-xs text-amber-600 dark:text-amber-500 -mt-1.5">
             Doesn't match the new password above.
           </p>
         )}
@@ -977,7 +977,7 @@ function KioskPinCard({ toast }: {
           <button
             onClick={clear}
             disabled={saving}
-            className="text-[11px] underline hover:no-underline disabled:opacity-50"
+            className="text-xs underline hover:no-underline disabled:opacity-50"
           >
             Clear PIN
           </button>
@@ -1010,12 +1010,12 @@ function KioskPinCard({ toast }: {
           />
         </Field>
         {pin.length > 0 && pin.length < 4 && (
-          <p className="text-[11px] text-amber-600 dark:text-amber-500 -mt-1.5">
+          <p className="text-xs text-amber-600 dark:text-amber-500 -mt-1.5">
             PINs are exactly 4 digits.
           </p>
         )}
         {pin2.length === 4 && !matches && (
-          <p className="text-[11px] text-amber-600 dark:text-amber-500 -mt-1.5">
+          <p className="text-xs text-amber-600 dark:text-amber-500 -mt-1.5">
             PINs don't match.
           </p>
         )}
@@ -1221,7 +1221,7 @@ function VoiceEnrollmentCard({ toast }: {
           <button
             onClick={clearEnrollment}
             disabled={uploading}
-            className="text-[11px] underline hover:no-underline disabled:opacity-50"
+            className="text-xs underline hover:no-underline disabled:opacity-50"
           >
             Clear
           </button>
@@ -1564,12 +1564,12 @@ function STTConfigCard({ toast }: {
                 <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <span className="font-medium text-sm">{b.label}</span>
                 {b.requires_key && (
-                  <span className="text-[10px] text-muted-foreground font-mono">
+                  <span className="text-2xs text-muted-foreground font-mono">
                     API key
                   </span>
                 )}
               </div>
-              <div className="text-[11px] text-muted-foreground mt-1 ml-6">
+              <div className="text-xs text-muted-foreground mt-1 ml-6">
                 {b.blurb}
               </div>
             </button>
@@ -1607,12 +1607,12 @@ function STTConfigCard({ toast }: {
                       ? <Loader2 className="w-4 h-4 animate-spin shrink-0" />
                       : <div className="w-4 h-4 rounded-full border border-border shrink-0" />}
                     <span className="font-medium text-sm">{v.label}</span>
-                    <span className="text-[10px] text-muted-foreground font-mono">~{v.size_mb} MB</span>
+                    <span className="text-2xs text-muted-foreground font-mono">~{v.size_mb} MB</span>
                     {v.installed
-                      ? <span className="text-[10px] text-emerald-600">downloaded</span>
-                      : <span className="text-[10px] text-amber-600">not downloaded</span>}
+                      ? <span className="text-2xs text-emerald-600">downloaded</span>
+                      : <span className="text-2xs text-amber-600">not downloaded</span>}
                   </div>
-                  <div className="text-[11px] text-muted-foreground mt-1 ml-6">{v.blurb}</div>
+                  <div className="text-xs text-muted-foreground mt-1 ml-6">{v.blurb}</div>
                 </button>
                 {!v.installed && (
                   <button
@@ -1629,7 +1629,7 @@ function STTConfigCard({ toast }: {
             );
           })}
           {parakeet.download.state === "error" && (
-            <p className="text-[11px] text-red-600">{parakeet.download.message}</p>
+            <p className="text-xs text-red-600">{parakeet.download.message}</p>
           )}
         </div>
       )}
@@ -1639,14 +1639,14 @@ function STTConfigCard({ toast }: {
         <div className="space-y-2.5 mb-4 border border-border rounded-md p-3 bg-muted/30">
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Audio is uploaded to <span className="font-mono">{currentBackendMeta.label}</span> for transcription.
               Yorik falls back to local Whisper automatically if the cloud is unreachable.
             </p>
           </div>
 
           <div>
-            <label className="block text-[11px] text-muted-foreground mb-1">Endpoint URL</label>
+            <label className="block text-xs text-muted-foreground mb-1">Endpoint URL</label>
             <input
               type="text"
               value={url}
@@ -1661,7 +1661,7 @@ function STTConfigCard({ toast }: {
           </div>
 
           <div>
-            <label className="block text-[11px] text-muted-foreground mb-1">Model</label>
+            <label className="block text-xs text-muted-foreground mb-1">Model</label>
             <input
               type="text"
               value={modelName}
@@ -1672,7 +1672,7 @@ function STTConfigCard({ toast }: {
           </div>
 
           <div>
-            <label className="block text-[11px] text-muted-foreground mb-1">
+            <label className="block text-xs text-muted-foreground mb-1">
               API key {apiKeySet && !apiKeyInput && (
                 <span className="text-emerald-600 font-mono">— saved</span>
               )}
@@ -1720,7 +1720,7 @@ function STTConfigCard({ toast }: {
           <HardDrive className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
           <div className="flex-1">
             <div className="text-xs font-medium">Local Whisper model</div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               {backend !== "whisper"
                 ? "Only used when Parakeet is not available. Bigger = better fallback quality."
                 : "Bigger = more accurate, slower, larger download. Switching downloads the new model on the next voice request."}
@@ -1752,13 +1752,13 @@ function STTConfigCard({ toast }: {
                       ? <Loader2 className="w-4 h-4 animate-spin shrink-0" />
                       : <div className="w-4 h-4 rounded-full border border-border shrink-0" />}
                     <span className="font-medium text-sm">{m.label}</span>
-                    <span className="text-[10px] text-muted-foreground font-mono">{m.id}</span>
+                    <span className="text-2xs text-muted-foreground font-mono">{m.id}</span>
                   </div>
-                  <div className="text-[10px] text-muted-foreground text-right tabular-nums shrink-0">
+                  <div className="text-2xs text-muted-foreground text-right tabular-nums shrink-0">
                     ~{m.size_mb} MB · {m.ms_short < 1000 ? `${m.ms_short}ms` : `${(m.ms_short/1000).toFixed(1)}s`}
                   </div>
                 </div>
-                <div className="text-[11px] text-muted-foreground mt-1 ml-6">{m.blurb}</div>
+                <div className="text-xs text-muted-foreground mt-1 ml-6">{m.blurb}</div>
               </button>
             );
           })}
@@ -2242,7 +2242,7 @@ function SuggestionEngineCard({ toast }: {
       </div>
       {enabled && (
         <div className="mt-4 pt-3 border-t border-border space-y-2">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+          <div className="text-xs text-muted-foreground font-medium">
             Sources
           </div>
           {KNOWN_SOURCES.map((src) => (
@@ -2407,7 +2407,7 @@ function DefaultDocVisibilityChips({ toast }: {
             <div className="text-sm font-medium flex items-center gap-1.5">
               <span>{opt.emoji}</span> {opt.label}
             </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">{opt.desc}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
           </button>
         ))}
       </div>
@@ -2737,7 +2737,7 @@ function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | 
             </span>
           </label>
         </div>
-        <p className="text-[11px] text-muted-foreground mt-2">Changing the model rebuilds the index in the background.</p>
+        <p className="text-xs text-muted-foreground mt-2">Changing the model rebuilds the index in the background.</p>
 
         <div className="mt-4 flex items-baseline justify-between">
           <div className="text-sm font-medium tabular-nums">
@@ -2749,7 +2749,7 @@ function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | 
           <div className={cn("h-full rounded-full transition-all", pct === 100 ? "bg-emerald-500" : "bg-violet-500")}
                style={{ width: `${pct}%` }} />
         </div>
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground tabular-nums">
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground tabular-nums">
           {st.sources.map(x => (
             <span key={x.source}>{SEARCH_SOURCE_LABEL[x.source] || x.source} {x.indexed.toLocaleString()}/{x.total.toLocaleString()}</span>
           ))}
@@ -3012,7 +3012,7 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
               Reconciler hasn't reported yet. It registers itself on first run (boot + every 6h).
             </p>
           )}
-          <p className="text-[11px] text-muted-foreground mt-3">
+          <p className="text-xs text-muted-foreground mt-3">
             Runs every 6 hours. Walks Paperless, ingests + embeds any new docs. Failures are surfaced here AND in /api/dashboard/workers.
           </p>
         </Card>
@@ -3038,7 +3038,7 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
             {reindexing ? "Queuing…" : "Reindex all Paperless documents"}
           </button>
           {!reachable && (
-            <p className="text-[11px] text-amber-600 mt-2">Embedder needs to be reachable first.</p>
+            <p className="text-xs text-amber-600 mt-2">Embedder needs to be reachable first.</p>
           )}
         </Card>
 
@@ -3066,11 +3066,11 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
                 </span>
               </div>
               {status.autotagger.detail && (
-                <div className="font-mono text-[11px] text-foreground/80">{status.autotagger.detail}</div>
+                <div className="font-mono text-xs text-foreground/80">{status.autotagger.detail}</div>
               )}
             </div>
           ) : (
-            <p className="text-[11px] text-muted-foreground mb-3 italic">
+            <p className="text-xs text-muted-foreground mb-3 italic">
               Autotagger hasn't run yet. Click below to start the first pass.
             </p>
           )}
@@ -3118,11 +3118,11 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
               </button>
             )}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-2">
+          <p className="text-xs text-muted-foreground mt-2">
             ~30–90 min for 2500 docs on a local LLM. First button skips docs that already
             carry a taxonomy tag; second forces a full re-run.
           </p>
-          <p className="text-[11px] text-muted-foreground mt-1 inline-flex items-start gap-1.5">
+          <p className="text-xs text-muted-foreground mt-1 inline-flex items-start gap-1.5">
             <Info className="w-3 h-3 mt-0.5 shrink-0 opacity-70" />
             <span>
               The job runs on the server, not in your browser — safe to close this page or shut down your laptop's lid.
@@ -3144,7 +3144,7 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
                 <span
                   key={tc.id}
                   title={`${tc.label_de} / ${tc.label_en} · category: ${tc.category_id}`}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20"
                 >
                   <span>{tc.label_de}</span>
                   <span className="opacity-60">·</span>
@@ -3153,7 +3153,7 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
               ))}
             </div>
             {status.taxonomy_tag_counts.length > 80 && (
-              <p className="text-[11px] text-muted-foreground mt-2">
+              <p className="text-xs text-muted-foreground mt-2">
                 +{status.taxonomy_tag_counts.length - 80} more not shown.
               </p>
             )}
@@ -3332,10 +3332,10 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
         <p className="text-xs text-muted-foreground mt-3">
           <strong>Don't have one yet?</strong> Fastest path is Ollama:
         </p>
-        <pre className="text-[11px] bg-muted/40 border border-border rounded-md px-3 py-2 mt-1 font-mono whitespace-pre overflow-x-auto">{`curl -fsSL https://ollama.com/install.sh | sh
+        <pre className="text-xs bg-muted/40 border border-border rounded-md px-3 py-2 mt-1 font-mono whitespace-pre overflow-x-auto">{`curl -fsSL https://ollama.com/install.sh | sh
 ollama serve &`}</pre>
         <p className="text-xs text-muted-foreground mt-2">
-          Then <code className="font-mono text-[11px]">ollama pull</code> a
+          Then <code className="font-mono text-xs">ollama pull</code> a
           tool-calling chat model (Yorik is tested with Qwen 3.5 9B,
           standard and MTP variants), click <strong>Scan now</strong> below,
           and pick the endpoint.
@@ -3363,7 +3363,7 @@ ollama serve &`}</pre>
                 </a>
                 <button
                   onClick={() => setJustConnected(false)}
-                  className="text-[11px] text-muted-foreground hover:text-foreground transition"
+                  className="text-xs text-muted-foreground hover:text-foreground transition"
                 >
                   Dismiss
                 </button>
@@ -3394,11 +3394,11 @@ ollama serve &`}</pre>
                   ? <span className="inline-flex items-center gap-1 text-emerald-600 text-xs"><CheckCircle2 className="w-3.5 h-3.5" /> reachable</span>
                   : <span className="inline-flex items-center gap-1 text-red-500 text-xs"><AlertCircle className="w-3.5 h-3.5" /> offline</span>}
                 {!cfg.reachable && cfg.reason && (
-                  <div className="text-[10px] text-muted-foreground mt-0.5">{cfg.reason}</div>
+                  <div className="text-2xs text-muted-foreground mt-0.5">{cfg.reason}</div>
                 )}
                 <button
                   onClick={refresh}
-                  className="text-[10px] text-muted-foreground hover:text-foreground transition mt-1 inline-flex items-center gap-1"
+                  className="text-2xs text-muted-foreground hover:text-foreground transition mt-1 inline-flex items-center gap-1"
                 >
                   <RefreshCw className="w-2.5 h-2.5" /> Re-check
                 </button>
@@ -3440,8 +3440,8 @@ ollama serve &`}</pre>
                         <span className="text-muted-foreground font-mono truncate">{c.base_url}</span>
                       </div>
                       {c.ok
-                        ? <span className="text-[10px] text-emerald-600">{c.models.length} model{c.models.length === 1 ? "" : "s"}</span>
-                        : <span className="text-[10px] text-muted-foreground">{c.reason}</span>}
+                        ? <span className="text-2xs text-emerald-600">{c.models.length} model{c.models.length === 1 ? "" : "s"}</span>
+                        : <span className="text-2xs text-muted-foreground">{c.reason}</span>}
                     </div>
                     {c.ok && c.models.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
@@ -3449,7 +3449,7 @@ ollama serve &`}</pre>
                           <button
                             key={m}
                             onClick={() => useCandidate(c, m)}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-card border border-border hover:border-blue-500/40 font-mono"
+                            className="text-2xs px-1.5 py-0.5 rounded bg-card border border-border hover:border-blue-500/40 font-mono"
                             title={`Use ${m} via ${c.label}`}
                           >
                             {m}
@@ -3528,7 +3528,7 @@ ollama serve &`}</pre>
                   />
                 )}
               </Field>
-              <div className="text-[10px] text-muted-foreground mt-1">
+              <div className="text-2xs text-muted-foreground mt-1">
                 Test the endpoint first to populate the dropdown from its
                 served-model list. Or type a model id directly if you know it.
               </div>
@@ -3570,7 +3570,7 @@ ollama serve &`}</pre>
                   )}
                 </div>
               </Field>
-              <div className="text-[10px] text-muted-foreground mt-1">
+              <div className="text-2xs text-muted-foreground mt-1">
                 Local servers (Ollama, llama-swap, LM Studio, vLLM) don't
                 need a key. Required for OpenAI / Anthropic / similar cloud
                 endpoints — prompts and chat content WILL leave the machine
@@ -3630,7 +3630,7 @@ ollama serve &`}</pre>
 
           <STTConfigCard toast={toast} />
 
-          <div className="text-[11px] text-muted-foreground leading-relaxed">
+          <div className="text-xs text-muted-foreground leading-relaxed">
             <strong className="text-foreground/70">Tips:</strong> Ollama serves at <code>http://127.0.0.1:11434/v1</code>.
             LM Studio at <code>http://127.0.0.1:1234/v1</code>. vLLM is whatever <code>--port</code> you started it with.
             Whichever backend, it needs to expose an OpenAI-compatible
@@ -3805,9 +3805,9 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
 
       <Card title="Got an idea for a new skill?">
         <p className="text-xs text-muted-foreground mb-2">
-          A skill is two files in <code className="font-mono text-[11px]">backend/skills/</code>.
+          A skill is two files in <code className="font-mono text-xs">backend/skills/</code>.
           ~50 lines. Scaffold one with{" "}
-          <code className="font-mono text-[11px]">bash scripts/new-skill.sh &lt;name&gt;</code>{" "}
+          <code className="font-mono text-xs">bash scripts/new-skill.sh &lt;name&gt;</code>{" "}
           then edit the two files. After backend restart, the LLM picks it up automatically.
         </p>
         <a
@@ -3844,11 +3844,11 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
                 >
                   <ArrowDownIcon open={!catCollapsed} />
                   <span className="font-semibold text-sm">{cat}</span>
-                  <span className="text-[10px] tabular-nums text-muted-foreground">
+                  <span className="text-2xs tabular-nums text-muted-foreground">
                     {enabledCount}/{members.length}
                   </span>
                   {!catFullyEnabled && catEnabled && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 uppercase tracking-wider">
+                    <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600">
                       partial
                     </span>
                   )}
@@ -3892,17 +3892,17 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="font-mono text-sm">{skill.name}</span>
                                 {skill.side_effects && skill.side_effects !== "none" && (
-                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 uppercase tracking-wider">
+                                  <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600">
                                     mutates
                                   </span>
                                 )}
                                 {skill.tags?.includes("free") && (
-                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 uppercase tracking-wider">
+                                  <span className="text-2xs px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600">
                                     free
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-3 text-[10px] tabular-nums text-muted-foreground shrink-0">
+                              <div className="flex items-center gap-3 text-2xs tabular-nums text-muted-foreground shrink-0">
                                 {stat ? (
                                   <>
                                     <span>{stat.total} call{stat.total === 1 ? "" : "s"}</span>
@@ -3945,16 +3945,16 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
                           <div className="px-3 pb-3 pt-1 border-t border-border bg-muted/10 text-xs space-y-2.5">
                             {skill.when_to_use && (
                               <div>
-                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">When to use</div>
-                                <div className="whitespace-pre-wrap text-[11px]">{skill.when_to_use.trim()}</div>
+                                <div className="text-2xs text-muted-foreground font-semibold mb-0.5">When to use</div>
+                                <div className="whitespace-pre-wrap text-xs">{skill.when_to_use.trim()}</div>
                               </div>
                             )}
                             {skill.inputs && Object.keys(skill.inputs).length > 0 && (
                               <div>
-                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-0.5">Inputs</div>
+                                <div className="text-2xs text-muted-foreground font-semibold mb-0.5">Inputs</div>
                                 <div className="space-y-0.5">
                                   {Object.entries(skill.inputs).map(([key, spec]) => (
-                                    <div key={key} className="text-[11px]">
+                                    <div key={key} className="text-xs">
                                       <span className="font-mono">{key}</span>
                                       {spec.required && <span className="text-red-500"> *</span>}
                                       {spec.type && <span className="text-muted-foreground"> · {spec.type}</span>}
@@ -3967,13 +3967,13 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
                               </div>
                             )}
                             {skill.permissions && (
-                              <div className="text-[11px]">
+                              <div className="text-xs">
                                 <span className="text-muted-foreground">Allowed roles: </span>
                                 <span className="font-mono">{skill.permissions.join(", ")}</span>
                               </div>
                             )}
                             {stat?.last_used && (
-                              <div className="text-[10px] text-muted-foreground">
+                              <div className="text-2xs text-muted-foreground">
                                 Last used: {new Date(stat.last_used).toLocaleString()}
                               </div>
                             )}
@@ -4083,7 +4083,7 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
                 <Sparkles className="w-4 h-4 text-violet-500" />
               </div>
               <div className="font-mono text-sm">{data.current_model}</div>
-              <div className="ml-auto text-[11px] text-muted-foreground">
+              <div className="ml-auto text-xs text-muted-foreground">
                 Switch models in <code>HOMEOS_MODEL</code> env var
               </div>
             </div>
@@ -4101,13 +4101,13 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
                     <div key={i} className="py-2.5 flex items-center gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{s.skill_id}</div>
-                        <div className="text-[10px] text-muted-foreground font-mono">
+                        <div className="text-2xs text-muted-foreground font-mono">
                           {s.llm_model || "(no model tag)"}
                           {s.avg_latency_ms && ` · ~${Math.round(s.avg_latency_ms)}ms`}
                         </div>
                       </div>
                       <div className={cn("font-mono text-sm font-semibold", color)}>{rate}%</div>
-                      <div className="text-[11px] text-muted-foreground tabular-nums w-16 text-right">
+                      <div className="text-xs text-muted-foreground tabular-nums w-16 text-right">
                         {s.successes}/{s.n}
                       </div>
                     </div>
@@ -4146,7 +4146,7 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
                 {data.templates.map((t, i) => (
                   <div key={i} className="flex items-center gap-3 text-sm">
                     <div className="font-mono flex-1 min-w-0 truncate">{t.template_id}</div>
-                    <span className="text-[10px] text-muted-foreground">{t.llm_model || "—"}</span>
+                    <span className="text-2xs text-muted-foreground">{t.llm_model || "—"}</span>
                     <span className="inline-flex items-center gap-0.5 text-emerald-500"><ThumbsUp className="w-3 h-3" />{t.up}</span>
                     <span className="inline-flex items-center gap-0.5 text-red-500"><ThumbsDown className="w-3 h-3" />{t.down}</span>
                   </div>
@@ -4162,9 +4162,9 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
                   <div key={i} className="text-xs bg-red-500/5 border border-red-500/15 rounded-md p-2.5">
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="font-mono font-medium text-red-600">{f.skill_id}</span>
-                      <span className="text-[10px] text-muted-foreground">{f.created_at}</span>
+                      <span className="text-2xs text-muted-foreground">{f.created_at}</span>
                     </div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5 font-mono leading-snug line-clamp-2">{f.error}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5 font-mono leading-snug line-clamp-2">{f.error}</div>
                   </div>
                 ))}
               </div>
@@ -4352,17 +4352,17 @@ function UserRow({ user: u, isSelf, onToggleDisabled, onChangeRole, onResetPassw
         <div className="flex items-center gap-2">
           <span className="font-semibold truncate">{u.name}</span>
           {isSelf && (
-            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+            <span className="text-2xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
               you
             </span>
           )}
           {u.disabled && (
-            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400">
+            <span className="text-2xs px-1.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400">
               disabled
             </span>
           )}
           {!u.has_password && (
-            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+            <span className="text-2xs px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
               no password
             </span>
           )}
@@ -4528,7 +4528,7 @@ function AddUserModal({ onClose, onCreated, toast }: {
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+            <div className="text-xs text-muted-foreground mt-1 leading-relaxed">
               Share this with the user after they're added. They can change it themselves later.
             </div>
           </Field>
@@ -4549,7 +4549,7 @@ function AddUserModal({ onClose, onCreated, toast }: {
               />
               <span>Auto-create matching Immich account</span>
             </label>
-            <div className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+            <div className="text-xs text-muted-foreground mt-1 leading-relaxed">
               Uses the same email + password. Skips silently if Paperless/Immich isn't configured.
             </div>
           </div>
@@ -4621,7 +4621,7 @@ function ResetPasswordModal({ user, onClose, onDone, toast }: {
               </button>
             </div>
           </Field>
-          <div className="text-[11px] text-muted-foreground leading-relaxed">
+          <div className="text-xs text-muted-foreground leading-relaxed">
             All of {user.name}'s active sessions will be revoked. They'll need to log in again with the new password.
           </div>
         </div>
@@ -4697,7 +4697,7 @@ You can change the password once you're in (Settings → Profile).`;
             <Copy className="w-3.5 h-3.5" />
             Copy ready-to-send message
           </button>
-          <div className="text-[11px] text-muted-foreground leading-relaxed text-center">
+          <div className="text-xs text-muted-foreground leading-relaxed text-center">
             The password is shown only once. Closing this dialog forgets it; you'd have to reset.
           </div>
         </div>
@@ -4712,7 +4712,7 @@ function CredRow({ label, value, onCopy, mono }: {
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold w-16 shrink-0">{label}</span>
+      <span className="text-2xs text-muted-foreground font-semibold w-16 shrink-0">{label}</span>
       <span className={cn("flex-1 truncate", mono && "font-mono")}>{value}</span>
       <button onClick={onCopy} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition" title={`Copy ${label}`}>
         <Copy className="w-3 h-3" />
@@ -4969,7 +4969,7 @@ function MarketplaceTab({ toast }: { toast: (text: string, kind?: "info" | "succ
                     )}
                     {verified && (
                       <span
-                        className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                        className="inline-flex items-center gap-1 text-2xs font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                         title="First-party app, reviewed by Yorik maintainers"
                       >
                         <BadgeCheck className="w-3 h-3" />
@@ -4983,7 +4983,7 @@ function MarketplaceTab({ toast }: { toast: (text: string, kind?: "info" | "succ
                   {a.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                       {a.tags.map(t => (
-                        <span key={t} className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                        <span key={t} className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                           {t}
                         </span>
                       ))}
@@ -5089,7 +5089,7 @@ function InstallConfirmModal({ app, verified, onClose, onConfirm }: {
                 <span className="font-semibold">{app.name}</span>
                 <span className="text-xs text-muted-foreground">v{app.version}</span>
                 {verified && (
-                  <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                  <span className="inline-flex items-center gap-1 text-2xs font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
                     <BadgeCheck className="w-3 h-3" />
                     Verified
                   </span>
@@ -5103,7 +5103,7 @@ function InstallConfirmModal({ app, verified, onClose, onConfirm }: {
           </div>
 
           <div className="border-t border-border pt-4">
-            <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
+            <div className="text-2xs font-semibold text-muted-foreground mb-2">
               What this app can access
             </div>
             <ul className="space-y-1.5 text-[13px]">
@@ -5111,7 +5111,7 @@ function InstallConfirmModal({ app, verified, onClose, onConfirm }: {
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                 <span>
                   Its own private database
-                  <span className="font-mono text-[11px] text-muted-foreground"> (data/apps/{app.id}/data.db)</span>
+                  <span className="font-mono text-xs text-muted-foreground"> (data/apps/{app.id}/data.db)</span>
                 </span>
               </li>
               {tables.length > 0 && tables.map((t, i) => (
@@ -5119,14 +5119,14 @@ function InstallConfirmModal({ app, verified, onClose, onConfirm }: {
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                   <span>
                     <strong>{t.access || "read"}</strong> access to
-                    <span className="font-mono text-[11px] ml-1">{t.db}.{t.table}</span>
+                    <span className="font-mono text-xs ml-1">{t.db}.{t.table}</span>
                   </span>
                 </li>
               ))}
               {connectors.length > 0 && connectors.map((c, i) => (
                 <li key={i} className="flex items-start gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                  <span>Calls the <span className="font-mono text-[11px]">{c}</span> connector</span>
+                  <span>Calls the <span className="font-mono text-xs">{c}</span> connector</span>
                 </li>
               ))}
               {selfContained && (
@@ -5139,10 +5139,10 @@ function InstallConfirmModal({ app, verified, onClose, onConfirm }: {
           </div>
 
           <div className="border-t border-border pt-4">
-            <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
+            <div className="text-2xs font-semibold text-muted-foreground mb-2">
               Sandboxed away from
             </div>
-            <ul className="space-y-1 text-[12.5px] text-muted-foreground">
+            <ul className="space-y-1 text-[13px] text-muted-foreground">
               {tables.length === 0 && (
                 <li className="flex items-center gap-2">
                   <Lock className="w-3 h-3 shrink-0" />
@@ -5151,7 +5151,7 @@ function InstallConfirmModal({ app, verified, onClose, onConfirm }: {
               )}
               <li className="flex items-center gap-2">
                 <Globe className="w-3 h-3 shrink-0" />
-                Outbound network — the iframe has CSP <code className="font-mono text-[10px]">connect-src 'none'</code>
+                Outbound network — the iframe has CSP <code className="font-mono text-2xs">connect-src 'none'</code>
               </li>
               <li className="flex items-center gap-2">
                 <Lock className="w-3 h-3 shrink-0" />
@@ -5205,11 +5205,11 @@ function UninstallConfirmModal({ app, onClose, onConfirm }: {
         </header>
         <div className="p-5 space-y-4">
           <div className="text-sm text-muted-foreground leading-relaxed">
-            This removes <span className="font-mono text-[12px]">{app.id}</span> and
+            This removes <span className="font-mono text-xs">{app.id}</span> and
             <strong className="text-foreground"> wipes its database</strong> at
-            <span className="font-mono text-[11px]"> data/apps/{app.id}/</span>.
+            <span className="font-mono text-xs"> data/apps/{app.id}/</span>.
           </div>
-          <div className="text-[12px] text-muted-foreground">
+          <div className="text-xs text-muted-foreground">
             You can reinstall from the Marketplace at any time, but the data will not return.
           </div>
           <div className="flex gap-2 pt-2">
@@ -5390,7 +5390,7 @@ function MapsConnectorCard() {
         </div>
         {configured !== null && (
           <span className={cn(
-            "text-[11px] px-2 py-0.5 rounded shrink-0",
+            "text-xs px-2 py-0.5 rounded shrink-0",
             configured
               ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
               : "bg-muted text-muted-foreground"
@@ -5583,7 +5583,7 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
           German e-invoicing). Each one declares its own pip dependencies
           so the base install stays lean for users who don't need them.
         </p>
-        <p className="text-[11px] text-amber-600 mt-2 flex items-start gap-1.5">
+        <p className="text-xs text-amber-600 mt-2 flex items-start gap-1.5">
           <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
           After installing dependencies, the Yorik backend must be
           restarted (rerun <code className="font-mono">bash start.sh</code>)
@@ -5612,33 +5612,33 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-medium text-sm">{r.name}</h3>
-                    <span className="text-[10px] text-muted-foreground font-mono">v{r.version}</span>
+                    <span className="text-2xs text-muted-foreground font-mono">v{r.version}</span>
                     {r.country && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">{r.country}</span>
+                      <span className="text-2xs px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">{r.country}</span>
                     )}
                     {r.loaded ? (
-                      <span className="text-[10px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                      <span className="text-2xs inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
                         <CheckCircle2 className="w-2.5 h-2.5" /> active
                       </span>
                     ) : r.deps.all_met ? (
-                      <span className="text-[10px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                      <span className="text-2xs inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
                         <AlertCircle className="w-2.5 h-2.5" /> installed, restart pending
                       </span>
                     ) : (
-                      <span className="text-[10px] inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+                      <span className="text-2xs inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
                         <X className="w-2.5 h-2.5" /> dependencies not installed
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1.5">{r.description}</p>
                   {r.python_requirements.length > 0 && (
-                    <div className="mt-2 text-[10px] text-muted-foreground">
+                    <div className="mt-2 text-2xs text-muted-foreground">
                       <span className="font-medium">Python deps:</span>{" "}
                       <span className="font-mono">{r.python_requirements.join(", ")}</span>
                     </div>
                   )}
                   {r.errors.length > 0 && (
-                    <div className="mt-2 text-[10px] text-rose-600">
+                    <div className="mt-2 text-2xs text-rose-600">
                       <span className="font-medium">Errors:</span> {r.errors.join(" / ")}
                     </div>
                   )}
@@ -5647,7 +5647,7 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
                       href={r.docs_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[10px] text-blue-500 hover:underline inline-flex items-center gap-1 mt-2"
+                      className="text-2xs text-blue-500 hover:underline inline-flex items-center gap-1 mt-2"
                     >
                       <ExternalLink className="w-2.5 h-2.5" /> Docs
                     </a>
@@ -5693,8 +5693,8 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
 
 function ExtField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[80px_1fr] gap-x-3 text-[11px]">
-      <div className="text-muted-foreground uppercase tracking-wider text-[10px] pt-0.5">{label}</div>
+    <div className="grid grid-cols-[80px_1fr] gap-x-3 text-xs">
+      <div className="text-muted-foreground text-2xs pt-0.5">{label}</div>
       <div>{children}</div>
     </div>
   );
@@ -5868,7 +5868,7 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
                         />
                         <span
                           className={cn(
-                            "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border shrink-0 mt-0.5",
+                            "inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-semibold border shrink-0 mt-0.5",
                             levelClasses(row.level),
                           )}
                         >
@@ -5876,10 +5876,10 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline gap-2 flex-wrap">
-                            <span className="font-mono text-[11px] text-muted-foreground tabular-nums shrink-0">
+                            <span className="font-mono text-xs text-muted-foreground tabular-nums shrink-0">
                               {row.ts.replace("T", " ")}
                             </span>
-                            <span className="font-mono text-[11px] text-muted-foreground truncate">
+                            <span className="font-mono text-xs text-muted-foreground truncate">
                               {row.logger}
                             </span>
                           </div>
@@ -5905,14 +5905,14 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
                               >
                                 <Copy className="w-3 h-3" />
                               </button>
-                              <span className="text-muted-foreground/70 text-[10px]">
+                              <span className="text-muted-foreground/70 text-2xs">
                                 {" — "}
                                 <code className="font-mono">grep corr={row.corr_id} data/logs/yorik.log</code>
                               </span>
                             </div>
                           )}
                           {row.traceback && (
-                            <pre className="bg-muted/40 border border-border rounded-md p-2 overflow-x-auto whitespace-pre text-[11px] leading-snug">
+                            <pre className="bg-muted/40 border border-border rounded-md p-2 overflow-x-auto whitespace-pre text-xs leading-snug">
                               {row.traceback}
                             </pre>
                           )}
@@ -5943,7 +5943,7 @@ const inputClass =
 function Card({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="bg-card border border-border rounded-xl p-5">
-      <h3 className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-3">{title}</h3>
+      <h3 className="text-xs font-semibold text-muted-foreground mb-3">{title}</h3>
       {children}
     </div>
   );
@@ -5952,7 +5952,7 @@ function Card({ title, children }: { title: React.ReactNode; children: React.Rea
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="text-[11px] text-muted-foreground mb-1">{label}</div>
+      <div className="text-xs text-muted-foreground mb-1">{label}</div>
       {children}
     </label>
   );
@@ -6131,7 +6131,7 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
       {/* Workspace kind */}
       {workspace && (
         <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Workspace</div>
+          <div className="text-xs text-muted-foreground font-semibold mb-2">Workspace</div>
           <div className="flex items-center gap-3">
             <div className="flex-1 min-w-0">
               <div className="font-medium text-base truncate">{workspace.name}</div>
@@ -6164,7 +6164,7 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
       <div className="grid md:grid-cols-[280px_1fr] gap-4">
         <div className="space-y-1">
           <div className="flex items-center justify-between mb-2">
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">Spaces</div>
+            <div className="text-xs text-muted-foreground font-semibold">Spaces</div>
             {isAdmin && (
               <button
                 onClick={() => setCreating(true)}
@@ -6189,7 +6189,7 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
               )} />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">{s.name}</div>
-                <div className="text-[10px] text-muted-foreground">
+                <div className="text-2xs text-muted-foreground">
                   {s.kind === "shared" ? `${s.members_count} member${s.members_count === 1 ? "" : "s"}` : "personal"}
                 </div>
               </div>
@@ -6225,7 +6225,7 @@ function CreateSpaceForm({ onCancel, onCreate }: { onCancel: () => void; onCreat
   const [slug, setSlug] = useState("");
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-3">New shared space</div>
+      <div className="text-xs text-muted-foreground font-semibold mb-3">New shared space</div>
       <div className="space-y-3">
         <div>
           <label className="text-xs text-muted-foreground">Name</label>
@@ -6245,7 +6245,7 @@ function CreateSpaceForm({ onCancel, onCreate }: { onCancel: () => void; onCreat
             placeholder="customers"
             className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono"
           />
-          <div className="text-[10px] text-muted-foreground mt-1">
+          <div className="text-2xs text-muted-foreground mt-1">
             Used by Paperless + Immich for the matching group / album name.
           </div>
         </div>
@@ -6291,7 +6291,7 @@ function SpaceDetailPanel({
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="text-base font-semibold">{detail.name}</div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
+          <div className="text-xs text-muted-foreground mt-0.5">
             {isPersonal ? "Personal space — visible only to its owner." :
               `Shared space${detail.slug ? ` · slug "${detail.slug}"` : ""} · ${detail.members.length} member${detail.members.length === 1 ? "" : "s"}`}
           </div>
@@ -6312,15 +6312,15 @@ function SpaceDetailPanel({
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium truncate">{m.name}</div>
-              <div className="text-[11px] text-muted-foreground truncate">
+              <div className="text-xs text-muted-foreground truncate">
                 {m.email}
                 {(m.paperless_user_id || m.immich_user_id) && (
-                  <span className="ml-2 text-[10px] uppercase tracking-wider">
+                  <span className="ml-2 text-2xs">
                     {m.paperless_user_id ? "· paperless ✓" : ""}{m.immich_user_id ? " · immich ✓" : ""}
                   </span>
                 )}
                 {!m.paperless_user_id && !m.immich_user_id && (
-                  <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  <span className="ml-2 text-2xs text-amber-600 dark:text-amber-400">
                     · no external accounts linked
                   </span>
                 )}
@@ -6346,7 +6346,7 @@ function SpaceDetailPanel({
                 </button>
               </>
             ) : (
-              <span className="text-xs text-muted-foreground uppercase tracking-wider">
+              <span className="text-xs text-muted-foreground">
                 {m.level}
               </span>
             )}
@@ -6473,7 +6473,7 @@ function InstalledAppsTab({ toast }: { toast: (text: string, kind?: "info" | "su
 
       {/* Install-from-path admin form */}
       <div className="mb-5 rounded-xl border border-border bg-card p-4">
-        <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
+        <div className="text-2xs font-semibold text-muted-foreground mb-2">
           Install from source directory
         </div>
         <div className="flex gap-2">
@@ -6576,13 +6576,13 @@ function InstalledAppUninstallConfirmModal({ app, onClose, onConfirm }: {
         </header>
         <div className="p-5 space-y-4">
           <div className="text-sm text-muted-foreground leading-relaxed">
-            This removes <span className="font-mono text-[12px]">{app.app_id}</span> and
+            This removes <span className="font-mono text-xs">{app.app_id}</span> and
             <strong className="text-foreground"> wipes its Postgres schema</strong>
-            {" "}<span className="font-mono text-[11px]">{app.owned_schema}</span>
+            {" "}<span className="font-mono text-xs">{app.owned_schema}</span>
             {" "}plus the data dir at
-            <span className="font-mono text-[11px]"> data/apps/{app.app_id}/</span>.
+            <span className="font-mono text-xs"> data/apps/{app.app_id}/</span>.
           </div>
-          <div className="text-[12px] text-muted-foreground">
+          <div className="text-xs text-muted-foreground">
             Reinstall is possible from the Marketplace, but the data does not come back.
           </div>
           <div className="flex gap-2 pt-2">
@@ -6625,7 +6625,7 @@ function InstalledAppCard({
             <span className="text-xs text-muted-foreground">
               v{app.manifest?.version}
             </span>
-            <span className="text-[10px] uppercase tracking-wider font-mono text-muted-foreground">
+            <span className="text-2xs font-mono text-muted-foreground">
               {app.app_id}
             </span>
           </div>
@@ -6652,14 +6652,14 @@ function InstalledAppCard({
         <PermFact
           label="Owned schema"
           value={
-            <span className="font-mono text-[11px]">{app.owned_schema}</span>
+            <span className="font-mono text-xs">{app.owned_schema}</span>
           }
         />
         <PermFact
           label="Tables"
           value={
             ownedTables.length > 0 ? (
-              <span className="font-mono text-[11px]">{ownedTables.join(", ")}</span>
+              <span className="font-mono text-xs">{ownedTables.join(", ")}</span>
             ) : <span className="text-muted-foreground">—</span>
           }
         />
@@ -6685,7 +6685,7 @@ function InstalledAppCard({
           <PermFact
             label="Realtime"
             value={
-              <span className="font-mono text-[11px]">{realtime.join(", ")}</span>
+              <span className="font-mono text-xs">{realtime.join(", ")}</span>
             }
           />
         )}
@@ -6693,7 +6693,7 @@ function InstalledAppCard({
           <PermFact
             label="Source"
             value={
-              <span className="font-mono text-[10px] text-muted-foreground break-all">
+              <span className="font-mono text-2xs text-muted-foreground break-all">
                 {app.source_dir}
               </span>
             }
@@ -6707,7 +6707,7 @@ function InstalledAppCard({
 function PermFact({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-0.5">
+      <div className="text-2xs font-semibold text-muted-foreground mb-0.5">
         {label}
       </div>
       <div>{value}</div>

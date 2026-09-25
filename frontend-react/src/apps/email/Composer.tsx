@@ -484,7 +484,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
       </div>
 
       {restoredHint && (
-        <div className="px-3 py-1.5 text-[11px] bg-emerald-500/[0.06] border-b border-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-between">
+        <div className="px-3 py-1.5 text-xs bg-emerald-500/[0.06] border-b border-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-between">
           <span>Restored your last draft.</span>
           <button
             onClick={() => { discardDraft(); }}
@@ -603,7 +603,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
       )}
 
       {dragOver && (
-        <div className="px-3 py-1.5 text-[11px] text-amber-700 dark:text-amber-400 text-center border-t border-amber-500/20 bg-amber-500/[0.05]">
+        <div className="px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400 text-center border-t border-amber-500/20 bg-amber-500/[0.05]">
           Drop to attach
         </div>
       )}
@@ -786,7 +786,7 @@ function AttachmentChip({ att, onOpen, onRemove }: {
         className="flex-1 min-w-0 text-left hover:underline"
       >
         <div className="truncate font-medium">{att.filename}</div>
-        <div className="text-[10px] text-muted-foreground">{humanSize(att.size)}</div>
+        <div className="text-2xs text-muted-foreground">{humanSize(att.size)}</div>
       </button>
       <button
         type="button"
@@ -912,7 +912,7 @@ function RecipientField({ label, value, onChange }: {
       </div>
       {open && suggestions.length > 0 && (
         <div className="absolute left-14 right-0 top-full mt-1 z-50 max-w-md rounded-md border border-border bg-popover shadow-lg overflow-hidden">
-          <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1 border-b border-border bg-muted/30">
+          <div className="px-3 py-1 text-2xs text-muted-foreground font-semibold flex items-center gap-1 border-b border-border bg-muted/30">
             <UsersRound className="w-2.5 h-2.5" /> Contacts matching "{partial}"
           </div>
           {suggestions.map((s, i) => (
@@ -928,7 +928,7 @@ function RecipientField({ label, value, onChange }: {
             >
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{s.display_name}</div>
-                <div className="text-[10px] text-muted-foreground truncate">{s.email}</div>
+                <div className="text-2xs text-muted-foreground truncate">{s.email}</div>
               </div>
             </button>
           ))}
@@ -1030,7 +1030,7 @@ export function NewEmailDraftPanel({
         className="w-full px-3 py-2 flex items-center gap-2 text-xs font-medium text-foreground/80 hover:bg-violet-500/[0.06] transition"
       >
         <Sparkles className="w-3.5 h-3.5 text-violet-500" />
-        <span className="uppercase tracking-wider">AI drafts</span>
+        <span className="">AI drafts</span>
         <span className="text-muted-foreground font-normal normal-case tracking-normal">
           {open
             ? "— pick a tone, describe the intent, get 3 suggestions"
@@ -1058,7 +1058,7 @@ export function NewEmailDraftPanel({
                   disabled={generating}
                   title={s.tone}
                   className={cn(
-                    "text-[11px] px-2.5 py-1 rounded-full transition disabled:opacity-50",
+                    "text-xs px-2.5 py-1 rounded-full transition disabled:opacity-50",
                     isActive ? tint.active : tint.idle,
                   )}
                 >
@@ -1091,7 +1091,7 @@ export function NewEmailDraftPanel({
               <button
                 type="button"
                 onClick={() => { setVariants([]); setErr(null); }}
-                className="text-[11px] text-muted-foreground hover:text-foreground transition px-1.5 py-1"
+                className="text-xs text-muted-foreground hover:text-foreground transition px-1.5 py-1"
               >
                 Discard
               </button>
@@ -1099,7 +1099,7 @@ export function NewEmailDraftPanel({
           </div>
 
           {err && (
-            <div className="text-[11px] text-rose-600 dark:text-rose-400 flex items-center gap-1">
+            <div className="text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1">
               <AlertCircle className="w-3 h-3" /> {err}
             </div>
           )}
@@ -1113,13 +1113,13 @@ export function NewEmailDraftPanel({
                   onClick={() => { onPick(v.text); setOpen(false); }}
                   className="text-left p-3 rounded-md bg-card border border-border hover:border-violet-500/60 hover:bg-accent transition group"
                 >
-                  <div className="text-[10px] uppercase tracking-wider font-semibold text-violet-500 mb-1.5">
+                  <div className="text-2xs font-semibold text-violet-500 mb-1.5">
                     {v.label}
                   </div>
                   <div className="text-xs text-foreground/90 line-clamp-6 group-hover:text-foreground whitespace-pre-line">
                     {v.text}
                   </div>
-                  <div className="text-[10px] text-muted-foreground mt-2 italic">
+                  <div className="text-2xs text-muted-foreground mt-2 italic">
                     Click to use this draft
                   </div>
                 </button>

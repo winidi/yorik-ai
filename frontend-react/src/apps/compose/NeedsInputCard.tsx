@@ -328,7 +328,7 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
               key={i}
               type="button"
               onClick={() => applySuggestion(s)}
-              className="inline-flex items-center gap-1.5 text-xs md:text-[11px] px-3 md:px-2.5 py-1.5 md:py-1 rounded-full border border-violet-500/30 bg-background hover:bg-violet-500/10 transition"
+              className="inline-flex items-center gap-1.5 text-xs md:text-xs px-3 md:px-2.5 py-1.5 md:py-1 rounded-full border border-violet-500/30 bg-background hover:bg-violet-500/10 transition"
               title={Object.entries(s.values).map(([k, v]) => `${k}: ${v}`).join("\n")}
             >
               <FileText className="w-3 h-3" />
@@ -350,7 +350,7 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
         <button
           type="button"
           onClick={() => setExtractOpen(o => !o)}
-          className="w-full px-2.5 py-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition"
+          className="w-full px-2.5 py-1.5 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition"
         >
           <ClipboardPaste className="w-3 h-3" />
           <span className="font-medium">Fill from text</span>
@@ -373,7 +373,7 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
                 type="button"
                 onClick={() => runExtract(false)}
                 disabled={extracting || !extractText.trim()}
-                className="h-9 md:h-7 px-3 md:px-2.5 rounded-md bg-violet-500 text-white text-xs md:text-[11px] font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
+                className="h-9 md:h-7 px-3 md:px-2.5 rounded-md bg-violet-500 text-white text-xs md:text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
               >
                 {extracting
                   ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -385,25 +385,25 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
                   type="button"
                   onClick={() => runExtract(true)}
                   disabled={extracting || !extractText.trim()}
-                  className="h-7 px-2 rounded-md text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50 flex items-center gap-1"
+                  className="h-7 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 flex items-center gap-1"
                   title="Also overwrite already-filled fields"
                 >
                   <RotateCcw className="w-3 h-3" /> Overwrite
                 </button>
               )}
               {lastFilledKeys.length > 0 && !extracting && (
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400">
+                <span className="text-2xs text-emerald-600 dark:text-emerald-400">
                   {lastFilledKeys.length} field{lastFilledKeys.length === 1 ? "" : "s"} filled
                 </span>
               )}
               {extractedOnce && lastFilledKeys.length === 0 && !extracting && (
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-2xs text-muted-foreground">
                   Nichts Passendes gefunden.
                 </span>
               )}
             </div>
             {extractError && (
-              <div className="text-[10px] text-rose-500">{extractError}</div>
+              <div className="text-2xs text-rose-500">{extractError}</div>
             )}
           </div>
         )}
@@ -451,7 +451,7 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
                   <button
                     type="button"
                     onClick={() => setPolishOpen(s => ({ ...s, [f.key]: !panelOpen }))}
-                    className="ml-auto inline-flex items-center gap-1 text-[10px] text-violet-500 hover:text-violet-600 transition"
+                    className="ml-auto inline-flex items-center gap-1 text-2xs text-violet-500 hover:text-violet-600 transition"
                     title="Yorik formuliert für mich aus Stichworten"
                   >
                     <Sparkles className="w-3 h-3" />
@@ -464,7 +464,7 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
                   multiple intent fields stay independent. */}
               {isIntent && panelOpen && (
                 <div className="rounded-md border border-violet-500/30 bg-violet-500/[0.04] p-2 space-y-2">
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="text-xs text-muted-foreground">
                     Was möchtest du schreiben? Stichworte reichen — Yorik macht den Rest.
                   </div>
                   <textarea
@@ -479,7 +479,7 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
                       type="button"
                       onClick={() => runPolish(f.key)}
                       disabled={busyP || !(intentText.trim() || (values[f.key] || "").trim())}
-                      className="h-7 px-2.5 rounded-md bg-violet-500 text-white text-[11px] font-medium hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
+                      className="h-7 px-2.5 rounded-md bg-violet-500 text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
                     >
                       {busyP
                         ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -487,13 +487,13 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
                       Yorik formuliert
                     </button>
                     {!intentText.trim() && (values[f.key] || "").trim() && (
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-2xs text-muted-foreground">
                         (verwendet was du schon getippt hast)
                       </span>
                     )}
                   </div>
                   {errP && (
-                    <div className="text-[10px] text-rose-500">{errP}</div>
+                    <div className="text-2xs text-rose-500">{errP}</div>
                   )}
                 </div>
               )}
@@ -515,7 +515,7 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
                 />
               )}
               {isLong && f.hint && (
-                <div className="text-[10px] text-muted-foreground/80 pl-0.5">{f.hint}</div>
+                <div className="text-2xs text-muted-foreground/80 pl-0.5">{f.hint}</div>
               )}
             </div>
           );
@@ -544,7 +544,7 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
           {action.save_to_contact && saveChecked ? "Save & continue" : "Submit"}
         </button>
         {!allValid && (
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             Required fields are missing or the format is invalid.
           </span>
         )}

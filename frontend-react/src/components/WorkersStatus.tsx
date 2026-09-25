@@ -87,10 +87,10 @@ export function WorkersStatus() {
 
   return (
     <section className="mb-8">
-      <h2 className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-3 flex items-center gap-2">
+      <h2 className="text-xs text-muted-foreground font-semibold mb-3 flex items-center gap-2">
         <Activity className="w-3 h-3" /> Background workers
         {allOk && (
-          <span className="text-[10px] normal-case tracking-normal text-emerald-500 font-normal">
+          <span className="text-2xs normal-case tracking-normal text-emerald-500 font-normal">
             · all {workers.length} healthy
           </span>
         )}
@@ -113,14 +113,14 @@ export function WorkersStatus() {
               <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{label}</div>
-                <div className="text-[10px] text-muted-foreground truncate">
+                <div className="text-2xs text-muted-foreground truncate">
                   {w.detail || (w.status === "starting" ? "starting…" : "—")}
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <SIcon className={cn("w-3.5 h-3.5", cls)} />
                 {w.last_heartbeat_age_s != null && (
-                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                  <span className="text-2xs text-muted-foreground tabular-nums">
                     {formatAge(w.last_heartbeat_age_s)}
                   </span>
                 )}

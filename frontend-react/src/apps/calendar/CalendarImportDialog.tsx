@@ -113,7 +113,7 @@ export function CalendarImportDialog({ calendars, onClose, onChanged }: {
               </div>
               {feeds.length > 0 && (
                 <div className="pt-2 border-t border-border space-y-1.5">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Abonniert</div>
+                  <div className="text-2xs text-muted-foreground font-semibold">Abonniert</div>
                   {feeds.map(f => (
                     <div key={f.id} className="flex items-center gap-2 text-xs">
                       <span className={cn("w-2 h-2 rounded-full shrink-0", f.last_status === "ok" ? "bg-emerald-500" : "bg-amber-500")} />

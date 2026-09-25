@@ -126,7 +126,7 @@ function PersonContent({ identifier }: { identifier: string }) {
           </div>
         )}
         {data.names_used.length > 1 && (
-          <div className="text-[10px] text-muted-foreground mt-1.5">
+          <div className="text-2xs text-muted-foreground mt-1.5">
             also known as: {data.names_used.filter(n => n !== data.primary_name).join(" · ")}
           </div>
         )}
@@ -144,7 +144,7 @@ function PersonContent({ identifier }: { identifier: string }) {
                 <div className="flex-1 min-w-0">
                   <div className="truncate">{f.label}</div>
                 </div>
-                <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                <span className="text-2xs text-muted-foreground tabular-nums shrink-0">
                   {formatWhen(f.ts)}
                 </span>
               </div>
@@ -165,7 +165,7 @@ function PersonContent({ identifier }: { identifier: string }) {
               <FileText className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
               <div className="flex-1 min-w-0">
                 <div className="truncate">{d.doc_title}</div>
-                {d.doc_date && <div className="text-[10px] text-muted-foreground">{d.doc_date}</div>}
+                {d.doc_date && <div className="text-2xs text-muted-foreground">{d.doc_date}</div>}
               </div>
             </a>
           ))}
@@ -180,7 +180,7 @@ function PersonContent({ identifier }: { identifier: string }) {
               <div className="flex-1 min-w-0">
                 <div className="truncate">{ev.title}</div>
                 {ev.starts_at && (
-                  <div className="text-[10px] text-muted-foreground">{shortDate(ev.starts_at)}</div>
+                  <div className="text-2xs text-muted-foreground">{shortDate(ev.starts_at)}</div>
                 )}
               </div>
             </div>
@@ -215,7 +215,7 @@ function PersonContent({ identifier }: { identifier: string }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="px-4 py-2 border-b border-border last:border-b-0">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+      <div className="text-2xs text-muted-foreground font-semibold mb-1.5">
         {title}
       </div>
       <div className="space-y-0">{children}</div>

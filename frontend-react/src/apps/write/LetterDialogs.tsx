@@ -30,7 +30,7 @@ function Shell({ title, onClose, children }: { title: string; onClose: () => voi
 
 const field = "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary";
 const finalNote = (doc: WrittenDoc) => doc.status === "draft"
-  ? <p className="text-[11px] text-muted-foreground">Danach ist der Brief fertig und wird nicht mehr geändert; „Als neuen Entwurf“ macht bei Bedarf eine Kopie.</p> : null;
+  ? <p className="text-xs text-muted-foreground">Danach ist der Brief fertig und wird nicht mehr geändert; „Als neuen Entwurf“ macht bei Bedarf eine Kopie.</p> : null;
 
 export function SendDialog({ doc, to, subject, onClose, onDone }: { doc: WrittenDoc; to: string; subject: string; onClose: () => void; onDone: (d: WrittenDoc) => void }) {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
@@ -69,16 +69,16 @@ export function SendDialog({ doc, to, subject, onClose, onDone }: { doc: Written
         <p className="text-sm text-muted-foreground">Du hast noch kein E-Mail-Konto in Yorik eingerichtet (App „E-Mail“ → Konto hinzufügen). Bis dahin: PDF öffnen und selbst verschicken.</p>
       ) : (
         <>
-          <label className="grid gap-1 text-[11px] text-muted-foreground">Von
+          <label className="grid gap-1 text-xs text-muted-foreground">Von
             <select value={accountId ?? ""} onChange={e => setAccountId(Number(e.target.value))} className={field}>
               {accounts.map(a => <option key={a.id} value={a.id}>{a.display_name ? `${a.display_name} · ${a.email}` : a.email}</option>)}
             </select></label>
-          <label className="grid gap-1 text-[11px] text-muted-foreground">An
+          <label className="grid gap-1 text-xs text-muted-foreground">An
             <input value={addr} onChange={e => setAddr(e.target.value)} placeholder="name@beispiel.de" className={cn(field, !addr.includes("@") && "border-amber-500/50")} /></label>
-          <label className="grid gap-1 text-[11px] text-muted-foreground">Betreff
+          <label className="grid gap-1 text-xs text-muted-foreground">Betreff
             <input value={subj} onChange={e => setSubj(e.target.value)} className={field} /></label>
           {canText && (
-            <div className="grid gap-1 text-[11px] text-muted-foreground">So verschicken
+            <div className="grid gap-1 text-xs text-muted-foreground">So verschicken
               <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="So verschicken">
                 {([["text", "Als E-Mail-Text"], ["pdf", "Als PDF-Anhang"]] as const).map(([v, label]) => (
                   <button key={v} type="button" role="radio" aria-checked={sendAs === v} onClick={() => chooseSendAs(v)}
@@ -89,9 +89,9 @@ export function SendDialog({ doc, to, subject, onClose, onDone }: { doc: Written
             </div>
           )}
           {sendAs === "text" && canText ? (
-            <p className="text-[11px] text-muted-foreground">Der Brief steht direkt in der E-Mail: dein Text, der Gruß und dein Name — ohne Briefkopf und Adressfeld. Als PDF bleibt er trotzdem in „Fertig“ abgelegt.</p>
+            <p className="text-xs text-muted-foreground">Der Brief steht direkt in der E-Mail: dein Text, der Gruß und dein Name — ohne Briefkopf und Adressfeld. Als PDF bleibt er trotzdem in „Fertig“ abgelegt.</p>
           ) : (
-            <label className="grid gap-1 text-[11px] text-muted-foreground">Nachricht (der Brief hängt als PDF an)
+            <label className="grid gap-1 text-xs text-muted-foreground">Nachricht (der Brief hängt als PDF an)
               <textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} className={cn(field, "resize-y")} /></label>
           )}
           {finalNote(doc)}

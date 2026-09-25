@@ -453,7 +453,7 @@ export function CalendarApp() {
             </div>
             <div>
               <div className="font-semibold leading-none">Calendar</div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+              <div className="text-2xs text-muted-foreground mt-0.5">
                 {events.length} event{events.length === 1 ? "" : "s"}
               </div>
             </div>
@@ -494,7 +494,7 @@ export function CalendarApp() {
           onAnchorChange={setAnchor}
         />
 
-        <footer className="mt-auto border-t border-border p-3 text-[11px] text-muted-foreground">
+        <footer className="mt-auto border-t border-border p-3 text-xs text-muted-foreground">
           {eventsApi.loading ? "Loading…" : "Auto-syncs · click any day"}
         </footer>
       </aside>
@@ -550,7 +550,7 @@ export function CalendarApp() {
             >
               <Sparkles className="w-5 h-5 md:w-3.5 md:h-3.5" />
               <span className="hidden sm:inline">Quick add</span>
-              <kbd className="hidden sm:inline text-[9px] bg-card border border-border rounded px-1 ml-0.5">⌘K</kbd>
+              <kbd className="hidden sm:inline text-2xs bg-card border border-border rounded px-1 ml-0.5">⌘K</kbd>
             </button>
             {/* Desktop switcher — three options. */}
             <div className="hidden sm:block">
@@ -570,7 +570,7 @@ export function CalendarApp() {
 
         {view === "month" && (
           <div className="flex-1 flex flex-col p-3 md:p-6 min-h-0">
-            <div className="grid grid-cols-7 gap-1 mb-1.5 text-[11px] md:text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+            <div className="grid grid-cols-7 gap-1 mb-1.5 text-xs md:text-2xs text-muted-foreground font-medium">
               {DAYS_SHORT.map(d => (
                 <div key={d} className="text-center py-1">{d}</div>
               ))}
@@ -600,7 +600,7 @@ export function CalendarApp() {
                 on mobile, so without this list mobile users would have
                 to open the drawer just to read event titles). */}
             <div className="md:hidden mt-4">
-              <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+              <div className="text-xs text-muted-foreground font-semibold mb-2">
                 {selected.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}
               </div>
               <MobileDayEventList
@@ -872,7 +872,7 @@ function MiniCalendar({
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-0.5 text-[10px] text-muted-foreground mb-1 text-center">
+      <div className="grid grid-cols-7 gap-0.5 text-2xs text-muted-foreground mb-1 text-center">
         {DAYS_SHORT.map(d => (
           <div key={d} className="py-0.5 font-medium">{d[0]}</div>
         ))}
@@ -1018,11 +1018,11 @@ function DayCell({
           {day.getDate()}
         </span>
         {taskCount > 0 && (
-          <span className="text-[9px] text-muted-foreground tabular-nums">{taskCount}T</span>
+          <span className="text-2xs text-muted-foreground tabular-nums">{taskCount}T</span>
         )}
       </div>
       {/* Mobile: a single row of up to 3 coloured dots per category
-          present that day. Event chips below text-[11px] in a 37px
+          present that day. Event chips below text-xs in a 37px
           cell are unreadable on a phone; dots give density at a
           glance without trying to render the title. The mobile
           "day events" list under the grid shows the full info for
@@ -1047,7 +1047,7 @@ function DayCell({
             onClick={(ev) => { ev.stopPropagation(); onEventClick(e); }} />
         ))}
         {extra > 0 && (
-          <div className="text-[10px] text-muted-foreground pl-1">+{extra} more</div>
+          <div className="text-2xs text-muted-foreground pl-1">+{extra} more</div>
         )}
       </div>
     </div>
@@ -1074,7 +1074,7 @@ function EventChip({ ev, highlighted, onClick }:
       onClick={onClick}
       title={tip}
       className={cn(
-        "text-left text-[11px] px-1.5 py-0.5 rounded truncate flex items-center gap-1 hover:brightness-110 transition",
+        "text-left text-xs px-1.5 py-0.5 rounded truncate flex items-center gap-1 hover:brightness-110 transition",
         highlighted && "ring-2 ring-violet-400 ring-offset-1 animate-pulse-flash"
       )}
       style={{
@@ -1083,7 +1083,7 @@ function EventChip({ ev, highlighted, onClick }:
         borderLeft: `2px solid ${vis.border}`,
       }}
     >
-      {time && <span className="font-medium tabular-nums shrink-0 text-[10px] opacity-80">{time}</span>}
+      {time && <span className="font-medium tabular-nums shrink-0 text-2xs opacity-80">{time}</span>}
       {ev.recurring && (
         <Repeat
           className="w-2.5 h-2.5 shrink-0 opacity-60"
@@ -1161,7 +1161,7 @@ function MobileDayEventList({
             <span className="w-1 shrink-0" style={{ background: v.accent }} aria-hidden="true" />
             <div className="flex-1 min-w-0 py-2.5 pr-3">
               <div className="text-sm font-medium truncate">{e.title}</div>
-              <div className="text-[12px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+              <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
                 <span className="tabular-nums">{time}</span>
                 {e.location && <span className="truncate opacity-80">· {e.location}</span>}
               </div>
@@ -1215,7 +1215,7 @@ function DayPane({
     <>
       <header className="h-16 px-5 flex items-center justify-between border-b border-border">
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+          <div className="text-2xs text-muted-foreground font-semibold">
             {dayLabel}
           </div>
           <div className="font-semibold text-base leading-tight mt-0.5">
@@ -1233,7 +1233,7 @@ function DayPane({
 
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
         <section>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+          <div className="text-2xs text-muted-foreground font-semibold mb-2">
             Events · {events.length}
           </div>
           {events.length === 0 ? (
@@ -1305,7 +1305,7 @@ function DayPane({
 
         {overdueTasks.length > 0 && (
           <section>
-            <div className="text-[10px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold mb-2">
+            <div className="text-2xs text-rose-600 dark:text-rose-400 font-semibold mb-2">
               Overdue · {overdueTasks.length}
             </div>
             <TaskRows
@@ -1318,7 +1318,7 @@ function DayPane({
         )}
 
         <section>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+          <div className="text-2xs text-muted-foreground font-semibold mb-2">
             {isToday ? `Due today · ${tasks.length}` : `Due ${dayLabel} · ${tasks.length}`}
           </div>
           {tasks.length === 0 ? (
@@ -1334,7 +1334,7 @@ function DayPane({
 
         {undatedOpenTasks.length > 0 && (
           <section>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+            <div className="text-2xs text-muted-foreground font-semibold mb-2">
               Anytime · {undatedOpenTasks.length}
             </div>
             <TaskRows
@@ -1347,7 +1347,7 @@ function DayPane({
 
         {futureTasks.length > 0 && (
           <section>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+            <div className="text-2xs text-muted-foreground font-semibold mb-2">
               Future · {futureTasks.length}
             </div>
             <TaskRows
@@ -1409,7 +1409,7 @@ function TaskRows({
             <div className={cn("text-sm", t.done && "line-through text-muted-foreground")}>
               {t.title}
             </div>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+            <div className="flex items-center gap-2 text-2xs text-muted-foreground mt-0.5">
               {showDueDate && t.due_date && (
                 <span className="tabular-nums">{shortDay(t.due_date)}</span>
               )}
@@ -1674,7 +1674,7 @@ function EventDialog({
             <span className="flex-1">You're invited — does this time work?</span>
             <button
               onClick={() => rsvp("accepted")}
-              className="px-2.5 py-1 rounded-md bg-emerald-500 text-white text-[11px] font-medium hover:opacity-90 flex items-center gap-1"
+              className="px-2.5 py-1 rounded-md bg-emerald-500 text-white text-xs font-medium hover:opacity-90 flex items-center gap-1"
             >
               <Check className="w-3 h-3" /> Accept
             </button>
@@ -1685,13 +1685,13 @@ function EventDialog({
                 const iso = `${date}T${t}:00`;
                 rsvp("tentative", iso);
               }}
-              className="px-2.5 py-1 rounded-md border border-border bg-card text-[11px] hover:bg-muted"
+              className="px-2.5 py-1 rounded-md border border-border bg-card text-xs hover:bg-muted"
             >
               Propose…
             </button>
             <button
               onClick={() => rsvp("declined")}
-              className="px-2.5 py-1 rounded-md border border-border bg-card text-[11px] hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 flex items-center gap-1"
+              className="px-2.5 py-1 rounded-md border border-border bg-card text-xs hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30 flex items-center gap-1"
             >
               <X className="w-3 h-3" /> Decline
             </button>
@@ -1701,7 +1701,7 @@ function EventDialog({
         {/* Inviter view: roster of who's RSVP'd and how. */}
         {!isNew && allAttendees.length > 0 && (
           <div className="px-6 py-2 bg-muted/30 border-b border-border flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mr-1">
+            <span className="text-2xs text-muted-foreground font-semibold mr-1">
               Attendees
             </span>
             {allAttendees.map(a => {
@@ -1715,7 +1715,7 @@ function EventDialog({
               return (
                 <span
                   key={a.id}
-                  className={cn("text-[10px] px-1.5 py-0.5 rounded-full border", pillCls)}
+                  className={cn("text-2xs px-1.5 py-0.5 rounded-full border", pillCls)}
                   title={a.proposed_time_iso
                     ? `Proposed: ${a.proposed_time_iso.slice(11, 16)}`
                     : a.response_status.replace("_", " ")}
@@ -1747,7 +1747,7 @@ function EventDialog({
               >
                 <Video className="w-4 h-4 shrink-0" />
                 <span className="font-medium">Join meeting</span>
-                <span className="text-[11px] opacity-70 truncate">· {link.kind}</span>
+                <span className="text-xs opacity-70 truncate">· {link.kind}</span>
               </a>
             );
           })()}
@@ -1768,7 +1768,7 @@ function EventDialog({
             return (
               <div className="-mt-2 mb-1 flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0 text-[11px] leading-relaxed">
+                <div className="flex-1 min-w-0 text-xs leading-relaxed">
                   <div className="font-semibold mb-0.5">
                     Conflicts with {conflicts.length} other event{conflicts.length === 1 ? "" : "s"}:
                   </div>
@@ -1816,7 +1816,7 @@ function EventDialog({
                       onClick={() => setCategory(sel ? "" : cat)}
                       title={sw.label}
                       className={cn(
-                        "text-[10px] px-2 py-1 rounded-md border transition flex items-center gap-1.5",
+                        "text-2xs px-2 py-1 rounded-md border transition flex items-center gap-1.5",
                         sel
                           ? "border-foreground font-medium"
                           : "border-border hover:border-foreground/40",
@@ -1838,7 +1838,7 @@ function EventDialog({
               </div>
               {!category && (
                 <div className="flex gap-1.5 mt-2 items-center">
-                  <span className="text-[10px] text-muted-foreground mr-1">Color:</span>
+                  <span className="text-2xs text-muted-foreground mr-1">Color:</span>
                   {EVENT_COLORS.map(c => (
                     <button
                       key={c}
@@ -1913,7 +1913,7 @@ function EventDialog({
               />
             </div>
             {event?.travel_time_s && event.travel_time_s > 0 ? (
-              <div className="mt-1.5 text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <div className="mt-1.5 text-xs text-muted-foreground flex items-center gap-1.5">
                 <Car className="w-3 h-3 text-amber-600" />
                 <span>
                   {formatTravelTime(event.travel_time_s)}
@@ -1925,7 +1925,7 @@ function EventDialog({
                 </span>
               </div>
             ) : location && !event ? (
-              <div className="mt-1.5 text-[11px] text-muted-foreground">
+              <div className="mt-1.5 text-xs text-muted-foreground">
                 Travel time will be computed after saving.
               </div>
             ) : null}
@@ -1985,23 +1985,23 @@ function EventDialog({
                   <button
                     type="button"
                     onClick={() => setRecurDays(new Set([1, 2, 3, 4, 5]))}
-                    className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                    className="text-2xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
                   >
                     Weekdays
                   </button>
-                  <span className="text-[10px] text-muted-foreground">·</span>
+                  <span className="text-2xs text-muted-foreground">·</span>
                   <button
                     type="button"
                     onClick={() => setRecurDays(new Set([6, 7]))}
-                    className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                    className="text-2xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
                   >
                     Weekend
                   </button>
-                  <span className="text-[10px] text-muted-foreground">·</span>
+                  <span className="text-2xs text-muted-foreground">·</span>
                   <button
                     type="button"
                     onClick={() => setRecurDays(new Set([1, 2, 3, 4, 5, 6, 7]))}
-                    className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                    className="text-2xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
                   >
                     All
                   </button>
@@ -2009,7 +2009,7 @@ function EventDialog({
               </div>
             )}
             {!isNew && (event?.recurring || recurMode) && (
-              <div className="mt-1.5 text-[11px] text-muted-foreground">
+              <div className="mt-1.5 text-xs text-muted-foreground">
                 Changes apply to the entire series.
               </div>
             )}
@@ -2230,7 +2230,7 @@ function AssigneePicker({
                 <UserAvatar name={u.name} size="sm" />
                 <span className="flex-1 truncate text-left">{u.name}</span>
                 {u.id === currentUserId && (
-                  <span className="text-[10px] text-muted-foreground">you</span>
+                  <span className="text-2xs text-muted-foreground">you</span>
                 )}
               </button>
             );
@@ -2251,7 +2251,7 @@ function AssigneeChip({ name, isMe, isEveryone, onRemove }:
         : isMe ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-card border border-border",
     )}>
       {!isEveryone && <UserAvatar name={name} size="xs" />}
-      {isEveryone && <span className="text-[12px]">👥</span>}
+      {isEveryone && <span className="text-xs">👥</span>}
       <span>{name}</span>
       <button
         onClick={onRemove}
@@ -2524,7 +2524,7 @@ const EVENT_COLORS = [
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
+      <span className="text-2xs font-semibold text-muted-foreground block mb-1">
         {label}
       </span>
       {children}
@@ -2745,12 +2745,12 @@ function EventQuickAddModal({
             rows={3}
             className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 resize-none"
           />
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Yorik resolves date, time, location, attendees — you confirm before save.</span>
             <span>Enter to parse · Esc cancel</span>
           </div>
           {error && (
-            <div className="text-[11px] text-rose-500">{error}</div>
+            <div className="text-xs text-rose-500">{error}</div>
           )}
           <div className="flex justify-end">
             <button
@@ -2848,12 +2848,12 @@ function EventSearchModal({
         </div>
         <div className="max-h-[60vh] overflow-y-auto">
           {!q.trim() && (
-            <div className="px-3 py-6 text-[11px] text-muted-foreground text-center italic">
+            <div className="px-3 py-6 text-xs text-muted-foreground text-center italic">
               Type to search across all events you can see.
             </div>
           )}
           {q.trim() && !loading && hits.length === 0 && (
-            <div className="px-3 py-6 text-[11px] text-muted-foreground text-center italic">
+            <div className="px-3 py-6 text-xs text-muted-foreground text-center italic">
               No matches for "{q}".
             </div>
           )}
@@ -2871,7 +2871,7 @@ function EventSearchModal({
               <CalendarIcon className="w-3 h-3 text-violet-500 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{ev.title}</div>
-                <div className="text-[10px] text-muted-foreground truncate">
+                <div className="text-2xs text-muted-foreground truncate">
                   {(ev.starts_at || "").slice(0, 16).replace("T", " · ")}
                   {ev.location && <> · {ev.location}</>}
                 </div>
@@ -3078,7 +3078,7 @@ function TimeGridView({
               )}
             >
               <span className={cn(
-                "text-[10px] uppercase tracking-wider font-medium",
+                "text-2xs font-medium",
                 isToday ? "text-primary" : "text-muted-foreground",
               )}>
                 {d.toLocaleDateString([], { weekday: "short" })}
@@ -3116,7 +3116,7 @@ function TimeGridView({
               return (
                 <div
                   key={h}
-                  className="text-[11px] text-muted-foreground tabular-nums text-right pr-2 -translate-y-2"
+                  className="text-xs text-muted-foreground tabular-nums text-right pr-2 -translate-y-2"
                   style={{ height: HOUR_PX }}
                 >
                   {i === 0 ? "" : `${String(h).padStart(2, "0")}:00`}
@@ -3298,7 +3298,7 @@ function DayColumn({
             className="absolute left-0.5 right-0.5 z-30 pointer-events-none rounded-md bg-primary/20 border border-primary/50 shadow-lg"
             style={{ top, height }}
           >
-            <div className="text-[10px] tabular-nums font-semibold text-primary px-2 py-1">
+            <div className="text-2xs tabular-nums font-semibold text-primary px-2 py-1">
               {minsToTime(startMin)} – {minsToTime(Math.max(startMin + 15, endMin))}
             </div>
           </div>
@@ -3414,7 +3414,7 @@ function EventBlock({
         {event.title || "(no title)"}
       </div>
       {(height > 32 || preview) && (
-        <div className={cn("tabular-nums opacity-80 mt-0.5", HOUR_PX >= 96 ? "text-xs" : "text-[11px]")}>
+        <div className={cn("tabular-nums opacity-80 mt-0.5", HOUR_PX >= 96 ? "text-xs" : "text-xs")}>
           {minsToTime(startMin)}{event.ends_at && ` – ${minsToTime(endMin)}`}
         </div>
       )}
@@ -3449,7 +3449,7 @@ function AllDayStrip({
   const visualOf = useEventVisualFn();
   return (
     <div className="flex border-b border-border bg-muted/20 shrink-0">
-      <div className="w-14 shrink-0 text-[9px] uppercase text-muted-foreground text-right pr-2 pt-1.5 font-medium tracking-wider">
+      <div className="w-14 shrink-0 text-2xs text-muted-foreground text-right pr-2 pt-1.5 font-medium">
         all-day
       </div>
       {days.map(d => {
@@ -3460,7 +3460,7 @@ function AllDayStrip({
               <button
                 key={`${e.id}_${e.occurrence_date || ""}`}
                 onClick={(ev) => { ev.stopPropagation(); onEventClick(e); }}
-                className="block w-full text-left text-[11px] px-2 py-0.5 rounded font-medium truncate transition hover:brightness-110"
+                className="block w-full text-left text-xs px-2 py-0.5 rounded font-medium truncate transition hover:brightness-110"
                 style={(() => {
                   const v = visualOf(e, false);
                   return {
@@ -3770,7 +3770,7 @@ function CalendarsSidebar({
   return (
     <div className="border-t border-border mt-2 pt-4 px-5 space-y-3">
       <div className="flex items-center justify-between">
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+        <div className="text-2xs text-muted-foreground font-semibold">
           Calendars
         </div>
         <button
@@ -3825,7 +3825,7 @@ function CalendarsSidebar({
         <button
           onClick={toggleShowEveryone}
           className={cn(
-            "w-full mt-1 h-7 rounded-md text-[11px] font-medium border transition flex items-center justify-center gap-1.5",
+            "w-full mt-1 h-7 rounded-md text-xs font-medium border transition flex items-center justify-center gap-1.5",
             allSharedHidden
               ? "border-border bg-card text-muted-foreground hover:text-foreground"
               : "border-primary/30 bg-primary/10 text-primary",
@@ -3845,7 +3845,7 @@ function CalendarsSidebar({
           users move their own events, this becomes a no-op. */}
       <button
         onClick={() => setImportOpen(true)}
-        className="w-full h-7 rounded-md text-[11px] font-medium border border-border bg-card text-muted-foreground hover:text-foreground transition flex items-center justify-center gap-1.5"
+        className="w-full h-7 rounded-md text-xs font-medium border border-border bg-card text-muted-foreground hover:text-foreground transition flex items-center justify-center gap-1.5"
         title="Import an .ics file or subscribe to a Google / iCloud / Outlook calendar"
       >
         <Download className="w-3 h-3" /> Google &amp; Co. übernehmen
@@ -3874,7 +3874,7 @@ function MoveLegacyEventsButton({ onMoved }: { onMoved: () => void }) {
   }
   if (done) {
     return (
-      <div className="text-[10px] text-emerald-600 px-1 pt-1">
+      <div className="text-2xs text-emerald-600 px-1 pt-1">
         Moved {done.moved} event{done.moved === 1 ? "" : "s"} to your Personal calendar.
       </div>
     );
@@ -3883,7 +3883,7 @@ function MoveLegacyEventsButton({ onMoved }: { onMoved: () => void }) {
     <button
       onClick={go}
       disabled={busy}
-      className="w-full mt-1 h-7 rounded-md text-[10px] text-muted-foreground hover:text-foreground border border-dashed border-border hover:border-foreground/30 transition flex items-center justify-center gap-1"
+      className="w-full mt-1 h-7 rounded-md text-2xs text-muted-foreground hover:text-foreground border border-dashed border-border hover:border-foreground/30 transition flex items-center justify-center gap-1"
       title="One-shot tidy: pull your events out of Shared into Personal"
     >
       {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : "↪"}
@@ -3904,7 +3904,7 @@ function SidebarCalendarSection({
 }) {
   return (
     <div>
-      <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/70 font-semibold mb-1 px-0.5">
+      <div className="text-2xs text-muted-foreground/70 font-semibold mb-1 px-0.5">
         {label}
       </div>
       <div className="space-y-0.5">
@@ -3938,12 +3938,12 @@ function SidebarCalendarSection({
                   )}
                 </span>
                 {c.access_level === "free_busy" && (
-                  <span className="text-[9px] uppercase tracking-wider text-muted-foreground opacity-60">
+                  <span className="text-2xs text-muted-foreground opacity-60">
                     busy only
                   </span>
                 )}
                 {c.access_level === "read" && (
-                  <span className="text-[9px] uppercase tracking-wider text-muted-foreground opacity-60">
+                  <span className="text-2xs text-muted-foreground opacity-60">
                     read
                   </span>
                 )}
@@ -4007,7 +4007,7 @@ function AttendeeUserPicker({
             type="button"
             onClick={() => toggle(u.id)}
             className={cn(
-              "text-[11px] px-2.5 py-1 rounded-full border transition flex items-center gap-1.5",
+              "text-xs px-2.5 py-1 rounded-full border transition flex items-center gap-1.5",
               on
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-card border-border text-muted-foreground hover:text-foreground",
@@ -4074,7 +4074,7 @@ function FreebusyPreview({
 
   return (
     <div className="rounded-md border border-border bg-muted/30 p-2.5">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5 flex items-center justify-between">
+      <div className="text-2xs text-muted-foreground font-semibold mb-1.5 flex items-center justify-between">
         <span>Free / busy on {new Date(date + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })}</span>
         {loading && <Loader2 className="w-3 h-3 animate-spin" />}
       </div>
@@ -4087,7 +4087,7 @@ function FreebusyPreview({
             return bs < slotEnd && be > slotStart;
           });
           return (
-            <div key={uid} className="flex items-center gap-2 text-[11px]">
+            <div key={uid} className="flex items-center gap-2 text-xs">
               <span className="w-20 truncate text-muted-foreground">
                 {userMap.get(uid) || `User ${uid}`}
               </span>
@@ -4123,8 +4123,8 @@ function FreebusyPreview({
                 />
               </div>
               {overlap
-                ? <span className="text-[10px] text-red-500 font-medium">Busy</span>
-                : <span className="text-[10px] text-emerald-500 font-medium">Free</span>}
+                ? <span className="text-2xs text-red-500 font-medium">Busy</span>
+                : <span className="text-2xs text-emerald-500 font-medium">Free</span>}
             </div>
           );
         })}
@@ -4222,7 +4222,7 @@ function ShareCalendarModal({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm truncate">{s.name}</div>
-                <div className="text-[10px] text-muted-foreground truncate">{s.email}</div>
+                <div className="text-2xs text-muted-foreground truncate">{s.email}</div>
               </div>
               <select
                 value={s.access_level}
@@ -4246,7 +4246,7 @@ function ShareCalendarModal({
           {/* Add new share */}
           {available.length > 0 && (
             <div className="border-t border-border pt-4 space-y-2">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              <div className="text-2xs text-muted-foreground font-semibold">
                 Add member
               </div>
               <div className="flex gap-2">
@@ -4280,7 +4280,7 @@ function ShareCalendarModal({
                     )}
                   >
                     <div className="text-sm">{opt.emoji} <b className="font-medium text-xs">{opt.label}</b></div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">{opt.desc}</div>
+                    <div className="text-2xs text-muted-foreground mt-0.5">{opt.desc}</div>
                   </button>
                 ))}
               </div>

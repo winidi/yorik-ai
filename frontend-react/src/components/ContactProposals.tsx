@@ -112,13 +112,13 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
   return (
     <div className="mb-4 rounded-xl border border-amber-300/60 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-700/50 p-3">
       {items.length > 0 && (
-        <div className="text-xs uppercase tracking-wider text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-3">
+        <div className="text-xs text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-3">
           <span>Suggestions · {merges_n > 0 && `${merges_n} merge${merges_n === 1 ? "" : "s"}`}{merges_n > 0 && adds_n > 0 && " · "}{adds_n > 0 && `${adds_n} number${adds_n === 1 ? "" : "s"}`}</span>
           {adds_n > 1 && (
             <button
               disabled={busy === -999999}
               onClick={rejectAllAdds}
-              className="normal-case tracking-normal text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+              className="normal-case tracking-normal text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
               dismiss all number suggestions
             </button>
@@ -142,7 +142,7 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
                     <div className="text-sm font-medium flex items-center gap-1.5">
                       <GitMerge className="w-3.5 h-3.5 text-violet-500" /> Keep {c.display_name}
                     </div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5">{channels(c)}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{channels(c)}</div>
                   </button>
                 ))}
               </div>
@@ -163,7 +163,7 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
               <button
                 disabled={busy === p.id}
                 onClick={() => reject(p)}
-                className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1 disabled:opacity-50"
+                className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 disabled:opacity-50"
               >
                 <X className="w-3 h-3" /> Not the same person
               </button>
@@ -172,7 +172,7 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
         ))}
       </ul>
       {merges.length > 0 && (
-        <div className="mt-3 pt-2 border-t border-amber-300/40 text-[11px] text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
+        <div className="mt-3 pt-2 border-t border-amber-300/40 text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
           {merges.map(m => (
             <span key={m.id} className="inline-flex items-center gap-1">
               {m.drop_name} → {m.keep_name}

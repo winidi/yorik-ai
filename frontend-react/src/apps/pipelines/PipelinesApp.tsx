@@ -168,12 +168,12 @@ function Row({ p }: { p: Pipeline }) {
       <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium truncate">{p.title}</div>
-        <div className={cn("text-[12px] truncate", p.state === "laeuft" && p.attention ? "text-primary" : "text-muted-foreground")}>
+        <div className={cn("text-xs truncate", p.state === "laeuft" && p.attention ? "text-primary" : "text-muted-foreground")}>
           {sub}
         </div>
       </div>
       {mailSteps > 0 && p.state !== "entwurf" && (
-        <div className="text-[11px] text-muted-foreground tabular-nums shrink-0">{sentCount}/{mailSteps}</div>
+        <div className="text-xs text-muted-foreground tabular-nums shrink-0">{sentCount}/{mailSteps}</div>
       )}
       <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
     </button>
@@ -199,10 +199,10 @@ function FirstSteps({ onPicked }: { onPicked: (id: number) => void }) {
         {steps.map(([title, text], i) => (
           <li key={title} className="rounded-xl border border-border bg-card p-3.5">
             <div className="flex items-center gap-2 mb-1">
-              <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[11px] font-semibold flex items-center justify-center">{i + 1}</span>
+              <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-xs font-semibold flex items-center justify-center">{i + 1}</span>
               <span className="text-sm font-medium">{title}</span>
             </div>
-            <p className="text-[12px] text-muted-foreground leading-snug">{text}</p>
+            <p className="text-xs text-muted-foreground leading-snug">{text}</p>
           </li>
         ))}
       </ol>
@@ -218,7 +218,7 @@ function FirstSteps({ onPicked }: { onPicked: (id: number) => void }) {
               <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium truncate">{m.subject || "(ohne Betreff)"}</div>
-                <div className="text-[12px] text-muted-foreground truncate">an {m.to.join(", ")} · {relDay(m.date)}</div>
+                <div className="text-xs text-muted-foreground truncate">an {m.to.join(", ")} · {relDay(m.date)}</div>
               </div>
               <button
                 disabled={busy !== null}
@@ -247,7 +247,7 @@ function SentMailPicker({ onClose, onPicked }: { onClose: () => void; onPicked: 
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-border">
           <div>
             <div className="font-medium">Welche Mail verfolgen?</div>
-            <div className="text-[12px] text-muted-foreground">Deine zuletzt gesendeten Mails</div>
+            <div className="text-xs text-muted-foreground">Deine zuletzt gesendeten Mails</div>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted" aria-label="Schließen"><X className="w-4 h-4" /></button>
         </div>
@@ -263,7 +263,7 @@ function SentMailPicker({ onClose, onPicked }: { onClose: () => void; onPicked: 
             >
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium truncate">{m.subject || "(ohne Betreff)"}</div>
-                <div className="text-[12px] text-muted-foreground truncate">an {m.to.join(", ")} · {relDay(m.date)}</div>
+                <div className="text-xs text-muted-foreground truncate">an {m.to.join(", ")} · {relDay(m.date)}</div>
               </div>
               {busy === m.id && <Loader2 className="w-4 h-4 animate-spin mt-1" />}
             </button>
@@ -298,7 +298,7 @@ function PeopleSwitches() {
       </button>
       {open && (
         <div className="mt-3 space-y-1.5">
-          <p className="text-[12px] text-muted-foreground mb-2">
+          <p className="text-xs text-muted-foreground mb-2">
             Für alle an. Ausschalten hält laufende Pipelines der Person an; ihre Inhalte siehst du dadurch nicht.
           </p>
           {people === null && <div className="text-sm text-muted-foreground">Lädt…</div>}
@@ -307,9 +307,9 @@ function PeopleSwitches() {
               <div className="min-w-0">
                 <div className="text-sm">{p.name}</div>
                 {!p.can_change ? (
-                  <div className="text-[11px] text-muted-foreground">nur ein Admin kann das ändern</div>
+                  <div className="text-xs text-muted-foreground">nur ein Admin kann das ändern</div>
                 ) : p.changed_by && (
-                  <div className="text-[11px] text-muted-foreground">zuletzt geändert von {p.changed_by}</div>
+                  <div className="text-xs text-muted-foreground">zuletzt geändert von {p.changed_by}</div>
                 )}
               </div>
               {p.can_change && <Toggle on={p.enabled} onClick={() => flip(p)} label={`Pipelines für ${p.name}`} />}

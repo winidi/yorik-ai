@@ -570,7 +570,7 @@ export function EmailApp() {
         <div className="h-14 px-4 flex items-center justify-between border-b border-border">
           <div>
             <div className="font-bold text-lg tracking-tight leading-none">yorik</div>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">email</span>
+            <span className="text-2xs text-muted-foreground">email</span>
           </div>
           <button
             onClick={() => setShowSettings(true)}
@@ -628,7 +628,7 @@ export function EmailApp() {
             without searching. Same FolderSelection state model, just
             with a categories array set. */}
         <div className="border-t border-border mt-2 pt-3 px-2">
-          <div className="px-2 pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+          <div className="px-2 pb-2 text-2xs text-muted-foreground font-medium">
             Categories
           </div>
           <nav className="space-y-0.5">
@@ -664,7 +664,7 @@ export function EmailApp() {
         {/* Per-account expanded folder lists */}
         <div className="border-t border-border mt-2 pt-3 px-2 flex-1 overflow-y-auto">
           <div className="px-2 pb-2 flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+            <span className="text-2xs text-muted-foreground font-medium">
               Accounts
             </span>
             <button
@@ -713,7 +713,7 @@ export function EmailApp() {
           ))}
         </div>
 
-        <div className="mt-auto border-t border-border p-3 text-[11px] text-muted-foreground">
+        <div className="mt-auto border-t border-border p-3 text-xs text-muted-foreground">
           {accountsApi.loading ? "Loading…"
             : accounts.length === 0 ? "Add your first account to get started."
             : `${accounts.length} account${accounts.length === 1 ? "" : "s"} · auto-syncs via IMAP IDLE`}
@@ -1039,7 +1039,7 @@ function AccountSection({
         <span className="truncate">{account.display_name || account.email}</span>
       </div>
       {foldersApi.loading && folders.length === 0 && (
-        <div className="px-3 py-1 text-[11px] text-muted-foreground italic">syncing folders…</div>
+        <div className="px-3 py-1 text-xs text-muted-foreground italic">syncing folders…</div>
       )}
       {sorted.map(f => {
         const Icon = FOLDER_ICONS[f.category] || Folder;
@@ -1065,7 +1065,7 @@ function AccountSection({
             <span className="flex-1 truncate">{f.display_name}</span>
             {f.unread > 0 && (
               <span className={cn(
-                "text-[10px] tabular-nums",
+                "text-2xs tabular-nums",
                 isActive ? "text-sidebar-accent-foreground" : "text-primary font-semibold"
               )}>
                 {f.unread}
@@ -1101,11 +1101,11 @@ function SidebarItem({
       <Icon className="w-4 h-4 shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="truncate">{label}</div>
-        {sub && <div className="text-[10px] text-muted-foreground truncate">{sub}</div>}
+        {sub && <div className="text-2xs text-muted-foreground truncate">{sub}</div>}
       </div>
       {!!badge && badge > 0 && (
         <span className={cn(
-          "text-[11px] tabular-nums shrink-0",
+          "text-xs tabular-nums shrink-0",
           active ? "text-sidebar-accent-foreground" : "text-primary font-semibold",
         )}>
           {badge}
@@ -1185,7 +1185,7 @@ function MessageList({
         return (
         <Fragment key={m.id}>
         {showDivider && (
-          <div className="sticky top-0 z-10 px-4 py-1.5 bg-muted/80 backdrop-blur-sm border-y border-border text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+          <div className="sticky top-0 z-10 px-4 py-1.5 bg-muted/80 backdrop-blur-sm border-y border-border text-2xs font-semibold text-muted-foreground">
             {thisYear}
           </div>
         )}
@@ -1258,7 +1258,7 @@ function MessageList({
                     </PersonHover>
                   )}
                 </span>
-                <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                <span className="text-xs text-muted-foreground tabular-nums shrink-0">
                   {formatWhen(m.date_received)}
                 </span>
               </div>
@@ -1275,7 +1275,7 @@ function MessageList({
                 <span className="truncate">{m.subject || "(no subject)"}</span>
                 {typeof m.thread_count === "number" && m.thread_count > 1 && (
                   <span
-                    className="text-[10px] tabular-nums px-1.5 rounded bg-muted text-muted-foreground shrink-0"
+                    className="text-2xs tabular-nums px-1.5 rounded bg-muted text-muted-foreground shrink-0"
                     title={`${m.thread_count} messages in thread`}
                   >
                     {m.thread_count}
@@ -1288,10 +1288,10 @@ function MessageList({
                   {m.snippet}
                 </div>
               )}
-              <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                 {m.needs_reply && (
                   <span
-                    className="px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/[0.08] text-amber-700 dark:text-amber-400 text-[10px] font-medium leading-none inline-flex items-center gap-1"
+                    className="px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/[0.08] text-amber-700 dark:text-amber-400 text-2xs font-medium leading-none inline-flex items-center gap-1"
                     title="You marked this as needing a reply"
                   >
                     <Reply className="w-2.5 h-2.5" /> reply
@@ -1299,7 +1299,7 @@ function MessageList({
                 )}
                 {m.category && CATEGORY_BADGE[m.category] && (
                   <span className={cn(
-                    "px-1.5 py-0.5 rounded border text-[10px] font-medium leading-none",
+                    "px-1.5 py-0.5 rounded border text-2xs font-medium leading-none",
                     CATEGORY_BADGE[m.category].cls,
                   )}>
                     {CATEGORY_BADGE[m.category].label}
@@ -2411,7 +2411,7 @@ function Reader({
             </div>
           )}
           {senderTrusted && hasRemoteImages && (
-            <div className="mb-3 text-[10px] text-muted-foreground uppercase tracking-wider flex items-center gap-2 shrink-0">
+            <div className="mb-3 text-2xs text-muted-foreground flex items-center gap-2 shrink-0">
               <span>Images auto-shown — sender is trusted.</span>
               <button
                 onClick={async () => {
@@ -2445,7 +2445,7 @@ function Reader({
           </div>
           {m.attachments?.length > 0 && (
             <div className="mt-6 space-y-2 shrink-0">
-              <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+              <div className="text-xs text-muted-foreground font-medium">
                 Attachments
               </div>
               {m.attachments.map(att => (
@@ -2658,17 +2658,17 @@ function AIDraftPanel({
     // without this gap below the panel the regenerate row + variant
     // cards sit underneath it and the user can't read/click them.
     <div className="border-t border-border bg-muted/30 p-4 mb-24">
-      <div className="flex items-center gap-2 mb-3 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+      <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground font-medium">
         <Loader2 className={cn("w-3.5 h-3.5", !regenerating && "hidden", "animate-spin")} />
         {!regenerating && <span>✨</span>}
         AI drafts
         <div className="ml-auto flex items-center gap-2">
           {variants.length > 0 && (
-            <button onClick={discard} className="text-[10px] hover:text-foreground">discard</button>
+            <button onClick={discard} className="text-2xs hover:text-foreground">discard</button>
           )}
           <button onClick={() => regenerate()}
             disabled={regenerating}
-            className="text-[10px] hover:text-foreground flex items-center gap-1">
+            className="text-2xs hover:text-foreground flex items-center gap-1">
             <RefreshCw className={cn("w-3 h-3", regenerating && "animate-spin")} />
             {regenerating ? "thinking" : "regenerate"}
           </button>
@@ -2690,14 +2690,14 @@ function AIDraftPanel({
                 disabled={regenerating}
                 title={s.tone}
                 className={cn(
-                  "px-2 py-1.5 rounded-md text-[11px] font-medium transition",
+                  "px-2 py-1.5 rounded-md text-xs font-medium transition",
                   "flex flex-col items-center gap-0 leading-tight",
                   regenerating && "opacity-50 cursor-not-allowed",
                   isActive ? tint.active : tint.idle,
                 )}
               >
                 <span>{s.label_en}</span>
-                <span className="text-[9px] opacity-70 font-normal">{s.label_de}</span>
+                <span className="text-2xs opacity-70 font-normal">{s.label_de}</span>
               </button>
             );
           })}
@@ -2750,7 +2750,7 @@ function AIDraftPanel({
           </button>
         </div>
         {voiceError && (
-          <div className="text-[10px] text-red-500 mt-1 flex items-center gap-1">
+          <div className="text-2xs text-red-500 mt-1 flex items-center gap-1">
             <AlertCircle className="w-2.5 h-2.5" /> {voiceError}
           </div>
         )}
@@ -2768,7 +2768,7 @@ function AIDraftPanel({
               onClick={() => handleUse(v)}
               className="text-left p-3 rounded-md bg-card border border-border hover:border-primary/60 hover:bg-accent transition group"
             >
-              <div className="text-[10px] uppercase tracking-wider font-semibold text-primary mb-1.5">
+              <div className="text-2xs font-semibold text-primary mb-1.5">
                 {v.label}
               </div>
               <div className="text-xs text-foreground/90 line-clamp-4 group-hover:text-foreground whitespace-pre-line">
@@ -3174,7 +3174,7 @@ function ClassifierSettingsPanel() {
           )}
         >
           <div className="text-sm font-medium">Heuristic</div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
+          <div className="text-xs text-muted-foreground mt-0.5">
             Regex rules. ~1 ms per mail. Reliable but coarse.
           </div>
         </button>
@@ -3189,7 +3189,7 @@ function ClassifierSettingsPanel() {
           )}
         >
           <div className="text-sm font-medium">LLM (Yorik)</div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
+          <div className="text-xs text-muted-foreground mt-0.5">
             Local Qwen via HOMEOS_LLM_BASE_URL. ~1–2 s per mail. Sharper categories.
           </div>
         </button>
@@ -3243,7 +3243,7 @@ function ClassifierSettingsPanel() {
         />
         <div>
           <div className="text-sm font-medium">Read bills with Yorik</div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">
+          <div className="text-xs text-muted-foreground mt-0.5">
             The local LLM picks amount and due date for "New bill?" — the total, not the subtotal,
             in any language and notation. An amount that isn't in the mail is ignored. Off: rules only.
           </div>
@@ -3347,12 +3347,12 @@ function AccountSync({ account, onChanged }: { account: EmailAccount; onChanged:
       : `In step with the server · checked ${st.last_run_at.slice(11, 16)}`;
 
   return (
-    <div className="mt-2 space-y-1.5 text-[11px]">
+    <div className="mt-2 space-y-1.5 text-xs">
       <div className="flex items-center gap-2 flex-wrap">
         <label className="text-muted-foreground" htmlFor={`scope-${account.id}`}>Keep in Yorik</label>
         <select id={`scope-${account.id}`} value={account.import_scope || "recent"} disabled={busy}
           onChange={e => setScope(e.target.value)}
-          className="h-7 px-2 rounded-md bg-muted text-[11px] focus:outline-none focus:ring-2 focus:ring-ring/40">
+          className="h-7 px-2 rounded-md bg-muted text-xs focus:outline-none focus:ring-2 focus:ring-ring/40">
           {IMPORT_SCOPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <button onClick={checkNow} disabled={busy}
@@ -3374,7 +3374,7 @@ function AccountSync({ account, onChanged }: { account: EmailAccount; onChanged:
             {failed} mail{failed === 1 ? "" : "s"} could not be read — they are safe on the server
           </button>
           {failures && (
-            <ul className="mt-1 space-y-0.5 font-mono text-[10px] text-muted-foreground">
+            <ul className="mt-1 space-y-0.5 font-mono text-2xs text-muted-foreground">
               {failures.map(f => (
                 <li key={`${f.folder}-${f.uid}`} className="truncate">{f.folder} #{f.uid}: {f.last_error}</li>
               ))}
@@ -3476,13 +3476,13 @@ function EmailSettingsModal({
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-sm truncate">{a.email}</div>
-                  <div className="text-[11px] text-muted-foreground truncate font-mono">
+                  <div className="text-xs text-muted-foreground truncate font-mono">
                     {a.imap_host}:{a.imap_port}
                     {a.imap_ssl ? " · SSL" : ""}
                     {a.is_default ? " · default" : ""}
                   </div>
                   {a.last_error && (
-                    <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 inline-flex items-center gap-1">
+                    <div className="text-xs text-amber-600 dark:text-amber-400 mt-1 inline-flex items-center gap-1">
                       <AlertTriangle className="w-3 h-3" />
                       <span className="truncate">{a.last_error}</span>
                     </div>
@@ -3552,7 +3552,7 @@ function EmailSettingsModal({
           </button>
         </div>
 
-        <p className="text-[11px] text-muted-foreground mt-4 leading-relaxed">
+        <p className="text-xs text-muted-foreground mt-4 leading-relaxed">
           Disconnecting removes the account from Yorik. Yorik forgets the
           IMAP/SMTP credentials and stops fetching new messages. The
           mailbox on your provider is untouched — nothing is deleted on

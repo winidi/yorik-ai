@@ -198,7 +198,7 @@ export function BriefingApp() {
             </button>
             <div className="text-sm font-medium tabular-nums">{formatDateLabel(targetDate)}</div>
             {isSnapshot && (
-              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <span className="text-2xs px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
                 snapshot
               </span>
             )}
@@ -239,7 +239,7 @@ export function BriefingApp() {
 
         {data?.synthesis && (
           <div className="mb-4 md:mb-6 p-5 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
-            <div className="flex items-center gap-2 mb-2 text-xs uppercase tracking-wider text-primary font-semibold">
+            <div className="flex items-center gap-2 mb-2 text-xs text-primary font-semibold">
               <Sparkles className="w-3.5 h-3.5" />
               Briefing
             </div>
@@ -295,7 +295,7 @@ function SectionCard({ section }: { section: SectionResult }) {
   if (!section.ok) {
     return (
       <div className="p-4 rounded-lg border border-destructive/30 bg-destructive/5 mb-4">
-        <div className="text-xs uppercase tracking-wider text-destructive font-semibold mb-1">
+        <div className="text-xs text-destructive font-semibold mb-1">
           {section.icon} {section.title}
         </div>
         <div className="text-xs text-muted-foreground">Error: {section.error}</div>
@@ -402,13 +402,13 @@ function RenderSection({ section }: { section: SectionResult }) {
         )}
         {freeSlots.length > 0 && (
           <div className="mt-3 pt-3 border-t border-border/40 text-xs text-muted-foreground">
-            <div className="font-semibold mb-1.5 uppercase tracking-wider">Free slots</div>
+            <div className="font-semibold mb-1.5">Free slots</div>
             <div className="flex flex-wrap gap-1">
               {freeSlots.slice(0, 6).map((s: any, i: number) => (
                 <a
                   key={i}
                   href={`/r/calendar?date=${s.date}`}
-                  className="px-2.5 py-1 md:px-1.5 md:py-0.5 bg-muted rounded text-xs md:text-[11px] hover:bg-primary/15 hover:text-foreground transition"
+                  className="px-2.5 py-1 md:px-1.5 md:py-0.5 bg-muted rounded text-xs md:text-xs hover:bg-primary/15 hover:text-foreground transition"
                 >
                   {s.date.slice(5)} · {s.start}–{s.end}
                 </a>
@@ -446,7 +446,7 @@ function TaskList({ tasks }: { tasks: any[] }) {
               )}
               aria-hidden="true"
             >
-              {t.done && <span className="text-[10px] text-primary-foreground">✓</span>}
+              {t.done && <span className="text-2xs text-primary-foreground">✓</span>}
             </span>
             <span className={cn("flex-1", t.done && "line-through text-muted-foreground")}>
               {t.title}
@@ -457,7 +457,7 @@ function TaskList({ tasks }: { tasks: any[] }) {
               </span>
             )}
             {t.priority >= 2 && !t.done && (
-              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 shrink-0">
+              <span className="text-2xs px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 shrink-0">
                 !
               </span>
             )}
@@ -524,7 +524,7 @@ function ActionList({ title, items }: {
   if (items.length === 0) return null;
   return (
     <div className="mt-3 pt-3 border-t border-border/40">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+      <div className="text-2xs text-muted-foreground font-semibold mb-1.5">
         {title}
       </div>
       <ul className="space-y-0.5">

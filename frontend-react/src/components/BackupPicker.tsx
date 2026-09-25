@@ -203,7 +203,7 @@ export function BackupPicker({
                     : "Backup target unreachable."}
             </div>
             {status.history.length > 0 && (
-              <div className="text-[11px] text-muted-foreground mt-0.5">
+              <div className="text-xs text-muted-foreground mt-0.5">
                 Last run: {fmtDateRel(status.history[0].started_at)}
                 {status.history[0].ok ? " ✓" : " — failed"}
               </div>
@@ -214,7 +214,7 @@ export function BackupPicker({
 
       {/* Passphrase */}
       <div>
-        <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1.5 flex items-center gap-1">
+        <div className="text-xs text-muted-foreground font-semibold mb-1.5 flex items-center gap-1">
           <KeyRound className="w-3 h-3" />
           {status?.config.passphrase_set ? "Change passphrase (optional)" : "Set a passphrase"}
         </div>
@@ -226,7 +226,7 @@ export function BackupPicker({
           className="w-full h-9 px-3 bg-background border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring/40"
         />
         {!compact && (
-          <p className="text-[10px] text-muted-foreground mt-1">
+          <p className="text-2xs text-muted-foreground mt-1">
             Snapshots are encrypted with this passphrase (age + scrypt). <strong>Lose it and the snapshots are unrecoverable</strong> —
             write it down in a password manager NOW.
           </p>
@@ -235,7 +235,7 @@ export function BackupPicker({
 
       {/* Target */}
       <div>
-        <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+        <div className="text-xs text-muted-foreground font-semibold mb-1.5">
           Backup target
         </div>
         {volumes.length > 0 && (
@@ -261,9 +261,9 @@ export function BackupPicker({
                   <div className="text-sm font-medium">
                     {v.label || v.name}
                     {v.size && <span className="ml-2 text-xs text-muted-foreground">{v.size}</span>}
-                    {v.hotplug && <span className="ml-2 text-[9px] px-1 rounded bg-sky-500/15 text-sky-500 uppercase tracking-wider">external</span>}
+                    {v.hotplug && <span className="ml-2 text-2xs px-1 rounded bg-sky-500/15 text-sky-500">external</span>}
                   </div>
-                  <div className="text-[10px] text-muted-foreground font-mono break-all">{v.suggested_target}</div>
+                  <div className="text-2xs text-muted-foreground font-mono break-all">{v.suggested_target}</div>
                 </div>
               </label>
             ))}
@@ -288,7 +288,7 @@ export function BackupPicker({
               placeholder="/mnt/yorik-backups"
               className="mt-1 w-full h-8 px-2 bg-background border border-border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ring/40"
             />
-            <p className="text-[10px] text-muted-foreground mt-1">
+            <p className="text-2xs text-muted-foreground mt-1">
               Local dir, NAS mount, or anywhere else readable. You can also point this at a
               folder you rsync to cloud — backups are age-encrypted so the cloud sees only ciphertext.
             </p>
@@ -297,7 +297,7 @@ export function BackupPicker({
 
         {/* Same-filesystem warning — allowed, just flagged */}
         {sameFilesystem && (
-          <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5 text-[11px] text-amber-700 dark:text-amber-400 flex items-start gap-2">
+          <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <div>
               This target is on the SAME disk as your live data. Backups will protect you from
@@ -310,7 +310,7 @@ export function BackupPicker({
 
       {/* Schedule */}
       <div>
-        <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1.5 flex items-center gap-1">
+        <div className="text-xs text-muted-foreground font-semibold mb-1.5 flex items-center gap-1">
           <Clock className="w-3 h-3" /> Schedule
         </div>
         <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -334,11 +334,11 @@ export function BackupPicker({
 
       {/* Includes */}
       <div>
-        <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+        <div className="text-xs text-muted-foreground font-semibold mb-1.5">
           What to include
         </div>
         <div className="space-y-1">
-          <div className="text-[11px] text-muted-foreground mb-2">
+          <div className="text-xs text-muted-foreground mb-2">
             <strong>Always:</strong> calendar, contacts, tasks, bills, chat history, settings, encryption key.
             The toggles below add HEAVY data on top — expect snapshots in the GB range when on.
           </div>
@@ -388,12 +388,12 @@ export function BackupPicker({
       {/* Recent runs — only in full mode */}
       {!compact && status && status.history.length > 0 && (
         <div>
-          <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1.5 mt-2">
+          <div className="text-xs text-muted-foreground font-semibold mb-1.5 mt-2">
             Recent runs
           </div>
           <div className="space-y-1">
             {status.history.slice(0, 5).map(h => (
-              <div key={h.id} className="flex items-center gap-2 text-[11px] py-1 px-2 rounded bg-muted/30">
+              <div key={h.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded bg-muted/30">
                 {h.ok ? <Check className="w-3 h-3 text-emerald-500" /> : <AlertTriangle className="w-3 h-3 text-red-500" />}
                 <span>{new Date(h.started_at).toLocaleString()}</span>
                 {h.size_bytes && <span className="text-muted-foreground">· {fmtBytes(h.size_bytes)}</span>}
@@ -408,7 +408,7 @@ export function BackupPicker({
         <button
           type="button"
           onClick={refresh}
-          className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+          className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
         >
           <RefreshCw className="w-3 h-3" /> Refresh
         </button>
@@ -435,7 +435,7 @@ function IncludeToggle({
       />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium">{label}</div>
-        <div className="text-[10px] text-muted-foreground">{desc}</div>
+        <div className="text-2xs text-muted-foreground">{desc}</div>
       </div>
     </label>
   );

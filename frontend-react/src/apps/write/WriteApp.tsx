@@ -73,7 +73,7 @@ export function WriteApp() {
         {r.status === "final" ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" /> : r.kind === "letter" ? <PenLine className="w-3.5 h-3.5 shrink-0 text-muted-foreground" /> : <Receipt className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
         <span className="truncate">{r.kind === "letter" ? (r.title || "Ohne Betreff") : `${r.kind === "quote" ? "Angebot" : "Rechnung"} ${r.number || ""}${r.title ? ` · ${r.title}` : ""}`}</span>
       </div>
-      <div className="text-[11px] text-muted-foreground truncate pl-5">{r.recipient?.name || (r.kind === "letter" ? "ohne Empfänger" : "ohne Kunde")} · {(r.finalised_at || r.updated_at).slice(0, 10).split("-").reverse().join(".")}</div>
+      <div className="text-xs text-muted-foreground truncate pl-5">{r.recipient?.name || (r.kind === "letter" ? "ohne Empfänger" : "ohne Kunde")} · {(r.finalised_at || r.updated_at).slice(0, 10).split("-").reverse().join(".")}</div>
     </button>
   );
 
@@ -103,8 +103,8 @@ export function WriteApp() {
             {rows && rows.length === 0 && (
               <p className="px-3 text-sm text-muted-foreground">Noch nichts geschrieben. Lege etwas an, oder sag es Yorik im Chat: „Schreib der Hausverwaltung, dass die Heizung kalt ist“ oder „Rechnung an Mustermann: 3 Stunden Beratung zu 80 Euro“.</p>
             )}
-            {drafts.length > 0 && <section><h2 className="px-3 mb-1 text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Entwürfe</h2>{drafts.map(r => <Row key={r.id} r={r} />)}</section>}
-            {finals.length > 0 && <section><h2 className="px-3 mb-1 text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">Fertig</h2>{finals.map(r => <Row key={r.id} r={r} />)}</section>}
+            {drafts.length > 0 && <section><h2 className="px-3 mb-1 text-xs font-semibold text-muted-foreground">Entwürfe</h2>{drafts.map(r => <Row key={r.id} r={r} />)}</section>}
+            {finals.length > 0 && <section><h2 className="px-3 mb-1 text-xs font-semibold text-muted-foreground">Fertig</h2>{finals.map(r => <Row key={r.id} r={r} />)}</section>}
           </div>
           <button onClick={() => navigate("/settings?tab=profile")} className="m-3 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted text-left">
             Aussehen ändern: Settings → You → Your letterhead

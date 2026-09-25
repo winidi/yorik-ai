@@ -57,7 +57,7 @@ export function LoginScreen({ onLoggedIn }: Props) {
           className="bg-card border border-border rounded-2xl shadow-xl p-6 space-y-3"
         >
           <label className="block">
-            <div className="text-[11px] text-muted-foreground mb-1">Email</div>
+            <div className="text-xs text-muted-foreground mb-1">Email</div>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <input
@@ -74,7 +74,7 @@ export function LoginScreen({ onLoggedIn }: Props) {
           </label>
 
           <label className="block">
-            <div className="text-[11px] text-muted-foreground mb-1">Password</div>
+            <div className="text-xs text-muted-foreground mb-1">Password</div>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <input
@@ -110,7 +110,7 @@ export function LoginScreen({ onLoggedIn }: Props) {
           </button>
         </form>
 
-        <div className="text-[11px] text-muted-foreground text-center mt-6">
+        <div className="text-xs text-muted-foreground text-center mt-6">
           Local-first · your data stays on this machine
         </div>
       </div>

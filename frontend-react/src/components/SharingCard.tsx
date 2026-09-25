@@ -64,7 +64,7 @@ export function SharingCard({ toast, ownerId, title }: {
 
   return (
     <div className="bg-card border border-border rounded-xl p-5">
-      <h3 className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-3">{title || "Sharing"}</h3>
+      <h3 className="text-xs font-semibold text-muted-foreground mb-3">{title || "Sharing"}</h3>
       <div className="mb-3 flex items-start gap-2">
         <Users className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
         <div className="flex-1">
@@ -78,7 +78,7 @@ export function SharingCard({ toast, ownerId, title }: {
         </div>
       </div>
 
-      {status.members.length === 0 && <p className="text-[11px] text-muted-foreground">No other members yet.</p>}
+      {status.members.length === 0 && <p className="text-xs text-muted-foreground">No other members yet.</p>}
 
       {status.can_set_family_default && status.members.length > 0 && (
         <div className="mb-4 rounded-lg border border-border bg-muted/30 p-3">
@@ -118,7 +118,7 @@ export function SharingCard({ toast, ownerId, title }: {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-[11px] text-muted-foreground">
+            <tr className="text-xs text-muted-foreground">
               <th className="text-left font-normal py-1 pr-2">Member</th>
               {status.areas.map(a => <th key={a} className="font-normal py-1 px-1">{LABEL[a] || a}</th>)}
               <th className="font-normal py-1 px-1">Can edit</th>
@@ -134,7 +134,7 @@ export function SharingCard({ toast, ownerId, title }: {
                 <tr key={m.user_id} className={cn("border-t border-border", isBusy && "opacity-60")}>
                   <td className="py-2 pr-2">
                     <div className="font-medium truncate max-w-[10rem]">{m.name}</div>
-                    <div className="text-[10px] text-muted-foreground">{m.role}</div>
+                    <div className="text-2xs text-muted-foreground">{m.role}</div>
                   </td>
                   {status.areas.map(a => (
                     <td key={a} className="text-center px-1">
@@ -156,7 +156,7 @@ export function SharingCard({ toast, ownerId, title }: {
                       className="w-4 h-4 accent-violet-500"
                     />
                   </td>
-                  <td className="pl-3 text-[11px] text-muted-foreground">
+                  <td className="pl-3 text-xs text-muted-foreground">
                     {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> :
                       m.shares_with_me.areas.length
                         ? `${m.shares_with_me.areas.map(a => LABEL[a] || a).join(", ")}${m.shares_with_me.level === "write" ? " (edit)" : ""}`

@@ -411,7 +411,7 @@ function RegionStep({ profile, patch }:
         </select>
       </Field>
       {NUMBERING_PRESETS[profile.country] && (
-        <div className="text-[11px] text-muted-foreground bg-emerald-500/5 border border-emerald-500/20 rounded-md px-3 py-2 leading-relaxed">
+        <div className="text-xs text-muted-foreground bg-emerald-500/5 border border-emerald-500/20 rounded-md px-3 py-2 leading-relaxed">
           <strong className="text-emerald-600">Bonus:</strong> if you finish setup as a business,
           Yorik will set up legally-compliant invoice numbering for your country
           automatically — you can change everything later.
@@ -485,7 +485,7 @@ function AddressStep({ profile, patch }:
           className="w-full h-9 px-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
         />
       </Field>
-      <div className="text-[11px] text-muted-foreground">
+      <div className="text-xs text-muted-foreground">
         Stays on this machine. Yorik only uses it for documents you create.
       </div>
     </div>
@@ -510,7 +510,7 @@ function BusinessStep({ profile, patch }:
             <UserIcon className="w-4 h-4 text-violet-500" />
             <span className="font-medium">Personal</span>
           </div>
-          <div className="text-[11px] text-muted-foreground leading-relaxed">
+          <div className="text-xs text-muted-foreground leading-relaxed">
             Letters, government forms, family stuff. No invoice numbering needed.
           </div>
         </button>
@@ -527,7 +527,7 @@ function BusinessStep({ profile, patch }:
             <Building2 className="w-4 h-4 text-violet-500" />
             <span className="font-medium">Business</span>
           </div>
-          <div className="text-[11px] text-muted-foreground leading-relaxed">
+          <div className="text-xs text-muted-foreground leading-relaxed">
             Send invoices and quotes. Yorik sets up sequential numbering, ZUGFeRD when needed.
           </div>
         </button>
@@ -568,7 +568,7 @@ function BusinessStep({ profile, patch }:
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="text-[11px] text-muted-foreground mb-1">{label}</div>
+      <div className="text-xs text-muted-foreground mb-1">{label}</div>
       {children}
     </label>
   );

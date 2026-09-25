@@ -289,7 +289,6 @@ export function ContactsApp() {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/30 to-rose-500/30 flex items-center justify-center shadow-md">
               <UsersRound className="w-5 h-5 text-amber-500" />
             </div>
-            <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Yorik · contacts</span>
           </div>
           <h1 className="text-xl sm:text-3xl font-semibold leading-tight">
             {counts.active} contact{counts.active !== 1 ? "s" : ""}
@@ -498,7 +497,7 @@ export function ContactsApp() {
               const groups = groupContacts(contacts);
               return groups.map(([label, rows]) => (
                 <div key={label} className="mb-2">
-                  <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1.5">
+                  <div className="px-2 pt-2 pb-1 text-2xs text-muted-foreground font-semibold flex items-center gap-1.5">
                     {label === "Pinned" && <Star className="w-2.5 h-2.5 text-rose-500" />}
                     {label === "Recent" && <Clock className="w-2.5 h-2.5" />}
                     {label}
@@ -711,7 +710,7 @@ function ContactAvatar({
         {imgLoaded !== true && (
           contact.kind === "business"
             ? <Briefcase className={iconSize} />
-            : <span>{initials(bestContactName(contact))}</span>
+            : <span>{bestContactName(contact) === UNKNOWN_WA ? "?" : initials(bestContactName(contact))}</span>
         )}
       </div>
       {contact.yorik_assist_enabled && (
@@ -795,10 +794,10 @@ function ContactListRow({
         <div className="text-sm font-medium truncate flex items-center gap-1.5">
           {bestContactName(contact)}
           {contact.status === "pending" && (
-            <span className="text-[9px] uppercase tracking-wider px-1 rounded bg-amber-500/15 text-amber-500">pending</span>
+            <span className="text-2xs px-1 rounded bg-amber-500/15 text-amber-500">pending</span>
           )}
         </div>
-        <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1.5">
+        <div className="text-xs text-muted-foreground truncate flex items-center gap-1.5">
           {employerName && (
             <span className="inline-flex items-center gap-1 text-blue-500/80">
               <Briefcase className="w-2.5 h-2.5" />
@@ -814,7 +813,7 @@ function ContactListRow({
           {primaryChannel && (
             <>
               {(employerName || contact.relation) && <span className="opacity-40">·</span>}
-              <span className="opacity-60">{primaryChannel.value}</span>
+              <span className="opacity-60">{channelDisplay(primaryChannel.value)}</span>
             </>
           )}
         </div>
@@ -929,6 +928,17 @@ const CHANNEL_NAME_PRIORITY: ReadonlyArray<string> = [
 // it represents. @lid stays as a short fingerprint — there's no
 // phone number to recover. Used for the last-resort fallback when
 // no name is available anywhere.
+const UNKNOWN_WA = "Unknown WhatsApp contact";
+
+// A channel value as a person reads it: WhatsApp JIDs become the phone
+// number (or "WhatsApp, no number" for an @lid, which has none); mail
+// addresses and plain numbers stay as they are.
+function channelDisplay(value: string): string {
+  if (value.endsWith("@s.whatsapp.net")) return formatJidForDisplay(value);
+  if (value.endsWith("@lid")) return "WhatsApp, no number";
+  return value;
+}
+
 function formatJidForDisplay(jid: string): string {
   if (!jid) return "";
   if (jid.endsWith("@s.whatsapp.net")) {
@@ -938,7 +948,7 @@ function formatJidForDisplay(jid: string): string {
   if (jid.endsWith("@lid")) {
     const digits = jid.slice(0, jid.length - "@lid".length);
     // No phone number behind an @lid; the digits mean nothing to a person.
-    return digits ? "Unknown WhatsApp contact" : jid;
+    return digits ? UNKNOWN_WA : jid;
   }
   return jid;
 }
@@ -1163,10 +1173,10 @@ function ContactView({
               <PinIcon className="w-3.5 h-3.5 text-rose-500" />
             )}
             {contact.status === "pending" && (
-              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-medium">pending</span>
+              <span className="text-2xs px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-medium">pending</span>
             )}
             {contact.status === "spam" && (
-              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-500 font-medium flex items-center gap-1">
+              <span className="text-2xs px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-500 font-medium flex items-center gap-1">
                 <ShieldAlert className="w-3 h-3" />spam
               </span>
             )}
@@ -1230,7 +1240,7 @@ function ContactView({
             <Briefcase className="w-4 h-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground/80 font-semibold">
+            <div className="text-2xs text-muted-foreground/80 font-semibold">
               Works at
             </div>
             <div className="text-sm font-medium truncate">
@@ -1259,7 +1269,7 @@ function ContactView({
         <BigActionBtn
           icon={<MessageCircle className="w-4 h-4" />}
           label="WhatsApp"
-          sub={wa?.value}
+          sub={wa ? channelDisplay(wa.value) : undefined}
           disabledHint={wa ? undefined : "No WhatsApp on file"}
           onClick={() => {
             if (!wa) { onEdit(); return; }
@@ -1280,7 +1290,7 @@ function ContactView({
       {/* Activity timeline — what Yorik knows about this person.
           Loads lazily; collapses gracefully when there's nothing. */}
       <section>
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
+        <div className="text-2xs text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
           <Clock className="w-2.5 h-2.5" /> Activity
           {timeline && timeline.total > 0 && (
             <span className="opacity-60">· {timeline.total}</span>
@@ -1305,7 +1315,7 @@ function ContactView({
           the section entirely. */}
       {contact.kind === "business" && employees.length > 0 && (
         <section>
-          <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground/80 font-semibold mb-2">
+          <h3 className="text-2xs text-muted-foreground/80 font-semibold mb-2">
             People here · {employees.length}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1323,7 +1333,7 @@ function ContactView({
                     {p.display_name}
                   </div>
                   {p.role && (
-                    <div className="text-[11px] text-muted-foreground truncate">
+                    <div className="text-xs text-muted-foreground truncate">
                       {p.role}
                     </div>
                   )}
@@ -1368,7 +1378,7 @@ function BigActionBtn({
             When present it shows on all sizes since it's actionable
             info (the actual email / phone / city). */}
         {(disabledHint || sub) && (
-          <div className="text-[11px] text-muted-foreground truncate">
+          <div className="text-xs text-muted-foreground truncate">
             {disabledHint || sub}
           </div>
         )}
@@ -1412,14 +1422,14 @@ function TimelineList({ items }: { items: ContactTimelineItem[] }) {
             <div className="text-xs font-medium truncate flex items-center gap-1.5">
               {it.title}
               {it.direction === "outgoing" && (
-                <span className="text-[9px] uppercase tracking-wider opacity-60">sent</span>
+                <span className="text-2xs opacity-60">sent</span>
               )}
             </div>
             {it.sub && (
-              <div className="text-[11px] text-muted-foreground truncate">{it.sub}</div>
+              <div className="text-xs text-muted-foreground truncate">{it.sub}</div>
             )}
           </div>
-          <div className="text-[10px] text-muted-foreground tabular-nums shrink-0 mt-0.5">
+          <div className="text-2xs text-muted-foreground tabular-nums shrink-0 mt-0.5">
             {fmtShortDate(it.when)}
           </div>
           <ExternalLink className="w-3 h-3 text-muted-foreground/60 shrink-0 mt-1" />
@@ -1886,7 +1896,7 @@ function TriageModal({ onClose, onApplied }: {
                   onClick={() => { setKindFilter(v); fetchPage(0, v); }}
                   disabled={applying || loading}
                   className={cn(
-                    "text-[11px] px-2 py-1 rounded border transition disabled:opacity-50",
+                    "text-xs px-2 py-1 rounded border transition disabled:opacity-50",
                     isActive
                       ? "border-primary/40 bg-primary/5 text-primary"
                       : "border-border text-muted-foreground hover:text-foreground hover:bg-muted",
@@ -1909,11 +1919,11 @@ function TriageModal({ onClose, onApplied }: {
 
         {/* Filter row — narrow bulk actions to rows with specific data */}
         <div className="px-5 py-2 border-b border-border/60 flex items-center flex-wrap gap-x-4 gap-y-1.5 bg-muted/15">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold shrink-0">
+          <span className="text-2xs text-muted-foreground/70 font-semibold shrink-0">
             Filter (bulk acts on rows that have ALL checked):
           </span>
           <label className={cn(
-            "inline-flex items-center gap-1.5 text-[12px] cursor-pointer select-none px-2 py-1 rounded transition",
+            "inline-flex items-center gap-1.5 text-xs cursor-pointer select-none px-2 py-1 rounded transition",
             requireEmail ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground",
           )}>
             <input
@@ -1926,7 +1936,7 @@ function TriageModal({ onClose, onApplied }: {
             Email
           </label>
           <label className={cn(
-            "inline-flex items-center gap-1.5 text-[12px] cursor-pointer select-none px-2 py-1 rounded transition",
+            "inline-flex items-center gap-1.5 text-xs cursor-pointer select-none px-2 py-1 rounded transition",
             requirePhone ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground",
           )}>
             <input
@@ -1939,7 +1949,7 @@ function TriageModal({ onClose, onApplied }: {
             Phone
           </label>
           <label className={cn(
-            "inline-flex items-center gap-1.5 text-[12px] cursor-pointer select-none px-2 py-1 rounded transition",
+            "inline-flex items-center gap-1.5 text-xs cursor-pointer select-none px-2 py-1 rounded transition",
             requireAddress ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground",
           )}>
             <input
@@ -1954,13 +1964,13 @@ function TriageModal({ onClose, onApplied }: {
           {filterActive && (
             <button
               onClick={() => { setRequireEmail(false); setRequirePhone(false); setRequireAddress(false); }}
-              className="text-[11px] text-muted-foreground hover:underline ml-auto"
+              className="text-xs text-muted-foreground hover:underline ml-auto"
             >
               Clear filter
             </button>
           )}
           {filterActive && (
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {matchingItems.length} of {items.length} on page match
             </span>
           )}
@@ -2012,7 +2022,7 @@ function TriageModal({ onClose, onApplied }: {
           >
             Clear page
           </button>
-          <span className="ml-auto text-[11px] text-muted-foreground text-right hidden md:inline">
+          <span className="ml-auto text-xs text-muted-foreground text-right hidden md:inline">
             <kbd className="font-mono px-1 rounded bg-muted/60">P</kbd>=person ·
             {" "}<kbd className="font-mono px-1 rounded bg-muted/60">B</kbd>=business ·
             {" "}<kbd className="font-mono px-1 rounded bg-muted/60">A</kbd>=archive ·
@@ -2064,27 +2074,27 @@ function TriageModal({ onClose, onApplied }: {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2 flex-wrap">
                     <span className="text-sm font-semibold truncate">{it.name}</span>
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 px-1.5 py-0.5 rounded bg-muted/40">
+                    <span className="text-2xs text-muted-foreground/70 px-1.5 py-0.5 rounded bg-muted/40">
                       {it.kind}
                     </span>
                     {!hasData && (
-                      <span className="text-[10px] text-muted-foreground/50 italic">name only</span>
+                      <span className="text-2xs text-muted-foreground/50 italic">name only</span>
                     )}
                   </div>
 
                   {it.summary && (
-                    <div className="text-[12.5px] text-muted-foreground mt-1.5 leading-snug line-clamp-2">
+                    <div className="text-[13px] text-muted-foreground mt-1.5 leading-snug line-clamp-2">
                       {it.summary}
                     </div>
                   )}
 
                   {it.triage_reason && (
-                    <div className="mt-1.5 text-[11.5px] flex items-start gap-1.5 text-foreground/70 leading-snug">
+                    <div className="mt-1.5 text-xs flex items-start gap-1.5 text-foreground/70 leading-snug">
                       <Sparkles className="w-3 h-3 text-primary/70 mt-[2px] shrink-0" />
                       <span className="italic">
                         Yorik: {it.triage_reason}
                         {it.triage_confidence && (
-                          <span className="ml-1 text-[10px] uppercase tracking-wider text-muted-foreground/70 not-italic">
+                          <span className="ml-1 text-2xs text-muted-foreground/70 not-italic">
                             · {it.triage_confidence}
                           </span>
                         )}
@@ -2093,7 +2103,7 @@ function TriageModal({ onClose, onApplied }: {
                   )}
 
                   {(channels.length > 0 || addresses.length > 0) && (
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
                       {channels.map((ch, i) => {
                         const Icon = ch.kind === "email"  ? Mail
                                    : ch.kind === "phone"  ? Phone
@@ -2131,7 +2141,7 @@ function TriageModal({ onClose, onApplied }: {
                         e.stopPropagation();
                         setExpandedId(expandedId === it.id ? null : it.id);
                       }}
-                      className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                      className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
                     >
                       <Mail className="w-3 h-3" />
                       {expandedId === it.id ? "Hide emails" : "Show emails"}
@@ -2194,7 +2204,7 @@ function TriageModal({ onClose, onApplied }: {
 
         {/* Footer */}
         <footer className="px-5 py-3 border-t border-border flex items-center gap-3">
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <button
               onClick={() => fetchPage(Math.max(0, offset - PAGE_SIZE), kindFilter)}
               disabled={offset === 0 || loading || applying}
@@ -2256,14 +2266,14 @@ function TriageEmailPreview({ contactId }: { contactId: number }) {
 
   if (api_.loading) {
     return (
-      <div className="mt-2 text-[11px] text-muted-foreground italic">
+      <div className="mt-2 text-xs text-muted-foreground italic">
         Loading emails…
       </div>
     );
   }
   if (items.length === 0) {
     return (
-      <div className="mt-2 text-[11px] text-muted-foreground italic">
+      <div className="mt-2 text-xs text-muted-foreground italic">
         No emails found from this sender.
       </div>
     );
@@ -2288,12 +2298,12 @@ function TriageEmailPreview({ contactId }: { contactId: number }) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="block group text-[11.5px] leading-snug rounded px-1.5 -mx-1.5 py-0.5 hover:bg-muted/50 transition cursor-pointer"
+            className="block group text-xs leading-snug rounded px-1.5 -mx-1.5 py-0.5 hover:bg-muted/50 transition cursor-pointer"
             title="Open this email in a new tab"
           >
             <div className="flex items-baseline gap-2">
               <span className={cn(
-                "text-[9px] uppercase tracking-wider shrink-0 px-1 rounded",
+                "text-2xs shrink-0 px-1 rounded",
                 it.direction === "outgoing"
                   ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                   : "bg-muted text-muted-foreground",
@@ -2303,13 +2313,13 @@ function TriageEmailPreview({ contactId }: { contactId: number }) {
               <span className="font-medium truncate group-hover:underline">{it.title}</span>
               <ExternalLink className="w-2.5 h-2.5 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0" />
               {it.when && (
-                <span className="ml-auto text-[10px] text-muted-foreground/60 tabular-nums shrink-0">
+                <span className="ml-auto text-2xs text-muted-foreground/60 tabular-nums shrink-0">
                   {fmtShortDate(it.when)}
                 </span>
               )}
             </div>
             {it.sub && (
-              <div className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{it.sub}</div>
+              <div className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{it.sub}</div>
             )}
           </a>
         </li>
@@ -2348,7 +2358,7 @@ function TriageChip({
       onClick={onClick}
       title={`${label} (${shortcut})${suggested ? " — Yorik's verdict" : ""}`}
       className={cn(
-        "inline-flex items-center gap-1 px-2 py-1.5 rounded-md border text-[11px] font-medium transition min-w-[28px] justify-center",
+        "inline-flex items-center gap-1 px-2 py-1.5 rounded-md border text-xs font-medium transition min-w-[28px] justify-center",
         active ? toneActive[tone] : `border-border text-muted-foreground ${toneHover[tone]}`,
         suggested && !active && "ring-1 ring-primary/30",
       )}
@@ -2555,12 +2565,12 @@ function DetailsBlock({ contact }: { contact: Contact }) {
 
   return (
     <section className="border-t border-border pt-4 space-y-3">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+      <div className="text-2xs text-muted-foreground font-semibold">
         Details
       </div>
       {channelGroups.map(g => (
         <div key={g.label}>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground/80 mb-0.5">{g.label}</div>
+          <div className="text-2xs text-muted-foreground/80 mb-0.5">{g.label}</div>
           {g.items.map(ch => {
             // Wrap actionable channel values in tel: / mailto: / WA
             // links so mobile users get one-tap dial / compose. text-sm
@@ -2572,7 +2582,7 @@ function DetailsBlock({ contact }: { contact: Contact }) {
                          ? `https://wa.me/${ch.value.replace(/[^\d]/g, "")}`
                          : undefined;
             const valueEl = (
-              <span className="font-medium break-all">{ch.value}</span>
+              <span className="font-medium break-all">{channelDisplay(ch.value)}</span>
             );
             return (
               <div key={ch.id} className="text-sm md:text-xs flex items-center gap-2 py-0.5">
@@ -2587,7 +2597,7 @@ function DetailsBlock({ contact }: { contact: Contact }) {
       ))}
       {contact.addresses.length > 0 && (
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground/80 mb-0.5 flex items-center gap-1">
+          <div className="text-2xs text-muted-foreground/80 mb-0.5 flex items-center gap-1">
             <MapPin className="w-2.5 h-2.5" /> Addresses
           </div>
           {contact.addresses.map(a => {
@@ -2614,7 +2624,7 @@ function DetailsBlock({ contact }: { contact: Contact }) {
       )}
       {contact.notes && (
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground/80 mb-1">Notes</div>
+          <div className="text-2xs text-muted-foreground/80 mb-1">Notes</div>
           <div className="text-xs whitespace-pre-wrap leading-relaxed text-foreground/90">
             {renderNotesWithDocLinks(contact.notes)}
           </div>
@@ -2960,10 +2970,10 @@ function ContactEditor({
           <KindToggle current={kind} value="business" label="Business" icon={<Briefcase className="w-3 h-3" />} onSelect={setKind} />
         </div>
         {contact?.status === "pending" && (
-          <span className="text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-amber-500/15 text-amber-500 font-medium">pending</span>
+          <span className="text-2xs px-2 py-1 rounded-full bg-amber-500/15 text-amber-500 font-medium">pending</span>
         )}
         {contact?.status === "spam" && (
-          <span className="text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-red-500/15 text-red-500 font-medium flex items-center gap-1">
+          <span className="text-2xs px-2 py-1 rounded-full bg-red-500/15 text-red-500 font-medium flex items-center gap-1">
             <ShieldAlert className="w-3 h-3" />spam
           </span>
         )}
@@ -3108,7 +3118,7 @@ function ContactEditor({
             >
               <Wand2 className="w-3 h-3" /> Enrich this contact
               {sourcesAvailable && (
-                <span className="ml-1 opacity-70 text-[10px] tabular-nums">
+                <span className="ml-1 opacity-70 text-2xs tabular-nums">
                   ({sourcesAvailable.emails}e · {sourcesAvailable.whatsapp}wa · {sourcesAvailable.documents}d · {sourcesAvailable.calendar}cal)
                 </span>
               )}
@@ -3156,7 +3166,7 @@ function ContactEditor({
             so running Enrich won't find anything to suggest. Add an email or WhatsApp
             channel below first, OR wait until you've exchanged a few messages with them.
             {sourcesAvailable.seeds.length > 0 && (
-              <div className="mt-1 text-[10px] opacity-70 font-mono">
+              <div className="mt-1 text-2xs opacity-70 font-mono">
                 Tried search seeds: {sourcesAvailable.seeds.join(" · ")}
               </div>
             )}
@@ -3180,7 +3190,7 @@ function ContactEditor({
               <Loader2 className="w-4 h-4 animate-spin shrink-0 mt-0.5" />
               <div className="flex-1">
                 <div className="font-medium">Scanning data for {displayName || "this contact"}…</div>
-                <div className="text-[11px] mt-1 opacity-80 leading-relaxed">
+                <div className="text-xs mt-1 opacity-80 leading-relaxed">
                   Reading recent emails, WhatsApp messages, Paperless documents, and calendar events.
                   Then asking the LLM to extract address, birthday, relation, and other field
                   suggestions with source citations. Usually 5–30 seconds.
@@ -3196,7 +3206,7 @@ function ContactEditor({
                   {enrichBanner.written} new suggestion{enrichBanner.written === 1 ? "" : "s"} —
                   fields above are highlighted with a ⌄ chip.
                 </div>
-                <div className="text-[11px] mt-1 opacity-80">
+                <div className="text-xs mt-1 opacity-80">
                   Scanned {enrichBanner.scanned.emails || 0} email{enrichBanner.scanned.emails === 1 ? "" : "s"},
                   {" "}{enrichBanner.scanned.whatsapp || 0} WhatsApp message{enrichBanner.scanned.whatsapp === 1 ? "" : "s"},
                   {" "}{enrichBanner.scanned.documents || 0} document{enrichBanner.scanned.documents === 1 ? "" : "s"},
@@ -3213,7 +3223,7 @@ function ContactEditor({
               <UserIcon className="w-4 h-4 shrink-0 mt-0.5 opacity-60" />
               <div className="flex-1">
                 <div className="font-medium">No new information found.</div>
-                <div className="text-[11px] mt-1 opacity-80">
+                <div className="text-xs mt-1 opacity-80">
                   Scanned {enrichBanner.scanned.emails || 0} email{enrichBanner.scanned.emails === 1 ? "" : "s"},
                   {" "}{enrichBanner.scanned.whatsapp || 0} WhatsApp message{enrichBanner.scanned.whatsapp === 1 ? "" : "s"},
                   {" "}{enrichBanner.scanned.documents || 0} document{enrichBanner.scanned.documents === 1 ? "" : "s"},
@@ -3231,7 +3241,7 @@ function ContactEditor({
               <StopCircle className="w-4 h-4 shrink-0 mt-0.5 opacity-60" />
               <div className="flex-1">
                 <div className="font-medium">Stopped.</div>
-                <div className="text-[11px] mt-1 opacity-80">
+                <div className="text-xs mt-1 opacity-80">
                   The LLM may still finish in the background — if proposals appear, refresh this contact to see them.
                 </div>
               </div>
@@ -3245,7 +3255,7 @@ function ContactEditor({
               <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <div className="font-medium">Enrich failed</div>
-                <div className="text-[11px] mt-1 opacity-90 font-mono break-all">{enrichBanner.message}</div>
+                <div className="text-xs mt-1 opacity-90 font-mono break-all">{enrichBanner.message}</div>
               </div>
               <button onClick={() => setEnrichBanner(null)} className="p-0.5 hover:opacity-70" aria-label="Dismiss">
                 <X className="w-3 h-3" />
@@ -3276,7 +3286,7 @@ function KindToggle({
       type="button"
       onClick={() => onSelect(value)}
       className={cn(
-        "text-[11px] px-2.5 py-1 rounded flex items-center gap-1 transition",
+        "text-xs px-2.5 py-1 rounded flex items-center gap-1 transition",
         current === value ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
     >
@@ -3286,7 +3296,7 @@ function KindToggle({
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <label className="block text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">{children}</label>;
+  return <label className="block text-2xs text-muted-foreground font-semibold mb-1">{children}</label>;
 }
 
 function LabelledInput({
@@ -3354,7 +3364,7 @@ function ProposalDropdown({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="mt-1 inline-flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 px-1.5 py-0.5 rounded transition"
+        className="mt-1 inline-flex items-center gap-1 text-2xs text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 px-1.5 py-0.5 rounded transition"
         title="Suggestions from the LLM contact enricher"
       >
         <Wand2 className="w-2.5 h-2.5" />
@@ -3379,16 +3389,16 @@ function ProposalDropdown({
                 >
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <span className="font-medium truncate flex-1">{p.proposed_value}</span>
-                    <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                    <span className="text-2xs text-muted-foreground tabular-nums shrink-0">
                       {Math.round(p.confidence * 100)}%
                     </span>
                   </div>
                   {p.source_snippet && (
-                    <div className="text-[10px] text-muted-foreground mt-1 line-clamp-2 italic">
+                    <div className="text-2xs text-muted-foreground mt-1 line-clamp-2 italic">
                       "{p.source_snippet}"
                     </div>
                   )}
-                  <div className="text-[9px] text-muted-foreground/70 mt-0.5 uppercase tracking-wider">
+                  <div className="text-2xs text-muted-foreground/70 mt-0.5">
                     {p.source_kind.replace(/_/g, " ")}
                   </div>
                 </button>
@@ -3471,13 +3481,13 @@ function BirthdayField({
         className="w-full h-11 md:h-8 px-2 bg-background border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring/40"
       />
       {preview && (
-        <div className="text-[10px] text-muted-foreground mt-0.5 pl-1">{preview}</div>
+        <div className="text-2xs text-muted-foreground mt-0.5 pl-1">{preview}</div>
       )}
       {suggestion && !value && (
         <button
           type="button"
           onClick={applySuggestion}
-          className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-violet-500/10 border border-violet-500/30 text-violet-600 hover:bg-violet-500/15 transition"
+          className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs bg-violet-500/10 border border-violet-500/30 text-violet-600 hover:bg-violet-500/15 transition"
           title={`Detected from ${suggestion.evidence_count} birthday message${suggestion.evidence_count === 1 ? "" : "s"} you sent`}
         >
           <Star className="w-2.5 h-2.5" />
@@ -3517,7 +3527,7 @@ function ChipField({
             type="button"
             onClick={() => onChange(opt.value)}
             className={cn(
-              "text-[11px] px-2.5 py-1 rounded-full border transition",
+              "text-xs px-2.5 py-1 rounded-full border transition",
               value === opt.value
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-card border-border text-muted-foreground hover:text-foreground",
@@ -3533,7 +3543,7 @@ function ChipField({
             placeholder="other…"
             maxLength={12}
             className={cn(
-              "h-7 w-24 px-2 rounded-full text-[11px] focus:outline-none transition",
+              "h-7 w-24 px-2 rounded-full text-xs focus:outline-none transition",
               showFreeText
                 ? "bg-primary/15 text-primary border border-primary/40"
                 : "bg-background border border-border text-muted-foreground placeholder:text-muted-foreground/60",
@@ -3601,8 +3611,8 @@ function ChannelsPanel({
           <div key={ch.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md border border-border bg-background text-sm">
             <span className="text-muted-foreground">{CHANNEL_ICONS[ch.kind] || <Globe className="w-3.5 h-3.5" />}</span>
             <span className="font-medium">{ch.value}</span>
-            {ch.label && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{ch.label}</span>}
-            <span className="text-[10px] text-muted-foreground opacity-60 ml-auto">{ch.source}</span>
+            {ch.label && <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{ch.label}</span>}
+            <span className="text-2xs text-muted-foreground opacity-60 ml-auto">{ch.source}</span>
             <button
               onClick={() => remove(ch)}
               className="p-1 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
@@ -3708,7 +3718,7 @@ function InboxSuggestions({
   return (
     <div className="mt-2 rounded-md border border-dashed border-border bg-muted/20 p-2">
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
+        <div className="text-2xs text-muted-foreground font-semibold flex items-center gap-1">
           <Mail className="w-3 h-3" /> From your inbox
         </div>
         <div className="relative">
@@ -3717,17 +3727,17 @@ function InboxSuggestions({
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="search emails…"
-            className="h-6 pl-5 pr-2 w-44 bg-background border border-border rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-ring/30"
+            className="h-6 pl-5 pr-2 w-44 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-ring/30"
           />
         </div>
       </div>
       {loading && (
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground py-1">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground py-1">
           <Loader2 className="w-3 h-3 animate-spin" /> Searching…
         </div>
       )}
       {!loading && hasRun && results.length === 0 && (
-        <div className="text-[11px] text-muted-foreground italic py-1">
+        <div className="text-xs text-muted-foreground italic py-1">
           {query ? "No matches in inbox." : "Nothing in your inbox matched this name — try searching above."}
         </div>
       )}
@@ -3745,7 +3755,7 @@ function InboxSuggestions({
               <span className="font-medium">{r.from_email}</span>
               {r.from_name && <span className="text-muted-foreground truncate">· {r.from_name}</span>}
             </div>
-            <div className="text-[10px] text-muted-foreground truncate flex items-center gap-1.5">
+            <div className="text-2xs text-muted-foreground truncate flex items-center gap-1.5">
               <span>{r.msg_count} message{r.msg_count === 1 ? "" : "s"}</span>
               {r.last_seen && (
                 <>
@@ -3859,7 +3869,7 @@ function AddressesPanel({
       <Label>Addresses</Label>
       {parsedProposals.length > 0 && (
         <div className="mb-2 p-2 rounded-md bg-amber-500/5 border border-amber-500/20">
-          <div className="text-[10px] text-amber-700 dark:text-amber-300 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+          <div className="text-2xs text-amber-700 dark:text-amber-300 mb-1.5 flex items-center gap-1">
             <Wand2 className="w-2.5 h-2.5" /> Suggested addresses · click to pre-fill
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -3871,17 +3881,17 @@ function AddressesPanel({
                 title={proposal.source_snippet
                   ? `"${proposal.source_snippet}" — from ${proposal.source_kind.replace(/_/g, " ")}`
                   : `From ${proposal.source_kind.replace(/_/g, " ")}`}
-                className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-card border border-amber-500/30 hover:bg-amber-500/10 hover:border-amber-500/50 transition text-left"
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-card border border-amber-500/30 hover:bg-amber-500/10 hover:border-amber-500/50 transition text-left"
               >
                 <MapPin className="w-2.5 h-2.5 text-amber-600 shrink-0" />
                 <span className="max-w-[200px] truncate">{summary}</span>
-                <span className="text-[9px] text-muted-foreground tabular-nums">
+                <span className="text-2xs text-muted-foreground tabular-nums">
                   {Math.round(proposal.confidence * 100)}%
                 </span>
               </button>
             ))}
           </div>
-          <div className="text-[10px] text-muted-foreground mt-1.5 italic">
+          <div className="text-2xs text-muted-foreground mt-1.5 italic">
             Picking fills only what was found — type the rest yourself (e.g. street number for a city-only suggestion). You can always paste in a fresh address you got via phone.
           </div>
         </div>
@@ -3894,7 +3904,7 @@ function AddressesPanel({
           <div key={a.id} className="flex items-start gap-2 px-2 py-1.5 rounded-md border border-border bg-background text-sm">
             <MapPin className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
             <div className="flex-1 leading-tight">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{a.kind}{a.label ? ` · ${a.label}` : ""}</div>
+              <div className="text-2xs text-muted-foreground">{a.kind}{a.label ? ` · ${a.label}` : ""}</div>
               <div>{[a.line1, a.line2].filter(Boolean).join(", ")}</div>
               <div className="text-xs text-muted-foreground">{[a.postcode, a.city, a.region, a.country].filter(Boolean).join(" · ")}</div>
             </div>
@@ -3942,7 +3952,7 @@ function AddressesPanel({
             className="col-span-2 h-11 md:h-8 px-2 bg-background border border-border rounded-md text-sm focus:outline-none" />
           <input value={country} onChange={e => setCountry(e.target.value)} placeholder="DE"
             maxLength={2}
-            className="h-11 md:h-8 px-2 bg-background border border-border rounded-md text-sm focus:outline-none uppercase" />
+            className="h-11 md:h-8 px-2 bg-background border border-border rounded-md text-sm focus:outline-none" />
 
           {/* On-demand scrape: opens the LLM extractor over WhatsApp+
               email passages with this contact. Cached after first run. */}
@@ -4039,14 +4049,14 @@ function AddressScrapePanel({
   return (
     <div className="rounded-md border border-dashed border-violet-500/30 bg-violet-500/5 p-2">
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <div className="text-[10px] uppercase tracking-wider text-violet-600 font-semibold flex items-center gap-1">
+        <div className="text-2xs text-violet-600 font-semibold flex items-center gap-1">
           <Star className="w-3 h-3" /> From your messages
         </div>
         <button
           type="button"
           onClick={runScrape}
           disabled={scraping}
-          className="text-[11px] px-2 py-1 rounded-md bg-violet-500 text-white hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
+          className="text-xs px-2 py-1 rounded-md bg-violet-500 text-white hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
           title={data.scraped_at
             ? `Last scraped ${new Date(data.scraped_at).toLocaleString()}`
             : "Yorik will scan WhatsApp + emails with this contact for any postal address"}
@@ -4057,13 +4067,13 @@ function AddressScrapePanel({
       </div>
 
       {!scraping && data.scraped_at && data.candidates.length === 0 && (
-        <div className="text-[11px] text-muted-foreground italic py-1">
+        <div className="text-xs text-muted-foreground italic py-1">
           Yorik scanned the history and didn't find a postal address.
         </div>
       )}
 
       {scraping && (
-        <div className="text-[11px] text-muted-foreground py-1 flex items-center gap-1.5">
+        <div className="text-xs text-muted-foreground py-1 flex items-center gap-1.5">
           <Loader2 className="w-3 h-3 animate-spin" />
           Scanning {data.passages_scanned || ""} messages with Yorik — usually 3–5s…
         </div>
@@ -4082,7 +4092,7 @@ function AddressScrapePanel({
             <div className="text-xs">
               {[c.line1, c.line2].filter(Boolean).join(", ")}
             </div>
-            <div className="text-[10px] text-muted-foreground">
+            <div className="text-2xs text-muted-foreground">
               {[c.postcode, c.city, c.region, c.country].filter(Boolean).join(" · ")}
               {c.confidence != null && (
                 <span className="ml-2 opacity-60">· {Math.round(c.confidence * 100)}%</span>
@@ -4090,7 +4100,7 @@ function AddressScrapePanel({
               <span className="ml-2 opacity-60">· from {c.source_kind}</span>
             </div>
             {c.excerpt && (
-              <div className="text-[10px] text-muted-foreground/80 italic mt-0.5 line-clamp-1">
+              <div className="text-2xs text-muted-foreground/80 italic mt-0.5 line-clamp-1">
                 "{c.excerpt}"
               </div>
             )}
