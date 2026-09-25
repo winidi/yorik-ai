@@ -179,6 +179,13 @@ if pgrep -f "uvicorn backend.main" >/dev/null 2>&1; then
   ok "killed stray 'uvicorn backend.main' processes"
 fi
 
+if [[ -f docker-compose.app.yml ]] && command -v docker >/dev/null 2>&1 \
+   && docker ps -a --format '{{.Names}}' | grep -qx yorik-app; then
+  say "CONTAINER" "removing the Yorik container + its image"
+  docker compose -f docker-compose.app.yml down --rmi local 2>/dev/null && ok "yorik-app removed" \
+    || warn "couldn't remove yorik-app — continuing"
+fi
+
 if [[ -n "$COMPOSE_CMD" ]]; then
   say "DOCKER" "tearing down containers + volumes"
   if $COMPOSE_CMD down -v --remove-orphans 2>/dev/null; then
@@ -302,7 +309,7 @@ if [[ -f config.env ]]; then
   ok "removed config.env"
 fi
 
-rm -f /tmp/homeos-api.pid /tmp/homeos-api.log .install-record
+rm -f /tmp/homeos-api.pid /tmp/homeos-api.log .install-record .yorik-runtime
 ok "removed /tmp/homeos-api.{pid,log}"
 
 # ── Done ─────────────────────────────────────────────────────────────

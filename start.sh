@@ -162,6 +162,19 @@ check_no_default_secrets() {
 }
 
 # ─────────────────────────────────────────────────────────────────────
+# Runtime: "classic" (Python venv on this machine, the default) or
+# "container" (install.sh --container: Yorik runs from the image built by
+# Dockerfile, see docker-compose.app.yml). In container mode the venv,
+# model downloads and migrations happen inside the container, and the
+# few backend calls below go through `docker exec`.
+YORIK_RUNTIME="${YORIK_RUNTIME:-classic}"
+if [[ -f .yorik-runtime ]]; then YORIK_RUNTIME="$(tr -d '[:space:]' < .yorik-runtime)"; fi
+if [[ "$YORIK_RUNTIME" == "container" ]]; then
+  YORIK_PY=(docker exec -i -w /app yorik-app python)
+else
+  YORIK_PY=(python3)
+fi
+
 # PHASE 1 — System packages
 # ─────────────────────────────────────────────────────────────────────
 say "PHASE 1" "system packages"
@@ -243,6 +256,9 @@ fi
 # PHASE 3 — Python environment
 # ─────────────────────────────────────────────────────────────────────
 say "PHASE 3" "Python environment"
+if [[ "$YORIK_RUNTIME" == "container" ]]; then
+  skip "container runtime: Yorik's Python lives in the image"
+else
 
 if [[ -d venv ]] && [[ -f venv/bin/activate ]]; then
   skip "venv/ exists"
@@ -289,11 +305,15 @@ else
   echo "$NEW_HASH" > "$REQ_HASH_FILE"
   ok "python deps installed"
 fi
+fi  # classic runtime
 
 # ─────────────────────────────────────────────────────────────────────
 # PHASE 4 — Model files (Parakeet STT, Supertonic TTS, speaker encoder, embedder)
 # ─────────────────────────────────────────────────────────────────────
 say "PHASE 4" "model files"
+if [[ "$YORIK_RUNTIME" == "container" ]]; then
+  skip "container runtime: the container fetches its models on first start"
+else
 
 # Pre-flight: data/ must be writable by the host user before we mkdir
 # anything inside it. dockerd auto-creates bind-mount source paths as
@@ -406,6 +426,8 @@ else
   || warn "embedder download failed — semantic search will fetch it on first use"
 fi
 
+fi  # classic runtime
+
 # NOTE: the embedder is no longer started here. It's served by whichever
 # OpenAI-compatible LLM backend the user configured (Settings → LLM).
 # Ollama and llama.cpp both expose /v1/embeddings; LM Studio does too.
@@ -420,13 +442,18 @@ say "PHASE 5" "database"
 # been brought up by hand, it just records the existing migrations
 # and exits in ~3s.
 bash scripts/bootstrap-supabase.sh
-python3 -m backend.database
-ok "database schema current (Postgres in the bundled Supabase stack)"
+if [[ "$YORIK_RUNTIME" == "container" ]]; then
+  ok "database up (the container brings the schema up to date when it starts)"
+else
+  python3 -m backend.database
+  ok "database schema current (Postgres in the bundled Supabase stack)"
+fi
 
 # ─────────────────────────────────────────────────────────────────────
 # PHASE 6 — Services
 # ─────────────────────────────────────────────────────────────────────
 say "PHASE 6" "services"
+if [[ "$YORIK_RUNTIME" != "container" ]]; then
 
 # Stop any old uvicorn we previously started
 if [[ -f /tmp/homeos-api.pid ]]; then
@@ -549,6 +576,7 @@ if [[ -d "frontend-react/src" && -f "frontend-react/scripts/fingerprint.sh" ]]; 
   fi
 fi
 
+fi  # classic runtime (in container mode the container owns :$PORT)
 LOG=/tmp/homeos-api.log
 
 # Default to all interfaces — most self-hosters want Yorik reachable
@@ -576,9 +604,24 @@ fi
 # --proxy-headers: behind Caddy / Tailscale Serve on this host the
 # session cookie must be issued with the Secure flag; uvicorn only sees
 # the https scheme through X-Forwarded-Proto from 127.0.0.1.
+if [[ "$YORIK_RUNTIME" == "container" ]]; then
+  export YORIK_UID="$(id -u)" YORIK_GID="$(id -g)"
+  say "CONTAINER" "building + starting the Yorik container (first build ~5 min)"
+  docker compose -f docker-compose.app.yml up -d --build yorik >"$LOG" 2>&1 \
+    || fail "the Yorik container didn't start — see $LOG"
+  # First start fetches ~1.5 GB of speech/search models into data/.
+  for _ in $(seq 1 240); do
+    curl -fs --max-time 2 "http://localhost:$PORT/api/health" >/dev/null 2>&1 && break
+    sleep 5
+  done
+  curl -fs --max-time 2 "http://localhost:$PORT/api/health" >/dev/null 2>&1 \
+    && ok "Yorik container answering on :$PORT (docker logs -f yorik-app)" \
+    || warn "Yorik container not answering yet — docker logs -f yorik-app"
+else
 nohup uvicorn backend.main:app --host "$YORIK_BIND" --port "$PORT" --proxy-headers --forwarded-allow-ips 127.0.0.1 $RELOAD_ARG >"$LOG" 2>&1 &
 echo $! > /tmp/homeos-api.pid
 ok "uvicorn started on $YORIK_BIND:$PORT  (pid $(cat /tmp/homeos-api.pid), log: $LOG)"
+fi
 
 _docker_ready() {
   # `docker` CLI being on PATH doesn't mean the daemon is responding —
@@ -958,8 +1001,8 @@ if _docker_ready; then
   # yorik-paperless-web container — it's meaningless against a user's
   # external instance. Short-circuit with a clear nudge to Connectors.
   if [[ "${PAPERLESS_BYO:-false}" == "true" ]]; then
-    skip "paperless is BYO — paste your API token at Settings → Connectors → Paperless"
-  elif ! python3 -c "
+    skip "paperless is BYO — Yorik can't make its own key there; see docs/help/03-paperless.md"
+  elif ! "${YORIK_PY[@]}" -c "
 from backend.database import conn_ctx, DEFAULT_DB_PATH
 import os
 with conn_ctx(os.getenv('HOMEOS_DB_PATH', DEFAULT_DB_PATH)) as c:
@@ -1008,7 +1051,7 @@ t, _ = Token.objects.get_or_create(user=u)
 print(t.key)
 " 2>/dev/null | tail -1 | tr -d '[:space:]')
       if [[ -n "$TOKEN" ]]; then
-        python3 -c "
+        "${YORIK_PY[@]}" -c "
 from backend.database import conn_ctx, DEFAULT_DB_PATH
 from backend import credential_store
 import os
@@ -1047,7 +1090,7 @@ credential_store.put('paperless', {
   # generate an API key for Yorik. Stores the key in app_settings so
   # /api/auth/setup can provision per-Yorik-user Immich accounts.
   # Idempotent: if app_settings already has an immich_api_key, skip.
-  HAVE_IMMICH_KEY=$(python3 -c "
+  HAVE_IMMICH_KEY=$("${YORIK_PY[@]}" -c "
 try:
     from backend import credential_store
     creds = credential_store.get('immich') or {}
@@ -1088,7 +1131,7 @@ except Exception:
             # Store in credential_store (Fernet-encrypted) — that's where
             # backend/external_users.provision_immich reads from. Also
             # mirror into app_settings for the Settings UI to display.
-            python3 -c "
+            "${YORIK_PY[@]}" -c "
 from backend import credential_store
 from backend.database import conn_ctx, DEFAULT_DB_PATH
 import os

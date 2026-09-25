@@ -1,0 +1,20 @@
+# Build context for the Yorik app image (Dockerfile). Only source goes
+# in; everything user-owned or rebuildable stays on the host.
+.git
+venv/
+data/
+models/
+e2e/
+archive/
+notes/
+tests/
+frontend-react/node_modules/
+frontend-react/dist/
+frontend-react/tsconfig.app.tsbuildinfo
+infra/supabase/docker/
+whatsapp-bridge/node_modules/
+config.env
+.install-record
+**/__pycache__/
+**/*.pyc
+.yorik-runtime

@@ -23,6 +23,7 @@ CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/yorik-vm"
 IMG_URL="https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
 BASE="$CACHE/noble-server-cloudimg-amd64.img"
 LLM="${LLM:-none}"
+EXTRA="${EXTRA:-}"   # more install.sh flags, e.g. EXTRA=--container
 SSH_PORT="${SSH_PORT:-2222}"
 WEB_PORT="${WEB_PORT:-18000}"
 STAMP="$(date +%Y-%m-%d-%H%M)"
@@ -85,9 +86,9 @@ tar -C "$REPO" --exclude=./venv --exclude=./data --exclude=./node_modules --excl
     --exclude=./.install-record --exclude=./archive --exclude=./.git -czf "$WORK/src.tgz" .
 cat "$WORK/src.tgz" | "${SSH[@]}" "mkdir -p ~/yorik-ai && tar -xzf - -C ~/yorik-ai" && pass "source copied ($(du -h "$WORK/src.tgz" | cut -f1))"
 
-step "bash install.sh --llm=$LLM --no-tailscale  (no terminal: it must not ask anything)"
+step "bash install.sh --llm=$LLM --no-tailscale $EXTRA  (no terminal: it must not ask anything)"
 t0=$(date +%s)
-"${SSH[@]}" "cd ~/yorik-ai && timeout 90m bash install.sh --llm=$LLM --no-tailscale </dev/null" > "$OUT/install.log" 2>&1
+"${SSH[@]}" "cd ~/yorik-ai && timeout 90m bash install.sh --llm=$LLM --no-tailscale $EXTRA </dev/null" > "$OUT/install.log" 2>&1
 rc=$?
 mins=$(( ($(date +%s) - t0) / 60 ))
 if [[ $rc == 0 ]]; then pass "install.sh finished in ${mins} min"; else fail "install.sh exited $rc after ${mins} min (tail: $(tail -3 "$OUT/install.log" | tr '\n' ' '))"; fi
@@ -111,8 +112,14 @@ curl -fsS -b "$JAR" "http://127.0.0.1:$WEB_PORT/api/help" | grep -q '"topics"' &
 curl -fsS "http://127.0.0.1:$WEB_PORT/r/home" | grep -q '<div id="root">' && pass "the app page is served" || fail "/r/home not served"
 
 step "Services"
-"${SSH[@]}" "systemctl is-active --quiet yorik" && pass "systemd runs yorik.service" || fail "yorik.service not active"
-"${SSH[@]}" "systemctl list-unit-files yorik-update.service | grep -q yorik-update" && pass "in-app update unit installed" || fail "yorik-update.service missing"
+if [[ "$EXTRA" == *--container* ]]; then
+  "${SSH[@]}" "sudo docker inspect -f '{{.State.Health.Status}}' yorik-app" 2>/dev/null | grep -q healthy \
+    && pass "Yorik runs as the yorik-app container (healthy)" || fail "yorik-app container not healthy"
+  "${SSH[@]}" "test ! -d ~/yorik-ai/venv" && pass "no Python venv on the host" || fail "a host venv exists in container mode"
+else
+  "${SSH[@]}" "systemctl is-active --quiet yorik" && pass "systemd runs yorik.service" || fail "yorik.service not active"
+  "${SSH[@]}" "systemctl list-unit-files yorik-update.service | grep -q yorik-update" && pass "in-app update unit installed" || fail "yorik-update.service missing"
+fi
 "${SSH[@]}" "test -f ~/yorik-ai/.install-record" && pass "install record written" || fail "no .install-record"
 
 step "Reboot"
@@ -133,7 +140,7 @@ fi
 {
   echo "# Fresh install test — $STAMP"
   echo
-  echo "Ubuntu 24.04 cloud image, --llm=$LLM --no-tailscale, $(cd "$REPO" && git log -1 --format='%h %s')"
+  echo "Ubuntu 24.04 cloud image, --llm=$LLM --no-tailscale $EXTRA, $(cd "$REPO" && git log -1 --format='%h %s')"
   echo
   for r in "${RESULTS[@]}"; do echo "- $r"; done
 } > "$OUT/README.md"

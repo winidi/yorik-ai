@@ -200,6 +200,20 @@ def _upgrade(args: argparse.Namespace) -> int:
     r = _run(["git", "diff", "--name-only", f"{old_head}..HEAD"])
     changed = set(r.stdout.strip().splitlines())
 
+    if (_repo / ".yorik-runtime").is_file() and (_repo / ".yorik-runtime").read_text().strip() == "container":
+        # Container runtime: the image carries the deps and the bundle;
+        # rebuild it and let the new container apply the migrations.
+        _step("rebuilding the Yorik container")
+        env = dict(_os.environ, YORIK_UID=str(_os.getuid()), YORIK_GID=str(_os.getgid()))
+        r = _run(["bash", "scripts/bootstrap-supabase.sh"])
+        if r.returncode != 0:
+            return _fail(f"bootstrap-supabase.sh failed:\n{r.stderr[-1500:]}")
+        r = _run(["docker", "compose", "-f", "docker-compose.app.yml", "up", "-d", "--build", "yorik"], env=env)
+        if r.returncode != 0:
+            return _fail(f"container rebuild failed:\n{r.stderr[-2000:]}")
+        print("  ✓ new container running (docker logs -f yorik-app)")
+        return 0
+
     needs_pip = any(f.startswith("backend/requirements") for f in changed)
     needs_npm_install = any(f.startswith("frontend-react/package") for f in changed)
     needs_npm_build = any(f.startswith("frontend-react/src/") or f.startswith("frontend-react/package")

@@ -79,3 +79,4 @@ models/
 
 # What install.sh set up (read by scripts/uninstall.sh)
 .install-record
+.yorik-runtime

@@ -32,6 +32,8 @@
 #                    (e.g. http://10.0.0.5:8080/v1); probed first.
 #   --no-autostart   Don't install the systemd unit.
 #   --no-tailscale   Don't install or configure Tailscale (home Wi-Fi only).
+#   --container      Run Yorik itself as a container (Dockerfile); nothing
+#                    of Yorik's Python on this machine. Restarts with Docker.
 #   --dir=PATH       Install here. Default: this clone, else $HOME/yorik.
 #   --yes, --no-llm  Kept for old scripts (--no-llm = --llm=none).
 #   --help           This message.
@@ -84,6 +86,7 @@ FLAG_YES=1
 FLAG_NO_LLM=0
 FLAG_NO_AUTOSTART=0
 FLAG_NO_TAILSCALE=0
+FLAG_CONTAINER=0
 FLAG_LLM=""
 FLAG_REMOTE_LLM_URL=""
 FLAG_DIR=""
@@ -96,6 +99,7 @@ for arg in "$@"; do
     --llm=auto)      FLAG_LLM="" ;;
     --no-autostart)  FLAG_NO_AUTOSTART=1 ;;
     --no-tailscale)  FLAG_NO_TAILSCALE=1 ;;
+    --container)     FLAG_CONTAINER=1 ;;
     --llm=ollama)    FLAG_LLM="ollama" ;;
     --llm=cuda)      FLAG_LLM="cuda" ;;
     --llm=existing)  FLAG_LLM="existing" ;;
@@ -104,7 +108,7 @@ for arg in "$@"; do
     --dir=*)         FLAG_DIR="${arg#--dir=}" ;;
     --full)          FLAG_FULL=1 ;;
     --help|-h)
-      sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,38p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *) fatal "unknown flag: $arg" "see --help" ;;
@@ -962,6 +966,13 @@ phase "Start Yorik (start.sh)"
 # prompt (line 1078) that would otherwise hang install.sh. The check
 # at line 1052 (`[[ -t 0 ]]`) auto-skips it when stdin isn't a TTY.
 # Our own systemd handling runs in the next phase below.
+# --container: start.sh builds the image and runs Yorik from it; the
+# choice is remembered in .yorik-runtime for re-runs and upgrades.
+if [[ "$FLAG_CONTAINER" == "1" ]]; then
+  echo container > .yorik-runtime
+  record runtime container
+  ok "runtime: container (Dockerfile, docker-compose.app.yml)"
+fi
 YORIK_ALLOW_STALE_DIST=1 bash start.sh </dev/null
 
 # ─── wait for health ──────────────────────────────────────────────────
@@ -1096,7 +1107,9 @@ _install_polkit_rule() {
 }
 
 SYSTEMD_UNIT="/etc/systemd/system/yorik.service"
-if [[ "$FLAG_NO_AUTOSTART" == "1" ]]; then
+if [[ -f .yorik-runtime && "$(cat .yorik-runtime)" == "container" ]]; then
+  skip "container runtime: Docker restarts Yorik at boot (restart: unless-stopped)"
+elif [[ "$FLAG_NO_AUTOSTART" == "1" ]]; then
   skip "autostart skipped (--no-autostart); Yorik runs until the next reboot"
 elif [[ -f "$SYSTEMD_UNIT" ]]; then
   skip "yorik.service already installed at $SYSTEMD_UNIT"
