@@ -71,7 +71,7 @@ async def execute(
     contact_obj = None
     if not chat_jid and contact_id:
         from backend import contacts as _contacts_mod
-        contact_obj = _contacts_mod.get(int(contact_id))
+        contact_obj = _contacts_mod.get(int(contact_id), role=(getattr(ctx, "role", None) or "member"), user_id=getattr(ctx, "user_id", None))   # audit 2026-09-25, L5
         if not contact_obj:
             raise ValueError(
                 f"contact_id={contact_id} not found. Re-call find_person "

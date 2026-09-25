@@ -420,6 +420,13 @@ def get_document(doc_id: int) -> Optional[Dict[str, Any]]:
     return dict(row) if row else None
 
 
+def owned_by(doc: Optional[Dict[str, Any]], user_id: Any) -> bool:
+    """Is this local upload the person's own? A local row is a copy of
+    what went to Paperless; anyone else reaches the document through
+    Paperless with their own token, where its sharing is decided."""
+    return bool(doc) and user_id is not None and str(doc.get("owner_user_id") or "") == str(user_id)
+
+
 def delete_document(doc_id: int) -> bool:
     """Remove the document row, its chunks, its vectors, and the file on disk."""
     # The embedding is a column on document_chunks;

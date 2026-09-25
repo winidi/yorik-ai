@@ -460,7 +460,7 @@ async def execute(
     if contact_id:
         try:
             from backend import contacts as _contacts_mod
-            contact_obj = _contacts_mod.get(int(contact_id))
+            contact_obj = _contacts_mod.get(int(contact_id), role=(getattr(ctx, "role", None) or "member"), user_id=getattr(ctx, "user_id", None))   # audit 2026-09-25, L5
             if contact_obj:
                 # Recipient defaults to the contact's name unless the LLM
                 # explicitly overrode it.

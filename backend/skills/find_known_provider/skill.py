@@ -63,16 +63,22 @@ async def execute(
 
     candidates: list[dict[str, Any]] = []
     source_counts = {"contacts": 0, "paperless": 0, "calendar": 0}
+    # Only what the person may see — contacts and events used to be read
+    # household-wide, private ones included (audit 2026-09-25, L4).
+    uid = getattr(ctx, "user_id", None)
+    role = getattr(ctx, "role", None) or "member"
+    if uid is None:
+        raise ValueError("find_known_provider needs the person it runs for")
 
     # ── 1. Contacts ───────────────────────────────────────────────
     try:
         from backend import contacts as C
-        all_rows = C.search("", kind="business", status="active", limit=500)
+        all_rows = C.search("", kind="business", status="active", limit=500, role=role, user_id=uid)
         # Also include person-kind contacts whose relation/display_name
         # matches (e.g. "Dr. Schmidt" relation="Zahnärztin").
-        all_rows += C.search("", kind="person", status="active", limit=500)
+        all_rows += C.search("", kind="person", status="active", limit=500, role=role, user_id=uid)
         for row in all_rows:
-            full = C.get(row["id"])
+            full = C.get(row["id"], role=role, user_id=uid)
             if not full: continue
             name = full.get("display_name") or ""
             relation = full.get("relation") or ""
@@ -135,13 +141,19 @@ async def execute(
     # ── 3. Past calendar events with locations ───────────────────
     try:
         from backend.database import get_conn
+        from backend.calendars import visible_event_filter, downgrade_for_privacy
+        vis_sql, vis_params = visible_event_filter(uid, role)
         with get_conn() as conn:
             rows = conn.execute(
-                "SELECT id, title, starts_at, location, location_lat, location_lon "
+                "SELECT id, title, starts_at, location, location_lat, location_lon, "
+                "       calendar_id, owner_user_id, visibility, notes "
                 "FROM events "
                 "WHERE location IS NOT NULL AND TRIM(location) <> '' "
+                f"AND ({vis_sql}) "
                 "ORDER BY starts_at DESC LIMIT 80",
+                vis_params,
             ).fetchall()
+        rows = [downgrade_for_privacy(dict(r), uid, role) for r in rows]
         for r in rows:
             matched = _haystack_match(r["title"] or "", keywords)
             if not matched: continue

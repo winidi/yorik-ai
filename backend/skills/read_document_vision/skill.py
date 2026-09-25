@@ -163,9 +163,9 @@ def _resolve_pdf(doc_id: int, user_id: Any = None) -> tuple[Optional[str], Optio
     """
     # Native upload first.
     try:
-        from backend.documents import get_document
+        from backend.documents import get_document, owned_by
         doc = get_document(doc_id)
-        if doc and doc.get("path"):
+        if doc and doc.get("path") and owned_by(doc, user_id):   # audit 2026-09-25, L1
             return doc["path"], "native", doc.get("title")
     except Exception:  # noqa: BLE001
         pass

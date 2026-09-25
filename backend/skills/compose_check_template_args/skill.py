@@ -240,9 +240,10 @@ async def execute(
             import json as _json_load
             from backend.database import conn_ctx as _cctx_pre, DEFAULT_DB_PATH as _ddb_pre
             with _cctx_pre(_ddb_pre) as _c:
+                # Only the person's own draft (audit 2026-09-25, L3).
                 _row = _c.execute(
-                    "SELECT args_json FROM compose_drafts WHERE id = ?",
-                    (int(existing_draft_id),),
+                    "SELECT args_json FROM compose_drafts WHERE id = ? AND user_id = ?",
+                    (int(existing_draft_id), getattr(ctx, "user_id", None)),
                 ).fetchone()
             if _row and _row["args_json"]:
                 stored = _json_load.loads(_row["args_json"]) or {}
@@ -282,7 +283,6 @@ async def execute(
     ):
         try:
             conv_id = getattr(ctx, "conversation_id", None)
-            role = getattr(ctx, "role", "admin")
             if conv_id:
                 from backend.agent.conversation_io import load_messages as _load_msgs
                 # limit=300 absorbs the post-Phase-4 read-first overhead
@@ -293,7 +293,7 @@ async def execute(
                 # already buried the user's intent under tool-result rows
                 # and only the synthetic [template_picked] follow-up (which
                 # we skip) remained in window — extraction got nothing.
-                prior = _load_msgs(conv_id, role, limit=300) or []
+                prior = _load_msgs(conv_id, getattr(ctx, "user_id", None), limit=300) or []
                 # Grab last ~3 user messages — that's where the intent
                 # lives. Skip [form_submit] / [template_picked] /
                 # [photo_picked] meta-messages and synthetic system text.

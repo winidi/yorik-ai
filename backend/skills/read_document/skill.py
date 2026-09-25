@@ -30,7 +30,7 @@ async def execute(ctx, doc_id: int) -> dict[str, Any]:
     if doc_id_int <= 0:
         raise ValueError(f"doc_id must be positive, got {doc_id_int}")
 
-    from backend.documents import get_document, get_docs_conn, DOCS_DB_PATH
+    from backend.documents import get_document, get_docs_conn, owned_by, DOCS_DB_PATH
 
     # Native uploads path: doc_id points at the `documents` table; chunks
     # live in document_chunks. Only commit to this path if the native
@@ -38,7 +38,10 @@ async def execute(ctx, doc_id: int) -> dict[str, Any]:
     # (write succeeded, indexing crashed) used to win the lookup and
     # the skill returned empty text instead of finding the real doc.
     doc = get_document(doc_id_int)
-    if doc:
+    # Only the uploader reads the local copy; everyone else goes through
+    # Paperless with their own token (audit 2026-09-25, L1). This also
+    # stops an upload with the same number hiding the Paperless document.
+    if doc and owned_by(doc, getattr(ctx, "user_id", None)):
         doc.pop("path", None)  # never expose on-disk paths to the LLM
         with get_docs_conn(DOCS_DB_PATH) as conn:
             rows = conn.execute(

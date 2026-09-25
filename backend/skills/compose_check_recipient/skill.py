@@ -134,7 +134,7 @@ async def execute(
             ),
         }
 
-    contact = C.get(cid)
+    contact = C.get(cid, role=(getattr(ctx, "role", None) or "member"), user_id=getattr(ctx, "user_id", None))   # only a contact the person sees (audit 2026-09-25, L5)
     if not contact:
         return {
             "_llm_hint": (

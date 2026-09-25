@@ -111,6 +111,11 @@ async def _invoke_n8n(spec: "ConnectorSpec", params: Dict[str, Any]) -> Dict[str
     return await asyncio.to_thread(lambda: n8n_client.trigger_webhook(path, params))
 
 
+# Connectors that read one install-wide account. Asked for a person,
+# they refuse; the admin's settings page (no person) may still test them.
+_HOUSEHOLD_ACCOUNT_CONNECTORS = {"email-imap", "email-gmail", "banking-fints"}
+
+
 async def invoke(name: str, params: Dict[str, Any], *, user_id: Any = None) -> Dict[str, Any]:
     """Call a connector by name. Always returns a dict — errors land in `error` key.
 
@@ -132,6 +137,26 @@ async def invoke(name: str, params: Dict[str, Any], *, user_id: Any = None) -> D
             params["creds_override"] = creds
         elif "creds_override" not in params:
             return {"ok": False, "error": "the Paperless connector needs the person it runs for"}
+    if name == "immich":
+        # Same rule for photos: the person's own Immich key or nothing.
+        # The global key is the admin's library — the chat handed it to
+        # every account, children included (audit 2026-09-25, L2).
+        params = dict(params or {})
+        if user_id is not None:
+            from ..external_users import get_user_immich_creds
+            creds = get_user_immich_creds(user_id)
+            if not creds:
+                return {"ok": False, "error": "no Immich account for this person — no photos to search"}
+            params["creds_override"] = creds
+        elif "creds_override" not in params:
+            return {"ok": False, "error": "the Immich connector needs the person it runs for"}
+    if name in _HOUSEHOLD_ACCOUNT_CONNECTORS and user_id is not None:
+        # These run on one install-wide account (a mailbox, a bank
+        # login). Whoever asks would read that account; mail and money
+        # have their own per-person paths (email skills, bills).
+        return {"ok": False, "error": (
+            f"'{name}' runs on the household's shared account, not on yours — "
+            "for mail use the mail skills (email_briefing, read_email)")}
 
     # n8n-backed connectors don't have a Python invoke — they route through webhook.
     if spec.backend == "n8n":
