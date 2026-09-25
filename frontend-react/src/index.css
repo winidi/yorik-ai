@@ -12,6 +12,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Type: Nunito Sans for text, Nunito (rounded, the family board's face)
+   for headings, so the app and the wall read as one family. Bundled
+   like the board's fonts; Yorik runs offline. Latin subset, OFL. */
+@font-face { font-family: "Nunito Sans"; font-style: normal; font-weight: 200 1000; font-display: swap; src: url("/r/fonts/NunitoSans-var-latin.woff2") format("woff2"); }
+@font-face { font-family: "Nunito"; font-style: normal; font-weight: 600; font-display: swap; src: url("/r/fonts/Nunito-600.woff2") format("woff2"); }
+@font-face { font-family: "Nunito"; font-style: normal; font-weight: 700; font-display: swap; src: url("/r/fonts/Nunito-700.woff2") format("woff2"); }
+@font-face { font-family: "Nunito"; font-style: normal; font-weight: 800; font-display: swap; src: url("/r/fonts/Nunito-800.woff2") format("woff2"); }
+
 :root {
   /* Height the floating Dock occupies at the bottom of every screen
      (tiles + its offset). Anything fixed to the bottom edge — the mail
@@ -92,6 +100,8 @@
    timestamps and badges in tight rows. Nothing in the app goes under
    it; running text starts at xs. */
 @theme {
+  --font-sans: "Nunito Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Nunito", "Nunito Sans", -apple-system, "Segoe UI", sans-serif;
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
 }
@@ -136,7 +146,7 @@
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* Body itself does not scroll (overflow lives on inner containers
@@ -198,3 +208,7 @@ body {
    root), so text and tap targets grow together without a separate
    layout. Set from AuthGate via <html data-role>. */
 html[data-role="child"] { font-size: 17px; }
+
+/* Headings in the rounded face. Page titles and section heads only;
+   running text, buttons and lists stay in Nunito Sans. */
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.005em; }
