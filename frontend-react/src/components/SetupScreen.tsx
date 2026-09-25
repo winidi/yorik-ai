@@ -177,7 +177,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
           </div>
 
           <div className="text-xs text-muted-foreground text-center mt-6">
-            Stored encrypted on this machine. Find it later under Settings → Connectors → Paperless.
+            Stored encrypted on this machine. Yorik won't show it again, so keep it somewhere safe.
           </div>
         </div>
       </div>

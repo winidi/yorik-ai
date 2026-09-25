@@ -18,12 +18,13 @@ import {
   House, Calendar, ListTodo, MessageSquare, FolderOpen,
   FilePlus, Camera, MessageCircle, Inbox, Contact,
   Newspaper, Settings,
-  Mic, type LucideIcon, LayoutGrid, PenLine, Landmark, Workflow } from "lucide-react";
+  Mic, type LucideIcon, LayoutGrid, PenLine, Landmark, Workflow, CircleHelp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { dockOrderFor, isKid, REACT_ROUTES } from "@/lib/dock-order";
 import { useAuth } from "@/components/AuthGate";
+import { openHelp } from "@/components/HelpPanel";
 
 interface AppInfo {
   id: string;
@@ -172,6 +173,16 @@ export function Dock({ activeAppId }: Props) {
           {community.map(tile)}
         </>
       )}
+      {/* Help for the app you're in, always the last tile. */}
+      <span className="w-px h-[30px] bg-border/40 mx-0.5 shrink-0" />
+      <button
+        onClick={() => openHelp()}
+        title="Help"
+        aria-label="Help"
+        className="inline-flex items-center justify-center w-12 h-12 rounded-2xl shrink-0 ring-1 ring-border/60 bg-card/40 hover:-translate-y-1.5 hover:scale-110 transition-[transform] duration-150"
+      >
+        <CircleHelp className="w-[22px] h-[22px] text-muted-foreground" strokeWidth={2.25} aria-hidden />
+      </button>
     </nav>
   );
 }

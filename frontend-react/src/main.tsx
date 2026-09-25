@@ -25,6 +25,7 @@ import { AmbientApp } from "./apps/ambient/AmbientApp";
 import { CommunityApp } from "./apps/community/CommunityApp";
 import { CommandPalette } from "./components/CommandPalette";
 import { NotificationBell } from "./components/NotificationBell";
+import { HelpPanel } from "./components/HelpPanel";
 // OnboardingModal kept as a file for now, but not mounted — user
 // said the small inline onboarding hints throughout the app are
 // enough and the welcome modal was popping on every reload (bug
@@ -195,6 +196,7 @@ createRoot(document.getElementById("root")!).render(
           <ChromeGate>
             <CommandPalette />
             <NotificationBell />
+            <HelpPanel />
             <DocBucketPill />
           </ChromeGate>
           {/* VoiceFab + NavigationBridge always mounted — VoiceFab is

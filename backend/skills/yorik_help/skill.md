@@ -26,6 +26,11 @@ when_to_use: |
   - Dark mode, colors, look and feel → topic="themes"
   - ZUGFeRD, regional add-ons, optional modules → topic="extensions"
   - Errors, "not working", debug, logs → topic="troubleshooting"
+  - Recording a conversation, transcript, dinner recording → topic="recordings"
+  - Family board, wall tablet, kiosk, routines, chores → topic="family-board"
+  - Writing letters in the Schreiben app, letterhead → topic="schreiben"
+  - Bank account, spending, Finanzen → topic="finance"
+  - Following up on a sent mail, pipelines, nachfassen → topic="pipelines"
 
   If you don't know which topic, pass `query` with the user's words — the skill ranks topics by keyword match.
 
@@ -42,7 +47,8 @@ inputs:
     description: |
       One of the topic ids: first-run | llm-setup | paperless | immich
       | tailscale | voice | whatsapp | email | compose | contacts
-      | calendar | tasks | briefing | themes | extensions | troubleshooting.
+      | calendar | tasks | briefing | themes | extensions | troubleshooting
+      | next-steps | recordings | family-board | schreiben | finance | pipelines.
       Pick the closest one to the user's question.
   query:
     type: string

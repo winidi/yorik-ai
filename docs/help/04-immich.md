@@ -51,7 +51,7 @@ By default: the entire camera roll, in original quality. Albums you toggle off d
 
 ### Multiple family members
 
-Each person gets their own Immich user account (Immich UI → Account → Add user). Each phone signs in with its own user. Each user sees only their own library — except shared albums which work across users.
+Each person gets their own Immich user account automatically when they get a Yorik account, with the same email and password. Each phone signs in with its own user. Each user sees only their own library — except shared albums which work across users.
 
 ## Face recognition
 

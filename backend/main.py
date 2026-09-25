@@ -213,6 +213,8 @@ app.include_router(_demo_routes.router)
 # without affecting the maintainer's logged-in state.
 from . import onboarding_routes as _onboarding_routes
 app.include_router(_onboarding_routes.router)
+from . import help_routes as _help_routes
+app.include_router(_help_routes.router)
 
 # Paperless reverse-proxy — gives the Documents app an "Open in Paperless"
 # button that drops the user inside Paperless already authenticated as
@@ -13190,9 +13192,10 @@ def sync_paperless_now(role: str = Depends(_auth.current_role)) -> Dict[str, Any
             return {
                 "ok": False,
                 "error": (
-                    "No Paperless API token configured and auto-heal failed "
-                    "(bundled Paperless container not running, or BYO setup). "
-                    "Open Settings → Connectors → Paperless and paste a token."
+                    "Documents aren't connected, and Yorik couldn't repair the "
+                    "link on its own (the document archive isn't running, or it "
+                    "was set up by hand). An admin can try 'Reconnect documents' "
+                    "under Settings → System."
                 ),
                 "checked": 0, "missing": 0, "ingested": 0, "skipped": 0, "failed": 0,
             }
@@ -13212,11 +13215,10 @@ def sync_paperless_now(role: str = Depends(_auth.current_role)) -> Dict[str, Any
             return {
                 "ok": False,
                 "error": (
-                    "Paperless rejected the stored token (HTTP 401) and "
-                    "auto-heal couldn't mint a replacement. Check that "
-                    "yorik-paperless-web is healthy and the admin user "
-                    "exists; otherwise paste a token manually under "
-                    "Settings → Connectors → Paperless."
+                    "The document archive refused Yorik's key and Yorik "
+                    "couldn't make a new one. An admin can try 'Reconnect "
+                    "documents' under Settings → System; if that fails, the "
+                    "archive (yorik-paperless-web) needs a look."
                 ),
                 "checked": 0, "missing": 0, "ingested": 0, "skipped": 0, "failed": 0,
             }

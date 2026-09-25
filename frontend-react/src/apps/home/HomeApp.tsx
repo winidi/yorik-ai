@@ -25,7 +25,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Sparkles, Calendar, MessageSquare, FolderOpen, FilePlus,
   MessageCircle, Inbox, Newspaper, Settings as Cog,
-  RefreshCw, ArrowRight, Plus, Search, Camera, ListTodo,
+  RefreshCw, ArrowRight, Plus, Search, Camera, ListTodo, CircleHelp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -34,6 +34,7 @@ import { Dock, APP_VISUAL } from "@/components/Dock";
 import { isKid, KID_ORDER } from "@/lib/dock-order";
 import { DemoDataPanel } from "@/components/DemoDataPanel";
 import { FamilyRow } from "@/components/FamilyRow";
+import { openHelp } from "@/components/HelpPanel";
 import { useHouseHealth, type SystemStatus, type HealthIssue } from "@/components/SystemStatusPanel";
 
 // One bit of data we want to surface on each app tile, pulled from the
@@ -159,6 +160,14 @@ export function HomeApp() {
               <kbd className="text-2xs px-1.5 py-0.5 rounded bg-background border border-border">
                 {navigator.platform.includes("Mac") ? "⌘K" : "Ctrl K"}
               </kbd>
+            </button>
+            <button
+              onClick={() => openHelp()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/40 hover:bg-muted text-xs text-muted-foreground hover:text-foreground transition"
+              title="Help: how Yorik works, step by step"
+            >
+              <CircleHelp className="w-3.5 h-3.5" />
+              <span>Help</span>
             </button>
             <button
               onClick={refresh}

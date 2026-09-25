@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { SystemStatusPanel } from "@/components/SystemStatusPanel";
 import { isKid } from "@/lib/dock-order";
+import { openHelp } from "@/components/HelpPanel";
 import { useTriPane, MobileBackdrop, mobileAsideLeft } from "@/components/MobileShell";
 import { AppInstallConsentDialog } from "@/components/AppInstallConsentDialog";
 import { cn } from "@/lib/utils";
@@ -157,7 +158,13 @@ export function SettingsApp() {
           ))}
         </div>
 
-        <footer className="border-t border-border px-4 py-3 text-xs">
+        <footer className="border-t border-border px-4 py-3 text-xs space-y-2">
+          <button
+            onClick={() => openHelp()}
+            className="w-full text-left text-muted-foreground hover:text-foreground transition"
+          >
+            Help
+          </button>
           <button
             onClick={() => auth.logout()}
             className="w-full text-left text-muted-foreground hover:text-foreground transition"

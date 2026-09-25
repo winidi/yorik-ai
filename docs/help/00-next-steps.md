@@ -18,7 +18,7 @@ You don't have to do all three. Pick the one that matters most.
 
 ## 1. Connect an email account (~2 min)
 
-The setup is wizard-driven, no manual IMAP/SMTP entry needed for the common providers (Gmail, Outlook/Hotmail, GMX, iCloud, mail.de, Web.de, T-Online, Strato — all auto-detected from the address).
+Type your address and Yorik fills in the server settings for the common providers (Gmail, Outlook/Hotmail, GMX, iCloud, mail.de, Web.de, T-Online, Strato). Some of them want an app password instead of your normal one; the form says so and links to where you get it.
 
 **Steps:**
 
@@ -78,7 +78,7 @@ Immich is the photo library. The killer feature is phone autosync — once confi
 
 1. On your phone, install the **Immich** app (Android Play Store / iOS App Store).
 2. In the app: **Server URL** = `http://<your-machine-ip>:2283` (or your Tailscale hostname — see `tailscale`).
-3. Log in with the Immich account Yorik created for you during setup (same email as your Yorik admin account; the password was shown once during install — check Settings → Account → Credentials).
+3. Log in with the Immich account Yorik created for you: your Yorik email and your Yorik password. (If your Yorik password didn't meet the archive's rules, setup showed a separate password once; use that one.)
 4. App → Settings → **Background backup: ON**. Pick whether to upload over WiFi only or also on cellular.
 
 Done. Photos taken from now on appear in Yorik within a minute.

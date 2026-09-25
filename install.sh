@@ -508,8 +508,10 @@ if [[ -z "$DECIDED_LLM" ]]; then
       _default="u"
       _prompt="  Choice [U/r/l/s]: "
     else
-      _default="s"
-      _prompt="  Choice [r/l/${_default^^}]: "
+      # Nothing found: install one here. Enter must never leave the
+      # chat without a model; skipping stays available as [s].
+      _default="l"
+      _prompt="  Choice [r/${_default^^}/s]: "
     fi
     while true; do
       printf "%s" "$_prompt"
@@ -549,7 +551,7 @@ fi
 case "$DECIDED_LLM" in
   existing) LLM_LINE="use existing LLM at ${DETECTED_LLM_URL} (model: ${DETECTED_LLM_MODEL})" ;;
   remote)   LLM_LINE="use remote LLM at ${DETECTED_LLM_URL} (model: ${DETECTED_LLM_MODEL})" ;;
-  cuda)     LLM_LINE="install llama.cpp:server-cuda + unsloth/Qwen3.5-9B-GGUF (Q5_K_M, ~7 GB) + vision projector" ;;
+  cuda)     LLM_LINE="install llama.cpp:server-cuda + unsloth/Qwen3.5-9B-MTP-GGUF (UD-Q5_K_XL, ~7 GB) + vision projector" ;;
   ollama)   LLM_LINE="install Ollama + robit/qwen3.5-9b-r7-research-vision:q4km (~6.3 GB, vision works)" ;;
   none)     LLM_LINE="skip LLM install (you'll point Yorik at one later)" ;;
 esac
@@ -715,6 +717,40 @@ case "$DECIDED_LLM" in
     # somewhere to write.
     mkdir -p "$MODEL_DIR"
 
+    # `docker run --gpus all` needs NVIDIA's container toolkit on the
+    # host. Nothing else installs it, and without it the model unit
+    # fails on the very first GPU box ("could not select device driver").
+    if ! command -v nvidia-ctk >/dev/null 2>&1; then
+      say "installing NVIDIA container toolkit (lets Docker use the GPU)"
+      if [[ "$PKG_MGR" == "apt" ]]; then
+        wait_for_dpkg_lock
+        curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+          | sudo gpg --dearmor --yes -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+        curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+          | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+          | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
+        sudo apt-get update -qq
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nvidia-container-toolkit >/dev/null
+      elif [[ "$PKG_MGR" == "dnf" ]]; then
+        curl -fsSL https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo \
+          | sudo tee /etc/yum.repos.d/nvidia-container-toolkit.repo >/dev/null
+        sudo dnf install -y -q nvidia-container-toolkit
+      fi
+      command -v nvidia-ctk >/dev/null 2>&1 \
+        || fatal "NVIDIA container toolkit didn't install" \
+                 "see docs/LLM-LLAMACPP-CUDA.md, or re-run with --llm=ollama to use the CPU"
+      ok "NVIDIA container toolkit installed"
+    else
+      skip "NVIDIA container toolkit already present"
+    fi
+    # Register the nvidia runtime with Docker once. Restarting Docker
+    # only happens here, on a box that didn't have the runtime yet.
+    if ! docker info 2>/dev/null | grep -qi 'runtimes:.*nvidia'; then
+      sudo nvidia-ctk runtime configure --runtime=docker >/dev/null
+      sudo systemctl restart docker
+      ok "Docker can use the GPU"
+    fi
+
     say "pulling llama.cpp:server-cuda Docker image (~3 GB, one-time)"
     docker pull ghcr.io/ggml-org/llama.cpp:server-cuda >/dev/null
     ok "image pulled"
@@ -737,7 +773,7 @@ case "$DECIDED_LLM" in
     # fine (just the filename downstream cares about).
     MMPROJ_URL="https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/main/mmproj-F16.gguf"
     if [[ ! -f "$MODEL_DIR/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf" ]]; then
-      say "downloading Qwen3.5-9B Q5_K_M (~7 GB) — this is the long step"
+      say "downloading Qwen3.5-9B MTP UD-Q5_K_XL (~7 GB) — this is the long step"
       curl -fL --progress-bar -o "$MODEL_DIR/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf.partial" "$GGUF_URL"
       mv "$MODEL_DIR/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf.partial" "$MODEL_DIR/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf"
     else
@@ -1133,7 +1169,7 @@ EOF
     ;;
   cuda)
     cat <<EOF
-  ${BOLD}LLM${RST}     llama.cpp on :8080 — Qwen3.5 9B Q5_K_M + vision
+  ${BOLD}LLM${RST}     llama.cpp on :8080 — Qwen3.5 9B MTP UD-Q5_K_XL + vision
           systemd unit: yorik-llamacpp.service
 
 EOF

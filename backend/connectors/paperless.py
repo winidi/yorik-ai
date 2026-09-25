@@ -12,7 +12,7 @@ regardless of whether they contain the exact keyword.
 Credentials are auto-populated by start.sh's first-run flow (creates the
 Paperless admin user, grabs the API token via Django shell, writes it to
 app_settings.paperless_api_token). User can override either field in
-Settings → Connectors → Paperless.
+Settings → System (Reconnect documents).
 """
 
 from __future__ import annotations
@@ -93,8 +93,8 @@ def paperless(op: str, query: str = "", limit: int = 10, doc_id: Optional[int] =
     s = creds_override or _settings()
     if not s["api_key"]:
         return {"ok": False,
-                "error": "Paperless not configured — open Settings → Connectors → Paperless and paste an API token. "
-                         "(start.sh normally does this for you on first run.)"}
+                "error": "Documents aren't connected yet. An admin can reconnect them "
+                         "under Settings → System ('Reconnect documents')."}
     try:
         if op == "search":
             if not query.strip():

@@ -150,6 +150,35 @@ def list_accounts(user: dict = Depends(current_user)):
     return [_account_row_to_dict(r) for r in rows]
 
 
+def human_mail_error(direction: str, error: str, email: str) -> str:
+    """The connection test's error as a sentence a person can act on.
+    The raw error stays at the end in brackets for whoever debugs it.
+    `direction` is 'receive' (IMAP) or 'send' (SMTP)."""
+    from .email_providers import lookup_provider
+    e = (error or "").lower()
+    provider = lookup_provider(email) or {}
+    name = provider.get("name") or "your mail provider"
+    if any(k in e for k in ("authenticationfailed", "authentication failed", "invalid credentials",
+                            "login failed", "535", "auth", "password", "logon failure", "[auth")):
+        msg = f"{name} refused the password."
+        if provider.get("notes") and "app password" in provider["notes"].lower():
+            msg += (f" {name} needs a separate app password for other programs, "
+                    "not your normal one. The link under the password field shows where to get it.")
+        elif provider.get("notes"):
+            msg += " " + provider["notes"].replace("**", "")
+        else:
+            msg += " Check it for typos. Some providers need an app password or a setting that allows mail programs."
+    elif any(k in e for k in ("timed out", "timeout", "connection refused", "name or service not known",
+                              "nodename nor servname", "no route", "network is unreachable", "getaddrinfo")):
+        msg = ("Yorik couldn't reach the mail server. Check the server name under Advanced, "
+               "or try again in a minute.")
+    elif "ssl" in e or "certificate" in e or "wrong version number" in e:
+        msg = "The secure connection to the mail server failed. The port or the SSL setting under Advanced is probably wrong."
+    else:
+        msg = ("Receiving mail didn't work." if direction == "receive" else "Sending mail didn't work.")
+    return f"{msg} ({'IMAP' if direction == 'receive' else 'SMTP'}: {error})"
+
+
 @router.post("/accounts", status_code=201)
 async def create_account(body: AccountCreate, user: dict = Depends(current_user)):
     """Add a new email account for the current user. Tests both IMAP
@@ -166,11 +195,11 @@ async def create_account(body: AccountCreate, user: dict = Depends(current_user)
                                   body.imap_ssl, imap_user, body.password,
                                   body.imap_starttls)
     if not t1["ok"]:
-        raise HTTPException(400, f"IMAP test failed: {t1['error']}")
+        raise HTTPException(400, human_mail_error("receive", t1["error"], body.email))
     t2 = await asyncio.to_thread(test_smtp, body.smtp_host, body.smtp_port,
                                   body.smtp_ssl, body.smtp_starttls, smtp_user, smtp_pw)
     if not t2["ok"]:
-        raise HTTPException(400, f"SMTP test failed: {t2['error']}")
+        raise HTTPException(400, human_mail_error("send", t2["error"], body.email))
 
     cred_key = f"email:{secrets.token_urlsafe(12)}"
     credential_store.put(cred_key, {

@@ -23,7 +23,7 @@ Why first: every letter, invoice, and email Yorik composes pulls the sender bloc
 
 On the **Home** dashboard, click **"Seed demo data"** (or run `curl -X POST http://localhost:8000/api/demo/seed -b cookies.txt`).
 
-You'll get a week of fictional events, a few tasks, a couple of bills, and a welcome notification. Date-shifted around today so nothing feels stale. Removable in one click from **Settings → Demo**.
+You'll get a week of fictional events, a few tasks, a couple of bills, and a welcome notification. Date-shifted around today so nothing feels stale. Removable in one click: while example data is loaded, Home shows a small "Demo data loaded — remove?" banner.
 
 If you'd rather not see anyone else's data: skip this. Yorik works fine empty.
 

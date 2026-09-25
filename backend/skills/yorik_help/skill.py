@@ -103,6 +103,12 @@ _TOPIC_KEYWORDS = {
     "briefing":        ["briefing", "tagesplan", "tagesübersicht", "tagesuebersicht", "morgen", "morning", "daily", "summary", "übersicht", "uebersicht"],
     "themes":          ["theme", "themes", "dark mode", "darkmode", "design", "farben", "color", "colour", "aussehen", "look"],
     "extensions":      ["extension", "extensions", "addon", "add-on", "erweiterung", "zugferd", "factur", "plugin"],
+    "next-steps":      ["next", "now", "weiter", "nächstes", "naechstes", "als", "danach"],
+    "recordings":      ["recording", "recordings", "aufnahme", "aufnahmen", "aufnehmen", "transkript", "transcript", "protokoll", "abendessen"],
+    "family-board":    ["board", "tafel", "familientafel", "wall", "wand", "tablet", "kiosk", "routine", "routinen", "chore", "chores"],
+    "schreiben":       ["schreiben", "writing", "write", "brief", "briefe", "letter", "briefkopf", "letterhead"],
+    "finance":         ["finance", "finanzen", "bank", "konto", "kontostand", "umsatz", "umsätze", "ausgaben", "spending", "fints"],
+    "pipelines":       ["pipeline", "pipelines", "nachfassen", "follow", "followup", "follow-up", "antwort", "reply", "dranbleiben"],
     "troubleshooting": ["error", "fehler", "broken", "kaputt", "geht nicht", "doesnt work", "doesn't work", "log", "debug", "problem", "issue", "stuck", "hängt"],
 }
 

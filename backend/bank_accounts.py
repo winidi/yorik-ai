@@ -108,7 +108,21 @@ def _test_connection(bank_url: str, blz: str, login_name: str, pin: str,
         ]}
     except Exception as exc:  # noqa: BLE001
         log.warning("bank connection test failed for blz=%s: %s", blz, exc)
-        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        return {"ok": False, "error": _human_bank_error(exc)}
+
+
+def _human_bank_error(exc: Exception) -> str:
+    """What went wrong at the bank, in words (the Finance app is German).
+    The raw exception is in the log line above."""
+    t = f"{type(exc).__name__}: {exc}".lower()
+    if "tan" in t and any(k in t for k in ("need", "requir", "erforder", "challenge", "pushtan", "phototan")):
+        return ("Die Bank verlangt beim ersten Anmelden eine TAN (pushTAN, photoTAN). "
+                "Das kann Yorik noch nicht. Bitte vorerst ein Konto ohne TAN-Pflicht beim Abruf verwenden.")
+    if any(k in t for k in ("pin", "9910", "9931", "9942", "login", "anmeld", "zugang", "credential")):
+        return "Die Bank hat Zugangsnummer oder PIN abgelehnt. Bitte beides noch einmal prüfen."
+    if any(k in t for k in ("timeout", "timed out", "connection", "resolve", "name or service", "ssl")):
+        return "Die Bank war nicht erreichbar. Bitte die Bank in der Suche neu auswählen oder später noch einmal versuchen."
+    return "Die Verbindung zur Bank hat nicht geklappt. Bitte die Angaben prüfen und es noch einmal versuchen."
 
 
 FOCUS_CATEGORIES_DEFAULT = ["Lebensmittel", "Verträge & Abos"]
@@ -182,7 +196,7 @@ async def create_account(body: AccountCreate, user: dict = Depends(current_user)
     test = await asyncio.to_thread(_test_connection, body.bank_url, body.blz, body.login_name,
                                     body.pin, body.product_id)
     if not test["ok"]:
-        raise HTTPException(400, f"Verbindung fehlgeschlagen: {test['error']}")
+        raise HTTPException(400, test["error"])
 
     cred_key = f"bank:{secrets.token_urlsafe(12)}"
     credential_store.put(cred_key, {"pin": body.pin})

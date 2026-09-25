@@ -19,6 +19,7 @@ import { useSearchParams } from "react-router-dom";
 import { Camera, ExternalLink, AlertCircle, Server } from "lucide-react";
 import { Dock } from "@/components/Dock";
 import { api } from "@/lib/api";
+import { useAuth } from "@/components/AuthGate";
 
 function defaultImmichUrl(): string {
   if (typeof window === "undefined") return "http://localhost:2283/";
@@ -36,6 +37,8 @@ function defaultImmichUrl(): string {
 
 export function PhotosApp() {
   const [params] = useSearchParams();
+  const role = useAuth().user?.role;
+  const isAdmin = role === "admin" || role === "platform_admin";
   const asset = params.get("asset");
   // Backend-supplied URL wins; fall back to the host-derived guess only
   // until /api/health responds.
@@ -99,17 +102,22 @@ export function PhotosApp() {
               <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-amber-500/10 flex items-center justify-center">
                 <Server className="w-6 h-6 text-amber-500" />
               </div>
-              <div className="text-base font-semibold mb-1">Immich is not running</div>
+              <div className="text-base font-semibold mb-1">Photos aren't available right now</div>
               <div className="text-sm text-muted-foreground mb-4">
-                The Photos app needs the Immich container to be up. Yorik's backend can't reach it at <code className="text-xs">{serverImmichUrl || defaultImmichUrl()}</code>.
+                The photo library on this Yorik isn't running. Your photos are safe; they're just not reachable at the moment.
               </div>
-              <div className="text-xs text-left bg-muted/40 border border-border rounded-md p-3 font-mono leading-relaxed">
-                # in the yorik-ai directory{"\n"}
-                docker compose up -d immich-server immich-machine-learning immich-postgres immich-redis
-              </div>
-              <div className="text-xs text-muted-foreground mt-3">
-                Already running on a different host? Update <code>HOMEOS_IMMICH_BASE_URL</code> in <code>config.env</code>.
-              </div>
+              {isAdmin && (
+                <details className="text-left">
+                  <summary className="text-xs text-muted-foreground cursor-pointer">For the admin</summary>
+                  <div className="text-xs mt-2 text-muted-foreground">Yorik can't reach Immich at <code className="text-xs">{serverImmichUrl || defaultImmichUrl()}</code>. Start it in the yorik-ai directory:</div>
+                  <div className="text-xs mt-2 bg-muted/40 border border-border rounded-md p-3 font-mono leading-relaxed">
+                    docker compose up -d immich-server immich-machine-learning immich-postgres immich-redis
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Running elsewhere? Set <code>HOMEOS_IMMICH_BASE_URL</code> in <code>config.env</code>.
+                  </div>
+                </details>
+              )}
             </div>
           </div>
         ) : (

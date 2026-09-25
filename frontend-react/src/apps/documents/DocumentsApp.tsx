@@ -276,15 +276,14 @@ export function DocumentsApp() {
         error?: string;
       }>("/api/documents/sync-paperless");
       if (r.error) {
-        toast("Paperless sync error: " + r.error);
+        toast("Couldn't sync documents: " + r.error);
       } else if ((r.checked ?? 0) === 0) {
         // Paperless returned zero documents — almost always a token /
         // auth issue, NOT "Paperless is empty". Distinguish from the
         // legitimate "everything in sync" case below.
         toast(
-          "Paperless returned 0 documents. If you have documents in Paperless, " +
-          "this is usually a missing/wrong API token. Open Settings → Connectors " +
-          "→ Paperless and paste a token from Paperless's Settings → API Tokens page."
+          "No documents came back from the archive. If you expected some, an admin " +
+          "can try 'Reconnect documents' under Settings → System."
         );
       } else if ((r.ingested ?? 0) === 0 && (r.missing ?? 0) === 0) {
         toast(`Already in sync — Paperless has ${r.checked} document(s), all mirrored locally.`);

@@ -237,7 +237,7 @@ Should print 8+ green checkmarks. If any fail, see
 | Update Yorik | `./scripts/yorik upgrade` (commits → pulls → installs deps → restarts) |
 | Tail logs | `journalctl -u yorik -f` (with systemd) or `tail -f /tmp/homeos-api.log` |
 | Stop the service | `sudo systemctl stop yorik` or `kill $(cat /tmp/homeos-api.pid)` |
-| Add a user | Settings → People → New user |
+| Add a user | Settings → Users → Add user |
 | Add a community template | Compose → "Browse community templates" → Install |
 | Run a backup now | Settings → Backup → "Run backup now" |
 | See what schema you're on | `./scripts/yorik db status` |

@@ -98,6 +98,19 @@ export function SystemStatusPanel() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  const [docsBusy, setDocsBusy] = useState(false);
+  const [docsNote, setDocsNote] = useState<string | null>(null);
+  async function reconnectDocs() {
+    setDocsBusy(true); setDocsNote(null);
+    try {
+      const r = await api.post<{ ok?: boolean; error?: string; checked?: number }>("/api/documents/sync-paperless");
+      setDocsNote(r.error ? r.error : `Connected. ${r.checked ?? 0} document(s) in the archive.`);
+      refresh();
+    } catch (e: any) {
+      setDocsNote(e?.message || "That didn't work.");
+    } finally { setDocsBusy(false); }
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
@@ -157,6 +170,23 @@ export function SystemStatusPanel() {
             hint={(status?.counts.numbering_series || 0) > 0 ? "Configured" : "Optional"}
           />
         </div>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-muted-foreground">Repair</h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={reconnectDocs}
+            disabled={docsBusy}
+            className="px-3 py-2 rounded-lg border border-border bg-card hover:border-foreground/20 text-sm transition disabled:opacity-60"
+          >
+            {docsBusy ? "Reconnecting…" : "Reconnect documents"}
+          </button>
+          {docsNote && <span className="text-sm text-muted-foreground">{docsNote}</span>}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Makes Yorik fetch a fresh key from the document archive and sync the list again. Safe to press any time.
+        </p>
       </section>
 
       <WorkersStatus />

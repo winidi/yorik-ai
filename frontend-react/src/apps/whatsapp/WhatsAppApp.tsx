@@ -360,7 +360,7 @@ function ChatListPane({
         {!loading && filtered.length === 0 && (
           <div className="px-4 py-12 text-center text-xs text-muted-foreground">
             {bridgeUnreachable
-              ? <><MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-30" />The WhatsApp bridge isn't running.<br/>Start it from the pairing dialog above (or via <code>docker compose up -d whatsapp-bridge</code>).</>
+              ? <><MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-30" />WhatsApp isn't connected right now.<br/>Start it from the pairing dialog above.</>
               : needsPairing
                 ? <><MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-30" />Scan the QR to start syncing chats.</>
                 : chats.length === 0
@@ -1113,7 +1113,7 @@ function QrModal({
     const id = setInterval(() => {
       if (Date.now() - startedAt > 180_000) {
         setBusy(false);
-        setErrorMsg("Bridge didn't come up after 3 minutes. Check Docker logs: `docker logs yorik-whatsapp-bridge`");
+        setErrorMsg("WhatsApp didn't start within 3 minutes. Try again; if it keeps failing, an admin can look under Settings → System.");
         clearInterval(id);
         return;
       }
