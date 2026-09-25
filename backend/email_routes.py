@@ -1937,18 +1937,20 @@ def _pending_draft_key(user_id: str) -> str:
 @router.get("/pending-draft")
 def get_pending_draft(user: dict = Depends(current_user)) -> dict:
     """A draft prepare_email staged server-side (to/subject/body/
-    account_id/attachments), if any. Read-and-clear (one-shot), same
-    as the sessionStorage handoff it replaces for this path — but this
-    one survives a reload, a different tab, or the user coming back
-    later, because it lives in app_settings, not the browser. The
-    Composer reads this on mount in ADDITION to sessionStorage (used
-    by the older photo-handoff / documents 'send via email' paths)."""
+    account_id/attachments), if any. Survives a reload, a different
+    tab, or the user coming back later, because it lives in
+    app_settings, not the browser.
+
+    NOT deleted on read (fixed 2026-09-25): a first version cleared it
+    on the very first GET, so opening the chat card, looking, and NOT
+    sending yet meant it was already gone if the user came back —
+    "he only opened the mail once?!". It now only goes away when
+    prepare_email stages a newer one (INSERT OR REPLACE) or the user
+    actually sends (see /send, which clears it on success) — never
+    just from looking at it."""
     key = _pending_draft_key(user["id"])
     with get_conn() as conn:
         row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
-        if row:
-            conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
-            conn.commit()
     if not row:
         return {"draft": None}
     try:
@@ -2014,6 +2016,14 @@ async def send_message(body: SendBody, user: dict = Depends(current_user)):
     )
     if not result.get("ok"):
         raise HTTPException(502, result.get("error", "send failed"))
+    # A successful send clears any prepare_email draft still staged for
+    # this user — best-effort, never fails the send itself.
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM app_settings WHERE key = ?", (_pending_draft_key(user["id"]),))
+            conn.commit()
+    except Exception:  # noqa: BLE001
+        pass
     # Mark the source draft as 'used' + siblings as 'discarded'.
     if body.draft_id is not None:
         with get_conn() as conn:
