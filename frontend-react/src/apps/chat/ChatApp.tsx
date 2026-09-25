@@ -1653,7 +1653,13 @@ function MessageBubble({
             : <AssistantMarkdown>{message.content}</AssistantMarkdown>}
         </div>
 
-        {isUser && attachmentIdsIn(message.content).map(id => <AttachmentCard key={id} id={id} />)}
+        {/* Not just isUser: a skill can create a NEW attachment server-side
+            (e.g. fill_pdf_form's filled-in PDF) and only the ASSISTANT's
+            reply names it ("...Anhang #7)") — the user never uploaded
+            anything that turn. Restricting this to user messages meant
+            that attachment was created correctly but never got a visible
+            card anywhere in the chat. Found 2026-09-25. */}
+        {attachmentIdsIn(message.content).map(id => <AttachmentCard key={id} id={id} />)}
 
         {/* Tool-trace summary — one-line ambient hint of what tools
             ran for this turn, shown on every assistant bubble that
