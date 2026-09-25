@@ -14,13 +14,15 @@
 // muscle memory + swipe order line up.
 export const DOCK_ORDER = ["home", "calendar", "tasks", "chat", "docs", "compose", "write", "photos", "whatsapp", "email", "contacts", "briefing", "board", "recordings", "finance", "pipelines"];
 
-// A child's account sees fewer apps: the family board first, then their
+// A child's account (role 'restricted') sees fewer apps: the family board first, then their
 // to-dos, the calendar, photos and the chat. Mail, documents, compose,
 // finance and the rest are grown-up tools. The same list drives the
 // Dock, the swipe order and Home's tiles.
 export const KID_ORDER = ["home", "board", "tasks", "calendar", "photos", "chat"];
 
-export function isKid(role?: string | null): boolean { return role === "child"; }
+// Children's accounts carry role 'restricted' (migration 036 folded the
+// old 'child' into it; 'child' can still arrive on an old session).
+export function isKid(role?: string | null): boolean { return role === "restricted" || role === "child"; }
 
 export function dockOrderFor(role?: string | null): string[] {
   return isKid(role) ? KID_ORDER : DOCK_ORDER;

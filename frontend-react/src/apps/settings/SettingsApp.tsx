@@ -22,6 +22,7 @@ import {
   Store, Download, BadgeCheck, Lock, Globe, Package, Plus, Home, Activity,
 } from "lucide-react";
 import { SystemStatusPanel } from "@/components/SystemStatusPanel";
+import { isKid } from "@/lib/dock-order";
 import { useTriPane, MobileBackdrop, mobileAsideLeft } from "@/components/MobileShell";
 import { AppInstallConsentDialog } from "@/components/AppInstallConsentDialog";
 import { cn } from "@/lib/utils";
@@ -83,7 +84,7 @@ export function SettingsApp() {
   // panels manage host-shared state (LLM, storage, marketplace etc.)
   // when this Yorik is a tenant.
   // A child manages only their own profile (name, colour, photo).
-  const kid = auth.user.role === "child";
+  const kid = isKid(auth.user.role);
   const visibleTabs = TABS.filter(t =>
     (isAdmin || !t.adminOnly) && (!auth.isTenant || !t.hostOnly) && (!kid || t.id === "profile")
   );
