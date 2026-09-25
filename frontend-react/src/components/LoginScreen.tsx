@@ -7,7 +7,8 @@
  * the goal is "I know I'm in the right place and I can get in".
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { PinPad } from "@/components/PinPad";
 import { Loader2, Mail, Lock, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -16,7 +17,63 @@ interface Props {
   onLoggedIn: () => void;
 }
 
+interface DeviceInfo { known: boolean; first_name?: string; color?: string; avatar_url?: string | null }
+
+/** A phone that joined by QR knows its person: it asks only for the PIN.
+ *  Everyone else (and "Sign in with email instead") gets the form. */
 export function LoginScreen({ onLoggedIn }: Props) {
+  const [device, setDevice] = useState<DeviceInfo | null>(null);
+  const [useForm, setUseForm] = useState(false);
+  const [pinBusy, setPinBusy] = useState(false);
+  const [pinErr, setPinErr] = useState<string | undefined>();
+
+  useEffect(() => {
+    api.get<DeviceInfo>("/api/auth/device").then(setDevice).catch(() => setDevice({ known: false }));
+  }, []);
+
+  async function pinLogin(pin: string) {
+    setPinBusy(true); setPinErr(undefined);
+    try {
+      await api.post("/api/auth/device-login", { pin });
+      onLoggedIn();
+      return true;
+    } catch (e: any) {
+      setPinErr(e?.message || "That PIN isn't right.");
+      return false;
+    } finally { setPinBusy(false); }
+  }
+
+  async function forgetDevice() {
+    try { await api.post("/api/auth/device-forget", {}); } catch { /* the form works either way */ }
+    setDevice({ known: false });
+  }
+
+  if (device === null) {
+    return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+  }
+
+  if (device.known && !useForm) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground px-6">
+        <div className="w-full max-w-sm flex flex-col items-center text-center gap-5">
+          {device.avatar_url
+            ? <img src={device.avatar_url} alt="" className="w-20 h-20 rounded-full object-cover" />
+            : <span className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-semibold text-white"
+                    style={{ background: device.color || "#6d5bd0" }}>{(device.first_name || "?")[0].toUpperCase()}</span>}
+          <PinPad prompt={`Hi ${device.first_name}! Your PIN, please`} busy={pinBusy} errorText={pinErr} onSubmit={pinLogin} />
+          <div className="flex gap-4 text-sm text-muted-foreground">
+            <button onClick={() => setUseForm(true)} className="underline hover:text-foreground">Sign in with email instead</button>
+            <button onClick={forgetDevice} className="underline hover:text-foreground">Not {device.first_name}?</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <PasswordLogin onLoggedIn={onLoggedIn} />;
+}
+
+function PasswordLogin({ onLoggedIn }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);

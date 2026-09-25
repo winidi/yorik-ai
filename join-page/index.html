@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Join Yorik</title>
+<!--
+  The public half of a Yorik invite. Tailscale Funnel serves this one
+  static file; it holds no data and calls no server of ours. Everything
+  it needs (your name, Yorik's tailnet address with the invite code, the
+  Tailscale share link) sits in the #fragment of the QR code's URL, which
+  browsers never send anywhere. See backend/member_invites.py.
+-->
+<style>
+  :root { color-scheme: light dark; --bg:#f1eff6; --card:#fbfaff; --ink:#2b2438; --muted:#6c6480; --line:#ddd8e8; --accent:#7c6cf0; --ok:#2f9e64; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#15121c; --card:#1e1a28; --ink:#f2eef8; --muted:#aba4ba; --line:#302a3e; --accent:#8b7cf6; --ok:#5fd49a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font: 17px/1.55 -apple-system, "Segoe UI", Roboto, system-ui, sans-serif; }
+  main { max-width: 440px; margin: 0 auto; padding: 36px 20px 56px; display:grid; gap:18px; }
+  h1 { font-size: 30px; line-height:1.15; margin: 0; }
+  p { margin: 0; color: var(--muted); }
+  .step { background: var(--card); border:1px solid var(--line); border-radius: 18px; padding: 18px; display:grid; gap:10px; }
+  .step h2 { font-size: 18px; margin:0; display:flex; gap:10px; align-items:center; }
+  .n { width:28px; height:28px; border-radius:50%; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); display:grid; place-items:center; font-size:14px; font-weight:700; flex:none; }
+  .done .n { background: var(--ok); color:#fff; }
+  a.btn, button.btn { display:block; text-align:center; text-decoration:none; padding: 14px; border-radius: 14px; background: var(--accent); color:#fff; font-weight:600; border:0; font-size:16px; width:100%; cursor:pointer; }
+  a.btn.ghost { background: transparent; color: var(--ink); border:1px solid var(--line); }
+  .status { font-size: 15px; display:flex; gap:8px; align-items:center; }
+  .dot { width:10px; height:10px; border-radius:50%; background: var(--muted); flex:none; }
+  .dot.ok { background: var(--ok); }
+  .small { font-size: 14px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1 id="hello">Welcome to Yorik</h1>
+    <p id="lede" style="margin-top:8px">Your family's Yorik lives at home. Three steps and your phone can reach it, at home and on the go.</p>
+  </div>
+
+  <section class="step" id="s1">
+    <h2><span class="n">1</span> Get the Tailscale app</h2>
+    <p class="small">Tailscale is a free app that builds a private line between your phone and your family's Yorik. Nobody else can use that line.</p>
+    <a class="btn" id="store" href="https://tailscale.com/download" target="_blank" rel="noopener">Get Tailscale</a>
+    <p class="small">Open it once and sign in with your Google, Apple or Microsoft account.</p>
+  </section>
+
+  <section class="step" id="s2">
+    <h2><span class="n">2</span> Accept the invitation</h2>
+    <div id="with-invite">
+      <p class="small" style="margin-bottom:10px">This lets your phone see only Yorik, nothing else in the house.</p>
+      <a class="btn" id="invite" href="#" target="_blank" rel="noopener">Accept in Tailscale</a>
+    </div>
+    <p class="small" id="no-invite" hidden>Ask the person who invited you to share Yorik with you in Tailscale. Then come back here.</p>
+    <p class="small">Make sure Tailscale is switched <b>on</b>.</p>
+  </section>
+
+  <section class="step" id="s3">
+    <h2><span class="n">3</span> Open Yorik</h2>
+    <div class="status"><span class="dot" id="dot"></span><span id="state">Looking for Yorik…</span></div>
+    <a class="btn" id="open" href="#">Open Yorik</a>
+    <p class="small" id="tip">This page checks every few seconds and opens Yorik by itself once it can reach it.</p>
+  </section>
+
+  <p class="small" id="bad" hidden>This link is incomplete. Please scan the QR code again.</p>
+</main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.hash.slice(1));
+  var name = q.get("n"), yorik = q.get("u"), invite = q.get("i");
+  if (!yorik) { document.getElementById("bad").hidden = false; return; }
+  if (name) document.getElementById("hello").textContent = "Welcome, " + name.split(" ")[0] + "!";
+
+  var ua = navigator.userAgent || "";
+  var store = document.getElementById("store");
+  if (/iPhone|iPad|iPod/.test(ua) || (ua.indexOf("Macintosh") >= 0 && "ontouchend" in document)) {
+    store.href = "https://apps.apple.com/app/tailscale/id1470499037"; store.textContent = "Get Tailscale from the App Store";
+  } else if (/Android/.test(ua)) {
+    store.href = "https://play.google.com/store/apps/details?id=com.tailscale.ipn"; store.textContent = "Get Tailscale from Google Play";
+  }
+
+  if (invite) { document.getElementById("invite").href = invite; }
+  else { document.getElementById("with-invite").hidden = true; document.getElementById("no-invite").hidden = false; }
+
+  document.getElementById("open").href = yorik;
+  var origin = new URL(yorik).origin;
+  var found = false;
+
+  function probe() {
+    if (found) return;
+    var ctl = new AbortController();
+    var t = setTimeout(function () { ctl.abort(); }, 4000);
+    // no-cors: we only learn whether Yorik answers at all, which is
+    // exactly the question (it answers only over Tailscale).
+    fetch(origin + "/api/health?join=1", { mode: "no-cors", cache: "no-store", signal: ctl.signal })
+      .then(function () {
+        found = true;
+        document.getElementById("dot").className = "dot ok";
+        document.getElementById("state").textContent = "Found Yorik. Opening…";
+        ["s1", "s2", "s3"].forEach(function (id) { document.getElementById(id).className = "step done"; });
+        setTimeout(function () { location.href = yorik; }, 900);
+      })
+      .catch(function () {
+        document.getElementById("state").textContent = "Not reachable yet. Do steps 1 and 2, with Tailscale switched on.";
+      })
+      .finally(function () { clearTimeout(t); });
+  }
+  probe();
+  setInterval(probe, 4000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) probe(); });
+})();
+</script>
+</body>
+</html>

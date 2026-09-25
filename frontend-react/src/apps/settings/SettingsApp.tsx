@@ -19,11 +19,12 @@ import {
   Users, UsersRound, UserPlus, KeyRound, Trash2, Power, Copy, X,
   HardDrive, ArrowRightLeft, AlertTriangle, Shield, Upload,
   Tag as TagIcon, XCircle, Info, ScrollText, ChevronRight, Puzzle,
-  Store, Download, BadgeCheck, Lock, Globe, Package, Plus, Home, Activity,
+  Store, Download, BadgeCheck, Lock, Globe, Package, Plus, Home, Activity, QrCode,
 } from "lucide-react";
 import { SystemStatusPanel } from "@/components/SystemStatusPanel";
 import { isKid } from "@/lib/dock-order";
 import { openHelp } from "@/components/HelpPanel";
+import { InviteDialog } from "@/components/InviteDialog";
 import { useTriPane, MobileBackdrop, mobileAsideLeft } from "@/components/MobileShell";
 import { AppInstallConsentDialog } from "@/components/AppInstallConsentDialog";
 import { cn } from "@/lib/utils";
@@ -4214,6 +4215,7 @@ function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" |
   const auth = useAuth();
   const [users, setUsers] = useState<YorikUserRow[] | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
   const [resetting, setResetting] = useState<YorikUserRow | null>(null);
   const [credentialsHandoff, setCredentialsHandoff] = useState<{
     name: string; email: string; password: string;
@@ -4263,17 +4265,27 @@ function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" |
         <div>
           <h1 className="text-2xl font-semibold">Users</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Family members, kids, employees. Each user gets their own login + their
-            own view of bills/tasks based on role. Admin can do anything; viewer is read-only.
+            Everyone in the household. The easiest way in is a QR code: the person
+            scans it with their phone and picks a PIN. "Add by hand" is for accounts
+            with an email and password.
           </p>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition inline-flex items-center gap-1.5 shrink-0"
-        >
-          <UserPlus className="w-4 h-4" /> Add user
-        </button>
+        <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+          <button
+            onClick={() => setShowInvite(true)}
+            className="px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition inline-flex items-center gap-1.5"
+          >
+            <QrCode className="w-4 h-4" /> Invite with a QR code
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="px-3 py-2 rounded-md border border-border text-sm font-medium hover:bg-muted transition inline-flex items-center gap-1.5"
+          >
+            <UserPlus className="w-4 h-4" /> Add by hand
+          </button>
+        </div>
       </header>
+      {showInvite && <InviteDialog onClose={() => { setShowInvite(false); load(); }} />}
 
       {users === null && (
         <div className="text-sm text-muted-foreground">Loading…</div>

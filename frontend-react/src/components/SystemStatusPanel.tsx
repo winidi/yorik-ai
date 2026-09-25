@@ -10,6 +10,7 @@ import { Server, Mail, FileText, Database, Hash, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { WorkersStatus } from "@/components/WorkersStatus";
+import { PhonesAccessCard } from "@/components/PhonesAccessCard";
 
 export interface SystemStatus {
   llm: { model: string; base_url: string; reachable: boolean };
@@ -171,6 +172,8 @@ export function SystemStatusPanel() {
           />
         </div>
       </section>
+
+      <PhonesAccessCard />
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-muted-foreground">Repair</h2>

@@ -14,6 +14,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { Loader2, Sparkles } from "lucide-react";
 import { api, registerSessionExpiredHandler as api_registerSessionExpiredHandler } from "@/lib/api";
 import type { AuthMe, YorikUser } from "@/lib/api";
+import { JoinScreen } from "./JoinScreen";
 import { LoginScreen } from "./LoginScreen";
 import { SetupScreen } from "./SetupScreen";
 import { OnboardingWizard } from "./OnboardingWizard";
@@ -159,6 +160,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       events.forEach(e => window.removeEventListener(e, arm));
     };
   }, [state?.wall_unlock, unlockMs, endWallUnlock, inWrapper]);
+
+  // An invite's QR code lands here; it works with or without a session
+  // (a parent testing the code on their own phone sees the same flow).
+  if (window.location.pathname.startsWith("/r/join")) {
+    return <JoinScreen />;
+  }
 
   if (loading && !state) {
     return <FullPageSpinner />;
