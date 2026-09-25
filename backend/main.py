@@ -217,6 +217,8 @@ from . import help_routes as _help_routes
 app.include_router(_help_routes.router)
 from . import member_invites as _member_invites
 app.include_router(_member_invites.router)
+from . import setup_checklist as _setup_checklist
+app.include_router(_setup_checklist.router)
 
 # Paperless reverse-proxy — gives the Documents app an "Open in Paperless"
 # button that drops the user inside Paperless already authenticated as

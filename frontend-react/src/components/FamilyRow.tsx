@@ -43,7 +43,7 @@ export function FamilyRow() {
   });
 
   return (
-    <section className="mb-8">
+    <section className="mb-8" data-tour="family">
       <div className="flex gap-5 overflow-x-auto pb-1">
         {rows.map(({ p, line }) => (
           <button

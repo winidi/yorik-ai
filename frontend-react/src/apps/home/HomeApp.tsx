@@ -35,6 +35,8 @@ import { isKid, KID_ORDER } from "@/lib/dock-order";
 import { DemoDataPanel } from "@/components/DemoDataPanel";
 import { FamilyRow } from "@/components/FamilyRow";
 import { openHelp } from "@/components/HelpPanel";
+import { SetupChecklist } from "@/components/SetupChecklist";
+import { FirstRunTour } from "@/components/FirstRunTour";
 import { useHouseHealth, type SystemStatus, type HealthIssue } from "@/components/SystemStatusPanel";
 
 // One bit of data we want to surface on each app tile, pulled from the
@@ -182,6 +184,7 @@ export function HomeApp() {
         {/* Big Ask CTA */}
         <button
           onClick={() => navigate("/chat")}
+          data-tour="ask"
           className={cn(
             "w-full text-left bg-card border border-border rounded-2xl p-5 mb-8 transition group",
             "hover:border-violet-500/40 hover:shadow-lg",
@@ -202,6 +205,8 @@ export function HomeApp() {
         </button>
 
         <FamilyRow />
+
+        <SetupChecklist />
 
         <DemoDataPanel />
 
@@ -301,6 +306,7 @@ export function HomeApp() {
       </div>
 
       <Dock activeAppId="home" />
+      <FirstRunTour />
 
       <style>{`
         .home-bg {

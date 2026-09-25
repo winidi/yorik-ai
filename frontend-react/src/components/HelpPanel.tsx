@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import { appIdFromPath } from "@/lib/dock-order";
 import { AssistantMarkdown } from "@/components/AssistantMarkdown";
 import { cn } from "@/lib/utils";
+import { startTour } from "@/components/FirstRunTour";
 
 interface Topic { topic: string; title: string; summary: string; app: string }
 interface Page extends Topic { body: string }
@@ -90,6 +91,10 @@ export function HelpPanel() {
                 </button>
               ))}
               {!topics && <p className="text-sm text-muted-foreground">Loading…</p>}
+              <button onClick={() => { setOpen(false); navigate("/home"); setTimeout(startTour, 600); }}
+                      className="w-full text-left p-3 rounded-xl border border-dashed border-border hover:border-foreground/20 transition text-sm">
+                Show the tour again
+              </button>
             </div>
           )}
         </div>

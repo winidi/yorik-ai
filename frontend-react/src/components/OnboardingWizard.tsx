@@ -200,32 +200,11 @@ export function OnboardingWizard({ user, isTenant, onComplete, onSkip }: Props) 
       subtitle: "Yorik adapts dates, currency and document numbering to your country.",
       render: () => <RegionStep profile={profile} patch={patch} />,
     },
-    {
-      key: "address",
-      title: profile.is_business ? "Your business address" : "Your address",
-      subtitle: "Yorik puts this in the letterhead when you write invoices, quotes or letters.",
-      render: () => <AddressStep profile={profile} patch={patch} />,
-    },
-    {
-      key: "business",
-      title: "Personal or business?",
-      subtitle: "If you'll send invoices to customers, switch to business mode. You can change this any time.",
-      render: () => <BusinessStep profile={profile} patch={patch} />,
-    },
-    ...(showHostSteps ? [
-      {
-        key: "storage",
-        title: "Where should photos + documents live?",
-        subtitle: "DBs stay internal; photos + paperless can grow huge. Move them to an external SSD now, or later in Settings → Storage.",
-        render: () => <StorageStep />,
-      },
-      {
-        key: "backup",
-        title: "Set up backups",
-        subtitle: "Encrypted snapshots of everything that matters. Passphrase is required — lose it and the snapshots are unrecoverable, so save it in a password manager NOW.",
-        render: () => <BackupStep />,
-      },
-    ] : []),
+    // Address, business details, storage and backups used to follow
+    // here. They moved out of the first run: address and business live
+    // in Settings → Profile (Schreiben and Compose ask when they need
+    // them), backups are a step on the Home checklist. The first run is
+    // welcome + where you are, nothing a newcomer can't answer.
   ];
 
   const current = steps[step];

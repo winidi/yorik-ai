@@ -154,6 +154,7 @@ export function Dock({ activeAppId }: Props) {
   return (
     <nav
       aria-label="App dock"
+      data-tour="dock"
       className={cn(
         // bottom-3.5 keeps the desktop position. On iOS the home-
         // indicator gesture zone is ~34px; respect it by adding
@@ -177,6 +178,7 @@ export function Dock({ activeAppId }: Props) {
       <span className="w-px h-[30px] bg-border/40 mx-0.5 shrink-0" />
       <button
         onClick={() => openHelp()}
+        data-tour="help"
         title="Help"
         aria-label="Help"
         className="inline-flex items-center justify-center w-12 h-12 rounded-2xl shrink-0 ring-1 ring-border/60 bg-card/40 hover:-translate-y-1.5 hover:scale-110 transition-[transform] duration-150"
