@@ -31,7 +31,8 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { DOCK_ORDER, REACT_ROUTES, appIdFromPath } from "@/lib/dock-order";
+import { dockOrderFor, REACT_ROUTES, appIdFromPath } from "@/lib/dock-order";
+import { useAuth } from "@/components/AuthGate";
 
 // Trigger thresholds for an actual app-switch. Once travel passes
 // MIN_DIST_PX *or* MIN_DIST_FRAC × viewport (whichever is larger),
@@ -78,6 +79,7 @@ export function SwipeNav() {
   const loc = useLocation();
   const navigate = useNavigate();
   const stateRef = useRef<SwipeState | null>(null);
+  const DOCK_ORDER = dockOrderFor(useAuth().user?.role);
 
   // Native bridge for /r/photos. yorik-wall's MainActivity intercepts
   // horizontal swipes on the Photos page (where SwipeNav otherwise

@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/AuthGate";
 import { Dock, APP_VISUAL } from "@/components/Dock";
+import { isKid, KID_ORDER } from "@/lib/dock-order";
 import { DemoDataPanel } from "@/components/DemoDataPanel";
 import { FamilyRow } from "@/components/FamilyRow";
 import { useHouseHealth, type SystemStatus, type HealthIssue } from "@/components/SystemStatusPanel";
@@ -113,8 +114,10 @@ export function HomeApp() {
   // /api/apps reports as installed — keeps a fresh user from seeing a
   // WhatsApp tile they haven't enabled yet. Until /api/apps responds we
   // hide them, which is the better default than briefly flashing them.
+  const kid = isKid(auth.user.role);
   const visibleApps = APPS.filter(app =>
-    !app.optional || (installedIds && installedIds.has(app.id)),
+    (!app.optional || (installedIds && installedIds.has(app.id)))
+    && (!kid || KID_ORDER.includes(DOCK_ID[app.id] || app.id)),
   );
 
   const firstName = (auth.user.name || "").split(" ")[0] || "there";

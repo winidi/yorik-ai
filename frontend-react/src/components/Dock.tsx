@@ -22,7 +22,8 @@ import {
 
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
-import { DOCK_ORDER, REACT_ROUTES } from "@/lib/dock-order";
+import { dockOrderFor, isKid, REACT_ROUTES } from "@/lib/dock-order";
+import { useAuth } from "@/components/AuthGate";
 
 interface AppInfo {
   id: string;
@@ -74,6 +75,9 @@ interface Props {
 export function Dock({ activeAppId }: Props) {
   const [apps, setApps] = useState<AppInfo[]>([]);
   const navigate = useNavigate();
+  const role = useAuth().user?.role;
+  const kid = isKid(role);
+  const DOCK_ORDER = dockOrderFor(role);
 
   useEffect(() => {
     api.get<AppInfo[]>("/api/apps?role=admin")
@@ -85,8 +89,9 @@ export function Dock({ activeAppId }: Props) {
 
   const byId = Object.fromEntries([HOME_TILE, ...apps].map(a => [a.id, a]));
   const ordered = DOCK_ORDER.map(id => byId[id]).filter(Boolean);
-  const extras = apps.filter(a => a.bundled && !DOCK_ORDER.includes(a.id));
-  const community = apps.filter(a => !a.bundled && !DOCK_ORDER.includes(a.id));
+  // A child's Dock is exactly KID_ORDER: no extras, no community apps.
+  const extras = kid ? [] : apps.filter(a => a.bundled && !DOCK_ORDER.includes(a.id));
+  const community = kid ? [] : apps.filter(a => !a.bundled && !DOCK_ORDER.includes(a.id));
   const builtins = [...ordered, ...extras];
 
   function handleClick(appId: string) {

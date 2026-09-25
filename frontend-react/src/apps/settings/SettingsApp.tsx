@@ -82,8 +82,10 @@ export function SettingsApp() {
   // selected-tab guard read the same list. hostOnly hides tabs whose
   // panels manage host-shared state (LLM, storage, marketplace etc.)
   // when this Yorik is a tenant.
+  // A child manages only their own profile (name, colour, photo).
+  const kid = auth.user.role === "child";
   const visibleTabs = TABS.filter(t =>
-    (isAdmin || !t.adminOnly) && (!auth.isTenant || !t.hostOnly)
+    (isAdmin || !t.adminOnly) && (!auth.isTenant || !t.hostOnly) && (!kid || t.id === "profile")
   );
   // ?tab=system etc. — Home's health line links straight to a tab.
   const [tab, setTab] = useState<Tab>(() => {

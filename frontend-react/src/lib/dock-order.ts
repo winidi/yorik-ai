@@ -14,6 +14,18 @@
 // muscle memory + swipe order line up.
 export const DOCK_ORDER = ["home", "calendar", "tasks", "chat", "docs", "compose", "write", "photos", "whatsapp", "email", "contacts", "briefing", "board", "recordings", "finance", "pipelines"];
 
+// A child's account sees fewer apps: the family board first, then their
+// to-dos, the calendar, photos and the chat. Mail, documents, compose,
+// finance and the rest are grown-up tools. The same list drives the
+// Dock, the swipe order and Home's tiles.
+export const KID_ORDER = ["home", "board", "tasks", "calendar", "photos", "chat"];
+
+export function isKid(role?: string | null): boolean { return role === "child"; }
+
+export function dockOrderFor(role?: string | null): string[] {
+  return isKid(role) ? KID_ORDER : DOCK_ORDER;
+}
+
 // app id → React route inside this SPA. Apps not in this map
 // either don't exist in the React shell (vanilla) or are
 // community apps mounted via /community-app/:appId.

@@ -56,6 +56,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // The role on <html> lets CSS size things per person: a child's
+  // account gets everything a little larger (index.css).
+  const role = state?.user?.role;
+  useEffect(() => {
+    if (role) document.documentElement.dataset.role = role;
+    else delete document.documentElement.dataset.role;
+  }, [role]);
+
   // The wall never shows a login screen. A PIN there unlocks the tablet
   // for a few minutes, and when that runs out the cookie points at a
   // session the server has already dropped — which would land the

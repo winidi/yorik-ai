@@ -193,3 +193,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .tick-pop { animation: none; }
 }
+
+/* Children's accounts: every rem-based size a little larger (16 → 17px
+   root), so text and tap targets grow together without a separate
+   layout. Set from AuthGate via <html data-role>. */
+html[data-role="child"] { font-size: 17px; }
