@@ -86,7 +86,7 @@ async def execute(
     with get_conn() as conn:
         before = conn.execute(
             "SELECT id, title, starts_at, ends_at, all_day, person, notes, "
-            "       owner_user_id "
+            "       owner_user_id, calendar_id "
             "FROM events WHERE id=?", (event_id,),
         ).fetchone()
     if not before:
@@ -96,7 +96,8 @@ async def execute(
     # Ownership gate: a non-admin caller may only update events they
     # themselves own. Calendar write-share does NOT grant mutation
     # rights — that's by design (see calendars.require_event_owner_or_admin).
-    from backend.calendars import require_event_owner_or_admin
+    from backend.calendars import require_event_owner_or_admin, require_writable_calendar
+    require_writable_calendar(before_dict)
     require_event_owner_or_admin(
         getattr(ctx, "role", None),
         getattr(ctx, "user_id", None),

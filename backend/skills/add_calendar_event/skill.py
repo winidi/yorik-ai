@@ -77,10 +77,22 @@ async def execute(
     # Solo → creator's Personal calendar. Multi-user → Shared.
     creator_id = getattr(ctx, "user_id", None)
     from backend import calendars as _cal
-    if calendar_id is None and creator_id is not None:
+    if creator_id is None:
+        raise ValueError("add_calendar_event needs the person it runs for")
+    if calendar_id is None:
         calendar_id = _cal.auto_route_calendar(
             creator_id, attendee_user_ids or [],
         )
+    # The app's rule (POST /api/events): write access on the chosen
+    # calendar. A calendar id from the model used to go in unchecked —
+    # into another member's personal calendar or a read-only mirror
+    # (audit 2026-09-25, W1).
+    if calendar_id is not None:
+        _cal_obj = _cal.get(int(calendar_id))
+        if not _cal_obj or not _cal.can_access(creator_id, getattr(ctx, "role", None) or "member", _cal_obj, "write"):
+            raise PermissionError(
+                "you can't add events to that calendar — leave calendar_id out "
+                "and the event goes to your own calendar")
 
     if visibility not in ("default", "private"):
         visibility = "default"

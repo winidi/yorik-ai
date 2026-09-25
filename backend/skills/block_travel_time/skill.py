@@ -69,7 +69,8 @@ async def execute(
     # or modify a travel buffer. Same rule as update/delete; a member
     # with calendar read-share on someone else's event can't add or
     # change drive-time blocks.
-    from backend.calendars import require_event_owner_or_admin
+    from backend.calendars import require_event_owner_or_admin, require_writable_calendar
+    require_writable_calendar(dict(main))
     require_event_owner_or_admin(
         getattr(ctx, "role", None),
         getattr(ctx, "user_id", None),
@@ -106,10 +107,12 @@ async def execute(
         else (f"%{marker}%", f"%{RETURN_TAG}%")
     )
     with get_conn() as conn:
+        # The main event owner's own buffer only — the marker is plain
+        # text anyone could put in a note (audit 2026-09-25, W4).
         existing = conn.execute(
             f"SELECT id, title, starts_at, ends_at "
-            f"FROM events WHERE {direction_match_sql}",
-            direction_match_params,
+            f"FROM events WHERE {direction_match_sql} AND owner_user_id = ?",
+            (*direction_match_params, main["owner_user_id"]),
         ).fetchone()
     if existing:
         # Compute the existing duration so we can decide whether to

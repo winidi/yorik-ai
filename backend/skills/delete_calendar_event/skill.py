@@ -41,7 +41,7 @@ async def execute(
     with get_conn() as conn:
         row = conn.execute(
             "SELECT id, title, starts_at, ends_at, all_day, person, notes, "
-            "       owner_user_id "
+            "       owner_user_id, calendar_id "
             "FROM events WHERE id=?", (event_id,),
         ).fetchone()
     if not row:
@@ -50,7 +50,8 @@ async def execute(
 
     # Ownership gate: a non-admin caller may only delete events they
     # themselves own. Calendar write-share does NOT grant deletion.
-    from backend.calendars import require_event_owner_or_admin
+    from backend.calendars import require_event_owner_or_admin, require_writable_calendar
+    require_writable_calendar(event_dict)
     require_event_owner_or_admin(
         getattr(ctx, "role", None),
         getattr(ctx, "user_id", None),
@@ -61,9 +62,11 @@ async def execute(
     # marks them with [LINKED_TO=<id>] in notes) go with it.
     link_marker = f"[LINKED_TO={event_id}]"
     with get_conn() as conn:
+        # Only the event owner's own buffers — anyone can type the marker
+        # into a note (audit 2026-09-25, W4).
         linked_rows = conn.execute(
-            "SELECT id, title FROM events WHERE notes LIKE ?",
-            (f"%{link_marker}%",),
+            "SELECT id, title FROM events WHERE notes LIKE ? AND owner_user_id = ?",
+            (f"%{link_marker}%", event_dict.get("owner_user_id")),
         ).fetchall()
     linked_ids = [int(r["id"]) for r in linked_rows]
 

@@ -212,6 +212,20 @@ def require_row_owner_or_admin(
         )
 
 
+def require_writable_calendar(event_row: Dict[str, Any]) -> None:
+    """A mirror of an outside calendar (Google, a subscribed iCal
+    address) is read-only; the app refuses to change its events and so
+    does the chat (audit 2026-09-25, W3)."""
+    cid = event_row.get("calendar_id")
+    if cid is None:
+        return
+    cal = get(int(cid))
+    if cal and cal.get("read_only"):
+        raise EventPermissionError(
+            f"this event comes from the read-only calendar '{cal.get('name')}' — "
+            "change it where it comes from")
+
+
 def require_contact_access(
     role: Optional[str],
     user_id: Optional[int],

@@ -604,7 +604,7 @@ async def ask(
     )
     # Persist the ledger AFTER save_messages — the row must exist first
     # in case this was the conversation's first turn.
-    conversation_io.save_ledger(conversation_id, ledger)
+    conversation_io.save_ledger(conversation_id, ledger, user.id)
 
     # Auto-title (fire-and-forget) — same trigger as the streaming
     # path so a conversation gets a real title regardless of which
@@ -640,6 +640,7 @@ async def ask(
                 "iterations":       trace_iterations,
                 "halted":           halted_by_guardrail,
             },
+            user_id=user.id,
         )
 
     # 6) Build response envelope ───────────────────────────────────────
@@ -1209,7 +1210,7 @@ async def ask_stream(
             final_text = stripped
 
     conversation_io.save_messages(conversation_id, role, user.id, messages)
-    conversation_io.save_ledger(conversation_id, ledger)
+    conversation_io.save_ledger(conversation_id, ledger, user.id)
 
     # Fire-and-forget LLM title generation when the conversation has
     # reached its second assistant turn and still has no title. Doesn't

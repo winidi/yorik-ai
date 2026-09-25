@@ -280,17 +280,20 @@ def load_ledger(conversation_id: str, user_id: Any) -> Dict[str, Any]:
         return {}
 
 
-def save_ledger(conversation_id: str, ledger: Dict[str, Any]) -> None:
+def save_ledger(conversation_id: str, ledger: Dict[str, Any], user_id: Any) -> None:
     """Persist the ledger for this conversation. Must run AFTER
     save_messages so the row is guaranteed to exist. Schema-tolerant
-    the same way load_ledger is."""
-    if not conversation_id:
+    the same way load_ledger is. Only into the person's own
+    conversation: the ledger goes into that conversation's next system
+    prompt, and a foreign conversation id used to overwrite it (audit
+    2026-09-25, W5)."""
+    if not conversation_id or user_id is None:
         return
     blob = json.dumps(ledger or {}, ensure_ascii=False)
     with conn_ctx(DB_PATH) as conn:
         conn.execute(
-            "UPDATE agent_conversations SET ledger_json = ? WHERE id = ?",
-            (blob, conversation_id),
+            "UPDATE agent_conversations SET ledger_json = ? WHERE id = ? AND user_id = ?",
+            (blob, conversation_id, user_id),
         )
 
 
@@ -298,6 +301,7 @@ def save_message_trace(
     conversation_id: str,
     message_idx: int,
     trace: Optional[Dict[str, Any]],
+    user_id: Any = None,
 ) -> None:
     """Persist a per-message agent_trace blob (dev mode).
 
@@ -308,11 +312,17 @@ def save_message_trace(
     No-op when ``trace`` is None or the conversation doesn't exist yet
     (the FK would reject). Callers always save_messages() first.
     """
-    if not conversation_id or not trace:
+    if not conversation_id or not trace or user_id is None:
         return
     blob = json.dumps(trace, ensure_ascii=False, default=str)
     try:
         with conn_ctx(DB_PATH) as conn:
+            # Only on the person's own conversation (audit 2026-09-25, W5).
+            row = conn.execute(
+                "SELECT user_id FROM agent_conversations WHERE id = ?", (conversation_id,),
+            ).fetchone()
+            if not owns(row, user_id):
+                return
             conn.execute(
                 "INSERT OR REPLACE INTO agent_message_traces "
                 "(conversation_id, message_idx, trace_json) "

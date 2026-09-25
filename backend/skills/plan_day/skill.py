@@ -18,7 +18,8 @@ async def execute(ctx, date: str, items: List[Dict[str, Any]]) -> Dict[str, Any]
         _d.fromisoformat(plan_date)
     except Exception:
         raise ValueError("date must be YYYY-MM-DD")
-    result = D.apply_plan(user_id=str(user_id), plan_date=plan_date, items=items or [])
+    result = D.apply_plan(user_id=str(user_id), plan_date=plan_date, items=items or [],
+                          role=getattr(ctx, "role", None))
     _append({"type": "refresh_data", "table": "tasks", "reason": f"day plan {plan_date}"})
     _append({"type": "show_calendar", "view": "day", "anchor_date": plan_date,
              "reason": f"plan for {plan_date}"})

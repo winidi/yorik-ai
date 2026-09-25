@@ -322,3 +322,55 @@ def test_admin_sees_own_drafts_and_web_log_only(house, fresh_app):
     from backend.skills.delete_compose_draft.skill import execute as delete_draft
     with pytest.raises(ValueError):
         run(delete_draft(ctx_for(house, "dirk"), draft_id=did))
+
+
+# ── W1–W5: the chat writes only where the app would ──────────────────
+
+def test_no_event_into_someone_elses_calendar(house):
+    from backend import calendars as C
+    from backend.skills.add_calendar_event.skill import execute as add_event
+    beate_cal = C.create_calendar(name="Beate", owner_user_id=house["beate"])
+    with pytest.raises(PermissionError):
+        run(add_event(ctx_for(house, "dirk"), title="Überraschung", starts_at="2027-01-10T10:00:00",
+                      calendar_id=beate_cal))
+
+
+def test_mirror_events_stay_read_only(house):
+    from backend import calendars as C
+    from backend.database import get_conn
+    from backend.skills.update_calendar_event.skill import execute as update_event
+    from backend.skills.delete_calendar_event.skill import execute as delete_event
+    mirror = C.create_calendar(name="Google", owner_user_id=house["dirk"])
+    with get_conn() as conn:
+        conn.execute("UPDATE calendars SET read_only = 1 WHERE id = ?", (mirror,))
+        eid = conn.execute("INSERT INTO events (title, starts_at, calendar_id, owner_user_id) "
+                           "VALUES ('Gespiegelt', '2027-01-10T10:00:00', ?, ?)", (mirror, house["dirk"])).lastrowid
+        conn.commit()
+    with pytest.raises(PermissionError):
+        run(update_event(ctx_for(house, "dirk"), event_id=eid, title="neu"))
+    with pytest.raises(PermissionError):
+        run(delete_event(ctx_for(house, "dirk"), event_id=eid))
+
+
+def test_day_plan_leaves_others_tasks_alone(house):
+    from backend import day_plans
+    from backend.database import get_conn
+    private = _task("Geschenk für Dirk", creator=house["beate"], assignees=[house["beate"]], space=house["beate_space"])
+    out = day_plans.apply_plan(user_id=house["dirk"], plan_date="2026-09-26", role="platform_admin",
+                               items=[{"title": "Umbenannt", "task_id": private}])
+    assert out["summary"].get("skipped") == 1
+    with get_conn() as conn:
+        assert conn.execute("SELECT title FROM tasks WHERE id = ?", (private,)).fetchone()["title"] == "Geschenk für Dirk"
+
+
+def test_ledger_only_into_own_conversation(house):
+    from backend.agent import conversation_io as io
+    from backend.database import get_conn
+    with get_conn() as conn:
+        conn.execute("INSERT INTO agent_conversations (id, user_id, user_role, messages_json, ledger_json) "
+                     "VALUES ('conv-beate', ?, 'member', '[]', '{}')", (house["beate"],))
+        conn.commit()
+    io.save_ledger("conv-beate", {"planted": True}, house["dirk"])
+    assert io.load_ledger("conv-beate", house["beate"]) == {}
+    io.save_ledger("conv-beate", {"mine": True}, house["beate"])
+    assert io.load_ledger("conv-beate", house["beate"]) == {"mine": True}

@@ -124,9 +124,15 @@ def _time_on(plan_date: str, value: Any) -> Optional[str]:
 # ─── apply / rollback ───────────────────────────────────────────────
 
 def apply_plan(*, user_id: str, plan_date: str, items: List[Dict[str, Any]],
-               space_id: Optional[int] = None, user_name: Optional[str] = None) -> Dict[str, Any]:
+               space_id: Optional[int] = None, user_name: Optional[str] = None,
+               role: Optional[str] = None) -> Dict[str, Any]:
     """Write the plan. Returns a summary plus the rollback args that
     restore the previous state."""
+    from .spaces import can_write_row
+    if role is None:
+        with get_conn() as conn:
+            r = conn.execute("SELECT role FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
+        role = (r["role"] if r else None) or "member"
     items = normalize_items(plan_date, items)
     cal_id = plan_calendar_id(user_id, user_name)
     adopted: List[tuple] = []          # (report_ref, task_id) — linked after the commit
@@ -146,6 +152,12 @@ def apply_plan(*, user_id: str, plan_date: str, items: List[Dict[str, Any]],
             if task is None and it.get("task_id"):
                 task = conn.execute("SELECT * FROM tasks WHERE id = ?", (int(it["task_id"]),)).fetchone()
                 task = dict(task) if task else None
+                # A task id from the model is rewritten (title, due date,
+                # plan day) only when the person may change that task —
+                # the Tasks app's rule (audit 2026-09-25, W2).
+                if task is not None and not can_write_row(user_id, role, "tasks", task):
+                    summary["skipped"] = summary.get("skipped", 0) + 1
+                    continue
             if task is None:
                 cur = conn.execute(
                     "INSERT INTO tasks (title, due_date, done, notes, category, created_by_user_id, "
@@ -221,7 +233,7 @@ def apply_plan(*, user_id: str, plan_date: str, items: List[Dict[str, Any]],
         )
         conn.commit()
     for ref, task_id in adopted:
-        _link_report_task(ref, task_id, user_id)
+        _link_report_task(ref, task_id, user_id, role)
     log.info("day plan %s for %s: %s", plan_date, user_id, summary)
     return {"summary": summary, "items": items, "rollback_args": rb, "calendar_id": cal_id}
 
@@ -474,7 +486,7 @@ def review_day(user_id: str, plan_date: str) -> Dict[str, Any]:
     return review
 
 
-def _link_report_task(report_ref: str, task_id: int, user_id: str) -> None:
+def _link_report_task(report_ref: str, task_id: int, user_id: str, role: Optional[str] = None) -> None:
     """A plan item taken from a recording report: mark that proposal
     adopted so the report and the other participants see it."""
     import json as _json
@@ -482,6 +494,11 @@ def _link_report_task(report_ref: str, task_id: int, user_id: str) -> None:
         rid_s, idx_s = report_ref.split(":", 1)
         rid, idx = int(rid_s), int(idx_s)
     except ValueError:
+        return
+    # Only a report the person may see — any recording id used to do
+    # (audit 2026-09-25, W2).
+    from .recordings import can_view
+    if not can_view(rid, {"id": user_id, "role": role}):
         return
     with get_conn() as conn:
         row = conn.execute("SELECT report_json FROM recordings WHERE id = ?", (rid,)).fetchone()
