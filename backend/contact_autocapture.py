@@ -38,16 +38,42 @@ from .database import conn_ctx
 log = logging.getLogger(__name__)
 
 
+def _owner_of_message(message_id: int) -> Optional[str]:
+    """Who the autocaptured contact belongs to: the owner of the mailbox
+    the message landed in. Derived here rather than plumbed through
+    email_fetcher — message_id is already on hand and the column is
+    indexed. None when the row is gone or pre-dates owner_user_id."""
+    try:
+        from .database import get_conn
+        with get_conn() as c:
+            row = c.execute(
+                "SELECT owner_user_id FROM email_messages WHERE id = ?",
+                (message_id,),
+            ).fetchone()
+        return row["owner_user_id"] if row and row["owner_user_id"] else None
+    except Exception as exc:  # noqa: BLE001
+        log.debug("contact_autocapture: owner lookup for msg %s failed: %s",
+                  message_id, exc)
+        return None
+
+
 def on_inbound_email(
     *,
     from_email: str,
     from_name: str,
     message_id: int,
+    owner_user_id: Optional[str] = None,
 ) -> Optional[str]:
     """Run after a new inbound email is committed to email_messages.
     Returns the category override (e.g. 'spam') if one was applied,
     else None. Caller (email_fetcher) should write the category to the
     email_messages row when not None.
+
+    `owner_user_id` becomes the new contact's creator, which is what
+    puts it in that person's personal space. Omitted → looked up from
+    the message. Without it a contact matches neither arm of
+    spaces.row_filter and is invisible to everyone but platform_admin —
+    that is how 555 contacts ended up unreachable (2026-09-22).
 
     NEVER raises — all paths log + swallow.
     """
@@ -55,6 +81,8 @@ def on_inbound_email(
         addr = (from_email or "").strip().lower()
         if not addr:
             return None
+        if owner_user_id is None:
+            owner_user_id = _owner_of_message(message_id)
 
         existing = _contacts.find_by_channel("email", addr)
 
@@ -129,6 +157,7 @@ def on_inbound_email(
                 kind="business",
                 status="spam",
                 source="email_in",
+                created_by_user_id=owner_user_id,
             )
             try:
                 _contacts.add_channel(
@@ -163,6 +192,7 @@ def on_inbound_email(
             kind=guessed_kind,
             status="pending",
             source="email_in",
+            created_by_user_id=owner_user_id,
         )
         try:
             _contacts.add_channel(
@@ -431,11 +461,16 @@ def on_inbound_whatsapp(
     *,
     from_jid: str,
     from_name: str,
+    owner_user_id: Optional[str] = None,
 ) -> Optional[str]:
     """Same shape as on_inbound_email but for WhatsApp. Stores the FULL
     jid as the channel value (not the digits) so lookups are exact and
     @lid pseudo-jids can be filtered out cleanly. Returns 'spam' if the
-    sender is on the spam list, else None. Never raises."""
+    sender is on the spam list, else None. Never raises.
+
+    `owner_user_id` is whose WhatsApp session the message arrived on; it
+    becomes the contact's creator and thereby its space. See
+    on_inbound_email for what happens without it."""
     try:
         if _is_pseudo_jid(from_jid):
             return None
@@ -517,6 +552,7 @@ def on_inbound_whatsapp(
             kind="person",
             status=status,
             source="wa_sync",
+            created_by_user_id=owner_user_id,
         )
         try:
             _contacts.add_channel(
@@ -774,6 +810,7 @@ def seed_from_whatsapp_history(*, owner_user_id: Optional[int] = None) -> dict:
                 kind="person",
                 status="active",
                 source="wa_sync",
+                created_by_user_id=owner_user_id,
             )
             try:
                 _contacts.add_channel(cid, kind="whatsapp", value=norm, source="wa_sync")

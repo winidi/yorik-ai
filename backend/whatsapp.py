@@ -335,6 +335,7 @@ def _insert_message(m: dict[str, Any], owner_user_id: str) -> None:
             contact_autocapture.on_inbound_whatsapp(
                 from_jid=jid,
                 from_name=m.get("pushName") or "",
+                owner_user_id=owner_user_id,
             )
         except Exception as exc:
             log.debug("WA contact_autocapture failed: %s", exc)
@@ -1602,7 +1603,8 @@ async def send_message(
             elif not existing:
                 # Brand-new recipient — autocapture them on the outbound
                 # side too. Uses the same active-by-default policy.
-                contact_autocapture.on_inbound_whatsapp(from_jid=jid, from_name="")
+                contact_autocapture.on_inbound_whatsapp(
+                    from_jid=jid, from_name="", owner_user_id=uid)
         except Exception as exc:
             log.debug("WA outbound promote hook failed: %s", exc)
     # Mark the source draft (and its siblings) as resolved. The chosen
