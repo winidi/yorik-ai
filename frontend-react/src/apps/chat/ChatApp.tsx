@@ -1051,7 +1051,24 @@ function Thread({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-6 py-6"
+        className={cn("flex-1 overflow-y-auto px-6 py-6 transition", dragOver && "bg-amber-500/10")}
+        // Same drop target as the composer below (handleDroppedFile routes
+        // by type) — without this, dropping anywhere over the message
+        // list (most of the visible chat) silently did nothing, and only
+        // the narrow composer strip actually accepted a file. 2026-09-25.
+        onDragOver={e => {
+          if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")) {
+            e.preventDefault();
+            setDragOver(true);
+          }
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => {
+          if (!e.dataTransfer?.files?.length) return;
+          e.preventDefault();
+          setDragOver(false);
+          handleDroppedFile(e.dataTransfer.files[0]);
+        }}
       >
         {/* Centred reading column — matches the ChatGPT/Grok layout so
             the chat doesn't stretch edge-to-edge on a wide window.
