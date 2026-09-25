@@ -33,6 +33,7 @@ import { useAuth } from "@/components/AuthGate";
 import { Dock } from "@/components/Dock";
 import { StoragePicker } from "@/components/StoragePicker";
 import { BackupPicker } from "@/components/BackupPicker";
+import { EasyBackup } from "@/components/EasyBackup";
 import { SeriesManager } from "@/apps/compose/SeriesManager";
 import { DevicesTab } from "./DevicesTab";
 import { HouseholdsTab } from "./HouseholdsTab";
@@ -3195,6 +3196,7 @@ function BackupTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
           Calendars, contacts, tasks and the encryption key are always included.
           Photos, Paperless and the WhatsApp session are opt-in (they're heavy).
         </p>
+        <div className="mb-6"><EasyBackup /></div>
         <BackupPicker />
       </Card>
     </div>

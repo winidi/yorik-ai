@@ -1081,6 +1081,58 @@ interface BridgeInfo {
   container_name:    string;
 }
 
+// WhatsApp on the same phone as Yorik can't scan a QR on its own screen:
+// link by phone number instead ("Link with phone number instead").
+function PairByCode() {
+  const [open, setOpen] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  async function ask() {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.post<{ code: string }>("/api/whatsapp/pairing-code", { phone });
+      setCode(r.code);
+    } catch (e: any) { setErr(e?.message || "No code came back."); }
+    finally { setBusy(false); }
+  }
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="mt-4 text-sm text-primary underline">
+        WhatsApp is on this phone? Link with a code instead
+      </button>
+    );
+  }
+  return (
+    <div className="mt-5 text-left space-y-3 border-t border-border pt-4">
+      {!code ? (
+        <>
+          <label className="block text-sm">
+            <span className="font-medium">Your WhatsApp phone number</span>
+            <input value={phone} onChange={e => setPhone(e.target.value)} inputMode="tel" placeholder="+49 170 1234567"
+                   className="mt-1.5 w-full h-10 px-3 rounded-lg bg-background border border-border" />
+          </label>
+          {err && <p className="text-xs text-destructive">{err}</p>}
+          <button onClick={ask} disabled={busy || phone.replace(/\D/g, "").length < 8}
+                  className="w-full h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+            {busy && <Loader2 className="w-4 h-4 animate-spin" />} Get the code
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="text-center text-3xl font-mono font-semibold tracking-[0.3em] py-2">{code}</div>
+          <ol className="text-xs text-muted-foreground space-y-1 pl-4 list-decimal">
+            <li>Open WhatsApp → Settings → <b>Linked Devices → Link a Device</b></li>
+            <li>Tap <b>Link with phone number instead</b></li>
+            <li>Type the code above</li>
+          </ol>
+        </>
+      )}
+    </div>
+  );
+}
+
 function QrModal({
   status, onRefreshStatus,
 }: {
@@ -1279,6 +1331,7 @@ function QrModal({
               <li>Settings → <b>Linked Devices → Link a Device</b></li>
               <li>Scan the QR above</li>
             </ol>
+            <PairByCode />
           </>
         ) : (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">

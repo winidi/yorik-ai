@@ -163,7 +163,7 @@ def human_mail_error(direction: str, error: str, email: str) -> str:
         msg = f"{name} refused the password."
         if provider.get("notes") and "app password" in provider["notes"].lower():
             msg += (f" {name} needs a separate app password for other programs, "
-                    "not your normal one. The link under the password field shows where to get it.")
+                    "not your normal one. Step 2 has a button that takes you to where you get it.")
         elif provider.get("notes"):
             msg += " " + provider["notes"].replace("**", "")
         else:

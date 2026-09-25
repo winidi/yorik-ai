@@ -961,6 +961,34 @@ async def qr(
         raise HTTPException(502, f"WhatsApp bridge unreachable — start yorik-whatsapp-bridge ({e})")
 
 
+class _PairingCodeBody(BaseModel):
+    phone: str
+
+
+@router.post("/pairing-code")
+async def pairing_code(body: _PairingCodeBody,
+                       user: dict[str, Any] = Depends(_auth.current_user)) -> dict[str, Any]:
+    """An 8-character code to link WhatsApp by phone number instead of
+    scanning the QR, for linking on the phone that runs WhatsApp itself."""
+    uid = user["id"]
+    try:
+        async with httpx.AsyncClient(timeout=20.0, headers=_bridge_headers()) as c:
+            try:
+                await c.post(_bridge_url("/start", uid))
+            except Exception:
+                pass
+            r = await c.post(_bridge_url("/pairing-code", uid), json={"phone": body.phone})
+    except httpx.RequestError:
+        raise HTTPException(502, "WhatsApp isn't running right now. Try again in a minute.")
+    if r.status_code == 400:
+        raise HTTPException(400, "That phone number doesn't look right. Use the full number with country code, e.g. +49 170 1234567.")
+    if r.status_code == 409:
+        raise HTTPException(409, "WhatsApp is already linked.")
+    if r.status_code != 200:
+        raise HTTPException(502, "WhatsApp didn't give a code. Wait a few seconds and try again, or use the QR code.")
+    return {"code": r.json().get("code")}
+
+
 @router.get("/settings")
 def get_wa_settings(user: dict[str, Any] = Depends(_auth.require_admin)) -> dict[str, Any]:
     """Read user-controllable WhatsApp toggles. Used by the Settings →

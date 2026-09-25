@@ -16,7 +16,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Camera, ExternalLink, AlertCircle, Server } from "lucide-react";
+import { Camera, ExternalLink, AlertCircle, Server, Smartphone } from "lucide-react";
+import { PhotosPhoneSetup } from "@/components/PhotosPhoneSetup";
 import { Dock } from "@/components/Dock";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/AuthGate";
@@ -72,17 +73,23 @@ export function PhotosApp() {
     return () => { cancelled = true; };
   }, []);
 
+  const [phoneSetup, setPhoneSetup] = useState(false);
+
   return (
     <div className="h-screen flex flex-col bg-background text-foreground pb-16">
+      {phoneSetup && <PhotosPhoneSetup onClose={() => setPhoneSetup(false)} />}
       <header className="h-12 px-4 border-b border-border bg-background/85 backdrop-blur flex items-center gap-3 shrink-0">
         <div className="w-7 h-7 rounded-md bg-emerald-500/15 flex items-center justify-center">
           <Camera className="w-3.5 h-3.5 text-emerald-500" />
         </div>
         <span className="text-sm font-medium">Photos</span>
-        <span className="text-2xs text-muted-foreground hidden sm:inline">
-          via Immich
-        </span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={() => setPhoneSetup(true)}
+            className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition"
+          >
+            <Smartphone className="w-3 h-3" /> Back up this phone
+          </button>
           <a
             href={src}
             target="_blank"

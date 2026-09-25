@@ -108,6 +108,21 @@ def join_page_url() -> Optional[str]:
     return _cached("join_page", load)
 
 
+def serve_url_for_local_port(port: int) -> Optional[str]:
+    """The tailnet HTTPS address Serve publishes a local service on, e.g.
+    Immich on localhost:2283 → https://box.tailnet.ts.net:8443."""
+    def load():
+        cfg = _run_json("serve", "status", "--json") or {}
+        for host_port, web in (cfg.get("Web") or {}).items():
+            for handler in (web.get("Handlers") or {}).values():
+                proxy = (handler or {}).get("Proxy") or ""
+                if proxy.rstrip("/").endswith(f":{port}"):
+                    host, _, p = host_port.rpartition(":")
+                    return f"https://{host}" + ("" if p == "443" else f":{p}")
+        return None
+    return _cached(f"serve:{port}", load)
+
+
 def forget_cache() -> None:
     _CACHE.clear()
 

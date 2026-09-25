@@ -3742,7 +3742,7 @@ function CalendarsSidebar({
     [usersApi.data],
   );
 
-  const [importOpen, setImportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState<boolean>(() => new URLSearchParams(window.location.search).get("import") === "1");  // ?import=1: the Home checklist
 
   // Three sections — my, others', household.
   const mine      = calendars.filter(c => c.you_own && c.kind !== "shared");

@@ -6,13 +6,27 @@
  * Backend: backend/calendar_import.py.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CloudDownload, FileUp, Loader2, RefreshCw, Trash2, X } from "lucide-react";
+import { CloudDownload, ExternalLink, FileUp, Loader2, RefreshCw, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { Calendar } from "./types";
 
 interface Feed { id: number; calendar_id: number; url_host: string; last_sync_at: string | null; last_status: string | null; last_error: string | null; event_count: number }
 interface Preview { events: number; series: number; first: string | null; last: string | null }
+
+// Where each service hides its secret calendar address, with a button
+// straight to that settings page.
+type SourceId = "google" | "icloud" | "outlook" | "other";
+const SOURCES: Record<SourceId, { label: string; steps: string[]; url?: string; open?: string }> = {
+  google:  { label: "Google", url: "https://calendar.google.com/calendar/r/settings", open: "Google-Kalender-Einstellungen öffnen",
+             steps: ["Links unter „Einstellungen für meine Kalender\" deinen Kalender antippen", "Runterscrollen zu „Kalender integrieren\" → Privatadresse im iCal-Format kopieren"] },
+  icloud:  { label: "iPhone / iCloud",
+             steps: ["iPhone: Kalender-App → unten „Kalender\" → beim Kalender auf ⓘ tippen", "„Öffentlicher Kalender\" einschalten → „Link teilen\" → Kopieren"] },
+  outlook: { label: "Outlook", url: "https://outlook.live.com/calendar/0/options/calendar/SharedCalendars", open: "Outlook-Freigaben öffnen",
+             steps: ["Unter „Kalender veröffentlichen\" deinen Kalender und „Alle Details anzeigen\" wählen → Veröffentlichen", "Den ICS-Link kopieren"] },
+  other:   { label: "Andere",
+             steps: ["In deinem Kalender nach „Abonnieren\", „Freigeben\" oder „iCal-Adresse\" suchen und die Adresse kopieren"] },
+};
 
 export function CalendarImportDialog({ calendars, onClose, onChanged }: {
   calendars: Calendar[]; onClose: () => void; onChanged: () => void;
@@ -25,6 +39,7 @@ export function CalendarImportDialog({ calendars, onClose, onChanged }: {
   const [done, setDone] = useState<string | null>(null);
   // subscribe
   const [url, setUrl] = useState("");
+  const [source, setSource] = useState<SourceId>("google");
   const [name, setName] = useState("Google");
   // file
   const fileRef = useRef<HTMLInputElement>(null);
@@ -40,7 +55,9 @@ export function CalendarImportDialog({ calendars, onClose, onChanged }: {
   async function subscribe() {
     setBusy("subscribe"); setError(null); setDone(null);
     try {
-      const r = await api.post<{ sync: { added: number } }>("/api/calendar-import/feeds", { url: url.trim(), name: name.trim() || "Google" });
+      // iPhone/iCloud share links start with webcal://; it's the same address over https.
+      const clean = url.trim().replace(/^webcals?:\/\//i, "https://");
+      const r = await api.post<{ sync: { added: number } }>("/api/calendar-import/feeds", { url: clean, name: name.trim() || SOURCES[source].label });
       setDone(`Abonniert: ${r.sync.added} Termine übernommen. Der Kalender folgt seiner Quelle alle 15 Minuten.`);
       setUrl(""); await loadFeeds(); onChanged();
     } catch (e: any) { setError(e?.message || "Das hat nicht geklappt."); } finally { setBusy(null); }
@@ -96,11 +113,24 @@ export function CalendarImportDialog({ calendars, onClose, onChanged }: {
                 Yorik spiegelt den Kalender und gleicht ihn alle 15 Minuten ab. Er ist hier nur lesbar: Termine trägst du weiter
                 bei Google ein, sie erscheinen dann in Yorik, auf der Familientafel und in der Suche. Nichts geht von Yorik zu Google.
               </p>
+              <div className="flex flex-wrap gap-1.5">
+                {(Object.keys(SOURCES) as SourceId[]).map(id => (
+                  <button key={id} onClick={() => { setSource(id); if (name === SOURCES[source].label || !name) setName(SOURCES[id].label); }}
+                          className={cn("rounded-full px-3 py-1 text-xs border", source === id ? "border-primary/50 bg-primary/10 text-primary" : "border-border text-muted-foreground")}>
+                    {SOURCES[id].label}
+                  </button>
+                ))}
+              </div>
               <ol className="text-xs text-muted-foreground list-decimal pl-4 space-y-0.5">
-                <li>Google Kalender → Zahnrad → Einstellungen → links deinen Kalender wählen</li>
-                <li>„Kalender integrieren" → <b>Privatadresse im iCal-Format</b> kopieren</li>
+                {SOURCES[source].steps.map((s, i) => <li key={i}>{s}</li>)}
                 <li>Hier einfügen. Die Adresse ist geheim; Yorik speichert sie verschlüsselt.</li>
               </ol>
+              {SOURCES[source].url && (
+                <a href={SOURCES[source].url} target="_blank" rel="noopener noreferrer"
+                   className="flex items-center justify-center gap-1.5 h-9 rounded-md border border-border text-xs font-medium hover:bg-muted">
+                  {SOURCES[source].open} <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
               <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
                      className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs" />
               <div className="flex gap-2">

@@ -706,6 +706,25 @@ app.get("/users/:userId/qr", async (req, res) => {
   }
 });
 
+// Link by phone number instead of a QR: WhatsApp shows "Link with phone
+// number instead" under Linked devices, and the person types this code.
+// This is what makes pairing work on the SAME phone that has WhatsApp
+// (a QR on that screen can't be scanned by it). Only while unpaired.
+app.post("/users/:userId/pairing-code", async (req, res) => {
+  const s = sessions.get(req.params.userId);
+  if (!s || !s.sock) return res.status(404).json({ error: "no_session" });
+  if (s.connected) return res.status(409).json({ error: "already_paired" });
+  const digits = String((req.body && req.body.phone) || "").replace(/\D/g, "");
+  if (digits.length < 8 || digits.length > 15) return res.status(400).json({ error: "bad_phone" });
+  try {
+    const code = await s.sock.requestPairingCode(digits);
+    res.json({ code });
+  } catch (e) {
+    s.logger.warn(`pairing code failed: ${e?.message || e}`);
+    res.status(502).json({ error: "pairing_code_failed", detail: String(e?.message || e) });
+  }
+});
+
 // Names from Baileys' in-memory contact map. Baileys keeps a live
 // store of every contact it has ever seen — populated from the
 // chats sync, push events on every inbound, contacts.upsert, etc.

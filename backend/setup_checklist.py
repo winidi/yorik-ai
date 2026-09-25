@@ -117,3 +117,18 @@ def patch_ui_state(body: UiStatePatch, user: dict = Depends(current_user)) -> di
         conn.execute("UPDATE user_profiles SET ui_state = ? WHERE id = ?", (json.dumps(st), user["id"]))
         conn.commit()
     return get_ui_state(user)
+
+
+@router.get("/setup/photos-phone")
+def photos_phone(user: dict = Depends(current_user)) -> dict[str, Any]:
+    """What the Immich phone app needs: the server address a phone can
+    reach, and the person's own login. Invited members never typed a
+    password (they use a PIN), so theirs is shown to them, and only to
+    them; everyone else signs in with their Yorik password."""
+    import os
+    from . import credential_store, tailscale_local
+    server = (os.getenv("YORIK_IMMICH_PUBLIC_URL") or "").strip().rstrip("/") \
+        or tailscale_local.serve_url_for_local_port(2283)
+    own = credential_store.get(f"member_pw:{user['id']}") or {}
+    return {"server_url": server, "email": user.get("email"),
+            "password": own.get("password"), "uses_yorik_password": not own.get("password")}

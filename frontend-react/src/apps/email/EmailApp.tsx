@@ -202,7 +202,8 @@ function usePagedMessages(
 
 
 export function EmailApp() {
-  const [showWizard, setShowWizard] = useState(false);
+  // ?add=1 (the Home checklist's "Connect your email") opens the wizard.
+  const [showWizard, setShowWizard] = useState(() => new URLSearchParams(window.location.search).get("add") === "1");
   const [showCleanup, setShowCleanup] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<number | "all">("all");
