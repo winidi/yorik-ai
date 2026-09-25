@@ -1,0 +1,17 @@
+# Settings → System → "Update now". Started by the Yorik user through
+# polkit (infra/polkit/50-yorik-tenant.rules); installed by install.sh.
+# Runs the same `yorik upgrade` as the command line, then restarts Yorik
+# with root rights (the "+" prefix) because the Yorik user can't.
+[Unit]
+Description=Yorik update (started from Settings → System)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{INSTALL_USER}}
+WorkingDirectory={{INSTALL_DIR}}
+ExecStart={{INSTALL_DIR}}/venv/bin/python {{INSTALL_DIR}}/scripts/yorik upgrade --no-restart
+ExecStartPost=+/usr/bin/systemctl restart yorik.service
+StandardOutput=append:/tmp/yorik-update.log
+StandardError=append:/tmp/yorik-update.log
+TimeoutStartSec=30min

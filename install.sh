@@ -1052,6 +1052,25 @@ _install_tenant_template() {
 # is unusable from inside the service. systemctl talks to systemd
 # over D-Bus and polkit authorises; the rule narrows authorization to
 # yorik-tenant@* units + caddy reload only.
+# The in-app update (Settings → System → Update now) starts this oneshot
+# unit through polkit: `yorik upgrade` as the install user, then a
+# restart of yorik.service with root rights (ExecStartPost=+).
+_install_update_unit() {
+  local dir="$1" user="$2"
+  local src="$dir/infra/systemd/yorik-update.service"
+  local target="/etc/systemd/system/yorik-update.service"
+  [[ -f "$src" ]] || return 0
+  if [[ -f "$target" ]] && grep -q "$dir" "$target" 2>/dev/null; then
+    return 0
+  fi
+  local tmp
+  tmp=$(mktemp --suffix=.service)
+  sed -e "s|{{INSTALL_DIR}}|$dir|g" -e "s|{{INSTALL_USER}}|$user|g" "$src" > "$tmp"
+  sudo install -m 0644 "$tmp" "$target"
+  rm -f "$tmp"
+  sudo systemctl daemon-reload
+}
+
 _install_polkit_rule() {
   local dir="$1" user="$2"
   local rule_src="$dir/infra/polkit/50-yorik-tenant.rules"
@@ -1086,6 +1105,7 @@ elif [[ -f "$SYSTEMD_UNIT" ]]; then
   # for this layout).
   _install_tenant_template "$INSTALL_DIR" "$INSTALL_USER"
   _install_polkit_rule "$INSTALL_DIR" "$INSTALL_USER"
+  _install_update_unit "$INSTALL_DIR" "$INSTALL_USER"
 elif [[ "$FLAG_YES" == "1" ]]; then
   TEMPLATE="$INSTALL_DIR/yorik.service.template"
   if [[ -f "$TEMPLATE" ]]; then
@@ -1099,6 +1119,7 @@ elif [[ "$FLAG_YES" == "1" ]]; then
     sudo systemctl enable yorik >/dev/null 2>&1
     _install_tenant_template "$INSTALL_DIR" "$INSTALL_USER"
   _install_polkit_rule "$INSTALL_DIR" "$INSTALL_USER"
+  _install_update_unit "$INSTALL_DIR" "$INSTALL_USER"
     ok "systemd unit installed + enabled (--yes mode)"
     if _handoff_to_systemd; then
       ok "manual launch handed off to systemd (systemctl status yorik → active)"
@@ -1127,6 +1148,7 @@ else
       sudo systemctl enable yorik >/dev/null 2>&1
       _install_tenant_template "$INSTALL_DIR" "$INSTALL_USER"
   _install_polkit_rule "$INSTALL_DIR" "$INSTALL_USER"
+  _install_update_unit "$INSTALL_DIR" "$INSTALL_USER"
       ok "systemd unit installed + enabled"
       if _handoff_to_systemd; then
         ok "manual launch handed off to systemd"
