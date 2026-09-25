@@ -226,10 +226,9 @@ export function EmailApp() {
      // Two ways to deep-link the composer on mount:
      //  (1) ?to=…&subject=… — used by the contacts page "Email" icon.
      //  (2) sessionStorage "yorik_pending_email" — used by the chat
-     //      photo handoff, the documents "Send via email" button, and
-     //      prepare_email (EmailStashBridge). The last of these also
-     //      carries to/subject/body/accountId, not just attachments —
-     //      a fully staged draft the user only has to review and send.
+     //      photo handoff and the documents "Send via email" button.
+     //      prepare_email instead stages server-side (see the
+     //      pending-draft fetch below) so it isn't tied to this tab.
      try {
        const params = new URLSearchParams(window.location.search);
        let to = params.get("to") || "";

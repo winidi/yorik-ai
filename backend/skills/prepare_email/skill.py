@@ -1,22 +1,23 @@
 """prepare_email — stage an email draft (recipient, subject, body, one
 attachment) for the user to review and send themselves in the Email app.
 
-Never calls email_sender.send() and never touches SMTP. Stages the
-draft two ways:
-  1. Server-side in app_settings (key pending_email_draft_<user_id>),
-     read-and-cleared by GET /api/email/pending-draft on the Email
-     app's mount. This is the reliable path — it works no matter which
-     tab, window, or later moment the user opens Email in, unlike a
-     sessionStorage handoff tied to one browser tab. First version of
-     this skill used ONLY a `stash_pending_email` UI action into
-     sessionStorage; the user reported "I don't see the draft" because
-     that action landed in whichever tab happened to receive the
-     assistant's reply, not necessarily the tab they later checked
-     Email in (2026-09-25).
-  2. Still ALSO fires that `stash_pending_email` UI action (consumed
-     by EmailStashBridge) for the same-tab case, where it's instant —
-     no extra request needed if the user navigates to Email in the
-     very tab the reply arrived in.
+Never calls email_sender.send() and never touches SMTP. Two things
+happen:
+  1. The draft is written server-side into app_settings (key
+     pending_email_draft_<user_id>), read-and-cleared by GET
+     /api/email/pending-draft on the Email app's mount. This is the
+     data channel — it works no matter which tab, window, or later
+     moment the user opens Email in. (V1 used only a sessionStorage
+     handoff; the user reported "I don't see the draft" because that
+     only reached the one browser tab that happened to receive the
+     assistant's reply — 2026-09-25.)
+  2. An `email_ready` UI action is returned so the chat renders a real
+     card — recipient, subject, a body preview, the attachment name —
+     with an "Open and send" button (EmailDraftReadyCard.tsx) that
+     jumps straight to /email. Before this, the assistant only ever
+     said "open Email yourself" in plain text, which the user rightly
+     called out as not UX-friendly (2026-09-25) next to how a letter
+     or invoice draft gets a proper inline card elsewhere in Yorik.
 Nothing is sent, filed, or delivered by this skill itself.
 """
 
@@ -85,18 +86,28 @@ async def execute(
         )
         conn.commit()
 
-    # 2. Instant same-tab hint, if the user is about to navigate to
-    # Email in the very tab this reply lands in.
+    # 2. A real card in the chat, not just a sentence — mirrors
+    # writing_draft_created's WritingDraftCard for letters/invoices.
+    body_preview = (body or "").strip().replace("\n", " ")
+    if len(body_preview) > 160:
+        body_preview = body_preview[:157] + "…"
     from backend.ui_tools import _append
-    _append({"type": "stash_pending_email", **payload})
+    _append({
+        "type":                "email_ready",
+        "to":                  to,
+        "subject":             payload["subject"],
+        "preview":             body_preview,
+        "attachment_filename": row["filename"],
+    })
 
     return {
         "ok":            True,
         "staged_to":     to,
         "attachment_id": row["id"],
         "_llm_hint": (
-            f"Staged, NOT sent. Tell the user in one line that the email to {to} is ready and waiting in the Email "
-            f"app with '{row['filename']}' attached, and that they need to open Email themselves, check it, and "
-            f"press send — nothing was sent or delivered by this call." + account_note
+            f"Staged, NOT sent — a card with an 'open and send' button already showed the user everything "
+            f"(recipient, subject, preview, attachment). Just confirm in one short line that it's ready; don't "
+            f"repeat the details the card already shows, and don't say 'open the Email app yourself', the card "
+            f"does that." + account_note
         ),
     }

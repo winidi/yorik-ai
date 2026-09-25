@@ -32,7 +32,6 @@ import { AuthGate } from "./components/AuthGate";
 import { VoiceFab } from "./components/VoiceFab";
 import { VoiceListeningOverlay } from "./components/VoiceListeningOverlay";
 import { NavigationBridge } from "./components/NavigationBridge";
-import { EmailStashBridge } from "./components/EmailStashBridge";
 import { SwipeNav } from "./components/SwipeNav";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Toaster } from "@/components/Toast";
@@ -202,7 +201,6 @@ createRoot(document.getElementById("root")!).render(
           <VoiceFab />
           <VoiceListeningOverlay />
           <NavigationBridge />
-          <EmailStashBridge />
           {/* long recordings (dinner, meeting) — outside ChromeGate so the pill survives the kiosk's return to /ambient */}
           <RecorderDock />
           <KioskRedirect />

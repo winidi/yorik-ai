@@ -10,9 +10,9 @@ when_to_use: |
   Write `subject` and `body` yourself from the conversation — a short,
   plain cover message is enough. Pass `from_email` only if the user
   named which of their own accounts to send from.
-  ALWAYS tell the user afterwards that nothing was sent: the draft is
-  staged in the Email app for them to open, check, and press send
-  themselves.
+  A card with an "open and send" button appears in the chat on its
+  own — don't repeat recipient/subject/attachment in your reply, just
+  confirm briefly that it's ready. Nothing is sent by this skill.
 when_not_to_use: |
   - Replying inside an existing email thread — that's email_draft.
   - Actually sending — no skill in Yorik does this yet; sending is
@@ -47,16 +47,18 @@ outputs:
     type: integer
 cost: instant — no LLM call, no network.
 permissions: [admin, member, restricted]
-side_effects: Stages a draft for the Email app (sessionStorage handoff). Sends nothing, files nothing, never touches SMTP.
+side_effects: Writes one app_settings row for the calling user (the staged draft) and shows a card in the chat. Sends nothing, files nothing, never touches SMTP.
 tags: [email, chat, write, draft]
 category: productivity
 ---
 
 # prepare_email
 
-Queues a `stash_pending_email` UI action instead of writing to any
-database table — the same handoff channel the chat's attachment stash
-tray and the documents "Send via email" button already use, just with
-`to`/`subject`/`body` added so the draft needs no further typing. The
-Email app's Composer reads it once on next mount and clears it; the
-send button there is the only thing that ever calls SMTP.
+Writes the draft into app_settings (key pending_email_draft_<user_id>)
+so GET /api/email/pending-draft can hand it to the Email app's
+Composer on mount — works regardless of which tab or window the user
+opens Email in, since it isn't tied to browser storage. Also returns
+an `email_ready` UI action so the chat shows a real card
+(EmailDraftReadyCard.tsx) with an "open and send" button, instead of
+just telling the user in text to go open Email themselves. The send
+button in the Composer is the only thing that ever calls SMTP.

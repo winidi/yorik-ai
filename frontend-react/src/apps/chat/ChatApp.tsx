@@ -30,6 +30,7 @@ import { PhotoPickerCard, type PhotoPickerAction } from "@/apps/compose/PhotoPic
 import { PeoplePickerCard, type PeoplePickerAction } from "@/components/PeoplePickerCard";
 import { InlineComposeDraft } from "@/apps/chat/InlineComposeDraft";
 import { WritingDraftCard } from "./WritingDraftCard";
+import { EmailDraftReadyCard } from "./EmailDraftReadyCard";
 import { AssistantMarkdown } from "@/components/AssistantMarkdown";
 import { VcardImportModal } from "@/components/VcardImportModal";
 import { MentionPopover, type MentionPick } from "./MentionPopover";
@@ -791,6 +792,7 @@ function Thread({
             "web_results",
             "price_summary",
             "venue_saved",
+            "email_ready",
           ]);
           if (!STICKS_TO_MESSAGE.has(a.type)) {
             dispatchableActions.push(a);
@@ -1795,6 +1797,15 @@ function MessageBubble({
           .map((a: any) => (
             <WritingDraftCard key={a.document_id} documentId={a.document_id} kind={a.kind} recipient={a.recipient || ""} subject={a.subject || ""}
                               preview={a.preview || ""} missing={a.missing || []} />
+          ))}
+        {/* A new outgoing email staged by prepare_email — the draft
+            itself already lives server-side; this card is just the
+            way in, matching how a letter/invoice draft shows up. */}
+        {!isUser && message.ui_actions && message.ui_actions
+          .filter(a => a.type === "email_ready")
+          .map((a: any, i: number) => (
+            <EmailDraftReadyCard key={i} to={a.to || ""} subject={a.subject || ""}
+                                  preview={a.preview} attachmentFilename={a.attachment_filename} />
           ))}
         {/* Template picker — the LLM called compose_draft with a vague
             body, so the skill emitted picker candidates instead of a
