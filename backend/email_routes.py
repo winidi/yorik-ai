@@ -950,31 +950,39 @@ async def cleanup_apply(body: CleanupApplyBody, user: dict = Depends(current_use
 
 
 class ClassifierSettings(BaseModel):
-    mode: str  # 'heuristic' | 'llm'
+    mode: Optional[str] = None       # 'heuristic' | 'llm'
+    bill_llm: Optional[bool] = None  # the model reads amount + due date off a bill
 
 
 @router.get("/classifier/settings")
 def get_classifier_settings(user: dict = Depends(current_user)):
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT classifier_mode FROM user_profiles WHERE id=?",
+            "SELECT classifier_mode, bill_extract_llm FROM user_profiles WHERE id=?",
             (user["id"],),
         ).fetchone()
     mode = (row["classifier_mode"] if row and row["classifier_mode"] else "heuristic")
-    return {"mode": mode}
+    bill_llm = True if not row or row["bill_extract_llm"] is None else bool(row["bill_extract_llm"])
+    return {"mode": mode, "bill_llm": bill_llm}
 
 
 @router.post("/classifier/settings")
 def put_classifier_settings(body: ClassifierSettings, user: dict = Depends(current_user)):
-    if body.mode not in ("heuristic", "llm"):
+    if body.mode is not None and body.mode not in ("heuristic", "llm"):
         raise HTTPException(400, "mode must be 'heuristic' or 'llm'")
     with get_conn() as conn:
-        conn.execute(
-            "UPDATE user_profiles SET classifier_mode=? WHERE id=?",
-            (body.mode, user["id"]),
-        )
+        if body.mode is not None:
+            conn.execute(
+                "UPDATE user_profiles SET classifier_mode=? WHERE id=?",
+                (body.mode, user["id"]),
+            )
+        if body.bill_llm is not None:
+            conn.execute(
+                "UPDATE user_profiles SET bill_extract_llm=? WHERE id=?",
+                (body.bill_llm, user["id"]),
+            )
         conn.commit()
-    return {"ok": True, "mode": body.mode}
+    return get_classifier_settings(user)
 
 
 # In-process registry of running backfill tasks. We keep references so

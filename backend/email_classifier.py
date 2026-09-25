@@ -218,12 +218,55 @@ def apply_to_message(message_id: int, *, quiet: bool = False) -> Optional[str]:
 import re as _re
 from datetime import datetime as _dt
 
+# A number with thousands groups ("1.234,56", "1,234.56") or without
+# ("1234.56", "214,00"). Which mark is the decimal one is decided in
+# _parse_amount, not here — the same pattern serves German and US mail.
+_NUM = r"\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{2})?|\d+(?:[.,]\d{2})?"
 _AMOUNT_RE = _re.compile(
-    r"(?:(€|\$|£|EUR|USD|GBP)\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?))"
-    r"|(?:(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)\s*(€|\$|£|EUR|USD|GBP))"
+    rf"(?:(€|\$|£|EUR|USD|GBP)\s*({_NUM}))"
+    rf"|(?:({_NUM})\s*(€|\$|£|EUR|USD|GBP))"
 )
-_DUE_DE_RE = _re.compile(r"\bf[äa]llig(?:keit)?(?:keitsdatum)?\s*(?:am|:)?\s*(\d{1,2})\.(\d{1,2})\.(\d{2,4})?", _re.IGNORECASE)
-_DUE_EN_RE = _re.compile(r"\bdue\s*(?:date|by|on)?\s*[:\-]?\s*(\d{4})-(\d{1,2})-(\d{1,2})", _re.IGNORECASE)
+# Words in front of the amount that was actually charged. A receipt
+# lists subtotal, tax and line items too; the first amount in the text
+# is often one of those.
+_TOTAL_STRONG_RE = _re.compile(
+    r"amount\s+(?:paid|due|charged)|grand\s+total|balance\s+due|"
+    r"rechnungsbetrag|gesamtbetrag|endbetrag|zahlbetrag|zu\s+zahlen",
+    _re.IGNORECASE,
+)
+_TOTAL_WEAK_RE = _re.compile(r"\b(?:total|gesamt|summe)\b(?!\s*(?:excl|exkl|netto|ohne|before))", _re.IGNORECASE)
+
+
+def _parse_amount(s: str) -> float:
+    """'214.00', '214,00', '1,234.56', '1.234,56', '1.234' → float.
+    The last mark is the decimal point only when exactly two digits
+    follow it; every other mark separates thousands."""
+    last = max(s.rfind("."), s.rfind(","))
+    if last != -1 and len(s) - last - 1 == 2:
+        whole, cents = s[:last], s[last + 1:]
+    else:
+        whole, cents = s, "0"
+    return float(whole.replace(".", "").replace(",", "") + "." + cents)
+
+
+def _pick_amount(text: str):
+    """The charged amount: one labelled 'amount paid'/'Rechnungsbetrag'
+    beats one labelled 'total', which beats the first amount found."""
+    best, best_score, prev_end = None, -1, 0
+    for m in _AMOUNT_RE.finditer(text):
+        label = text[max(prev_end, m.start() - 40):m.start()]
+        score = 2 if _TOTAL_STRONG_RE.search(label) else 1 if _TOTAL_WEAK_RE.search(label) else 0
+        if score > best_score:
+            best, best_score = m, score
+        prev_end = m.end()
+    return best
+# The due date is the first date within a few words after one of these.
+_DUE_KW_RE = _re.compile(
+    r"\b(?:f[äa]llig(?:keit)?(?:keitsdatum)?|zahlbar\s+bis|zahlungsziel|"
+    r"due|pay(?:ment)?\s+by|payable\s+by)\b",
+    _re.IGNORECASE,
+)
+_DATE_SLASH_RE = _re.compile(r"\b(\d{1,2})/(\d{1,2})(?:/(\d{4}|\d{2}))?\b(?!/)")   # 10/05/2026, 10/5
 _DATE_DE_RE = _re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{2,4})?\b")
 _DATE_ISO_RE = _re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b")
 _TIME_RE = _re.compile(r"\b(\d{1,2})[:.](\d{2})\s*(uhr|am|pm)?\b", _re.IGNORECASE)
@@ -232,24 +275,112 @@ _TIME_RE = _re.compile(r"\b(\d{1,2})[:.](\d{2})\s*(uhr|am|pm)?\b", _re.IGNORECAS
 def _extract_bill(text: str) -> dict:
     """Best-effort {amount, currency, due_date} from email text."""
     out: dict = {}
-    m = _AMOUNT_RE.search(text)
+    m = _pick_amount(text)
     if m:
         cur = m.group(1) or m.group(4) or "EUR"
-        amt = (m.group(2) or m.group(3) or "").replace(".", "").replace(",", ".")
         try:
-            out["amount"] = float(amt)
+            out["amount"] = _parse_amount(m.group(2) or m.group(3) or "")
             out["currency"] = {"€": "EUR", "$": "USD", "£": "GBP"}.get(cur, cur).upper()
         except ValueError:
             pass
-    m = _DUE_DE_RE.search(text)
-    if m:
-        d, mo, y = m.group(1), m.group(2), m.group(3) or str(_dt.now().year)
-        if len(y) == 2:
-            y = "20" + y
-        out["due_date"] = f"{int(y):04d}-{int(mo):02d}-{int(d):02d}"
-    elif (m := _DUE_EN_RE.search(text)):
-        out["due_date"] = f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+    for kw in _DUE_KW_RE.finditer(text):
+        # Blank out amounts so "due €12.10 on …" doesn't read as 12 Oct.
+        window = _AMOUNT_RE.sub(lambda a: " " * len(a.group(0)), text[kw.end():kw.end() + 40])
+        if (due := _first_date(window, us=out.get("currency") == "USD")):
+            out["due_date"] = due
+            break
     return out
+
+
+def _bill_llm_enabled(owner_id: Any) -> bool:
+    """user_profiles.bill_extract_llm — on unless the user turned it off."""
+    from .database import get_conn
+    try:
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT bill_extract_llm FROM user_profiles WHERE id = ?", (owner_id,),
+            ).fetchone()
+        return True if row is None or row["bill_extract_llm"] is None else bool(row["bill_extract_llm"])
+    except Exception as exc:  # noqa: BLE001 — column not migrated yet
+        log.debug("bill_extract_llm lookup failed: %s", exc)
+        return True
+
+
+_ANY_NUM_RE = _re.compile(rf"(?<![\d.,])(?:{_NUM})(?![\d])")
+
+
+def _amount_in_text(amount: float, text: str) -> bool:
+    """Does `amount` appear in the mail, in whatever notation?"""
+    return any(abs(_parse_amount(m.group(0)) - amount) < 0.005 for m in _ANY_NUM_RE.finditer(text))
+
+
+def _extract_bill_llm(text: str, row: dict) -> Optional[dict]:
+    """The model's reading of the bill, kept only where it checks out:
+    the amount must stand in the mail, the currency is an ISO code, the
+    due date a real date within a year either way. None when the model
+    is off, unreachable or its amount fails the check — then the rules
+    decide alone."""
+    from datetime import date, timedelta
+    from . import email_classifier_llm as _llm
+    got = _llm.extract_bill_llm(row.get("subject") or "", text,
+                                row.get("from_email") or "", row.get("from_name") or "")
+    if not got:
+        return None
+    try:
+        amount = round(float(got.get("amount")), 2)
+    except (TypeError, ValueError):
+        return None
+    if amount <= 0 or not _amount_in_text(amount, text):
+        log.info("LLM bill amount %r not found in mail — using the rules", got.get("amount"))
+        return None
+    out: dict = {"amount": amount, "source": "llm"}
+    cur = str(got.get("currency") or "").strip().upper()
+    if _re.fullmatch(r"[A-Z]{3}", cur):
+        out["currency"] = cur
+    try:
+        due = date.fromisoformat(str(got.get("due_date") or ""))
+        if abs((due - date.today()).days) <= 366:
+            out["due_date"] = due.isoformat()
+    except ValueError:
+        pass    # null or garbage: a receipt has no due date
+    return out
+
+
+def _first_date(text: str, us: bool, today=None) -> Optional[str]:
+    """The earliest date in `text` as ISO: 2026-10-05, 05.10.2026,
+    10/05/2026, October 5, 2026, 5. Oktober 2026. A slash date is read
+    month-first in a dollar bill and day-first otherwise, unless one of
+    the two numbers can only be a day. Without a year: this year, or
+    next year when that date lies more than 60 days back."""
+    from .email_invites import (_DATE_DMY_NAME_RE, _DATE_ISO_RE, _DATE_MDY_NAME_RE,
+                                _DATE_NUM_RE, _MONTHS, _valid)
+    from datetime import date, timedelta
+    today = today or date.today()
+
+    def build(y: Optional[str], mo: int, d: int) -> Optional[str]:
+        if y:
+            return _valid(int(y) + (2000 if len(y) == 2 else 0), mo, d)
+        iso = _valid(today.year, mo, d)
+        if iso and iso < (today - timedelta(days=60)).isoformat():
+            iso = _valid(today.year + 1, mo, d)
+        return iso
+
+    found: list[tuple[int, str]] = []
+    for m in _DATE_ISO_RE.finditer(text):
+        found.append((m.start(), _valid(int(m.group(1)), int(m.group(2)), int(m.group(3)))))
+    for m in _DATE_NUM_RE.finditer(text):
+        found.append((m.start(), build(m.group(3), int(m.group(2)), int(m.group(1)))))
+    for m in _DATE_DMY_NAME_RE.finditer(text):
+        found.append((m.start(), build(m.group(3), _MONTHS[m.group(2).lower()], int(m.group(1)))))
+    for m in _DATE_MDY_NAME_RE.finditer(text):
+        found.append((m.start(), build(m.group(3), _MONTHS[m.group(1).lower()], int(m.group(2)))))
+    for m in _DATE_SLASH_RE.finditer(text):
+        a, b = int(m.group(1)), int(m.group(2))
+        month_first = b > 12 or (us and a <= 12)
+        mo, d = (a, b) if month_first else (b, a)
+        found.append((m.start(), build(m.group(3), mo, d)))
+    hits = sorted((pos, iso) for pos, iso in found if iso)
+    return hits[0][1] if hits else None
 
 
 def _extract_appointment(text: str) -> dict:
@@ -280,6 +411,10 @@ def _propose_action(message_id: int, category: str, row: dict) -> None:
 
     if category == "bill":
         extracted = _extract_bill(text)
+        if _bill_llm_enabled(owner_id) and (llm := _extract_bill_llm(text, row)):
+            # The model's answer as a whole — its "no due date" on a
+            # receipt included; the rules fill only a missing currency.
+            extracted = {**llm, "currency": llm.get("currency") or extracted.get("currency") or "EUR"}
         amount_s = (f"{extracted['amount']:.2f} {extracted.get('currency', 'EUR')}"
                     if "amount" in extracted else "amount unknown")
         due_s = f", due {extracted['due_date']}" if "due_date" in extracted else ""

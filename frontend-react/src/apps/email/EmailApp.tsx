@@ -2984,14 +2984,15 @@ function shortAddress(email?: string | null): string {
 // without dragging the account-disconnect logic with it.
 function ClassifierSettingsPanel() {
   const [mode, setMode] = useState<"heuristic" | "llm" | null>(null);
+  const [billLlm, setBillLlm] = useState(true);
   const [saving, setSaving] = useState(false);
   const [job, setJob] = useState<{ status: string; total: number; done: number; last_error?: string | null } | null>(null);
   const [starting, setStarting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get<{ mode: "heuristic" | "llm" }>("/api/email/classifier/settings")
-      .then(r => setMode(r.mode))
+    api.get<{ mode: "heuristic" | "llm"; bill_llm?: boolean }>("/api/email/classifier/settings")
+      .then(r => { setMode(r.mode); setBillLlm(r.bill_llm ?? true); })
       .catch(() => setMode("heuristic"));
     refreshStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3021,6 +3022,18 @@ function ClassifierSettingsPanel() {
     try {
       await api.post("/api/email/classifier/settings", { mode: next });
       setMode(next);
+    } catch (e: any) {
+      setErr(e?.message || "save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveBillLlm(next: boolean) {
+    setSaving(true); setErr(null);
+    try {
+      await api.post("/api/email/classifier/settings", { bill_llm: next });
+      setBillLlm(next);
     } catch (e: any) {
       setErr(e?.message || "save failed");
     } finally {
@@ -3123,6 +3136,26 @@ function ClassifierSettingsPanel() {
           </div>
         )}
       </div>
+
+      {/* Independent of the classifier mode: this only runs on mail
+          already tagged as a bill, and the rules check the answer
+          (backend/email_classifier.py, _extract_bill_llm). */}
+      <label className="flex items-start gap-3 p-3 rounded-md border border-border cursor-pointer hover:bg-muted/40">
+        <input
+          type="checkbox"
+          checked={billLlm}
+          disabled={saving}
+          onChange={e => saveBillLlm(e.target.checked)}
+          className="mt-0.5 w-4 h-4 accent-violet-500"
+        />
+        <div>
+          <div className="text-sm font-medium">Read bills with Yorik</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">
+            The local LLM picks amount and due date for "New bill?" — the total, not the subtotal,
+            in any language and notation. An amount that isn't in the mail is ignored. Off: rules only.
+          </div>
+        </div>
+      </label>
       {err && <div className="text-xs text-destructive">{err}</div>}
     </div>
   );
