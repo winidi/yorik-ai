@@ -722,6 +722,28 @@ function TBtn({ active, onClick, title, children }: {
 
 
 // ─── attachment chip ────────────────────────────────────────────
+// Clicking the chip opens the attachment in a new tab so the user can
+// check it before sending — built from content_b64, which every
+// AttachmentDraft already carries (a manual pick, a pendingAttachments
+// fetch, a prepare_email handoff), so this needs no extra request and
+// works the same way regardless of where the file came from.
+function openAttachmentPreview(att: AttachmentDraft) {
+  try {
+    const byteChars = atob(att.content_b64);
+    const bytes = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([bytes], { type: att.mimetype || "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    // Revoke well after the new tab has had time to load it — an
+    // immediate revoke can race the tab's own fetch of the blob: URL.
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch {
+    // Corrupt/oversized base64 — fail quietly, the send-time size cap
+    // would have already caught anything actually too big.
+  }
+}
+
 function AttachmentChip({ att, onRemove }: {
   att: AttachmentDraft;
   onRemove: () => void;
@@ -729,13 +751,17 @@ function AttachmentChip({ att, onRemove }: {
   return (
     <div
       className="inline-flex items-center gap-2 max-w-[220px] pl-2 pr-1 py-1 rounded-md border border-border bg-card text-xs"
-      title={att.filename}
+      title={`${att.filename} — anklicken zum Ansehen`}
     >
       <Paperclip className="w-3 h-3 text-muted-foreground shrink-0" />
-      <div className="flex-1 min-w-0">
+      <button
+        type="button"
+        onClick={() => openAttachmentPreview(att)}
+        className="flex-1 min-w-0 text-left hover:underline"
+      >
         <div className="truncate font-medium">{att.filename}</div>
         <div className="text-[10px] text-muted-foreground">{humanSize(att.size)}</div>
-      </div>
+      </button>
       <button
         type="button"
         onClick={onRemove}
