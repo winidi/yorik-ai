@@ -5,7 +5,7 @@
  * browser, never through chat (see docs/plans/2026-09-25-finanzen.md).
  */
 import { useEffect, useRef, useState } from "react";
-import { Landmark, Plus, RefreshCw, Trash2, X, Loader2, Users, Lock, Search, Check } from "lucide-react";
+import { Landmark, Plus, RefreshCw, Trash2, X, Loader2, Search, Check } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +41,11 @@ function eur(n: number): string {
   return n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 }
 
+function dateHeading(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" });
+}
+
 export function FinanceApp() {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -54,10 +59,16 @@ export function FinanceApp() {
     try {
       const [accs, txs] = await Promise.all([
         api.get<BankAccount[]>("/api/bank/accounts"),
-        api.get<Transaction[]>(`/api/bank/transactions?days=${days}`),
+        // Postgres NUMERIC comes over the wire as a JSON string (to
+        // avoid float precision loss), not a number — treating it as
+        // one turned category totals into concatenated digit soup
+        // ("0-388.21-425.22...") instead of a sum. Parse once, here.
+        api.get<Array<Omit<Transaction, "amount"> & { amount: string }>>(
+          `/api/bank/transactions?days=${days}`,
+        ),
       ]);
       setAccounts(accs);
-      setTransactions(txs);
+      setTransactions(txs.map(t => ({ ...t, amount: Number(t.amount) })));
     } finally {
       setLoading(false);
     }
@@ -86,23 +97,31 @@ export function FinanceApp() {
     byCategory.set(key, (byCategory.get(key) || 0) + t.amount);
   }
   const categoryRows = [...byCategory.entries()].sort((a, b) => a[1] - b[1]);
+  const maxAbs = Math.max(1, ...categoryRows.map(([, v]) => Math.abs(v)));
+  const totalOut = transactions.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+  const totalIn = transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+
+  // Group consecutive transactions by day so a date is a heading, not
+  // a repeated label on every row (three "Landkreis Peine" entries in
+  // a row all said "2026-09-25" three times).
+  const txByDay: Array<[string, Transaction[]]> = [];
+  for (const t of transactions) {
+    const last = txByDay[txByDay.length - 1];
+    if (last && last[0] === t.booking_date) last[1].push(t);
+    else txByDay.push([t.booking_date, [t]]);
+  }
 
   return (
     <div className="h-screen overflow-y-auto bg-background">
-    <div className="p-6 pb-24 max-w-3xl mx-auto w-full">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <span className="grid place-items-center w-9 h-9 rounded-lg bg-primary/15 text-primary">
-            <Landmark className="w-5 h-5" />
-          </span>
-          <div>
-            <h1 className="text-lg font-semibold">Finance</h1>
-            <p className="text-xs text-muted-foreground">Nur lesend — Yorik kann nichts überweisen.</p>
-          </div>
+    <div className="px-6 pt-6 pb-24 max-w-2xl mx-auto w-full">
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-2.5">
+          <Landmark className="w-5 h-5 text-muted-foreground" />
+          <h1 className="text-lg font-semibold">Finance</h1>
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium"
+          className="flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium"
         >
           <Plus className="w-4 h-4" /> Konto verbinden
         </button>
@@ -115,41 +134,62 @@ export function FinanceApp() {
         />
       )}
 
-      <section className="mb-8">
-        <h2 className="text-sm font-medium text-muted-foreground mb-2">Konten</h2>
+      {accounts.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-4 sm:gap-0 mb-10">
+          <div>
+            <div className="text-[13px] text-muted-foreground mb-1">Einnahmen · {days} Tage</div>
+            <div className="text-3xl font-semibold tabular-nums text-emerald-600">{eur(totalIn)}</div>
+          </div>
+          <div className="sm:text-right">
+            <div className="text-[13px] text-muted-foreground mb-1">Ausgaben</div>
+            <div className="text-3xl font-semibold tabular-nums text-rose-500">{eur(totalOut)}</div>
+          </div>
+        </div>
+      )}
+
+      <section className="mb-9">
+        <h2 className="text-[13px] font-medium text-muted-foreground mb-3">Konten</h2>
         {accounts.length === 0 && !loading && (
-          <p className="text-sm text-muted-foreground">Noch kein Konto verbunden.</p>
+          <p className="text-sm text-muted-foreground">
+            Noch kein Konto verbunden. Nur lesend — Yorik kann nichts überweisen.
+          </p>
         )}
-        <div className="space-y-2">
+        <div className="divide-y divide-border">
           {accounts.map(a => (
-            <div key={a.id} className="rounded-xl border border-border bg-card p-3 flex items-center gap-3">
-              <span className="grid place-items-center w-8 h-8 rounded-lg bg-muted shrink-0">
-                {a.space_id ? <Users className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-              </span>
+            <div
+              key={a.id}
+              className={cn(
+                "group flex items-center gap-3 py-2.5 pl-3 border-l-2",
+                a.space_id ? "border-l-teal-500" : "border-l-transparent",
+              )}
+            >
               <div className="min-w-0 flex-1">
-                <div className="font-medium truncate">{a.display_name}</div>
-                <div className="text-xs text-muted-foreground truncate">
-                  {a.iban || "IBAN noch nicht bekannt"}
-                  {a.space_id ? " · geteilt" : " · privat"}
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-medium truncate">{a.display_name}</span>
+                  <span className="text-[11px] text-muted-foreground shrink-0">
+                    {a.space_id ? "geteilt" : "privat"}
+                  </span>
                 </div>
-                {a.last_sync_error && (
-                  <div className="text-xs text-rose-500 mt-0.5 truncate">Sync-Fehler: {a.last_sync_error}</div>
-                )}
-                {!a.last_sync_error && a.last_synced_at && (
-                  <div className="text-[11px] text-muted-foreground mt-0.5">Zuletzt synchronisiert: {a.last_synced_at}</div>
-                )}
+                <div className="text-[12px] text-muted-foreground truncate">
+                  {a.iban || "IBAN noch nicht bekannt"}
+                </div>
+                {a.last_sync_error ? (
+                  <div className="text-[12px] text-rose-500 mt-0.5 truncate">Sync-Fehler: {a.last_sync_error}</div>
+                ) : a.last_synced_at ? (
+                  <div className="text-[11px] text-muted-foreground/80 mt-0.5">Synchronisiert: {a.last_synced_at}</div>
+                ) : null}
               </div>
               <button
                 onClick={() => handleSync(a.id)}
                 disabled={syncingId === a.id}
-                className="p-1.5 rounded-md hover:bg-muted text-muted-foreground disabled:opacity-50"
+                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50 transition-opacity"
                 title="Jetzt synchronisieren"
               >
                 {syncingId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               </button>
               <button
                 onClick={() => handleDelete(a.id)}
-                className="p-1.5 rounded-md hover:bg-rose-500/10 text-muted-foreground hover:text-rose-500"
+                className="p-1.5 rounded-md text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                 title="Konto entfernen"
               >
                 <Trash2 className="w-4 h-4" />
@@ -161,9 +201,9 @@ export function FinanceApp() {
 
       {accounts.length > 0 && (
         <>
-          <section className="mb-8">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-medium text-muted-foreground">Nach Kategorie</h2>
+          <section className="mb-9">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-[13px] font-medium text-muted-foreground">Nach Kategorie</h2>
               <select
                 value={days}
                 onChange={e => setDays(Number(e.target.value))}
@@ -175,33 +215,44 @@ export function FinanceApp() {
               </select>
             </div>
             {categoryRows.length === 0 && <p className="text-sm text-muted-foreground">Noch keine Umsätze.</p>}
-            <div className="space-y-1">
+            <div className="space-y-2.5">
               {categoryRows.map(([cat, total]) => (
-                <div key={cat} className="flex items-center justify-between text-sm py-1 border-b border-border/50">
-                  <span className={cn(cat === "unkategorisiert" && "text-muted-foreground italic")}>{cat}</span>
-                  <span className={cn("font-medium", total < 0 ? "text-rose-500" : "text-emerald-600")}>{eur(total)}</span>
+                <div key={cat}>
+                  <div className="flex items-baseline justify-between text-sm mb-1">
+                    <span className={cn(cat === "unkategorisiert" && "text-muted-foreground italic")}>{cat}</span>
+                    <span className="tabular-nums">{eur(total)}</span>
+                  </div>
+                  <div className="h-1 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={cn("h-full rounded-full", total < 0 ? "bg-rose-500/70" : "bg-emerald-500/70")}
+                      style={{ width: `${Math.max(3, (Math.abs(total) / maxAbs) * 100)}%` }}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
           </section>
 
           <section>
-            <h2 className="text-sm font-medium text-muted-foreground mb-2">Umsätze</h2>
-            <div className="space-y-1">
-              {transactions.map(t => (
-                <div key={t.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/50">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate">{t.counterparty || t.purpose || "—"}</div>
-                    <div className="text-[11px] text-muted-foreground truncate">
-                      {t.booking_date}{t.category ? ` · ${t.category}` : ""}
+            <h2 className="text-[13px] font-medium text-muted-foreground mb-3">Umsätze</h2>
+            {txByDay.map(([day, txs]) => (
+              <div key={day} className="mb-4">
+                <div className="text-[11px] font-medium text-muted-foreground/80 mb-1.5">{dateHeading(day)}</div>
+                <div className="divide-y divide-border/60">
+                  {txs.map(t => (
+                    <div key={t.id} className="flex items-center justify-between text-sm py-1.5">
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate">{t.counterparty || t.purpose || "—"}</div>
+                        {t.category && <div className="text-[11px] text-muted-foreground truncate">{t.category}</div>}
+                      </div>
+                      <span className={cn("tabular-nums shrink-0 ml-3", t.amount < 0 ? "text-rose-500" : "text-emerald-600")}>
+                        {eur(t.amount)}
+                      </span>
                     </div>
-                  </div>
-                  <span className={cn("font-medium shrink-0 ml-3", t.amount < 0 ? "text-rose-500" : "text-emerald-600")}>
-                    {eur(t.amount)}
-                  </span>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </section>
         </>
       )}
