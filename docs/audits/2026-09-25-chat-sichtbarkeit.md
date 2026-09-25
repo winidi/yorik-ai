@@ -108,6 +108,36 @@ oder sie landen beim Falschen. **M** = Kontext-Leck, schmaler Fall.
 5. **Schreiben** (W1–W5): `can_write_row` bzw. Kalender-Schreibrecht und `read_only` in allen Termin-Skills und `apply_plan`, Ledger-Schreiben mit `user_id`.
 6. **Rest** (L11–L14, Notizen).
 
+## Stand (2026-09-25, gebaut)
+
+Dirk hat am selben Tag entschieden: „meine Aufgaben“ wie in der
+Aufgaben-App; „passt mir?“ zählt eigene Kalender, Familienkalender und
+Einladungen, nicht Beates persönlichen; Immich nur mit dem eigenen
+Konto. `trigger_connector` bleibt im Chat, weil das Wetter darüber
+läuft; persönliche Verbindungen laufen nur noch mit den Zugangsdaten
+der Person.
+
+| Paket | Commit | Was |
+| --- | --- | --- |
+| 1 | `0d81358` | A1, Notiz C10: Prompt nennt die fragende Person; Skill-Menü nach Rolle |
+| 2 | `2b27ecc` | L1–L5: Uploads nur für den Hochlader, Immich nur mit eigenem Schlüssel, Mail-/Banking-Connectoren verweigern Personen, fremde Entwürfe, `find_known_provider`, `contacts.get` mit Person |
+| 3 | `53442ec` | A2–A6, L7: `own_task_filter`, `own_event_filter`; `check_tasks`/`check_calendar` standardmäßig „meins“, `person=` / `everyone=`, Besitzer-Namen auf den Karten; Tagesplan, `/api/today`, Entwurfs-Kontext; private Termine „Busy“ ohne Ort |
+| 4 | `261fdbc` | L6, L8–L10: Adress-Cache pro Person (Migration 161), kein Admin-Immich in Briefen, lokale Dokumente nach Hochlader (schließt 2.12), keine Admin-Sicht auf Websuchen und Entwürfe |
+| 5 | `dbd9330` | W1–W5: Kalender-Schreibrecht, Tagesplan nur beschreibbare Aufgaben, Spiegel-Kalender schreibgeschützt, Puffer nur des Besitzers, Ledger nur in eigene Unterhaltung |
+| 6 | `fd531b9` | L11–L14 und Notizen: Puffer-Konflikte als sichtbar, keine unsichtbaren Kontakte benannt/erweitert, keine fremden Dokumenttitel, `/api/saved-queries` entfernt, `find_event_by_title`/`find_task_by_title`/`list_subtasks`/`universal_search`/`find_user`/`find_photo` ohne Admin- oder Leer-Rückfall |
+
+Tests: `tests/test_chat_visibility.py` (30 Fälle, ein Haushalt aus Dirk,
+Beate, Clara); jedes Paket gegen den alten Code gegengeprüft.
+
+Offen: die alten `saved_queries`-Zeilen und die Adress-Vorschläge ohne
+Besitzer liegen noch in der Datenbank (niemand sieht sie mehr; löschen
+wäre ein Eingriff in Live-Daten und ist Dirks Entscheidung). Die fünf
+Rechnungs-Skills bleiben abgeschaltet und ungefiltert. Die
+Channel-Eindeutigkeit (`UNIQUE(kind, value)`) ist haushaltsweit: wer eine
+Mailadresse anlegen will, die schon in einem fremden privaten Kontakt
+steht, bekommt nur „schon bei jemand anderem“ — das zu lösen ist eine
+Schemafrage.
+
 ## Entscheidungen für Dirk
 
 - **Was heißt „meine Aufgaben“?** Vorschlag: wie die Aufgaben-App, also zugewiesen an mich, oder ohne Zuweisung und von mir angelegt. Die Aufgaben, die du für ein Kind angelegt hast, gehören dann dem Kind; sie kommen bei „was müssen die Kinder noch machen“.
