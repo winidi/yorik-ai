@@ -226,13 +226,16 @@ export function EmailApp() {
      // Two ways to deep-link the composer on mount:
      //  (1) ?to=…&subject=… — used by the contacts page "Email" icon.
      //  (2) sessionStorage "yorik_pending_email" — used by the chat
-     //      photo handoff and the documents "Send via email" button.
-     //      Carries a list of server-side asset URLs the Composer
-     //      mount effect fetches and attaches.
+     //      photo handoff, the documents "Send via email" button, and
+     //      prepare_email (EmailStashBridge). The last of these also
+     //      carries to/subject/body/accountId, not just attachments —
+     //      a fully staged draft the user only has to review and send.
      try {
        const params = new URLSearchParams(window.location.search);
-       const to = params.get("to") || "";
-       const subject = params.get("subject") || "";
+       let to = params.get("to") || "";
+       let subject = params.get("subject") || "";
+       let body = "";
+       let accountId: number | undefined;
        let pendingAttachments: ComposeDraft["pendingAttachments"];
        const raw = sessionStorage.getItem("yorik_pending_email");
        if (raw) {
@@ -241,12 +244,18 @@ export function EmailApp() {
            if (Array.isArray(parsed?.attachments)) {
              pendingAttachments = parsed.attachments;
            }
+           // URL params win if both are somehow present; otherwise take
+           // the staged values.
+           if (!to && typeof parsed?.to === "string") to = parsed.to;
+           if (!subject && typeof parsed?.subject === "string") subject = parsed.subject;
+           if (typeof parsed?.body === "string") body = parsed.body;
+           if (typeof parsed?.accountId === "number") accountId = parsed.accountId;
          } catch {}
          // One-shot: clear so a refresh doesn't re-attach.
          sessionStorage.removeItem("yorik_pending_email");
        }
-       if (!to && !pendingAttachments) return null;
-       return { to, subject, body: "", pendingAttachments };
+       if (!to && !pendingAttachments && !body) return null;
+       return { to, subject, body, accountId, pendingAttachments };
      } catch { return null; }
    });
 

@@ -174,7 +174,19 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
   // exactly this mail when answering (so a draft never leaks into
   // another thread).
   const saveKey = autosaveKey(initial.inReplyTo);
+  // A caller that hands over real content — a deep link, the chat photo
+  // handoff, prepare_email's staged draft — means "open exactly this",
+  // not "continue whatever I was typing before". Without this guard,
+  // any old (even near-empty) localStorage autosave would win field by
+  // field via `??` below, since an empty string is not nullish: a
+  // leftover blank draft with just a stray space in one field silently
+  // blanked out a fully staged to/subject/body. Found 2026-09-25 while
+  // testing prepare_email's handoff.
+  const hasPrefill = !!(
+    initial.to || initial.subject || initial.body || initial.pendingAttachments?.length
+  );
   const restored = useMemo(() => {
+    if (hasPrefill) return null;
     try {
       const raw = localStorage.getItem(saveKey);
       if (!raw) return null;
@@ -182,7 +194,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
       if ((d.to || d.subject || d.body || d.bodyHtml || d.cc || "").trim()) return d;
       return null;
     } catch { return null; }
-  }, [saveKey]);
+  }, [saveKey, hasPrefill]);
 
   const [accountId, setAccountId] = useState<number>(
     restored?.accountId || initial.accountId || defaultAccount?.id || 0
