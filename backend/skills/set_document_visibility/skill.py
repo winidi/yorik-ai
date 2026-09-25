@@ -57,9 +57,11 @@ async def execute(
 
     if me_paperless_uid is None or owner != me_paperless_uid:
         from backend.calendars import RowOwnerPermissionError
+        # No title: the lookup ran with the admin token, so the asker
+        # may not even see this document (audit 2026-09-25, L13).
         raise RowOwnerPermissionError(
-            f"only the document's owner can change its visibility "
-            f"({title!r} belongs to another user)."
+            f"only the document's owner can change its visibility — "
+            f"document {int(document_id)} is not yours."
         )
 
     from backend import paperless_visibility as _pv

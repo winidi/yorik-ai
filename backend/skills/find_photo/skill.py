@@ -97,11 +97,13 @@ async def execute(
         _chunks = [c.strip() for c in _chunks if c.strip()]
         # 2-8 tokens, each name-shaped (≤20 chars). Anything longer or
         # wordier is almost certainly real content for CLIP.
-        if 2 <= len(_chunks) <= 8 and all(len(c) <= 20 for c in _chunks):
-            _creds_for_check = None
-            if getattr(ctx, "user_id", None):
-                from backend.external_users import get_user_immich_creds
-                _creds_for_check = get_user_immich_creds(ctx.user_id)
+        # Only with the person's own key — None would read the admin's
+        # people list (audit 2026-09-25, pattern D).
+        _creds_for_check = None
+        if getattr(ctx, "user_id", None):
+            from backend.external_users import get_user_immich_creds
+            _creds_for_check = get_user_immich_creds(ctx.user_id)
+        if _creds_for_check and 2 <= len(_chunks) <= 8 and all(len(c) <= 20 for c in _chunks):
             _known = [c for c in _chunks if _is_known_person(c, _creds_for_check)]
             if len(_known) >= 2:
                 people_list = _known
@@ -244,6 +246,11 @@ async def execute(
                             "in Settings → Users.",
                 "degraded": True,
             }
+    else:
+        # No person: no library at all. This used to fall through to the
+        # global admin key (audit 2026-09-25, pattern D).
+        return {"ok": False, "op": op, "photos": [],
+                "error": "find_photo needs the person it runs for", "degraded": True}
 
     # Pre-check named-people resolution. If the user asked for someone
     # ("Sara", or multi: "Tom, Sara") whose face isn't labeled in

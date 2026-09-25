@@ -52,12 +52,14 @@ async def execute(
     # would see every user_profile across all workspaces as
     # "household members". Scope to user_profiles whose user shares
     # at least one workspace with the caller — either as owner or
-    # via space_members. platform_admin sees everyone; an
-    # anonymous/no-ctx caller (internal tooling) keeps the old
-    # behaviour.
+    # via space_members.
     caller_id = getattr(ctx, "user_id", None) if ctx else None
-    caller_role = getattr(ctx, "role", None) if ctx else None
-    if caller_id is not None and caller_role != "platform_admin":
+    # Household members only, the operator included; no person, nobody
+    # (audit 2026-09-25 — platform_admin and a missing person used to
+    # list every account on the install).
+    if caller_id is None:
+        where.append("1=0")
+    else:
         where.append(
             "id IN ("
             " SELECT ? "

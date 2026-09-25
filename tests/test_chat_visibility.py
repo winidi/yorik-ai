@@ -374,3 +374,60 @@ def test_ledger_only_into_own_conversation(house):
     assert io.load_ledger("conv-beate", house["beate"]) == {}
     io.save_ledger("conv-beate", {"mine": True}, house["beate"])
     assert io.load_ledger("conv-beate", house["beate"]) == {"mine": True}
+
+
+# ── package 6: the rest ──────────────────────────────────────────────
+
+def test_event_title_search_hides_private_and_needs_a_person(house):
+    from datetime import datetime, timedelta
+    from backend import calendars as C
+    from backend.database import get_conn
+    from backend.skills.find_event_by_title.skill import execute as find_event
+    fam = C.create_calendar(name="Familie", owner_user_id=house["dirk"], kind="shared")
+    when = (datetime.now() + timedelta(days=3)).replace(microsecond=0).isoformat()
+    with get_conn() as conn:
+        conn.execute("INSERT INTO space_members (space_id, user_id, level) VALUES (?, ?, 'write') ON CONFLICT DO NOTHING",
+                     (_household_space(), house["beate"]))
+        conn.execute("INSERT INTO events (title, starts_at, calendar_id, owner_user_id, visibility) "
+                     "VALUES ('Frauenarzt', ?, ?, ?, 'private')", (when, fam, house["beate"]))
+        conn.commit()
+    assert run(find_event(ctx_for(house, "beate"), query="Frauenarzt"))["count"] == 1
+    assert run(find_event(ctx_for(house, "dirk"), query="Frauenarzt"))["count"] == 0
+    from backend.skills.registry import Registry, SkillContext
+    assert run(find_event(SkillContext(Registry(), role="admin", user_id=None), query="Frauenarzt"))["count"] == 0
+
+
+def test_task_title_search_finds_what_is_assigned_to_me(house):
+    from backend.skills.find_task_by_title.skill import execute as find_task
+    tid = _task("Beates Liste: Dirk holt Brot", creator=house["beate"], assignees=[house["dirk"]],
+                space=house["beate_space"])
+    got = run(find_task(ctx_for(house, "dirk"), query="Brot"))
+    assert [m["id"] for m in got["matches"]] == [tid]
+    assert run(find_task(ctx_for(house, "kid"), query="Brot"))["count"] == 0
+
+
+def test_add_contact_does_not_merge_into_an_invisible_one(house):
+    from backend import contacts as C
+    from backend.skills.add_contact.skill import execute as add_contact
+    cid = _contact(house, "beate", "Beates Freundin")
+    C.add_channel(cid, kind="email", value="freundin@example.local")
+    with pytest.raises(ValueError) as e:
+        run(add_contact(ctx_for(house, "dirk"), display_name="Jemand", emails=["freundin@example.local"]))
+    assert "Beates Freundin" not in str(e.value)
+
+
+def test_saved_queries_route_is_gone(fresh_app):
+    from fastapi.testclient import TestClient
+    assert TestClient(fresh_app).get("/api/saved-queries").status_code in (401, 404)
+
+
+def test_find_user_needs_a_person(house):
+    from backend.skills.find_user.skill import execute as find_user
+    from backend.skills.registry import Registry, SkillContext
+    assert run(find_user(SkillContext(Registry(), role="platform_admin", user_id=None), query="Beate")).get("users") in ([], None)
+    from backend.database import get_conn
+    with get_conn() as conn:                  # Beate is in the household
+        conn.execute("INSERT INTO space_members (space_id, user_id, level) VALUES (?, ?, 'write') ON CONFLICT DO NOTHING",
+                     (_household_space(), house["beate"]))
+        conn.commit()
+    assert run(find_user(ctx_for(house, "dirk"), query="Beate"))["users"]

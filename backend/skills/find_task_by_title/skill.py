@@ -45,17 +45,13 @@ async def execute(
     # member's rows by title. The operator is scoped like everyone else.
     role = (getattr(ctx, "role", None) or "").lower()
     uid = getattr(ctx, "user_id", None)
-    if uid:
-        from backend import spaces as _sp
-        visible = _sp.user_visible_space_ids(uid, role, area="tasks")
-        if visible:
-            where.append(f"(space_id IN ({','.join('?' * len(visible))}) OR created_by_user_id = ?)")
-            params.extend([*visible, uid])
-        else:
-            where.append("created_by_user_id = ?")
-            params.append(uid)
-    else:
-        where.append("1=0")           # no person, no tasks
+    # One rule for every reader of tasks, the app's (spaces.row_filter):
+    # own, in a visible space, assigned to them, or shared by row — the
+    # hand-built filter here missed assignments and shares (2026-09-25).
+    from backend import spaces as _sp
+    clause, clause_params = _sp.row_filter(uid, role, "tasks")   # no person → 1=0
+    where.append(clause)
+    params.extend(clause_params)
 
     sql = (
         "SELECT id, title, due_date, done, parent_task_id "

@@ -7330,16 +7330,9 @@ def ask(
     )
 
 
-@app.get("/api/saved-queries")
-def list_saved_queries(limit: int = Query(50, ge=1, le=500)) -> List[Dict[str, Any]]:
-    """Inspection endpoint for the cache. Ordered by warmest (use_count desc)."""
-    with conn_ctx(DB_PATH) as conn:
-        rows = conn.execute(
-            "SELECT id, trigger_phrase, sql_query, view_command, response_text, use_count, last_used "
-            "FROM saved_queries ORDER BY use_count DESC, last_used DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    return [dict(r) for r in rows]
+# /api/saved-queries is gone (audit 2026-09-25, L14): it listed the old
+# answer cache — everyone's questions and answers — with no sign-in check.
+# Only the dead Vanna path in ask.py still reads or writes that table.
 
 
 @app.get("/api/connectors")
@@ -9587,11 +9580,8 @@ def today_digest(
                 })
         out["birthdays_this_week"] = upcoming
 
-        # Saved-queries count (an unused-feature nudge for early users)
-        cnt = conn.execute(
-            "SELECT COUNT(*) AS n FROM saved_queries",
-        ).fetchone()
-        out["saved_query_count"] = int(cnt["n"]) if cnt else 0
+        # saved_query_count stays 0: the table is the old household-wide
+        # answer cache, not the person's (audit 2026-09-25, L14).
 
     return out
 

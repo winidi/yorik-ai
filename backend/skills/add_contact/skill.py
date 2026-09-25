@@ -85,12 +85,25 @@ async def execute(
         + [("whatsapp", j) for j in (whatsapp_jids or [])],
         display_name=display_name,
     )
+    # Only contacts the asker may see are named or extended. A detail
+    # already on someone else's private contact used to be merged into
+    # it and that contact returned whole (audit 2026-09-25, L12).
+    _uid = getattr(ctx, "user_id", None)
+    _crole = getattr(ctx, "role", None) or "member"
+    def _visible(c: dict) -> bool:
+        return C.get(int(c["id"]), include_children=False, role=_crole, user_id=_uid) is not None
     if _res.conflicts:
-        others = sorted({f"#{c['contact']['id']} {c['contact'].get('display_name')}" for c in _res.conflicts})
+        others = sorted({f"#{c['contact']['id']} {c['contact'].get('display_name')}"
+                         if _visible(c["contact"]) else "a contact you can't see"
+                         for c in _res.conflicts})
         raise ValueError(
             f"these contact details belong to different existing contacts: {', '.join(others)}. "
             f"Use find_person to pick one and add_contact_channel to extend it."
         )
+    if _res.contact is not None and not _visible(_res.contact):
+        raise ValueError(
+            "these contact details are already on file in someone else's contacts. "
+            "Ask them to share that contact with you instead of adding it again.")
     if _res.contact is not None:
         existing_id = int(_res.contact["id"])
         added = []

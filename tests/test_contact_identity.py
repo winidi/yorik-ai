@@ -19,6 +19,13 @@ def _mk(name, **channels):
     return cid
 
 
+def _own(cid, uid):
+    from backend.database import get_conn
+    with get_conn() as conn:
+        conn.execute("UPDATE contacts SET created_by_user_id = ? WHERE id = ?", (uid, cid))
+        conn.commit()
+
+
 def test_phone_normalisation_and_cross_kind_lookup(fresh_app):
     from backend import contact_identity as I, contacts as C
     assert I.to_e164("0511 / 12 34 56") == "+49511123456"
@@ -54,12 +61,14 @@ def test_add_contact_skill_reuses_existing(fresh_app):
     from backend import contacts as C
     uid = seed_user(name="Skill User", role="admin", email="sk@example.local")
     a = _mk("Anna", email="anna@example.org")
+    _own(a, uid)          # a contact the skill user can see — only those are extended
     ctx = SkillContext(Registry(), role="admin", user_id=uid)
     out = asyncio.run(execute(ctx, display_name="Anna M.", emails=["anna@example.org"], phones=["0151 11111111"]))
     assert out["existing"] is True and out["contact_id"] == a
     kinds = {(c["kind"], c["value"]) for c in C.get(a)["channels"]}
     assert ("phone", "+4915111111111") in kinds
     b = _mk("Bob", phone="+4915122222222")
+    _own(b, uid)
     with pytest.raises(ValueError):
         asyncio.run(execute(ctx, display_name="X", emails=["anna@example.org"], phones=["+4915122222222"]))
 

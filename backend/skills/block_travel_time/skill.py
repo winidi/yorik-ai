@@ -349,6 +349,7 @@ async def execute(
             __import__("logging").getLogger("yorik.block_travel_time").debug(
                 "conflict scan failed: %s", e,
             )
+    conflicts = [_as_seen_by(ctx, c) for c in conflicts]
 
     result: dict[str, Any] = {
         "ok":              True,
@@ -408,6 +409,31 @@ async def execute(
     return result
 
 
+def _as_seen_by(ctx, ev: dict[str, Any]) -> dict[str, Any]:
+    """An event of the main event's owner as the asker may see it. A
+    write member of a shared calendar may add a buffer to someone else's
+    appointment; the owner's next event and conflicts come from all
+    their calendars and used to arrive with title and place (audit
+    2026-09-25, L11). Not visible → "Busy"; private → "Busy"."""
+    from backend import calendars as _cal
+    from backend.database import get_conn
+    uid, role = getattr(ctx, "user_id", None), getattr(ctx, "role", None) or "member"
+    ev = dict(ev)
+    if uid is not None and str(ev.get("owner_user_id") or "") == str(uid):
+        return ev
+    visible = False
+    if uid is not None and ev.get("id") is not None:
+        vis, vis_params = _cal.visible_event_filter(str(uid), role)
+        with get_conn() as conn:
+            row = conn.execute(
+                f"SELECT calendar_id, visibility, owner_user_id FROM events WHERE id = ? AND {vis}",
+                (ev["id"], *vis_params)).fetchone()
+        if row:
+            visible = True
+            ev.update({k: row[k] for k in ("calendar_id", "visibility", "owner_user_id")})
+    return _cal.downgrade_for_privacy(ev, str(uid), role) if visible else _cal._busy_only(ev)
+
+
 def _analyse_return_trip(
     ctx,
     main_event: Any,
@@ -453,6 +479,9 @@ def _analyse_return_trip(
                 f"%{LINK_MARKER_PREFIX}%",
             ),
         ).fetchone()
+
+    if next_row is not None:
+        next_row = _as_seen_by(ctx, dict(next_row))
 
     # No follow-up event today → straight home-drive. Estimate as same
     # duration as the forward trip (good enough; the LLM can ask user

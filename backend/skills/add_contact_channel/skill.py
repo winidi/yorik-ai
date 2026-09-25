@@ -36,10 +36,16 @@ async def execute(
     except pg_errors.IntegrityError:
         # UNIQUE(kind, value) violation — surface which contact already owns it.
         existing = C.find_by_channel(kind, value)
-        owner = existing["display_name"] if existing else "(unknown)"
+        # Name the other contact only when the asker may see it
+        # (audit 2026-09-25, L12).
+        if existing and C.get(int(existing["id"]), include_children=False,
+                              role=getattr(ctx, "role", None) or "member",
+                              user_id=getattr(ctx, "user_id", None)) is None:
+            existing = None
+        owner = existing["display_name"] if existing else "a contact you can't see"
         raise ValueError(
             f"channel {kind}={value!r} is already linked to contact "
-            f"{owner!r} (id={existing['id'] if existing else '?'}). "
+            f"{owner!r}" + (f" (id={existing['id']})" if existing else "") + ". "
             f"Pick that contact instead of creating a duplicate, or remove "
             f"the channel from the other contact first."
         )

@@ -37,28 +37,30 @@ async def execute(
     params: list[Any] = [start, end, *(f"%{t.lower()}%" for t in tokens)]
 
     # Scope to the caller's visible calendars — the same filter the
-    # calendar UI and check_calendar apply. Without it a restricted role
-    # could enumerate any household member's events by title.
-    vis_sql = ""
+    # calendar UI and check_calendar apply. No person, nothing (it used to
+    # search every event), and a private event of someone else is not
+    # found by its title (audit 2026-09-25, L7).
     role = (getattr(ctx, "role", None) or "").lower()
     uid = getattr(ctx, "user_id", None)
-    if uid:
-        from backend.calendars import visible_event_filter
-        vis_clause, vis_params = visible_event_filter(uid, role)
-        if vis_clause:
-            vis_sql = " AND (" + vis_clause + ")"
-            params.extend(vis_params)
+    if not uid:
+        return {"matches": [], "count": 0}
+    from backend.calendars import visible_event_filter, downgrade_for_privacy
+    vis_clause, vis_params = visible_event_filter(uid, role)
+    params.extend(vis_params)
     params.append(limit)
 
     sql = (
-        "SELECT events.id, events.title, events.starts_at, events.ends_at, events.all_day "
+        "SELECT events.id, events.title, events.starts_at, events.ends_at, events.all_day, "
+        "       events.calendar_id, events.owner_user_id, events.visibility "
         "FROM events "
         "WHERE events.starts_at >= ? AND events.starts_at <= ? AND " + where_extra
-        + vis_sql + " "
+        + " AND (" + vis_clause + ") "
         "ORDER BY events.starts_at ASC LIMIT ?"
     )
 
     with get_conn() as conn:
-        rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
+        rows = [downgrade_for_privacy(dict(r), uid, role) for r in conn.execute(sql, params).fetchall()]
+    rows = [{k: r[k] for k in ("id", "title", "starts_at", "ends_at", "all_day")}
+            for r in rows if not r.get("_busy_only")]
 
     return {"matches": rows, "count": len(rows)}

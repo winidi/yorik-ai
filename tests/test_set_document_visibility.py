@@ -77,8 +77,11 @@ class TestSetDocumentVisibility:
                    side_effect=_fake_paperless_get(owner_paperless_uid=7, title="someone-else-mietvertrag")):
             with pytest.raises(RowOwnerPermissionError) as excinfo:
                 asyncio.run(execute(ctx=_mk_ctx(role="member", user_id=anna), document_id=42, visibility="shared"))
-            # Error names the doc so the user knows what was refused.
-            assert "someone-else-mietvertrag" in str(excinfo.value)
+            # The refusal names the number, never the title: the lookup
+            # ran with the admin token, so Anna may not even see the
+            # document (audit 2026-09-25, L13).
+            assert "someone-else-mietvertrag" not in str(excinfo.value)
+            assert "42" in str(excinfo.value)
 
     def test_an_admin_does_not_publish_someone_elses_document(self, fresh_app):
         from backend.skills.set_document_visibility.skill import execute
