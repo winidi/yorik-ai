@@ -24,6 +24,7 @@ import { CheckCircle2, FlaskConical, X, Loader2, AlertCircle } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { emitUiAction } from "@/lib/uiActions";
+import { useAuth } from "@/components/AuthGate";
 
 interface PendingAction {
   pending_id: string;
@@ -44,6 +45,7 @@ interface Props {
 
 export function PendingActionPanel({ action, onResolved, compact }: Props) {
   const [busy, setBusy] = useState<Resolution | null>(null);
+  const devMode = !!(useAuth().user as any)?.dev_mode;
   const [resolved, setResolved] = useState<Resolution | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -93,9 +95,11 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
         <div className="flex items-center gap-1.5 mb-1.5">
           <AlertCircle className="w-3.5 h-3.5 text-violet-500" />
           <span className="text-xs font-semibold">{deferred ? "Delete this?" : "Does this look right?"}</span>
-          <span className="text-[9px] text-muted-foreground font-mono ml-auto">
-            {action.skill}{action.llm_model && ` · ${action.llm_model}`}
-          </span>
+          {devMode && (
+            <span className="text-[9px] text-muted-foreground font-mono ml-auto">
+              {action.skill}{action.llm_model && ` · ${action.llm_model}`}
+            </span>
+          )}
         </div>
         <PendingPreview skill={action.skill} preview={action.preview} />
         {err && (
@@ -186,10 +190,18 @@ function PendingPreview({ skill, preview }: { skill: string; preview: any }) {
   if (skill === "add_bill")              return <BillCreatePreview p={preview} />;
   if (skill === "update_bill")           return <BillUpdatePreview p={preview} />;
   if (skill === "delete_bill")           return <BillDeletePreview p={preview} />;
+  // Any other action: its fields as plain label/value lines instead of
+  // raw JSON. Nested values fall back to a short JSON string.
+  const rows = Object.entries(preview || {}).filter(([, v]) => v !== null && v !== undefined && v !== "");
   return (
-    <pre className="text-[10px] bg-muted/30 border border-border rounded p-1.5 font-mono whitespace-pre-wrap break-words">
-      {JSON.stringify(preview, null, 2)}
-    </pre>
+    <div className="space-y-0.5 text-xs">
+      {rows.map(([k, v]) => (
+        <div key={k} className="break-words">
+          <span className="text-muted-foreground">{k.replace(/_/g, " ")}:</span>{" "}
+          {typeof v === "object" ? JSON.stringify(v) : String(v)}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -220,7 +232,7 @@ function CalendarUpdatePreview({ p }: { p: any }) {
   const changed = fields.filter(k => p.before?.[k] !== p.after?.[k]);
   return (
     <div className="space-y-0.5 text-xs">
-      <div><span className="text-muted-foreground">Update event:</span> <span className="font-mono">#{p.event_id}</span></div>
+      <div><span className="text-muted-foreground">Update event:</span> <span className="font-semibold">{p.before?.title || "this event"}</span></div>
       {changed.length === 0 && <div className="text-muted-foreground italic">No changes.</div>}
       {changed.map(k => {
         const before = k.includes("_at") ? fmtDateTime(p.before[k]) : String(p.before[k] ?? "—");
@@ -240,7 +252,7 @@ function CalendarUpdatePreview({ p }: { p: any }) {
 function CalendarDeletePreview({ p }: { p: any }) {
   return (
     <div className="space-y-0.5 text-xs">
-      <div><span className="text-muted-foreground">Delete event:</span> <span className="font-mono">#{p.event_id}</span></div>
+      <div className="text-muted-foreground">Delete this event:</div>
       <div className="p-1.5 bg-red-500/5 border border-red-500/20 rounded text-[11px]">
         <div className="font-medium">{p.event?.title}</div>
         <div className="text-muted-foreground">{fmtDateTime(p.event?.starts_at)}{p.event?.person && ` · ${p.event.person}`}</div>
@@ -275,7 +287,7 @@ function TaskUpdatePreview({ p }: { p: any }) {
   const changed = fields.filter(k => p.before?.[k] !== p.after?.[k]);
   return (
     <div className="space-y-0.5 text-xs">
-      <div><span className="text-muted-foreground">Update task:</span> <span className="font-mono">#{p.task_id}</span></div>
+      <div><span className="text-muted-foreground">Update task:</span> <span className="font-semibold">{p.before?.title || "this task"}</span></div>
       {changed.length === 0 && <div className="text-muted-foreground italic">No changes.</div>}
       {changed.map(k => {
         const before = k === "due_date" ? fmtDate(p.before[k]) : String(p.before[k] ?? "—");
@@ -295,7 +307,7 @@ function TaskUpdatePreview({ p }: { p: any }) {
 function TaskDeletePreview({ p }: { p: any }) {
   return (
     <div className="space-y-0.5 text-xs">
-      <div><span className="text-muted-foreground">Delete task:</span> <span className="font-mono">#{p.task_id}</span></div>
+      <div className="text-muted-foreground">Delete this task:</div>
       <div className="p-1.5 bg-red-500/5 border border-red-500/20 rounded text-[11px]">
         <div className="font-medium">{p.task?.title}</div>
         <div className="text-muted-foreground">
@@ -337,7 +349,7 @@ function BillUpdatePreview({ p }: { p: any }) {
   const changed = fields.filter(k => p.before?.[k] !== p.after?.[k]);
   return (
     <div className="space-y-0.5 text-xs">
-      <div><span className="text-muted-foreground">Update bill:</span> <span className="font-mono">#{p.bill_id}</span></div>
+      <div><span className="text-muted-foreground">Update bill:</span> <span className="font-semibold">{p.before?.name || "this bill"}</span></div>
       {changed.length === 0 && <div className="text-muted-foreground italic">No changes.</div>}
       {changed.map(k => {
         const fmt = (v: any) =>
@@ -359,7 +371,7 @@ function BillUpdatePreview({ p }: { p: any }) {
 function BillDeletePreview({ p }: { p: any }) {
   return (
     <div className="space-y-0.5 text-xs">
-      <div><span className="text-muted-foreground">Delete bill:</span> <span className="font-mono">#{p.bill_id}</span></div>
+      <div className="text-muted-foreground">Delete this bill:</div>
       <div className="p-1.5 bg-red-500/5 border border-red-500/20 rounded text-[11px]">
         <div className="font-medium">{p.bill?.name}</div>
         <div className="text-muted-foreground">

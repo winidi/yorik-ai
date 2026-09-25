@@ -937,7 +937,8 @@ function formatJidForDisplay(jid: string): string {
   }
   if (jid.endsWith("@lid")) {
     const digits = jid.slice(0, jid.length - "@lid".length);
-    return `WhatsApp #${digits.slice(-6)}`;
+    // No phone number behind an @lid; the digits mean nothing to a person.
+    return digits ? "Unknown WhatsApp contact" : jid;
   }
   return jid;
 }
@@ -2069,7 +2070,6 @@ function TriageModal({ onClose, onApplied }: {
                     {!hasData && (
                       <span className="text-[10px] text-muted-foreground/50 italic">name only</span>
                     )}
-                    <span className="ml-auto text-[10px] font-mono text-muted-foreground/40">#{it.id}</span>
                   </div>
 
                   {it.summary && (

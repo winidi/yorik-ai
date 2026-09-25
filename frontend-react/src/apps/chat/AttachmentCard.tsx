@@ -23,7 +23,7 @@ const WHO: Record<string, string> = {
 };
 type FileAs = "private" | "parents" | "shared";
 const FILE_AS: Array<{ v: FileAs; label: string; hint: string }> = [
-  { v: "private", label: "nur mich", hint: "Nur du siehst das Dokument in Paperless." },
+  { v: "private", label: "nur mich", hint: "Nur du siehst das Dokument unter Dokumente." },
   { v: "parents", label: "die Eltern", hint: "Die Erwachsenen im Haushalt, nicht die Konten der Kinder." },
   { v: "shared", label: "die Familie", hint: "Alle im Haushalt, auch die Konten der Kinder." },
 ];
@@ -61,11 +61,11 @@ export function AttachmentCard({ id }: { id: number }) {
   async function fileIt(visibility: FileAs) {
     setBusy(visibility); setError(null);
     try { setAtt(await api.post<Attachment>(`/api/chat/attachments/${id}/file?visibility=${visibility}`, {})); }
-    catch (e: any) { setError(e?.message || "Paperless hat die Datei nicht angenommen."); }
+    catch (e: any) { setError(e?.message || "Die Datei konnte nicht abgelegt werden."); }
     finally { setBusy(null); }
   }
   async function remove() {
-    if (!confirm("Diesen Anhang löschen? Er ist nicht in Paperless abgelegt.")) return;
+    if (!confirm("Diesen Anhang löschen? Er ist nicht unter Dokumente abgelegt.")) return;
     setBusy("delete");
     try { await api.delete(`/api/chat/attachments/${id}`); setGone(true); } catch { /* stays */ } finally { setBusy(null); }
   }
@@ -90,13 +90,13 @@ export function AttachmentCard({ id }: { id: number }) {
       <div className="px-3 pb-3">
         {att.filed ? (
           <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-            <Check className="w-3.5 h-3.5" /> In Paperless abgelegt{att.visibility ? `, ${WHO[att.visibility] || att.visibility}` : ""} ·{" "}
+            <Check className="w-3.5 h-3.5" /> In Dokumente abgelegt{att.visibility ? `, ${WHO[att.visibility] || att.visibility}` : ""} ·{" "}
             <a href="/r/documents" className="underline">Dokumente öffnen</a>
           </div>
         ) : (
           <>
             <div className="text-[11px] text-muted-foreground mb-2">Nur in diesem Gespräch · wird am {until} gelöscht</div>
-            <div className="text-[11px] font-medium mb-1">In Paperless ablegen, sichtbar für</div>
+            <div className="text-[11px] font-medium mb-1">In Dokumente ablegen, sichtbar für</div>
             <div className="flex flex-wrap gap-2">
               {FILE_AS.map(({ v, label, hint }) => {
                 const primary = att.suggest === "file" && att.default_visibility === v;
@@ -117,7 +117,7 @@ export function AttachmentCard({ id }: { id: number }) {
             </div>
             {(error || att.paperless_error) && (
               <div className="mt-2 text-[11px] text-red-500">
-                {error || `Paperless hat die Datei abgelehnt: ${att.paperless_error}`}
+                {error || "Die Datei konnte nicht abgelegt werden."}
               </div>
             )}
           </>

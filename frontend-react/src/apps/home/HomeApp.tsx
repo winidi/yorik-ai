@@ -10,10 +10,9 @@
  *   2. App grid — large tinted tiles, one per React app, with count
  *      chips ("12 events", "3 unpaid bills", "4 templates") so the
  *      home screen is informative at a glance.
- *   3. System status row — five chips: LLM · Email · Paperless · Backup
- *      · Numbering. Green = ready, amber = configured but degraded,
- *      red = broken, grey = not set up. Click → Settings or the right
- *      connector setup.
+ *   3. Health line — one sentence: "Everything is running", or what
+ *      needs attention. The chips and workers behind it live in
+ *      Settings → System (admin only), not in front of the family.
  *   4. Quick actions — "Write a letter" · "Create event" · "Find a
  *      document" — keyboard-discoverable jumps into the relevant app.
  *
@@ -24,28 +23,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Loader2, Sparkles, Calendar, MessageSquare, FolderOpen, FilePlus,
-  MessageCircle, Inbox, Newspaper, Hash, Settings as Cog,
-  RefreshCw, Wifi, WifiOff, AlertCircle, CheckCircle2, Server,
-  Mail, FileText, Database, ArrowRight, Plus, Search, Camera,
-  ListTodo,
+  Sparkles, Calendar, MessageSquare, FolderOpen, FilePlus,
+  MessageCircle, Inbox, Newspaper, Settings as Cog,
+  RefreshCw, ArrowRight, Plus, Search, Camera, ListTodo,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/AuthGate";
 import { Dock } from "@/components/Dock";
-import { WorkersStatus } from "@/components/WorkersStatus";
 import { DemoDataPanel } from "@/components/DemoDataPanel";
-
-interface SystemStatus {
-  llm: { model: string; base_url: string; reachable: boolean };
-  email: { configured: boolean; kinds: string[] };
-  paperless: { admin_token_set: boolean; url: string | null };
-  backup: { last: any; configured: boolean };
-  counts: Record<string, number>;
-  user: { name: string; role: string; language: string };
-  configured_connectors: string[];
-}
+import { useHouseHealth, type SystemStatus, type HealthIssue } from "@/components/SystemStatusPanel";
 
 // One bit of data we want to surface on each app tile, pulled from the
 // status counts. Empty entry = no chip.
@@ -76,30 +63,27 @@ const APPS: AppTile[] = [
   { id: "chat",      label: "Chat",       route: "/chat",      icon: MessageSquare, color: "from-violet-500/30 to-blue-500/30 text-violet-500",     blurb: "Ask Yorik anything in plain language." },
   { id: "calendar",  label: "Calendar",   route: "/calendar",  icon: Calendar,      color: "from-blue-500/30 to-cyan-500/30 text-blue-500",         blurb: "Events, tasks, drag-to-create blocks." },
   { id: "tasks",     label: "Tasks",      route: "/tasks",     icon: ListTodo,      color: "from-emerald-500/30 to-teal-500/30 text-emerald-500",   blurb: "Add, complete, and triage your to-dos." },
-  { id: "documents", label: "Documents",  route: "/documents", icon: FolderOpen,    color: "from-amber-500/30 to-orange-500/30 text-amber-500",     blurb: "Your filing cabinet — search by meaning." },
+  { id: "documents", label: "Documents",  route: "/documents", icon: FolderOpen,    color: "from-amber-500/30 to-orange-500/30 text-amber-500",     blurb: "Letters, bills and papers, easy to find." },
   { id: "compose",   label: "Compose",    route: "/compose",   icon: FilePlus,      color: "from-rose-500/30 to-pink-500/30 text-rose-500",         blurb: "Write invoices, quotes, letters with AI." },
   { id: "whatsapp",  label: "WhatsApp",   route: "/whatsapp",  icon: MessageCircle, color: "from-emerald-500/30 to-green-500/30 text-emerald-500", blurb: "Chat replies drafted while you sleep.", optional: true },
-  { id: "email",     label: "Email",      route: "/email",     icon: Inbox,         color: "from-sky-500/30 to-blue-500/30 text-sky-500",           blurb: "Inbox with AI triage and summaries." },
-  { id: "photos",    label: "Photos",     route: "/photos",    icon: Camera,        color: "from-emerald-500/30 to-teal-500/30 text-emerald-500",   blurb: "Your photos and videos via Immich." },
+  { id: "email",     label: "Email",      route: "/email",     icon: Inbox,         color: "from-sky-500/30 to-blue-500/30 text-sky-500",           blurb: "Your inbox, sorted and summarized." },
+  { id: "photos",    label: "Photos",     route: "/photos",    icon: Camera,        color: "from-emerald-500/30 to-teal-500/30 text-emerald-500",   blurb: "The family's photos and videos." },
   { id: "briefing",  label: "Briefing",   route: "/briefing",  icon: Newspaper,     color: "from-fuchsia-500/30 to-purple-500/30 text-fuchsia-500", blurb: "Your morning digest in one screen." },
-  { id: "settings",  label: "Settings",   route: "/settings",  icon: Cog,           color: "from-slate-500/30 to-zinc-500/30 text-slate-500",       blurb: "Profile, connectors, quality, numbering." },
+  { id: "settings",  label: "Settings",   route: "/settings",  icon: Cog,           color: "from-slate-500/30 to-zinc-500/30 text-slate-500",       blurb: "Your profile, family and connections." },
 ];
 
 
 export function HomeApp() {
   const auth = useAuth();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<SystemStatus | null>(null);
+  const isAdmin = auth.user.role === "admin" || auth.user.role === "platform_admin";
+  const health = useHouseHealth(isAdmin);
+  const status: SystemStatus | null = health.status;
   const [loading, setLoading] = useState(true);
   const [installedIds, setInstalledIds] = useState<Set<string> | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      const s = await api.get<SystemStatus>("/api/system/status?role=admin");
-      setStatus(s);
-    } catch {
-      // home stays usable even if status fails
-    }
+  const loadApps = useCallback(async () => {
+    setLoading(true);
     try {
       const apps = await api.get<Array<{ id: string }>>("/api/apps?role=admin");
       setInstalledIds(new Set(apps.map(a => a.id)));
@@ -111,7 +95,9 @@ export function HomeApp() {
     }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  // The health hook loads itself on mount; the button reloads both.
+  useEffect(() => { loadApps(); }, [loadApps]);
+  const refresh = () => { health.refresh(); loadApps(); };
 
   // Optional tiles (marked `optional: true` in APPS) are filtered by what
   // /api/apps reports as installed — keeps a fresh user from seeing a
@@ -142,7 +128,7 @@ export function HomeApp() {
               {greeting}, <span className="bg-gradient-to-r from-violet-500 to-blue-500 bg-clip-text text-transparent">{firstName}</span>.
             </h1>
             <p className="text-sm text-muted-foreground mt-2 max-w-md leading-relaxed">
-              Everything Yorik runs lives on this machine. Click an app, or just ask.
+              Everything stays at home. Pick an app, or just ask.
             </p>
           </div>
 
@@ -165,7 +151,7 @@ export function HomeApp() {
             <button
               onClick={refresh}
               className="text-muted-foreground hover:text-foreground transition"
-              title="Refresh status"
+              title="Refresh"
             >
               <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
             </button>
@@ -258,53 +244,13 @@ export function HomeApp() {
           </div>
         </section>
 
-        {/* System status */}
-        <section className="mb-10">
-          <h2 className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-3">
-            System status
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-            <StatusChip
-              icon={Server}
-              label="LLM"
-              detail={status?.llm.model || "—"}
-              tone={!status ? "loading" : status.llm.reachable ? "ok" : "error"}
-              hint={status?.llm.reachable ? "Reachable" : "Unreachable"}
-            />
-            <StatusChip
-              icon={Mail}
-              label="Email"
-              detail={status?.email.kinds?.[0] || "Not configured"}
-              tone={!status ? "loading" : status.email.configured ? "ok" : "off"}
-              onClick={() => navigate("/settings")}
-              hint={status?.email.configured ? "Ready" : "Click to set up"}
-            />
-            <StatusChip
-              icon={FileText}
-              label="Paperless"
-              detail={status?.paperless.admin_token_set ? "Linked" : "Not linked"}
-              tone={!status ? "loading" : status?.paperless.admin_token_set ? "ok" : "off"}
-              hint={status?.paperless.admin_token_set ? "Token set" : "Optional"}
-            />
-            <StatusChip
-              icon={Database}
-              label="Backup"
-              detail={backupSummary(status)}
-              tone={!status ? "loading" : status.backup.configured ? "ok" : "off"}
-              hint={status?.backup.last?.finished_at || ""}
-            />
-            <StatusChip
-              icon={Hash}
-              label="Numbering"
-              detail={status ? `${status.counts.numbering_series || 0} series` : "—"}
-              tone={!status ? "loading" : (status.counts.numbering_series || 0) > 0 ? "ok" : "off"}
-              onClick={() => navigate("/settings")}
-              hint={(status?.counts.numbering_series || 0) > 0 ? "Configured" : "Optional"}
-            />
-          </div>
-        </section>
-
-        <WorkersStatus />
+        {health.loaded && (
+          <HealthLine
+            issues={health.issues}
+            isAdmin={isAdmin}
+            onOpen={() => navigate("/settings?tab=system")}
+          />
+        )}
 
         {/* Quick actions */}
         <section>
@@ -346,42 +292,41 @@ export function HomeApp() {
 
 // ─── chips + helpers ──────────────────────────────────────────────────
 
-type Tone = "ok" | "off" | "error" | "loading";
-
-function StatusChip({ icon: Icon, label, detail, tone, hint, onClick }: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  detail: string;
-  tone: Tone;
-  hint?: string;
-  onClick?: () => void;
+/** One sentence instead of a dashboard. Admins always see it (green
+ *  when all is well, so they know it was checked) and can click
+ *  through to Settings → System; members only see it when Yorik
+ *  itself can't answer, and without the link. */
+function HealthLine({ issues, isAdmin, onOpen }: {
+  issues: HealthIssue[];
+  isAdmin: boolean;
+  onOpen: () => void;
 }) {
-  const dotClass =
-    tone === "ok"      ? "bg-emerald-500" :
-    tone === "error"   ? "bg-red-500"     :
-    tone === "off"     ? "bg-muted-foreground/40" :
-                         "bg-muted-foreground/30 animate-pulse";
-
-  const Wrap = onClick ? "button" : "div" as any;
-  return (
-    <Wrap
-      onClick={onClick}
-      className={cn(
-        "bg-card border border-border rounded-xl p-3 text-left transition",
-        onClick && "hover:border-foreground/20 hover:shadow-md cursor-pointer w-full",
-      )}
-      title={hint}
-    >
-      <div className="flex items-center gap-2 mb-1.5">
-        <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex-1">
-          {label}
-        </span>
-        <span className={cn("w-2 h-2 rounded-full", dotClass)} />
-      </div>
-      <div className="text-sm font-medium truncate" title={detail}>{detail}</div>
-    </Wrap>
+  const shown = isAdmin ? issues : issues.filter(i => i.tone === "error" && i.text.startsWith("Yorik"));
+  if (!isAdmin && shown.length === 0) return null;
+  const worst = shown.some(i => i.tone === "error") ? "error" : shown.length ? "warn" : "ok";
+  const text =
+    shown.length === 0 ? "Everything is running" :
+    shown.length === 1 ? shown[0].text :
+    `${shown.length} things need you: ${shown.map(i => i.text.charAt(0).toLowerCase() + i.text.slice(1)).join(", ")}`;
+  const body = (
+    <>
+      <span className={cn(
+        "w-2.5 h-2.5 rounded-full shrink-0",
+        worst === "ok" ? "bg-emerald-500" : worst === "warn" ? "bg-amber-500" : "bg-red-500",
+      )} />
+      <span className="text-sm flex-1 min-w-0">{text}</span>
+      {isAdmin && <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition shrink-0" />}
+    </>
   );
+  const cls = cn(
+    "w-full mb-10 flex items-center gap-3 px-4 py-3 rounded-xl text-left transition",
+    worst === "ok"   ? "bg-card border border-border" :
+    worst === "warn" ? "bg-amber-500/10 border border-amber-500/20" :
+                       "bg-red-500/10 border border-red-500/25",
+  );
+  return isAdmin
+    ? <button onClick={onOpen} className={cn(cls, "group hover:border-foreground/20")} title="Open Settings → System">{body}</button>
+    : <div className={cls}>{body}</div>;
 }
 
 function QuickAction({ icon: Icon, label, onClick }: {
@@ -411,18 +356,4 @@ function pickGreeting(): string {
   if (h < 17) return "Good afternoon";
   if (h < 22) return "Good evening";
   return "Good night";
-}
-
-function backupSummary(s: SystemStatus | null): string {
-  if (!s) return "—";
-  if (!s.backup.configured) return "Not set up";
-  if (!s.backup.last) return "No runs yet";
-  const ts = s.backup.last?.finished_at || s.backup.last?.started_at;
-  if (!ts) return "Configured";
-  const d = new Date(ts.replace(" ", "T") + (ts.includes("T") ? "" : "Z"));
-  if (isNaN(d.getTime())) return "Configured";
-  const diffMin = (Date.now() - d.getTime()) / 60_000;
-  if (diffMin < 60)        return `${Math.round(diffMin)}m ago`;
-  if (diffMin < 60 * 24)   return `${Math.round(diffMin / 60)}h ago`;
-  return `${Math.round(diffMin / (60 * 24))}d ago`;
 }

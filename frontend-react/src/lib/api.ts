@@ -81,12 +81,41 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       // see the ApiError so per-tab error UI works.
       try { _sessionExpiredHandler(path); } catch { /* noop */ }
     }
-    const msg = (typeof body === "object" && body && "detail" in body)
-      ? String((body as { detail: unknown }).detail)
-      : `HTTP ${res.status}`;
-    throw new ApiError(res.status, msg, body);
+    throw new ApiError(res.status, friendlyMessage(res.status, body, path), body);
   }
   return body as T;
+}
+
+// What a person reads when a request fails. A 4xx `detail` from our
+// own routes is written for people ("Name is required"), so it passes
+// through. A server error, a proxy page or a validation array is not:
+// those get a fixed sentence, and the original goes to the console for
+// whoever is debugging. `ApiError.body` still carries the raw response.
+function friendlyMessage(status: number, body: unknown, path: string): string {
+  const detail = (typeof body === "object" && body && "detail" in body)
+    ? (body as { detail: unknown }).detail
+    : undefined;
+  // 502/503/504 from our routes usually carry a hand-written reason
+  // ("Paperless isn't reachable"); a 500 carries str(exception).
+  if (status > 500 && typeof detail === "string" && detail.length < 140
+      && !/traceback|exception|errno|\{|object has no|NoneType/i.test(detail)) {
+    return detail;
+  }
+  if (status >= 500 || status === 0) {
+    console.warn(`[api] ${status} on ${path}:`, detail ?? body);
+    return "Something went wrong on Yorik's side. Try again in a moment.";
+  }
+  if (status === 429) return "That was a lot at once. Wait a moment and try again.";
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    console.warn(`[api] ${status} on ${path}:`, detail);
+    return "Some of that didn't fit. Check the fields and try again.";
+  }
+  if (status === 401) return "You're signed out. Sign in again to continue.";
+  if (status === 403) return "You don't have access to this.";
+  if (status === 404) return "That isn't there any more.";
+  console.warn(`[api] ${status} on ${path}:`, body);
+  return "That didn't work. Try again in a moment.";
 }
 
 export const api = {

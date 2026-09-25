@@ -19,8 +19,9 @@ import {
   Users, UsersRound, UserPlus, KeyRound, Trash2, Power, Copy, X,
   HardDrive, ArrowRightLeft, AlertTriangle, Shield, Upload,
   Tag as TagIcon, XCircle, Info, ScrollText, ChevronRight, Puzzle,
-  Store, Download, BadgeCheck, Lock, Globe, Package, Plus, Home,
+  Store, Download, BadgeCheck, Lock, Globe, Package, Plus, Home, Activity,
 } from "lucide-react";
+import { SystemStatusPanel } from "@/components/SystemStatusPanel";
 import { useTriPane, MobileBackdrop, mobileAsideLeft } from "@/components/MobileShell";
 import { AppInstallConsentDialog } from "@/components/AppInstallConsentDialog";
 import { cn } from "@/lib/utils";
@@ -39,7 +40,7 @@ import { ProfileLookCard } from "@/components/ProfileLookCard";
 import { SharingCard } from "@/components/SharingCard";
 import { LetterheadCard } from "@/components/LetterheadCard";
 
-type Tab = "profile" | "llm" | "users" | "spaces" | "households" | "apps" | "marketplace" | "installed" | "skills" | "numbering" | "quality" | "connectors" | "extensions" | "storage" | "embeddings" | "backup" | "logs" | "devices";
+type Tab = "profile" | "system" | "llm" | "users" | "spaces" | "households" | "apps" | "marketplace" | "installed" | "skills" | "numbering" | "quality" | "connectors" | "extensions" | "storage" | "embeddings" | "backup" | "logs" | "devices";
 
 // `adminOnly: true` hides the tab from non-admin users in the sidebar.
 // The corresponding backend endpoints already 403 for non-admins, so
@@ -55,6 +56,7 @@ type Tab = "profile" | "llm" | "users" | "spaces" | "households" | "apps" | "mar
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }>; color: string; adminOnly?: boolean; hostOnly?: boolean }[] = [
   { id: "profile",    label: "Profile",     icon: UserIcon, color: "text-violet-500 bg-violet-500/10" },
   { id: "devices",    label: "Devices",     icon: MonitorSmartphone, color: "text-blue-500 bg-blue-500/10" },
+  { id: "system",     label: "System",      icon: Activity, color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, hostOnly: true },
   { id: "llm",        label: "LLM",         icon: Cpu,      color: "text-blue-500 bg-blue-500/10",     adminOnly: true, hostOnly: true },
   { id: "users",      label: "Users",       icon: Users,    color: "text-cyan-500 bg-cyan-500/10" },
   { id: "households", label: "Households",  icon: Home,     color: "text-orange-500 bg-orange-500/10", adminOnly: true, hostOnly: true },
@@ -64,13 +66,13 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: "installed",  label: "Installed",   icon: Package,  color: "text-pink-500 bg-pink-500/10",     adminOnly: true, hostOnly: true },
   { id: "skills",     label: "Skills",      icon: Lightbulb,color: "text-yellow-500 bg-yellow-500/10", adminOnly: true, hostOnly: true },
   { id: "numbering",  label: "Numbering",   icon: Hash,     color: "text-rose-500 bg-rose-500/10" },
-  { id: "quality",    label: "Quality",     icon: BarChart3,color: "text-emerald-500 bg-emerald-500/10" },
+  { id: "quality",    label: "Quality",     icon: BarChart3,color: "text-emerald-500 bg-emerald-500/10", adminOnly: true },
   { id: "connectors", label: "Connectors",  icon: Plug,     color: "text-amber-500 bg-amber-500/10",   adminOnly: true, hostOnly: true },
   { id: "extensions", label: "Extensions",  icon: Puzzle,   color: "text-indigo-500 bg-indigo-500/10", adminOnly: true, hostOnly: true },
   { id: "storage",    label: "Storage",     icon: HardDrive,color: "text-sky-500 bg-sky-500/10",     adminOnly: true, hostOnly: true },
   { id: "embeddings", label: "Embeddings",  icon: Sparkles, color: "text-violet-500 bg-violet-500/10", adminOnly: true, hostOnly: true },
   { id: "backup",     label: "Backup",      icon: Shield,   color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, hostOnly: true },
-  { id: "logs",       label: "Logs",        icon: ScrollText,color: "text-orange-500 bg-orange-500/10" },
+  { id: "logs",       label: "Logs",        icon: ScrollText,color: "text-orange-500 bg-orange-500/10", adminOnly: true },
 ];
 
 export function SettingsApp() {
@@ -83,7 +85,11 @@ export function SettingsApp() {
   const visibleTabs = TABS.filter(t =>
     (isAdmin || !t.adminOnly) && (!auth.isTenant || !t.hostOnly)
   );
-  const [tab, setTab] = useState<Tab>("profile");
+  // ?tab=system etc. — Home's health line links straight to a tab.
+  const [tab, setTab] = useState<Tab>(() => {
+    const want = new URLSearchParams(window.location.search).get("tab");
+    return (TABS.some(t => t.id === want) ? want : "profile") as Tab;
+  });
   // If the persisted/current tab is admin-only and the user isn't an
   // admin (e.g., a role downgrade happened, or stale local state),
   // fall back to Profile rather than rendering an empty pane.
@@ -173,6 +179,7 @@ export function SettingsApp() {
         </div>
         <div className="max-w-3xl mx-auto px-4 sm:px-8 py-6 sm:py-8">
           {activeTab === "profile"    && <ProfileTab toast={toast} />}
+          {activeTab === "system"     && <SystemStatusPanel />}
           {activeTab === "devices"    && <DevicesTab toast={toast} />}
           {activeTab === "llm"        && <LlmTab toast={toast} />}
           {activeTab === "users"      && <UsersTab toast={toast} />}

@@ -15,7 +15,7 @@ import {
   Loader2, Send, Plus, Search, Trash2, MessageSquare, Sparkles,
   FileText, Download, Eye, X, ArrowDown, ThumbsUp, ThumbsDown,
   AlertCircle, Globe, Check, Upload, Copy, RefreshCw, Calendar,
-  CheckSquare, UsersRound, Cake, ChevronDown, ChevronLeft, ChevronRight, Wrench,
+  CheckSquare, UsersRound, Cake, ChevronDown, ChevronLeft, ChevronRight,
   Pin, PinOff, Mic, Pencil, Square, Bug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -38,6 +38,7 @@ import {
   AttachmentStashTray, useAttachmentStash, type StashItem,
 } from "./AttachmentStashTray";
 import { AttachmentCard, attachmentIdsIn } from "./AttachmentCard";
+import { useAuth } from "@/components/AuthGate";
 import {
   useTriPane, MobileTopBar, MobileBackdrop,
   mobileAsideLeft,
@@ -130,7 +131,7 @@ export function ChatApp() {
   const tri = useTriPane();
   const activeConv = conversations.find(c => c.id === activeId);
   const headerTitle = draftConversation ? "New conversation"
-    : activeConv?.preview?.slice(0, 30) || "Chat";
+    : readableTitle(activeConv?.preview || "").slice(0, 30) || "Chat";
 
   return (
     <div className="flex h-screen bg-background text-foreground relative">
@@ -363,8 +364,7 @@ function ConversationList({
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-sm truncate font-medium flex items-center gap-1.5">
                       {c.pinned && <Pin className="w-3 h-3 text-rose-500 shrink-0" />}
-                      {c.title
-                        || c.preview
+                      {readableTitle(c.title || c.preview || "")
                         || <span className="italic opacity-60">empty</span>}
                     </span>
                   </div>
@@ -4016,51 +4016,85 @@ function toolIcon(name: string): string {
   return TOOL_ICONS[name] || "🔧";
 }
 
+// Conversations started from the mail app begin with the machine-made
+// "[Email context]\nFrom: Name <addr>" seed; show who the mail was from.
+function readableTitle(t: string): string {
+  const m = /^\[Email context\]\s*From:\s*([^<\n]*?)\s*<?([^>\n]*)>?/.exec(t);
+  if (!m) return t;
+  const who = m[1].trim() || m[2].trim();
+  return who ? `Email from ${who}` : "About an email";
+}
+
 function ToolTraceSummary({ entries }: { entries: ToolTraceEntry[] }) {
+  const auth = useAuth();
+  const devMode = !!(auth.user as any)?.dev_mode;
   const [open, setOpen] = useState(false);
-  const summary = entries
-    .map(e => `${toolIcon(e.name)} ${e.name}`)
-    .join(" · ");
+  const n = entries.length;
   return (
-    <div className="mt-1.5 text-[10px] text-muted-foreground">
+    <div className="mt-1.5 text-[11px] text-muted-foreground">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
         className="inline-flex items-center gap-1 hover:text-foreground transition"
-        title={open ? "Hide tool details" : "Show what Yorik did"}
+        title={open ? "Hide the steps" : "Show what Yorik did"}
       >
         {open
-          ? <ChevronDown className="w-2.5 h-2.5" />
-          : <ChevronRight className="w-2.5 h-2.5" />}
-        <Wrench className="w-2.5 h-2.5 opacity-70" />
-        <span className="font-mono">{summary}</span>
+          ? <ChevronDown className="w-3 h-3" />
+          : <ChevronRight className="w-3 h-3" />}
+        <span>Yorik took {n} step{n !== 1 ? "s" : ""}</span>
       </button>
       {open && (
-        <div className="mt-1 pl-3 ml-1 border-l border-border/60 space-y-1.5">
-          {entries.map((e, i) => (
-            <div key={i} className="font-mono text-[10px] leading-relaxed">
-              <div className="text-foreground/80">
-                {toolIcon(e.name)} <span className="font-semibold">{e.name}</span>
-                <span className="opacity-70">
+        <div className="mt-1 pl-3 ml-1.5 border-l border-border/60 space-y-1">
+          {entries.map((e, i) => {
+            const line = describeStep(e.name, e.args);
+            // Without dev mode, "Looked up how to do it" three times in a
+            // row says nothing the first line didn't; show it once, counted.
+            if (!devMode && i > 0 && describeStep(entries[i - 1].name, entries[i - 1].args) === line) return null;
+            let repeat = 1;
+            while (!devMode && i + repeat < entries.length && describeStep(entries[i + repeat].name, entries[i + repeat].args) === line) repeat++;
+            return (
+            <div key={i} className="leading-relaxed">
+              <div className="text-foreground/80">{line}{repeat > 1 && <span className="opacity-60"> ({repeat}×)</span>}</div>
+              {/* The raw call stays one switch away for whoever debugs
+                  Yorik (Settings → Profile → developer mode). */}
+              {devMode && (
+                <div className="font-mono text-[10px] opacity-70 whitespace-pre-wrap break-words">
+                  {toolIcon(e.name)} <span className="font-semibold">{e.name}</span>
                   ({(() => {
                     try {
                       const s = JSON.stringify(e.args ?? {});
                       return s.length > 200 ? s.slice(0, 200) + "…" : s;
                     } catch { return "{}"; }
                   })()})
-                </span>
-              </div>
-              {e.result && (
-                <div className="ml-4 opacity-60 whitespace-pre-wrap break-words">
-                  ← {e.result.length > 200 ? e.result.slice(0, 200) + "…" : e.result}
+                  {e.result && <div className="ml-4 opacity-80">← {e.result.length > 200 ? e.result.slice(0, 200) + "…" : e.result}</div>}
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
+}
+
+// A step in words for the trace list: the typing-indicator line without
+// its emoji and "…", and a readable name for the generic tools that
+// would otherwise show up as "Calling skill_view".
+function describeStep(tool: string, args: Record<string, any> | undefined): string {
+  const humanize = (s: string) => {
+    const t = s.replace(/[_-]+/g, " ").trim();
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  };
+  if (tool === "skill_view") return "Looked up how to do it";
+  const line = formatToolStatus(tool, args);
+  if (line.startsWith("⚙ Calling")) {
+    if ((tool === "invoke_skill" || tool === "use_skill") && args?.name) {
+      return humanize(String(args.name));
+    }
+    return humanize(tool);
+  }
+  return line.replace(/^[^\p{L}\p{N}"]+/u, "").replace(/…$/, "");
 }
 
 
