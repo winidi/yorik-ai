@@ -2769,6 +2769,31 @@ function hash(s: string) {
   return h;
 }
 
+/** How much mail body the "Ask Yorik" seed carries into the chat. */
+const BODY_SEED_CHARS = 4000;
+/** Links up to this length go through untouched — an order page or a
+ *  short unsubscribe link is worth reading as-is. */
+const MAX_LINK_CHARS = 60;
+
+/** Collapse tracking monsters to `[Link: host]`.
+ *
+ *  Measured on one Klarna dunning notice: 2173 of the 4246 seeded
+ *  characters were two URLs, the longer one 1599 characters. Half the
+ *  budget went to base64, the 4000-char cap then fell mid-word, and
+ *  the chat showed a wall of noise where the mail should be. The host
+ *  survives so the model can still say "there's a payment link to
+ *  klarna.de"; the full URL stays one click away in the mail itself. */
+export function shortenLinks(text: string): string {
+  return text.replace(/https?:\/\/\S+/g, (url) => {
+    if (url.length <= MAX_LINK_CHARS) return url;
+    try {
+      return `[Link: ${new URL(url).host}]`;
+    } catch {
+      return "[Link]";
+    }
+  });
+}
+
 /** Dropdown that hands the email body to /r/chat with a pre-seeded
  *  prompt. Three sub-actions cover ~all the "what now?" verbs:
  *    - Summarise → 1-line "what does this want from me?"
@@ -2788,7 +2813,12 @@ function AskYorikButton({ message, detail, onReply }: {
   function seedAndGo(prompt: string) {
     setOpen(false);
     try { sessionStorage.setItem("yorik_chat_seed", prompt); } catch {}
-    navigate("/chat");
+    // `?new=1` — this seed is about one specific mail and has no
+    // business landing in whatever thread happened to be open last.
+    // Without it the chat auto-selects the most recent conversation
+    // (ChatApp.tsx) and a Klarna dunning notice dropped straight into
+    // that morning's voice thread about the calendar.
+    navigate("/chat?new=1");
     // The chat picks up the seed via sessionStorage on mount, then
     // auto-sends. See ChatApp.tsx — same path as the onboarding wizard.
     window.setTimeout(() => {
@@ -2798,7 +2828,12 @@ function AskYorikButton({ message, detail, onReply }: {
   }
 
   // Cap the body so we don't blow the LLM context on a huge thread.
-  const body = (detail.body_text || "").slice(0, 4000);
+  // Shorten first, cap second: marketing mail is half tracking link,
+  // and those links were eating the budget the actual text needed.
+  const full = shortenLinks(detail.body_text || "");
+  const body = full.length > BODY_SEED_CHARS
+    ? full.slice(0, BODY_SEED_CHARS) + "\n…(truncated)"
+    : full;
   const ctx = `[Email context]\n`
             + `From: ${detail.from_name || ""} <${detail.from_email}>\n`
             + `Subject: ${detail.subject}\n`

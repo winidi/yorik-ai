@@ -75,6 +75,18 @@ export function ChatApp() {
   useEffect(() => {
     if (deepLinkConsumed) return;
     const params = new URLSearchParams(location.search);
+    // /chat?new=1 — open a fresh thread instead of auto-selecting the
+    // most recent one. For surfaces that arrive with a seed about one
+    // specific thing (the mail app's "Ask Yorik"): without this their
+    // message is appended to whatever was last open, which is how a
+    // Klarna dunning mail ended up inside a thread about the calendar.
+    // Checked before conversation_id — an explicit id still wins.
+    if (!params.get("conversation_id") && params.get("new") === "1") {
+      startNew();
+      window.history.replaceState({}, "", location.pathname);
+      setDeepLinkConsumed(true);
+      return;
+    }
     const wanted = params.get("conversation_id");
     if (!wanted) { setDeepLinkConsumed(true); return; }
     // Wait until the conversations list has loaded so we know if the
