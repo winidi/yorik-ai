@@ -27,32 +27,35 @@
      never covers a button. */
   --dock-clearance: 5rem;
   color-scheme: light;
-  --background:           oklch(1 0 0);
-  --foreground:           oklch(0.145 0 0);
-  --card:                 oklch(1 0 0);
-  --card-foreground:      oklch(0.145 0 0);
-  --popover:              oklch(1 0 0);
-  --popover-foreground:   oklch(0.145 0 0);
+  /* Light is soft rather than paper-white: a faintly violet grey ground
+     (L 0.955), cards a step lighter, text a deep plum-grey instead of
+     near-black. Less glare on a phone at night, same hierarchy. */
+  --background:           oklch(0.955 0.008 290);
+  --foreground:           oklch(0.24 0.018 290);
+  --card:                 oklch(0.975 0.006 290);
+  --card-foreground:      oklch(0.24 0.018 290);
+  --popover:              oklch(0.98 0.005 290);
+  --popover-foreground:   oklch(0.24 0.018 290);
   --primary:              oklch(0.46 0.18 277);   /* matches Yorik accent indigo */
   --primary-foreground:   oklch(0.985 0 0);
-  --secondary:            oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted:                oklch(0.97 0 0);
-  --muted-foreground:     oklch(0.556 0 0);
-  --accent:               oklch(0.97 0 0);
-  --accent-foreground:    oklch(0.205 0 0);
+  --secondary:            oklch(0.925 0.01 290);
+  --secondary-foreground: oklch(0.26 0.018 290);
+  --muted:                oklch(0.925 0.01 290);
+  --muted-foreground:     oklch(0.50 0.015 290);
+  --accent:               oklch(0.925 0.01 290);
+  --accent-foreground:    oklch(0.26 0.018 290);
   --destructive:          oklch(0.577 0.245 27.325);
-  --border:               oklch(0.92 0 0);
-  --input:                oklch(0.92 0 0);
+  --border:               oklch(0.885 0.01 290);
+  --input:                oklch(0.885 0.01 290);
   --ring:                 oklch(0.46 0.18 277);
   --radius:               0.625rem;
-  --sidebar:              oklch(0.985 0 0);
-  --sidebar-foreground:   oklch(0.145 0 0);
+  --sidebar:              oklch(0.94 0.009 290);
+  --sidebar-foreground:   oklch(0.24 0.018 290);
   --sidebar-primary:      oklch(0.46 0.18 277);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent:       oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border:       oklch(0.92 0 0);
+  --sidebar-accent:       oklch(0.905 0.012 290);
+  --sidebar-accent-foreground: oklch(0.26 0.018 290);
+  --sidebar-border:       oklch(0.885 0.01 290);
   --sidebar-ring:         oklch(0.46 0.18 277);
 }
 
