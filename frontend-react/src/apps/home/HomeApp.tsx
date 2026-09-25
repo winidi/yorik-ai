@@ -32,6 +32,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/components/AuthGate";
 import { Dock, APP_VISUAL } from "@/components/Dock";
 import { DemoDataPanel } from "@/components/DemoDataPanel";
+import { FamilyRow } from "@/components/FamilyRow";
 import { useHouseHealth, type SystemStatus, type HealthIssue } from "@/components/SystemStatusPanel";
 
 // One bit of data we want to surface on each app tile, pulled from the
@@ -187,6 +188,8 @@ export function HomeApp() {
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition shrink-0" />
           </div>
         </button>
+
+        <FamilyRow />
 
         <DemoDataPanel />
 
