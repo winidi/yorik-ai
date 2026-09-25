@@ -203,8 +203,28 @@ export function PdfFormEditModal({ filename, contentB64, onSave, onClose }: {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      {/* pdf_viewer.css gives every widget input a translucent blue
+          background (deliberately see-through, to mark "this is a
+          fillable field") — fine for checkboxes/radios, whose checked
+          glyph is drawn on the canvas UNDERNEATH and needs to show
+          through. But the SAME canvas also draws each text field's
+          current value as static text, so a translucent text input
+          sitting on top of its own value doubles it visually. Opaque
+          white behind text/select inputs only masks that duplicate
+          without touching how checkboxes/radios render. */}
+      <style>{`
+        .pdf-form-edit-modal .textWidgetAnnotation :is(input, textarea),
+        .pdf-form-edit-modal .choiceWidgetAnnotation select {
+          /* pdf.js sets background-color: transparent as an INLINE
+             style on the element itself, which beats any stylesheet
+             rule regardless of specificity — !important is the only
+             way to actually override it here. */
+          background-color: #fff !important;
+          background-image: none !important;
+        }
+      `}</style>
       <div
-        className="bg-background rounded-xl border border-border shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col"
+        className="pdf-form-edit-modal bg-background rounded-xl border border-border shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
