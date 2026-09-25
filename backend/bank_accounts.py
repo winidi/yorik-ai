@@ -284,7 +284,7 @@ def list_transactions(days: int = 30, account_id: Optional[int] = None,
     with get_conn() as conn:
         rows = conn.execute(q, params).fetchall()
     # amount is Postgres NUMERIC -> a Decimal in Python; left as-is it
-    # serialises to a JSON string ("-388.21"), which a JS client adds
+    # serialises to a JSON string ("-42.10"), which a JS client adds
     # with `+` as text concatenation instead of arithmetic. A float is
     # precise enough for a currency amount and round-trips as a real
     # JSON number.

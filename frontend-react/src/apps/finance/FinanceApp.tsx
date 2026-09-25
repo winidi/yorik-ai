@@ -102,7 +102,7 @@ export function FinanceApp() {
         // Postgres NUMERIC comes over the wire as a JSON string (to
         // avoid float precision loss), not a number — treating it as
         // one turned category totals into concatenated digit soup
-        // ("0-388.21-425.22...") instead of a sum. Parse once, here.
+        // ("0-42.10-13.50...") instead of a sum. Parse once, here.
         api.get<Array<Omit<Transaction, "amount"> & { amount: string }>>(
           `/api/bank/transactions?days=${days}${acctQuery}`,
         ),
@@ -156,8 +156,8 @@ export function FinanceApp() {
   const totalIn = transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
 
   // Group consecutive transactions by day so a date is a heading, not
-  // a repeated label on every row (three "Landkreis Peine" entries in
-  // a row all said "2026-09-25" three times). A category total on its
+  // a repeated label on every row (three same-day entries in a row all
+  // showing the same date three times). A category total on its
   // own doesn't say what it's made of -- clicking one filters this list
   // down to exactly the transactions that add up to it.
   const filteredTransactions = filterCategory
