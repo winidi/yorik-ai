@@ -8,6 +8,9 @@ export interface MailPayload {
   to?: string[];
   subject?: string;
   body?: string;
+  why?: string;
+  source?: "llm" | "llm_frisch" | "vorlage" | "bearbeitet";
+  written_at?: string;
 }
 
 export interface Step {
@@ -50,6 +53,7 @@ export interface Config {
   send_days: "alle" | "werktags";
   send_from_hour: number;
   send_to_hour: number;
+  drafting?: boolean;
 }
 
 export interface PipelineEvent {

@@ -53,6 +53,14 @@ export function PipelineDetail({ id }: { id: number }) {
 
   useEffect(() => { void load(); }, [load]);
 
+  // While the model writes the reminders, look again every few seconds.
+  const drafting = !!p?.config?.drafting;
+  useEffect(() => {
+    if (!drafting) return;
+    const t = setInterval(() => { void load(); }, 3000);
+    return () => clearInterval(t);
+  }, [drafting, load]);
+
   async function run(label: string, fn: () => Promise<Pipeline>, ok?: string) {
     setBusy(label);
     try {
@@ -76,7 +84,7 @@ export function PipelineDetail({ id }: { id: number }) {
   }
   if (!p) return <div className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Lädt…</div>;
 
-  const editable = p.state === "entwurf" || p.state === "laeuft" || p.state === "pausiert";
+  const editable = (p.state === "entwurf" || p.state === "laeuft" || p.state === "pausiert") && !p.config?.drafting;
   const doneSteps = p.steps.filter(s => s.status === "erledigt");
   const openMail = draft.filter(s => s.action === "mail_senden");
   const allApproved = openMail.every(s => s.approved);
@@ -88,7 +96,13 @@ export function PipelineDetail({ id }: { id: number }) {
   }
 
   function change(key: string, patch: Partial<DraftStep>) {
-    setDraft(d => d.map(s => (s.key === key ? { ...s, ...patch, approved: false } : s)));
+    setDraft(d => d.map(s => {
+      if (s.key !== key) return s;
+      const textChanged = patch.payload && (patch.payload.body !== s.payload.body
+        || patch.payload.subject !== s.payload.subject || (patch.payload.to || []).join() !== (s.payload.to || []).join());
+      const payload = patch.payload ? { ...patch.payload, ...(textChanged ? { source: "bearbeitet" as const } : {}) } : s.payload;
+      return { ...s, ...patch, payload, approved: false };
+    }));
     setDirty(true);
   }
 
@@ -154,8 +168,33 @@ export function PipelineDetail({ id }: { id: number }) {
       )}
 
       {/* ── the sequence ─────────────────────────────────────── */}
-      <div className="flex items-center justify-between mt-7 mb-3">
+      {p.config?.drafting && (
+        <div className="mt-6 rounded-xl border border-primary/30 bg-primary/5 p-4 flex items-start gap-3">
+          <Loader2 className="w-4 h-4 animate-spin text-primary mt-0.5 shrink-0" />
+          <div>
+            <div className="text-sm font-medium">Yorik schreibt die Erinnerungen…</div>
+            <p className="text-[12px] text-muted-foreground">
+              Er liest deine Mail, überlegt, welche Antwort du erwartest, und schlägt Abstände und Texte vor. Das dauert meist unter einer Minute.
+            </p>
+          </div>
+        </div>
+      )}
+      <div className="flex items-center justify-between mt-7 mb-3 gap-2">
         <div className="text-[13px] font-medium text-muted-foreground">Ablauf</div>
+        <div className="flex items-center gap-2">
+        {editable && openMail.length > 0 && (
+          <button
+            onClick={() => {
+              if (openMail.some(s => s.approved || s.payload.source === "bearbeitet")
+                  && !window.confirm("Yorik schreibt die offenen Erinnerungen neu; deine Änderungen und Freigaben daran gehen verloren. Weiter?")) return;
+              void run("redraft", post("/redraft"));
+            }}
+            disabled={busy !== null || dirty}
+            className="text-[12px] rounded-md border border-border px-2.5 py-1 hover:bg-muted disabled:opacity-40"
+          >
+            Neu schreiben lassen
+          </button>
+        )}
         {editable && openMail.length > 0 && !allApproved && !dirty && (
           <button
             onClick={approveAll}
@@ -166,6 +205,7 @@ export function PipelineDetail({ id }: { id: number }) {
             {busy === "approveAll" ? "…" : allOpened ? "Alle freigeben" : "Alle freigeben (erst jede öffnen)"}
           </button>
         )}
+        </div>
       </div>
 
       <ol className="relative ml-3 border-l border-border space-y-4 pb-1">
@@ -349,7 +389,10 @@ function StepCard({ step, index, editable, dirty, expanded, quote, busy, onToggl
       </button>
       {expanded && (
         <div className="px-3.5 pb-3.5 space-y-2.5 border-t border-border pt-3">
-          <div className="text-[12px] text-muted-foreground">{days} der vorigen Nachricht</div>
+          <div className="text-[12px] text-muted-foreground">
+            {days} der vorigen Nachricht{step.payload.why ? <> · <span className="italic">{step.payload.why}</span></> : null}
+          </div>
+          <SourceNote source={step.payload.source} />
           <Field label="An">
             <input
               value={(step.payload.to || []).join(", ")}
@@ -407,6 +450,17 @@ function StepCard({ step, index, editable, dirty, expanded, quote, busy, onToggl
       )}
     </div>
   );
+}
+
+function SourceNote({ source }: { source?: string }) {
+  const text = {
+    llm: "Von Yorik geschrieben. Wenn sie fällig wird, schreibt er sie mit dem aktuellen Stand noch einmal neu.",
+    llm_frisch: "Heute von Yorik neu geschrieben, mit allem, was seitdem passiert ist.",
+    vorlage: "Nur eine Vorlage: das Sprachmodell war nicht erreichbar. „Neu schreiben lassen“ versucht es noch einmal.",
+    bearbeitet: "Von dir bearbeitet.",
+  }[source || ""];
+  if (!text) return null;
+  return <div className={cn("text-[11px]", source === "vorlage" ? "text-amber-600" : "text-muted-foreground")}>{text}</div>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -482,18 +536,23 @@ function AttentionCard({ p, busy, run, post, onAddReminder }: {
 
       {p.attention === "schritt_faellig" && step && (
         <div>
-          <p className="text-[13px] text-muted-foreground mb-2">{d.summary}. Keine Antwort gefunden.</p>
+          <p className="text-[13px] text-muted-foreground mb-2">
+            {d.summary}. Keine Antwort gefunden.
+            {step.payload.source === "llm_frisch" && " Yorik hat die Erinnerung für heute neu geschrieben."}
+          </p>
           <div className="rounded-lg border border-border bg-card p-3 mb-3">
             <div className="text-[12px] text-muted-foreground">an {(step.payload.to || []).join(", ")}</div>
             <div className="text-sm font-medium">{step.payload.subject}</div>
             <pre className="text-[12px] whitespace-pre-wrap font-sans mt-1.5 max-h-40 overflow-y-auto">{step.payload.body}</pre>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button className={cn(primary, "flex items-center gap-1.5")} disabled={busy !== null || !step.approved}
-              onClick={() => run("send", post(`/steps/${step.id}/send`), "Erinnerung gesendet")}>
-              {busy === "send" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Jetzt senden
+            <button className={cn(primary, "flex items-center gap-1.5")} disabled={busy !== null}
+              onClick={() => run("send", post(`/steps/${step.id}/send`,
+                step.approved ? {} : { approve: true, seen_body: step.payload.body || "" }), "Erinnerung gesendet")}>
+              {busy === "send" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {step.approved ? "Jetzt senden" : "Freigeben und senden"}
             </button>
-            {!step.approved && <span className="text-[12px] text-amber-600">Erst freigeben (unten im Ablauf).</span>}
+            <span className="text-[12px] text-muted-foreground">Ändern kannst du den Text unten im Ablauf.</span>
             <span className="text-[11px] text-muted-foreground">Yorik prüft direkt vor dem Senden noch einmal.</span>
           </div>
         </div>

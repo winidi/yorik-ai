@@ -522,10 +522,18 @@ def _():
         return False, f"send {r.status_code}; in sent-mails: {bool(sent)}"
     p = anna.api("POST", "/api/pipelines", json={"mail_id": sent["id"]})
     j = p.json() if p.ok else {}
+    # The model writes the reminders in the background; wait for it.
+    for _ in range(120):
+        if not (j.get("config") or {}).get("drafting"):
+            break
+        time.sleep(1)
+        j = anna.api("GET", f"/api/pipelines/{j['id']}").json()
     PIPE.update(j)
     f = j.get("features") or {}
+    src = [s["payload"].get("source") for s in j.get("steps", []) if s["action"] == "mail_senden"]
     return (p.status_code == 201 and "ben@example.test" in f.get("addresses", [])
-            and "KD-88442211" in f.get("numbers", []), f"HTTP {p.status_code}: {json.dumps(f)[:200]}")
+            and "KD-88442211" in f.get("numbers", []) and not (j.get("config") or {}).get("drafting"),
+            f"HTTP {p.status_code}: {json.dumps(f)[:160]}; reminders by {src}; goal {j.get('goal')!r}")
 
 
 @check(PL, "Ben cannot open Anna's pipeline; a child cannot manage the switch")

@@ -195,6 +195,14 @@ def process(pipeline_id: int) -> None:
         store.update(p["id"], next_run_at=now + KICK_WAIT)
         return
 
+    # The reminder is written afresh for today, with what happened since.
+    if p["attention"] != "schritt_faellig" and hasattr(kind, "refresh_due"):
+        try:
+            if kind.refresh_due(p, step, all_steps):
+                step = next(s for s in store.steps(p["id"]) if s["id"] == step["id"])
+        except Exception as exc:  # noqa: BLE001 — the old text stays usable
+            log.warning("pipeline %s: rewrite failed: %s", p["id"], exc)
+
     detail = {"step_id": step["id"], "position": step["position"], "summary": chk["summary"],
               "due_at": due.isoformat()}
     if p["mode"] == "begleitet" or not step["approved"]:

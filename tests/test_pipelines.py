@@ -60,7 +60,13 @@ def _mail(owner: str, account: int, *, sent: bool = False, frm: str = "", to=Non
 
 
 @pytest.fixture
-def home(fresh_app):
+def home(fresh_app, monkeypatch):
+    # The model is never called from tests; without a fake it is "not reachable".
+    from backend.pipelines import writer
+
+    def _no_model(*a, **kw):
+        raise ConnectionError("no model in tests")
+    monkeypatch.setattr(writer, "_complete", _no_model)
     dirk_c, dirk = login_client(fresh_app, role="platform_admin", name="Dirk", email="d@example.local")
     beate_c, beate = login_client(fresh_app, role="member", name="Beate", email="b@example.local")
     kid_c, kid = login_client(fresh_app, role="restricted", name="Kind", email="k@example.local")
@@ -466,3 +472,82 @@ def test_a_member_sees_an_admins_switch_but_cannot_flip_it(home):
     assert people[home["dirk"]]["can_change"] is False
     assert people[home["kid"]]["can_change"] is True
     assert {x["id"]: x for x in home["dirk_c"].get("/api/pipelines/people").json()}[home["dirk"]]["can_change"]
+
+
+# ─── the model writes the reminders ─────────────────────────────────
+
+PLAN = {"kind": "kuendigung", "goal": "Kündigungsbestätigung mit Datum des Vertragsendes",
+        "reminders": [
+            {"after_days": 10, "why": "Stadtwerke brauchen oft zwei Wochen", "subject": "Re: Kündigung Stromvertrag",
+             "body": "Sehr geehrte Damen und Herren,\n\nich bitte um Bestätigung meiner Kündigung (Kundennummer 4711-0815-22).\n\nDirk"},
+            {"after_days": 7, "why": "zweite, bestimmtere Nachfrage", "subject": "Re: Kündigung Stromvertrag",
+             "body": "Bitte bestätigen Sie bis zum Monatsende.\n\nDirk"}],
+        "handover_days": 5}
+
+
+def test_the_model_plans_the_days_and_writes_the_reminders(home, monkeypatch):
+    from backend.pipelines import writer
+    prompts = []
+    monkeypatch.setattr(writer, "_complete", lambda prompt, **kw: prompts.append(prompt) or json.dumps(PLAN))
+    p = _create(home)   # the background task runs before TestClient returns
+    d = home["dirk_c"].get(f"/api/pipelines/{p['id']}").json()
+    assert d["config"]["drafting"] is False
+    assert d["goal"] == PLAN["goal"]
+    assert [s["after_days"] for s in d["steps"]] == [10, 7, 5]
+    assert d["steps"][0]["payload"]["source"] == "llm"
+    assert d["steps"][0]["payload"]["why"] == "Stadtwerke brauchen oft zwei Wochen"
+    assert d["steps"][0]["payload"]["to"] == ["kuendigung@stadtwerke-muster.de"]
+    assert "4711-0815-22" in prompts[0] and "Kündigung Stromvertrag" in prompts[0]
+
+
+def test_without_the_model_the_template_stays_and_says_so(home):
+    p = _create(home)
+    d = home["dirk_c"].get(f"/api/pipelines/{p['id']}").json()
+    assert d["config"]["drafting"] is False
+    assert d["steps"][0]["payload"]["source"] == "vorlage"
+    assert any("nicht erreichbar" in e["text"] for e in d["events"])
+
+
+def test_a_due_reminder_is_written_afresh_and_needs_approval_of_that_text(home, monkeypatch):
+    from backend.pipelines import engine, writer
+    from unittest.mock import patch
+    p = _approve_all_and_start(home, _create(home))
+    ack = _mail(home["dirk"], home["acct"], frm="info@stadtwerke-muster.de", subject="Eingangsbestätigung",
+                body="Wir haben Ihre Nachricht erhalten.")
+    _process(p["id"])
+    home["dirk_c"].post(f"/api/pipelines/{p['id']}/answer", json={"mail_id": ack, "is_answer": False})
+    prompts = []
+    fresh = {"subject": "Re: Kündigung Stromvertrag",
+             "body": "Sie haben den Eingang bestätigt, die Bestätigung der Kündigung fehlt noch.\n\nDirk"}
+    monkeypatch.setattr(writer, "_complete", lambda prompt, **kw: prompts.append(prompt) or json.dumps(fresh))
+    with patch.object(engine, "in_window", return_value=True):
+        after = _process(p["id"])
+        assert after["attention"] == "schritt_faellig"
+        _process(p["id"])   # already written for today: not again
+    assert len(prompts) == 1
+    assert "Eingangsbestätigung" in prompts[0]
+    step = home["dirk_c"].get(f"/api/pipelines/{p['id']}").json()["steps"][0]
+    assert step["payload"]["source"] == "llm_frisch" and step["approved"] is False
+
+    OWNER[0] = home["dirk"]
+    calls = []
+    from backend import email_sender
+    url = f"/api/pipelines/{p['id']}/steps/{step['id']}/send"
+    with patch.object(email_sender, "send", side_effect=_fake_send(calls)):
+        assert home["dirk_c"].post(url, json={}).status_code == 409          # not approved
+        stale = home["dirk_c"].post(url, json={"approve": True, "seen_body": "ein anderer Text"})
+        assert stale.status_code == 409                                     # approves only what was seen
+        ok = home["dirk_c"].post(url, json={"approve": True, "seen_body": fresh["body"]})
+    assert ok.status_code == 200, ok.text
+    assert calls[0]["body_text"].startswith("Sie haben den Eingang bestätigt")
+
+
+def test_steps_cannot_be_changed_or_started_while_yorik_writes(home):
+    p = _create(home)
+    from backend.pipelines import store
+    store.update(p["id"], config_json=dict(p["config"], drafting=True))
+    body = [{"action": s["action"], "after_days": s["after_days"], "payload": s["payload"]} for s in p["steps"]]
+    assert home["dirk_c"].put(f"/api/pipelines/{p['id']}/steps", json={"steps": body}).status_code == 409
+    assert home["dirk_c"].post(f"/api/pipelines/{p['id']}/start").status_code == 409
+    assert home["dirk_c"].post(f"/api/pipelines/{p['id']}/steps/{p['steps'][0]['id']}/approve",
+                               json={"approved": True}).status_code == 409

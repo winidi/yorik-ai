@@ -13,6 +13,15 @@ worklist.
 
 ### Added
 
+- **Pipelines: the model writes the reminders.** When a pipeline is
+  created, the local model reads the sent mail, names the expected
+  answer, plans one to three reminders with the days between them (and
+  a reason for each) and writes them in the tone of the mail. When a
+  reminder falls due it is written again for that day, with the
+  reminders already sent, acknowledgements that were not the answer
+  and a concrete deadline; the person approves exactly that fresh text
+  ("Freigeben und senden"). Without the model the template stays and
+  says so. `backend/pipelines/writer.py`.
 - **Pipelines, stage 1: follow a sent mail until the answer comes.**
   New app at `/pipelines` (on for everyone; parents and admins can
   switch it off per person). "Antwort verfolgen" on a sent mail drafts

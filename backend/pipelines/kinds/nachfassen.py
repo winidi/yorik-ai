@@ -94,11 +94,62 @@ def default_steps(origin: dict[str, Any], owner: str) -> list[dict[str, Any]]:
     )
     return [
         {"action": "mail_senden", "after_days": DEFAULT_DAYS[0],
-         "payload": {"to": to, "subject": subject, "body": first}},
+         "payload": {"to": to, "subject": subject, "body": first, "source": "vorlage"}},
         {"action": "mail_senden", "after_days": DEFAULT_DAYS[1],
-         "payload": {"to": to, "subject": subject, "body": second}},
+         "payload": {"to": to, "subject": subject, "body": second, "source": "vorlage"}},
         {"action": "uebergabe", "after_days": DEFAULT_DAYS[2], "payload": {}},
     ]
+
+
+def llm_steps(origin: dict[str, Any], owner: str) -> Optional[dict[str, Any]]:
+    """The model plans and writes the sequence. {goal, steps} or None
+    (then the template from default_steps stays)."""
+    from .. import writer
+    plan = writer.draft_sequence(owner, origin)
+    if not plan:
+        return None
+    to = list(origin.get("to") or [])
+    fallback_subject = _reply_subject(origin.get("subject") or "")
+    now = store.now().isoformat()
+    steps = [{"action": "mail_senden", "after_days": r["after_days"],
+              "payload": {"to": to, "subject": r["subject"] or fallback_subject, "body": r["body"],
+                          "why": r["why"], "source": "llm", "written_at": now}}
+             for r in plan["reminders"]]
+    steps.append({"action": "uebergabe", "after_days": plan["handover_days"], "payload": {}})
+    return {"goal": plan["goal"], "kind": plan["kind"], "steps": steps}
+
+
+def refresh_due(p: dict[str, Any], step: dict[str, Any], all_steps: list[dict[str, Any]]) -> bool:
+    """Write the reminder that is due now afresh, with what happened
+    since. True when the text was replaced (its approval is then gone,
+    the person approves the fresh text)."""
+    from .. import writer
+    if step["action"] != "mail_senden" or step["payload"].get("source") == "llm_frisch":
+        return False
+    mail_steps = [s for s in all_steps if s["action"] == "mail_senden"]
+    sent = [{"date": _fmt_date(s["done_at"]), "body": s["payload"].get("body") or ""}
+            for s in mail_steps if s["status"] == "erledigt"]
+    not_answers = []
+    dismissed = set(p["features"].get("dismissed_mail_ids") or [])
+    if dismissed:
+        from ...database import conn_ctx
+        with conn_ctx() as c:
+            rows = c.execute(
+                "SELECT id, from_email, subject, snippet, date_received FROM email_messages "
+                "WHERE owner_user_id = ? AND id = ANY(?) ORDER BY date_received",
+                (p["owner_user_id"], list(dismissed))).fetchall()
+        not_answers = [{"date": _fmt_date(r["date_received"]), "from": r["from_email"],
+                        "subject": r["subject"] or "", "snippet": (r["snippet"] or "")[:160]} for r in rows]
+    number = 1 + len(sent)
+    fresh = writer.rewrite_due(p, step, {"sent": sent, "not_answers": not_answers,
+                                         "number": number, "total": len(mail_steps)})
+    if not fresh:
+        return False
+    payload = dict(step["payload"], subject=fresh["subject"], body=fresh["body"],
+                   source="llm_frisch", written_at=store.now().isoformat())
+    store.update_step_payload(step["id"], payload)
+    store.event(p["id"], "status", f"Erinnerung {number} für heute neu geschrieben — bitte lesen und freigeben")
+    return True
 
 
 def default_config() -> dict[str, Any]:

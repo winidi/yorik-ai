@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..auth_sessions import current_user
@@ -127,8 +127,34 @@ class CreateBody(BaseModel):
     mail_id: int
 
 
+def draft_with_llm(pipeline_id: int, owner: str) -> None:
+    """Let the model plan and write the reminders (runs after the
+    response; the page shows "Yorik schreibt…" meanwhile)."""
+    p = store.get(pipeline_id, owner)
+    if not p:
+        return
+    try:
+        plan = nachfassen.llm_steps(p["origin"], owner)
+    except Exception as exc:  # noqa: BLE001
+        plan = None
+        store.event(pipeline_id, "status", f"Schreiben fehlgeschlagen: {type(exc).__name__}")
+    config = dict(p["config"], drafting=False)
+    if plan:
+        store.replace_steps(pipeline_id, [
+            {"action": d["action"], "after_days": d["after_days"], "payload": d["payload"]}
+            for d in store.steps(pipeline_id) if d["status"] == "erledigt"] + plan["steps"])
+        fields: dict[str, Any] = {"config_json": config}
+        if plan["goal"]:
+            fields["goal"] = plan["goal"]
+        store.update(pipeline_id, **fields)
+        store.event(pipeline_id, "status", "Yorik hat die Erinnerungen geschrieben und die Abstände vorgeschlagen")
+    else:
+        store.update(pipeline_id, config_json=config)
+        store.event(pipeline_id, "status", "Das Sprachmodell war nicht erreichbar — Vorlage bleibt stehen")
+
+
 @router.post("", status_code=201)
-def create(body: CreateBody, user: dict = Depends(current_user)) -> dict[str, Any]:
+def create(body: CreateBody, background: BackgroundTasks, user: dict = Depends(current_user)) -> dict[str, Any]:
     _require_enabled(user)
     owner = _uid(user)
     mail = mail_src.load_sent_mail(owner, body.mail_id)
@@ -144,12 +170,27 @@ def create(body: CreateBody, user: dict = Depends(current_user)) -> dict[str, An
     pid = store.create(
         owner, kind=nachfassen.KIND, title=subject,
         goal=f"Antwort auf „{subject}“", origin=origin,
-        features=mail_src.features_from_mail(mail), config=nachfassen.default_config(),
+        features=mail_src.features_from_mail(mail),
+        config=dict(nachfassen.default_config(), drafting=True),
         since_at=since,
     )
     store.replace_steps(pid, nachfassen.default_steps(origin, owner))
     store.event(pid, "status", "Entwurf angelegt aus der gesendeten Mail")
+    background.add_task(draft_with_llm, pid, owner)
     return _detail(store.get(pid, owner))
+
+
+@router.post("/{pipeline_id}/redraft")
+def redraft(pipeline_id: int, background: BackgroundTasks, user: dict = Depends(current_user)) -> dict[str, Any]:
+    """Let the model write the open reminders again."""
+    p = _own(pipeline_id, user)
+    if p["state"] not in ("entwurf", "laeuft", "pausiert"):
+        raise HTTPException(409, "Die Pipeline ist beendet.")
+    if p["config"].get("drafting"):
+        raise HTTPException(409, "Yorik schreibt schon.")
+    store.update(pipeline_id, config_json=dict(p["config"], drafting=True))
+    background.add_task(draft_with_llm, pipeline_id, _uid(user))
+    return _detail(_own(pipeline_id, user))
 
 
 @router.get("/{pipeline_id}")
@@ -214,7 +255,7 @@ def patch(pipeline_id: int, body: PatchBody, user: dict = Depends(current_user))
             raise HTTPException(400, "send_days: alle oder werktags")
         if not (0 <= c.send_from_hour < c.send_to_hour <= 24):
             raise HTTPException(400, "Sendefenster ungültig")
-        fields["config_json"] = c.model_dump()
+        fields["config_json"] = dict(p["config"], **c.model_dump())
     if fields:
         store.update(pipeline_id, **fields)
         if p["state"] == "laeuft":
@@ -237,6 +278,8 @@ def put_steps(pipeline_id: int, body: StepsBody, user: dict = Depends(current_us
     p = _own(pipeline_id, user)
     if p["state"] in ("erledigt", "abgebrochen"):
         raise HTTPException(409, "Die Pipeline ist beendet.")
+    if p["config"].get("drafting"):
+        raise HTTPException(409, "Yorik schreibt die Erinnerungen gerade. Gleich noch einmal.")
     done = [s for s in store.steps(pipeline_id) if s["status"] == "erledigt"]
     new = []
     for s in body.steps:
@@ -251,6 +294,9 @@ def put_steps(pipeline_id: int, body: StepsBody, user: dict = Depends(current_us
                 raise HTTPException(400, "Eine Erinnerung braucht einen Empfänger.")
             payload = {"to": to[:10], "subject": str(s.payload.get("subject") or "")[:300],
                        "body": str(s.payload.get("body") or "")[:20000]}
+            for k in ("why", "source", "written_at"):
+                if isinstance(s.payload.get(k), str):
+                    payload[k] = s.payload[k][:300]
         new.append({"action": s.action, "after_days": s.after_days, "payload": payload})
     if not new or new[-1]["action"] != "uebergabe":
         new.append({"action": "uebergabe", "after_days": 7, "payload": {}})
@@ -272,7 +318,8 @@ class ApproveBody(BaseModel):
 @router.post("/{pipeline_id}/steps/{step_id}/approve")
 def approve(pipeline_id: int, step_id: int, body: ApproveBody,
             user: dict = Depends(current_user)) -> dict[str, Any]:
-    _own(pipeline_id, user)
+    if _own(pipeline_id, user)["config"].get("drafting"):
+        raise HTTPException(409, "Yorik schreibt die Erinnerungen gerade.")
     if not store.approve_step(pipeline_id, step_id, body.approved):
         raise HTTPException(404, "Schritt nicht gefunden oder schon erledigt")
     return _detail(_own(pipeline_id, user))
@@ -286,6 +333,8 @@ def start(pipeline_id: int, user: dict = Depends(current_user)) -> dict[str, Any
     p = _own(pipeline_id, user)
     if p["state"] != "entwurf":
         raise HTTPException(409, "Schon gestartet")
+    if p["config"].get("drafting"):
+        raise HTTPException(409, "Yorik schreibt die Erinnerungen gerade.")
     open_mail = [s for s in store.steps(pipeline_id) if s["status"] == "offen" and s["action"] == "mail_senden"]
     if any(not s["approved"] for s in open_mail):
         raise HTTPException(409, "Bitte erst jede Mail freigeben.")
@@ -368,6 +417,8 @@ def check_now(pipeline_id: int, user: dict = Depends(current_user)) -> dict[str,
 
 class SendBody(BaseModel):
     despite_stale: bool = False
+    approve: bool = False   # "Freigeben und senden": approve the text shown, then send
+    seen_body: Optional[str] = None  # the text the person saw; approval only for exactly that
 
 
 @router.post("/{pipeline_id}/steps/{step_id}/send")
@@ -377,6 +428,11 @@ def send(pipeline_id: int, step_id: int, body: SendBody, user: dict = Depends(cu
     _locked(pipeline_id)
     try:
         p = _own(pipeline_id, user)
+        if body.approve:
+            current = next((s for s in store.steps(pipeline_id) if s["id"] == step_id), None)
+            if not current or (current["payload"].get("body") or "") != (body.seen_body or ""):
+                raise engine.NotNow("Der Text hat sich inzwischen geändert. Bitte noch einmal lesen.")
+            store.approve_step(pipeline_id, step_id, True)
         res = engine.send_step(p, step_id, despite_stale=body.despite_stale)
     except engine.NotNow as exc:
         raise HTTPException(409, {"reason": exc.reason, "detail": exc.detail})

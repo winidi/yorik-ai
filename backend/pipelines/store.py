@@ -273,6 +273,14 @@ def replace_steps(pipeline_id: int, new_steps: list[dict[str, Any]]) -> None:
                   (pipeline_id, len(new_steps)))
 
 
+def update_step_payload(step_id: int, payload: dict[str, Any]) -> None:
+    """New text for an open step. Its approval no longer matches and
+    counts as gone (see _step_dict)."""
+    with conn_ctx() as c:
+        c.execute("UPDATE pipeline_steps SET payload_json = ? WHERE id = ? AND status = 'offen'",
+                  (json.dumps(payload), step_id))
+
+
 def approve_step(pipeline_id: int, step_id: int, approved: bool) -> bool:
     with conn_ctx() as c:
         r = c.execute("SELECT * FROM pipeline_steps WHERE id = ? AND pipeline_id = ?",

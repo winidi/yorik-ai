@@ -15,7 +15,9 @@ Two ways:
 - In **Mail**, open a mail you sent and tap the **Antwort verfolgen** icon in the toolbar.
 - In **Pipelines**, tap **Antwort verfolgen** and pick one of your recently sent mails.
 
-Yorik drafts the sequence: a first reminder after 5 days, a second after another 7, then after 7 more days he hands the matter back to you. Change the days, the recipients and the texts as you like, then open each reminder once and tap **Freigeben**. **Starten** works once every reminder is approved. If you change a reminder later, its approval is gone and you approve it again.
+Yorik reads your mail and plans the follow-up. He works out what kind of matter it is (a cancellation, a request, a claim), which answer you are waiting for, how many reminders make sense and after how many days, with a short reason for each gap. Then he writes each reminder in the tone of your mail. This takes a few seconds; the page shows **Yorik schreibt die Erinnerungen…** meanwhile. If the language model cannot be reached, a plain template stays and the reminder says so; **Neu schreiben lassen** tries again.
+
+Change the days, the recipients and the texts as you like, then open each reminder once and tap **Freigeben**. **Starten** works once every reminder is approved. If you change a reminder later, its approval is gone and you approve it again.
 
 ## How Yorik recognises the answer
 
@@ -33,7 +35,7 @@ When Yorik finds such a mail, he asks you: **Ist das die Antwort?** Tap **Ja** a
 
 ## When a reminder is due
 
-You get a notification: **Keine Antwort — Erinnerung senden?** Open it, read the reminder once more and tap **Jetzt senden**. Right before sending, Yorik checks your mail again. If something has arrived in the meantime, he shows it to you instead of sending.
+You get a notification: **Keine Antwort — Erinnerung senden?** When a reminder falls due, Yorik writes it again for that day, with what happened since: how long ago you wrote, the reminders already sent, an acknowledgement of receipt that came without a real answer, a concrete deadline in the last reminder. Read the fresh text and tap **Freigeben und senden**. Your approval covers exactly the text you saw. Right before sending, Yorik checks your mail again. If something has arrived in the meantime, he shows it to you instead of sending.
 
 The reminder goes from the same account as your first mail, as a reply in the same conversation, with your first mail quoted below.
 
@@ -58,4 +60,4 @@ Parents and admins can switch pipelines off for a single person at the bottom of
 
 ## Coming later
 
-Yorik writing the reminders himself and suggesting the days, looking for answers in scanned letters and WhatsApp, an autonomous mode that sends approved reminders by itself, and other kinds of pipelines, such as watching for a payment on your account.
+Looking for answers in scanned letters and WhatsApp, an autonomous mode that sends approved reminders by itself, and other kinds of pipelines, such as watching for a payment on your account.
