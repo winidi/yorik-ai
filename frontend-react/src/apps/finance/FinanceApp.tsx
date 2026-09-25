@@ -4,10 +4,17 @@
  * typed; it goes straight to POST /api/bank/accounts in the user's own
  * browser, never through chat (see docs/plans/2026-09-25-finanzen.md).
  */
-import { useEffect, useState } from "react";
-import { Landmark, Plus, RefreshCw, Trash2, X, Loader2, Users, Lock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Landmark, Plus, RefreshCw, Trash2, X, Loader2, Users, Lock, Search, Check } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+interface Institute {
+  blz: string;
+  name: string;
+  city: string;
+  url: string;
+}
 import { Dock } from "@/components/Dock";
 
 interface BankAccount {
@@ -255,7 +262,12 @@ function ConnectAccountForm({ onClose, onConnected }: { onClose: () => void; onC
           <input required value={displayName} onChange={e => setDisplayName(e.target.value)}
                 className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
         </Field>
-        <Field label="FinTS-Server-URL" hint="Nachschlagen auf hbci-zka.de nach Bankname.">
+        <Field label="Bank suchen" hint="Name oder Ort eingeben — BLZ und FinTS-Adresse werden automatisch ausgefüllt.">
+          <BankSearchField
+            onPick={inst => { setBankUrl(inst.url); setBlz(inst.blz); }}
+          />
+        </Field>
+        <Field label="FinTS-Server-URL" hint="Automatisch ausgefüllt, wenn oben gefunden — sonst selbst eintragen (nachschlagen auf hbci-zka.de).">
           <input required value={bankUrl} onChange={e => setBankUrl(e.target.value)}
                 placeholder="https://..."
                 className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
@@ -292,6 +304,73 @@ function ConnectAccountForm({ onClose, onConnected }: { onClose: () => void; onC
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// Debounced search over the bundled FinTS institute list (GET
+// /api/bank/institutes) — picking a result fills BLZ + FinTS URL so
+// the user doesn't have to hunt one down by hand. Mirrors the
+// contact-autocomplete pattern in Composer.tsx's RecipientField:
+// short debounce, a request-id guard against out-of-order responses.
+function BankSearchField({ onPick }: { onPick: (inst: Institute) => void }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Institute[]>([]);
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<Institute | null>(null);
+  const reqIdRef = useRef(0);
+
+  useEffect(() => {
+    if (query.trim().length < 2) { setResults([]); setOpen(false); return; }
+    const id = ++reqIdRef.current;
+    const handle = window.setTimeout(async () => {
+      try {
+        const r = await api.get<Institute[]>(`/api/bank/institutes?q=${encodeURIComponent(query)}`);
+        if (id !== reqIdRef.current) return;
+        setResults(r);
+        setOpen(r.length > 0);
+      } catch {
+        if (id === reqIdRef.current) { setResults([]); setOpen(false); }
+      }
+    }, 150);
+    return () => window.clearTimeout(handle);
+  }, [query]);
+
+  function pick(inst: Institute) {
+    setPicked(inst);
+    setQuery(`${inst.name} (${inst.city})`);
+    setOpen(false);
+    onPick(inst);
+  }
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={query}
+          onChange={e => { setQuery(e.target.value); setPicked(null); }}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          placeholder="z. B. Sparkasse Peine, ING"
+          className="w-full rounded-md border border-border bg-background pl-7 pr-7 py-1.5 text-sm"
+        />
+        {picked && <Check className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 text-emerald-600" />}
+      </div>
+      {open && (
+        <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
+          {results.map(inst => (
+            <button
+              type="button"
+              key={inst.blz}
+              onClick={() => pick(inst)}
+              className="w-full text-left px-2.5 py-1.5 text-sm hover:bg-muted"
+            >
+              <div className="font-medium truncate">{inst.name}</div>
+              <div className="text-[11px] text-muted-foreground truncate">{inst.city} · BLZ {inst.blz}</div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

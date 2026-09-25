@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import secrets
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,6 +30,41 @@ from pydantic import BaseModel
 from . import credential_store, spaces
 from .auth_sessions import current_user
 from .database import get_conn
+
+# Bank name -> FinTS PIN/TAN URL + BLZ, so "Konto verbinden" can offer a
+# search instead of making the user hunt down a FinTS server URL by
+# hand (real UX complaint, 2026-09-25) -- generated once from the
+# actively-maintained hbci4java project (used by Jameica/Hibiscus and
+# many other German FinTS clients), NOT bundled with python-fints
+# itself, which ships no institute database at all. Re-generate with:
+#   curl -sSL https://raw.githubusercontent.com/hbci4j/hbci4java/master/src/main/resources/blz.properties
+# and re-run the one-off parse (see docs/plans/2026-09-25-finanzen.md).
+_INSTITUTES_PATH = Path(__file__).parent / "fints_institutes.json"
+_institutes_cache: Optional[list[dict[str, str]]] = None
+
+
+def _load_institutes() -> list[dict[str, str]]:
+    global _institutes_cache
+    if _institutes_cache is None:
+        try:
+            _institutes_cache = json.loads(_INSTITUTES_PATH.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("could not load fints_institutes.json: %s", exc)
+            _institutes_cache = []
+    return _institutes_cache
+
+
+def search_institutes(query: str, limit: int = 20) -> list[dict[str, str]]:
+    q = (query or "").strip().lower()
+    if len(q) < 2:
+        return []
+    out = []
+    for inst in _load_institutes():
+        if q in inst["name"].lower() or q in inst["city"].lower() or q in inst["blz"]:
+            out.append(inst)
+            if len(out) >= limit:
+                break
+    return out
 
 log = logging.getLogger("yorik.bank_accounts")
 
@@ -105,6 +142,15 @@ class AccountUpdate(BaseModel):
 
 
 router = APIRouter(prefix="/api/bank", tags=["bank"])
+
+
+@router.get("/institutes")
+def list_institutes(q: str = "", user: dict = Depends(current_user)) -> list[dict[str, str]]:
+    """Bank search for the 'Konto verbinden' form — name/city/BLZ match
+    against the bundled institute list, so the user picks a bank
+    instead of hand-typing a FinTS server URL. Needs >= 2 characters;
+    empty otherwise (an empty query would just be the whole list)."""
+    return search_institutes(q)
 
 
 def _finance_space_id() -> Optional[int]:

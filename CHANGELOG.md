@@ -13,6 +13,22 @@ worklist.
 
 ### Added
 
+- **Finance: read-only bank accounts via FinTS.** New opt-in app at
+  `/finance` — connect a German bank account (Sparkasse, ING, any
+  FinTS PIN/TAN bank), see synced transactions and a by-category
+  total. One row per account (`bank_accounts`/`bank_transactions`,
+  `migrations_pg/162_bank_accounts.sql`), following the existing
+  spaces/`row_filter` visibility model: a private account only its
+  owner sees, a shared one (a joint account) is visible to everyone in
+  the household's Finance space, no admin exception. The PIN is typed
+  once, directly into the Finance app's own form — never through chat,
+  never seen by an assistant. Sync runs every 6h in the background
+  (`backend/bank_sync.py`) so chat questions ("was hab ich für
+  Lebensmittel ausgegeben") read a local copy, never live FinTS. Chat
+  skills: `list_bank_accounts`, `show_transactions`,
+  `spending_summary`. Read-only everywhere, by design — no code path
+  can initiate a transfer. Details and build log in
+  `docs/plans/2026-09-25-finanzen.md`.
 - **Schreiben: invoices, quotes and a valid e-invoice (third stage).**
   Line items as data (any number of them), sums in `Decimal` by the
   app, never by the model; § 14 UStG checklist beside the sheet;
