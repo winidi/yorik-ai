@@ -86,6 +86,12 @@ export function FinanceApp() {
   const [tab, setTab] = useState<Tab>("uebersicht");
   const [selectedAccount, setSelectedAccount] = useState<number | "all">("all");
   const [editingFocus, setEditingFocus] = useState(false);
+  const [filterCategory, setFilterCategory] = useState<string | null>(null);
+
+  function jumpToCategory(cat: string) {
+    setTab("umsaetze");
+    setFilterCategory(cat);
+  }
 
   async function refresh() {
     setLoading(true);
@@ -151,9 +157,14 @@ export function FinanceApp() {
 
   // Group consecutive transactions by day so a date is a heading, not
   // a repeated label on every row (three "Landkreis Peine" entries in
-  // a row all said "2026-09-25" three times).
+  // a row all said "2026-09-25" three times). A category total on its
+  // own doesn't say what it's made of -- clicking one filters this list
+  // down to exactly the transactions that add up to it.
+  const filteredTransactions = filterCategory
+    ? transactions.filter(t => (t.category || "unkategorisiert") === filterCategory)
+    : transactions;
   const txByDay: Array<[string, Transaction[]]> = [];
-  for (const t of transactions) {
+  for (const t of filteredTransactions) {
     const last = txByDay[txByDay.length - 1];
     if (last && last[0] === t.booking_date) last[1].push(t);
     else txByDay.push([t.booking_date, [t]]);
@@ -272,6 +283,7 @@ export function FinanceApp() {
                 onEdit={() => setEditingFocus(true)}
                 onCancel={() => setEditingFocus(false)}
                 onSave={saveFocusCategories}
+                onCategoryClick={jumpToCategory}
               />
 
               <RecurringSection
@@ -294,9 +306,17 @@ export function FinanceApp() {
                   <PeriodSelect days={days} onChange={setDays} />
                 </div>
                 {categoryRows.length === 0 && <p className="text-sm text-muted-foreground">Noch keine Umsätze.</p>}
-                <div className="space-y-2.5">
+                <div className="space-y-1">
                   {categoryRows.map(([cat, total]) => (
-                    <div key={cat}>
+                    <button
+                      key={cat}
+                      onClick={() => setFilterCategory(f => f === cat ? null : cat)}
+                      className={cn(
+                        "block w-full text-left rounded-md px-2 -mx-2 py-1.5 transition-colors",
+                        filterCategory === cat ? "bg-muted" : "hover:bg-muted/50",
+                      )}
+                      title="Klicken, um die zugehörigen Umsätze zu sehen"
+                    >
                       <div className="flex items-baseline justify-between text-sm mb-1">
                         <span className={cn(cat === "unkategorisiert" && "text-muted-foreground italic")}>{cat}</span>
                         <span className="tabular-nums">{eur(total)}</span>
@@ -307,13 +327,26 @@ export function FinanceApp() {
                           style={{ width: `${Math.max(3, (Math.abs(total) / maxAbs) * 100)}%` }}
                         />
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </section>
 
               <section>
-                <h2 className="text-[13px] font-medium text-muted-foreground mb-3">Umsätze</h2>
+                <div className="flex items-center gap-2 mb-3">
+                  <h2 className="text-[13px] font-medium text-muted-foreground">Umsätze</h2>
+                  {filterCategory && (
+                    <button
+                      onClick={() => setFilterCategory(null)}
+                      className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground hover:bg-muted/70"
+                    >
+                      {filterCategory} <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+                {filteredTransactions.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Keine Umsätze in dieser Kategorie im gewählten Zeitraum.</p>
+                )}
                 {txByDay.map(([day, txs]) => (
                   <div key={day} className="mb-4">
                     <div className="text-[11px] font-medium text-muted-foreground/80 mb-1.5">{dateHeading(day)}</div>
@@ -442,9 +475,10 @@ function AccountsList({ accounts, syncingId, onSync, onDelete, compact }: {
 // categories get pinned here is a per-user preference (GET/PUT
 // /api/bank/focus-categories), not hardcoded, so "Lebensmittel" and
 // "Verträge & Abos" are just the defaults, not the only options.
-function QuickStats({ byCategory, focusCategories, editing, onEdit, onCancel, onSave }: {
+function QuickStats({ byCategory, focusCategories, editing, onEdit, onCancel, onSave, onCategoryClick }: {
   byCategory: Map<string, number>; focusCategories: string[]; editing: boolean;
   onEdit: () => void; onCancel: () => void; onSave: (cats: string[]) => void;
+  onCategoryClick: (cat: string) => void;
 }) {
   const [draft, setDraft] = useState(focusCategories);
   useEffect(() => { setDraft(focusCategories); }, [focusCategories, editing]);
@@ -481,10 +515,15 @@ function QuickStats({ byCategory, focusCategories, editing, onEdit, onCancel, on
     <div className="relative border-y border-border mb-9">
       <div className="grid grid-cols-2 divide-x divide-border">
         {focusCategories.slice(0, 2).map(cat => (
-          <div key={cat} className="py-4 first:pr-4 last:pl-4">
+          <button
+            key={cat}
+            onClick={() => onCategoryClick(cat)}
+            className="text-left py-4 first:pr-4 last:pl-4 hover:bg-muted/50 transition-colors rounded-md"
+            title="Klicken, um die zugehörigen Umsätze zu sehen"
+          >
             <div className="text-[13px] text-muted-foreground mb-1 truncate">{cat}</div>
             <div className="text-xl font-semibold tabular-nums">{eur(Math.abs(byCategory.get(cat) || 0))}</div>
-          </div>
+          </button>
         ))}
       </div>
       <button
