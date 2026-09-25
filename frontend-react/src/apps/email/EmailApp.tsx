@@ -13,7 +13,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   Inbox, Star, Send, Archive, Trash2, Search, Pencil, AlertCircle,
-  Reply, ReplyAll, Forward, MoreVertical, Paperclip, Plus, CornerDownRight,
+  Reply, ReplyAll, Forward, MoreVertical, Paperclip, Plus, CornerDownRight, Workflow,
   RefreshCw, Settings as SettingsIcon, AlertTriangle, Loader2,
   Mail, Folder, FileEdit, ShieldAlert, Clock, MessageSquare, Sparkles,
   MailX, Menu, ArrowLeft, Mic, Square, X,
@@ -2128,6 +2128,7 @@ function Reader({
   // Refetch the full message detail when the selected id changes.
   const detail = useApi<EmailMessageDetail>(`/api/email/messages/${messageRow.id}`, []);
   const m = detail.data;
+  const navigate = useNavigate();
 
   // Remote-image gate. Off by default (privacy) — flipped per-message
   // when the user clicks "Show images". When the sender is on the
@@ -2219,6 +2220,15 @@ function Reader({
               to: "", subject: `Fwd: ${m.subject}`,
               body: `\n\n--- Forwarded message ---\nFrom: ${m.from_name || m.from_email}\nSubject: ${m.subject}\n\n${m.body_text || ""}`,
             })} />
+          {m.is_sent && (
+            <ToolbarBtn icon={Workflow} label="Antwort verfolgen (Pipelines)"
+              onClick={async () => {
+                try {
+                  const p = await api.post<{ id: number }>("/api/pipelines", { mail_id: messageRow.id });
+                  navigate(`/pipelines/${p.id}`);
+                } catch (e: any) { toast("Pipeline: " + e.message); }
+              }} />
+          )}
           <div className="w-px h-5 bg-border mx-1" />
           <ToolbarBtn
             icon={Star}

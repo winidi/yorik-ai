@@ -13,6 +13,23 @@ worklist.
 
 ### Added
 
+- **Pipelines, stage 1: follow a sent mail until the answer comes.**
+  New app at `/pipelines` (on for everyone; parents and admins can
+  switch it off per person). "Antwort verfolgen" on a sent mail drafts
+  a sequence (reminder, second reminder, hand-over; days and texts
+  editable); every reminder is approved once, and when it falls due
+  Yorik asks before sending. The answer is looked for in all of the
+  person's mail since the first message, spam included, not only in
+  the thread: other addresses of the same domain, a domain carrying
+  the company's name, numbers from the first mail, keywords. A possible
+  answer, a mailbox that is not current (sync old, errors, import
+  running, an unreadable mail) or the person writing themselves stop
+  the reminder and ask. Each send claims a fixed key first, so a
+  restart never sends twice. General engine (`backend/pipelines/`:
+  kinds, sources, engine, planner worker `pipelines`), migration
+  `163_pipelines.sql`, `tests/test_pipelines.py`, help page
+  `docs/help/21-pipelines.md`. Plan and later stages:
+  `docs/plans/2026-09-25-pipelines.md`.
 - **Finance: read-only bank accounts via FinTS.** New opt-in app at
   `/finance` — connect a German bank account (Sparkasse, ING, any
   FinTS PIN/TAN bank), see synced transactions and a by-category

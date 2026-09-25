@@ -1248,6 +1248,13 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
         except Exception as e:
             log.warning("suggestions trigger failed for msg %s: %s", inserted_id, e)
 
+    # Pipelines waiting for an answer look again on their next tick. Every
+    # mail counts here, quiet ones (imports, repairs) and spam included:
+    # an answer found late is still the answer.
+    if inserted_id:
+        from . import pipelines as _pipelines
+        _pipelines.poke(cfg["owner_user_id"])
+
     # Tier 1 vs Tier 2 routing for document attachments. The old code
     # auto-uploaded every PDF/DOCX/XLSX unconditionally, which turned
     # Paperless into a dumping ground for advertising and notification

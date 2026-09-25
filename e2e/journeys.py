@@ -496,6 +496,102 @@ def _():
     return r.ok, f"HTTP {r.status_code}: {r.text[:200]}"
 
 
+# ─── pipelines ──────────────────────────────────────────────────────
+PL = "Pipelines (follow a sent mail)"
+PIPE: dict = {}
+
+
+def wait_row(p, subject, seconds=60):
+    for _ in range(seconds):
+        m = row(p, subject)
+        if m:
+            return m
+        time.sleep(1)
+    return None
+
+
+@check(PL, "Anna follows her sent cancellation; the draft knows the address and the customer number")
+def _():
+    acc = anna.api("GET", "/api/email/accounts").json()[0]
+    r = anna.api("POST", "/api/email/send", json={
+        "account_id": acc["id"], "to": ["ben@example.test"], "subject": "Kündigung Testvertrag",
+        "body_text": "Hiermit kündige ich den Vertrag mit der Kundennummer KD-88442211 zum nächstmöglichen Termin."})
+    sent = next((m for m in anna.api("GET", "/api/pipelines/sent-mails").json()
+                 if m["subject"] == "Kündigung Testvertrag"), None)
+    if not (r.ok and sent):
+        return False, f"send {r.status_code}; in sent-mails: {bool(sent)}"
+    p = anna.api("POST", "/api/pipelines", json={"mail_id": sent["id"]})
+    j = p.json() if p.ok else {}
+    PIPE.update(j)
+    f = j.get("features") or {}
+    return (p.status_code == 201 and "ben@example.test" in f.get("addresses", [])
+            and "KD-88442211" in f.get("numbers", []), f"HTTP {p.status_code}: {json.dumps(f)[:200]}")
+
+
+@check(PL, "Ben cannot open Anna's pipeline; a child cannot manage the switch")
+def _():
+    pid = PIPE.get("id")
+    b = ben.api("GET", f"/api/pipelines/{pid}").status_code
+    c = clara.api("GET", "/api/pipelines/people").status_code
+    return b == 404 and c == 403, f"Ben {b}, Clara people {c}"
+
+
+@check(PL, "start needs every reminder approved; then it runs")
+def _():
+    pid = PIPE["id"]
+    early = anna.api("POST", f"/api/pipelines/{pid}/start").status_code
+    # Only the address counts here: every household mail shares example.test.
+    anna.api("PATCH", f"/api/pipelines/{pid}", json={
+        "features": {"addresses": ["ben@example.test"], "numbers": ["KD-88442211"]},
+        "config": {"send_days": "alle", "send_from_hour": 0, "send_to_hour": 24}})
+    steps = [{"action": "mail_senden", "after_days": 0, "payload": {
+                "to": ["ben@example.test"], "subject": "Re: Kündigung Testvertrag",
+                "body": "Guten Tag,\n\nbitte bestätigen Sie meine Kündigung.\n\nAnna"}},
+             {"action": "uebergabe", "after_days": 7, "payload": {}}]
+    d = anna.api("PUT", f"/api/pipelines/{pid}/steps", json={"steps": steps}).json()
+    step = d["steps"][0]
+    anna.api("POST", f"/api/pipelines/{pid}/steps/{step['id']}/approve", json={"approved": True})
+    r = anna.api("POST", f"/api/pipelines/{pid}/start")
+    PIPE.update(r.json() if r.ok else {})
+    return early == 409 and r.ok and r.json()["state"] == "laeuft", f"early {early}, start {r.status_code}: {r.text[:160]}"
+
+
+@check(PL, "the approved reminder goes out as a reply and arrives in Ben's Yorik")
+def _():
+    pid = PIPE["id"]
+    step = PIPE["steps"][0]
+    r = anna.api("POST", f"/api/pipelines/{pid}/steps/{step['id']}/send", json={})
+    got = wait_row(ben, "Re: Kündigung Testvertrag")
+    again = anna.api("POST", f"/api/pipelines/{pid}/steps/{step['id']}/send", json={}).status_code
+    return r.ok and got is not None and again == 409, f"send {r.status_code}: {r.text[:200]}; arrived {bool(got)}; again {again}"
+
+
+@check(PL, "Ben answers with a new mail (not in the thread); Yorik asks Anna whether that is the answer")
+def _():
+    pid = PIPE["id"]
+    acc = ben.api("GET", "/api/email/accounts").json()[0]
+    ben.api("POST", "/api/email/send", json={"account_id": acc["id"], "to": ["anna@example.test"],
+                                              "subject": "Ihr Schreiben",
+                                              "body_text": "Wir bestätigen die Kündigung zu KD-88442211."})
+    arrived = wait_row(anna, "Ihr Schreiben")
+    d = anna.api("POST", f"/api/pipelines/{pid}/check").json()
+    cands = (d.get("attention_detail") or {}).get("candidates") or []
+    ok = arrived is not None and d.get("attention") == "vielleicht" and any(c["subject"] == "Ihr Schreiben" for c in cands)
+    if ok:
+        mid = next(c["id"] for c in cands if c["subject"] == "Ihr Schreiben")
+        done = anna.api("POST", f"/api/pipelines/{pid}/answer", json={"mail_id": mid, "is_answer": True}).json()
+        ok = done.get("state") == "erledigt"
+    return ok, f"arrived {bool(arrived)}; attention {d.get('attention')}; candidates {[c['subject'] for c in cands]}"
+
+
+@check(PL, "Anna switches pipelines off for Clara; Clara cannot start one")
+def _():
+    r = anna.api("PUT", f"/api/pipelines/people/{clara.id}", json={"enabled": False})
+    me = clara.api("GET", "/api/pipelines/me").json()
+    anna.api("PUT", f"/api/pipelines/people/{clara.id}", json={"enabled": True})
+    return r.ok and me.get("enabled") is False, f"PUT {r.status_code}; Clara sees enabled={me.get('enabled')}"
+
+
 # ─── search ─────────────────────────────────────────────────────────
 S = "Search"
 

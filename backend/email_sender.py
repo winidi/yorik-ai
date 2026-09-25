@@ -43,10 +43,15 @@ def send(
     in_reply_to: Optional[str] = None,
     references: Optional[list[str]] = None,
     attachments: Optional[list[dict]] = None,  # [{filename, mimetype, content: bytes}, ...]
+    message_id: Optional[str] = None,
 ) -> dict[str, Any]:
     """Build + send. Returns {ok, message_id, error?}. Idempotent in
     the sense that re-calling generates a NEW message_id — there's no
-    de-dup, the caller is responsible for not double-clicking."""
+    de-dup, the caller is responsible for not double-clicking.
+
+    `message_id`: a caller-made Message-ID (pipelines record it before
+    sending, so after a crash they can look for the sent copy instead of
+    sending again). Made here when not given."""
     cfg = _load_account(account_id)
     if not cfg:
         return {"ok": False, "error": "account not found"}
@@ -78,7 +83,9 @@ def send(
         msg["Cc"] = ", ".join(cc)
     msg["Subject"] = _h(subject) or "(no subject)"
     msg["Date"] = formatdate(localtime=True)
-    message_id = make_msgid(domain=cfg["email"].split("@", 1)[1])
+    message_id = _h(message_id) or make_msgid(domain=cfg["email"].split("@", 1)[1])
+    if not message_id.startswith("<"):
+        message_id = f"<{message_id}>"
     msg["Message-ID"] = message_id
     if in_reply_to:
         # In-Reply-To MUST be wrapped in <>; we accept both forms.

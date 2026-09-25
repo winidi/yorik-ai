@@ -316,6 +316,20 @@ register(App(
     opt_in=True,
 ))
 
+# Pipelines — Yorik follows a matter until it is done: a sent mail
+# until the answer comes, later much more. On for everyone; parents and
+# admins can switch it off per person inside the app.
+register(App(
+    id="pipelines",
+    name="Pipelines",
+    icon="🔁",
+    description="Yorik stays on it: follows up on a sent mail until the answer comes, and asks you before every reminder.",
+    view_kind="native",
+    chrome="embedded",
+    tags=["bundled"],
+    aliases=["pipelines", "pipeline", "nachfassen", "erinnerungen", "dranbleiben", "follow up"],
+))
+
 register(App(
     id="finance",
     name="Finance",

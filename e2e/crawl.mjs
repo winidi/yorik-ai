@@ -26,7 +26,7 @@ if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(BASE) || BASE.endsWith(":8000")) {
 const ROUTES = [
   "/r/home", "/r/chat", "/r/tasks", "/r/calendar", "/r/briefing", "/r/email", "/r/whatsapp",
   "/r/contacts", "/r/documents", "/r/photos", "/r/recordings", "/r/compose", "/r/write",
-  "/r/board", "/r/ambient", "/r/settings",
+  "/r/board", "/r/ambient", "/r/pipelines", "/r/settings",
 ];
 const VIEWPORTS = {
   desktop: { viewport: { width: 1440, height: 900 } },

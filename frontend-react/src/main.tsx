@@ -8,6 +8,7 @@ import { BriefingApp } from "./apps/briefing/BriefingApp";
 import { RecordingsApp } from "@/apps/recordings/RecordingsApp";
 import { BoardApp } from "@/apps/board/BoardApp";
 import { FinanceApp } from "@/apps/finance/FinanceApp";
+import { PipelinesApp } from "@/apps/pipelines/PipelinesApp";
 import { RecorderDock } from "@/components/RecorderDock";
 import { WhatsAppApp } from "./apps/whatsapp/WhatsAppApp";
 import { CalendarApp } from "./apps/calendar/CalendarApp";
@@ -224,6 +225,8 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/briefing" element={<ErrorBoundary><BriefingApp /></ErrorBoundary>} />
             <Route path="/board" element={<ErrorBoundary><BoardApp /></ErrorBoundary>} />
             <Route path="/finance" element={<ErrorBoundary><FinanceApp /></ErrorBoundary>} />
+            <Route path="/pipelines" element={<ErrorBoundary><PipelinesApp /></ErrorBoundary>} />
+            <Route path="/pipelines/:id" element={<ErrorBoundary><PipelinesApp /></ErrorBoundary>} />
             <Route path="/recordings" element={<ErrorBoundary><RecordingsApp /></ErrorBoundary>} />
             <Route path="/recordings/:id" element={<ErrorBoundary><RecordingsApp /></ErrorBoundary>} />
             <Route path="/ambient" element={<ErrorBoundary><AmbientApp /></ErrorBoundary>} />
