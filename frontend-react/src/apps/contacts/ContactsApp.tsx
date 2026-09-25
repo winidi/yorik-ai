@@ -30,6 +30,7 @@ import { VcardImportModal } from "@/components/VcardImportModal";
 import { ContactProposals } from "@/components/ContactProposals";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { ListSkeleton } from "@/components/Skeleton";
 import { api, ApiError } from "@/lib/api";
 import { Dock } from "@/components/Dock";
 import { useAuth } from "@/components/AuthGate";
@@ -446,14 +447,12 @@ export function ContactsApp() {
             mobileDetailOpen && "hidden lg:flex",
           )}>
             {loading && contacts.length === 0 && (
-              <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
-                <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading…
-              </div>
+              <ListSkeleton rows={8} avatar className="px-2" />
             )}
             {!loading && contacts.length === 0 && (
               <div className="text-center py-12 text-muted-foreground text-sm italic">
                 {tab === "active"  && (query ? "No matches." : "No contacts yet. Add one with the button above.")}
-                {tab === "pending" && "Nothing pending — Yorik will park new contacts here when they auto-arrive from email/WhatsApp."}
+                {tab === "pending" && "Nothing to check. New people from email and WhatsApp land here first."}
                 {tab === "spam"    && "No contacts marked as spam."}
               </div>
             )}

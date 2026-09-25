@@ -343,19 +343,19 @@ export function BackupPicker({
             The toggles below add HEAVY data on top — expect snapshots in the GB range when on.
           </div>
           <IncludeToggle
-            label="📷 Photos (Immich library + Postgres dump)"
+            label="Photos (Immich library + Postgres dump)"
             desc="JPEGs + albums + faces + AI search metadata. Big — usually most of the backup."
             checked={includePhotos}
             onChange={setIncludePhotos}
           />
           <IncludeToggle
-            label="📄 Paperless (PDFs + scans)"
+            label="Documents (PDFs + scans)"
             desc="Filed documents + OCR. Sizeable; grows with your filing rate."
             checked={includePaperless}
             onChange={setIncludePaperless}
           />
           <IncludeToggle
-            label="💬 WhatsApp session (pairing secrets)"
+            label="WhatsApp session (pairing secrets)"
             desc="Without this, a restored Yorik forgets which phone is paired — you'd re-scan the QR code."
             checked={includeWhatsapp}
             onChange={setIncludeWhatsapp}

@@ -731,7 +731,7 @@ function Bubble({ m, contactName, isFirstInGroup, isLastInGroup }:
   } else if (m.media_kind === "image") {
     body = <ImageBubble msgId={m.msg_id} />;
   } else if (m.media_kind === "video") {
-    body = <span className="opacity-80 italic">🎥 Video</span>;
+    body = <span className="opacity-80 italic">Video</span>;
   } else if (m.media_kind === "document") {
     body = <span className="opacity-80 italic flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" />{m.filename || "Document"}</span>;
   } else if (m.media_kind === "audio") {
@@ -792,10 +792,10 @@ function Bubble({ m, contactName, isFirstInGroup, isLastInGroup }:
           {ts}
           {out && <CheckCheck className="w-3 h-3 opacity-80" />}
           {(m.media_paperless_id !== null && m.media_paperless_id !== undefined) && (
-            <span className="ml-1">· 📁 Filed</span>
+            <span className="ml-1">· Filed</span>
           )}
           {m.media_immich_id && (
-            <span className="ml-1">· 🖼 Photos</span>
+            <span className="ml-1">· Photos</span>
           )}
         </div>
       </div>

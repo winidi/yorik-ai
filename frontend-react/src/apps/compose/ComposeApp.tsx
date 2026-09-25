@@ -49,6 +49,7 @@ import {
   Globe, ExternalLink, Check, ImagePlus, ChevronUp, ChevronDown,
   UsersRound, Mic, Square, Copy, Upload,
   Mail, Phone, MapPin, Trash2,
+  StickyNote,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -1205,7 +1206,7 @@ export function ComposeApp() {
           <div className="border-t border-border bg-amber-50 dark:bg-amber-950/20 shrink-0">
             <div className="max-w-[820px] mx-auto px-6 py-3">
               <div className="flex items-start gap-2.5">
-                <span className="text-base leading-none mt-0.5">📝</span>
+                <StickyNote className="w-4 h-4 mt-0.5 text-amber-600 dark:text-amber-400 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-amber-700 dark:text-amber-400 font-semibold mb-1">
                     About this template

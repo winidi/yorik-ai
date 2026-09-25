@@ -16,7 +16,7 @@ import {
   Loader2, Check, Trash2, X, Clock, MapPin, Car,
   Eye, EyeOff, Share2, ShieldAlert, UsersRound,
   Sparkles, Search, AlertTriangle, Video, Repeat,
-  Download,
+  Download, Lock, Pencil,
 } from "lucide-react";
 
 // ── Travel-time helpers ────────────────────────────────────────────
@@ -2026,7 +2026,7 @@ function EventDialog({
             >
               {writableCals.map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.kind === "shared" ? "👥 " : ""}{c.name}
+                  {c.name}{c.kind === "shared" ? " (shared)" : ""}
                 </option>
               ))}
             </select>
@@ -2081,7 +2081,7 @@ function EventDialog({
                     : "border-border text-muted-foreground hover:text-foreground"
                 )}
               >
-                🔒 Private
+                <Lock className="w-3 h-3 inline -mt-0.5 mr-1" />Private
               </button>
             </div>
           </Field>
@@ -2251,7 +2251,7 @@ function AssigneeChip({ name, isMe, isEveryone, onRemove }:
         : isMe ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-card border border-border",
     )}>
       {!isEveryone && <UserAvatar name={name} size="xs" />}
-      {isEveryone && <span className="text-xs">👥</span>}
+      {isEveryone && <UsersRound className="w-3.5 h-3.5" />}
       <span>{name}</span>
       <button
         onClick={onRemove}
@@ -4229,9 +4229,9 @@ function ShareCalendarModal({
                 onChange={e => changeLevel(s, e.target.value as any)}
                 className="h-8 px-2 bg-muted border border-border rounded-md text-xs focus:outline-none"
               >
-                <option value="free_busy">🕐 Busy only</option>
-                <option value="read">👁 See details</option>
-                <option value="write">✏️ Edit</option>
+                <option value="free_busy">Busy only</option>
+                <option value="read">See details</option>
+                <option value="write">Edit</option>
               </select>
               <button
                 onClick={() => removeShare(s)}
@@ -4264,9 +4264,9 @@ function ShareCalendarModal({
               {/* Three radio-style cards, one-line explanations */}
               <div className="grid grid-cols-3 gap-1.5">
                 {([
-                  { v: "free_busy", emoji: "🕐", label: "Busy only", desc: "See when, not what" },
-                  { v: "read",      emoji: "👁", label: "Details",   desc: "Read titles & notes" },
-                  { v: "write",     emoji: "✏️", label: "Edit",      desc: "Add & change events" },
+                  { v: "free_busy", Icon: Clock, label: "Busy only", desc: "See when, not what" },
+                  { v: "read",      Icon: Eye, label: "Details",   desc: "Read titles & notes" },
+                  { v: "write",     Icon: Pencil, label: "Edit",      desc: "Add & change events" },
                 ] as const).map(opt => (
                   <button
                     key={opt.v}
@@ -4279,7 +4279,7 @@ function ShareCalendarModal({
                         : "border-border hover:bg-muted/50",
                     )}
                   >
-                    <div className="text-sm">{opt.emoji} <b className="font-medium text-xs">{opt.label}</b></div>
+                    <div className="text-sm flex items-center gap-1.5"><opt.Icon className="w-3.5 h-3.5" /><b className="font-medium text-xs">{opt.label}</b></div>
                     <div className="text-2xs text-muted-foreground mt-0.5">{opt.desc}</div>
                   </button>
                 ))}

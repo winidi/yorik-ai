@@ -40,6 +40,7 @@ import {
 import { AttachmentCard, attachmentIdsIn } from "./AttachmentCard";
 import { useAuth } from "@/components/AuthGate";
 import { MemberAvatar } from "@/components/PersonAvatar";
+import { DocKindIcon } from "@/components/DocKindIcon";
 import {
   useTriPane, MobileTopBar, MobileBackdrop,
   mobileAsideLeft,
@@ -2119,7 +2120,7 @@ function formatToolStatus(tool: string, args: Record<string, any> | undefined): 
     if (name === "recording_report") return "Holt den Bericht… (beim ersten Mal bis zu einer Minute)";
   }
   switch (tool) {
-    case "web_search":   return `🔍 Searching the web for "${head(a.query || "")}"…`;
+    case "web_search":   return `Searching the web for "${head(a.query || "")}"…`;
     case "web_extract":  {
       const urls = Array.isArray(a.urls) ? a.urls : [];
       const host = (() => {
@@ -2127,34 +2128,34 @@ function formatToolStatus(tool: string, args: Record<string, any> | undefined): 
         catch { return urls[0] || ""; }
       })();
       const more = urls.length > 1 ? ` (+${urls.length - 1})` : "";
-      return `📄 Reading ${head(host, 40)}${more}…`;
+      return `Reading ${head(host, 40)}${more}…`;
     }
-    case "find_contact":           return `👤 Looking up contact "${head(a.query || "")}"…`;
-    case "list_contacts_for_picking": return `👥 Browsing the address book…`;
-    case "find_document":          return `📚 Looking for a document about "${head(a.query || "")}"…`;
-    case "find_photo":             return `🖼 Looking for a photo of "${head(a.query || "")}"…`;
-    case "find_provider_nearby":   return `📍 Looking for ${head(a.poi || "")} near ${head(a.near || "you")}…`;
-    case "find_known_provider":    return `🧠 Checking who you already know as a ${head(a.category || "provider")}…`;
-    case "calculate_travel_time":  return `🚗 Calculating travel time to ${head(a.to || "")}…`;
-    case "compose_check_recipient": return `✉️ Checking the recipient address…`;
-    case "compose_check_template_args": return `✉️ Checking the template fields…`;
-    case "compose_draft":          return `✉️ Drafting…`;
-    case "find_recipient_address_from_documents": return `🗂 Looking for the address in old documents…`;
-    case "propose_inline_photo":   return `🖼 Looking for photo suggestions…`;
-    case "add_calendar_event":     return `📅 Adding an event…`;
-    case "update_calendar_event":  return `📅 Updating an event…`;
-    case "delete_calendar_event":  return `📅 Removing an event…`;
-    case "check_calendar":         return `📅 Checking your calendar…`;
-    case "add_task":               return `✅ Adding a task…`;
-    case "check_tasks":            return `✅ Checking your tasks…`;
-    case "add_bill":               return `💰 Adding a bill…`;
-    case "check_bills":            return `💰 Checking your bills…`;
-    case "run_sql":                return `🗃 Querying the database…`;
-    case "search_documents":       return `📚 Searching your documents…`;
-    case "trigger_connector":      return `🔌 Calling ${head(a.name || "connector")}…`;
-    case "navigate_to":            return `🧭 Opening ${head(a.app || "app")}…`;
-    case "yorik_help":              return `📖 Checking the docs${a.topic ? ` (${head(a.topic)})` : ""}…`;
-    default:                       return `⚙ Calling ${tool}…`;
+    case "find_contact":           return `Looking up contact "${head(a.query || "")}"…`;
+    case "list_contacts_for_picking": return `Browsing the address book…`;
+    case "find_document":          return `Looking for a document about "${head(a.query || "")}"…`;
+    case "find_photo":             return `Looking for a photo of "${head(a.query || "")}"…`;
+    case "find_provider_nearby":   return `Looking for ${head(a.poi || "")} near ${head(a.near || "you")}…`;
+    case "find_known_provider":    return `Checking who you already know as a ${head(a.category || "provider")}…`;
+    case "calculate_travel_time":  return `Calculating travel time to ${head(a.to || "")}…`;
+    case "compose_check_recipient": return `Checking the recipient address…`;
+    case "compose_check_template_args": return `Checking the template fields…`;
+    case "compose_draft":          return `Drafting…`;
+    case "find_recipient_address_from_documents": return `Looking for the address in old documents…`;
+    case "propose_inline_photo":   return `Looking for photo suggestions…`;
+    case "add_calendar_event":     return `Adding an event…`;
+    case "update_calendar_event":  return `Updating an event…`;
+    case "delete_calendar_event":  return `Removing an event…`;
+    case "check_calendar":         return `Checking your calendar…`;
+    case "add_task":               return `Adding a task…`;
+    case "check_tasks":            return `Checking your tasks…`;
+    case "add_bill":               return `Adding a bill…`;
+    case "check_bills":            return `Checking your bills…`;
+    case "run_sql":                return `Looking it up…`;
+    case "search_documents":       return `Searching your documents…`;
+    case "trigger_connector":      return `Calling ${head(a.name || "connector")}…`;
+    case "navigate_to":            return `Opening ${head(a.app || "app")}…`;
+    case "yorik_help":              return `Checking the help pages${a.topic ? ` (${head(a.topic)})` : ""}…`;
+    default:                       return "Working on it…";
   }
 }
 
@@ -2401,13 +2402,12 @@ function ComposeDraftCard({
     email:   "E-Mail",
     memo:    "Notiz",
   };
-  const kindIcon = kind === "invoice" || kind === "offer" ? "💶" : kind === "email" ? "📧" : "📄";
   const hasAlts = (alternates?.length ?? 0) > 0;
   return (
     <div className="mt-2 border border-border rounded-xl bg-card/80 overflow-hidden max-w-md">
       <div className="px-3 pt-2.5 pb-2">
         <div className="flex items-center gap-1.5 mb-1.5">
-          <span className="text-base leading-none">{kindIcon}</span>
+          <DocKindIcon kind={kind} />
           <span className="text-xs font-semibold">{kindLabel[kind] || "Dokument"} vorbereitet</span>
           <span className="text-2xs text-muted-foreground font-mono ml-auto">#{draftId}</span>
         </div>
@@ -2513,13 +2513,6 @@ function TemplatePickerCard({
     window.dispatchEvent(new CustomEvent("yorik:chat-seed-and-send", { detail: { seed } }));
   };
 
-  const kindIcon = (kind?: string): string => {
-    if (kind === "invoice" || kind === "offer") return "💶";
-    if (kind === "email") return "📧";
-    if (kind === "memo")  return "📝";
-    return "📄";
-  };
-
   if (!templates.length) {
     return (
       <div className="mt-2 px-3 py-2 rounded-xl bg-amber-500/[0.06] border border-amber-500/30 max-w-md text-xs text-foreground">
@@ -2547,7 +2540,7 @@ function TemplatePickerCard({
               className="w-full text-left px-3 py-2 hover:bg-blue-500/[0.06] transition group"
             >
               <div className="flex items-center gap-2">
-                <span className="text-base leading-none">{kindIcon(t.kind)}</span>
+                <DocKindIcon kind={t.kind} />
                 <span className="text-sm font-medium flex-1 truncate">{t.name}</span>
                 <span className="text-2xs text-blue-500 opacity-0 group-hover:opacity-100 transition">
                   pick →
@@ -4089,13 +4082,13 @@ function describeStep(tool: string, args: Record<string, any> | undefined): stri
   };
   if (tool === "skill_view") return "Looked up how to do it";
   const line = formatToolStatus(tool, args);
-  if (line.startsWith("⚙ Calling")) {
+  if (line === "Working on it…") {
     if ((tool === "invoke_skill" || tool === "use_skill") && args?.name) {
       return humanize(String(args.name));
     }
     return humanize(tool);
   }
-  return line.replace(/^[^\p{L}\p{N}"]+/u, "").replace(/…$/, "");
+  return line.replace(/…$/, "");
 }
 
 

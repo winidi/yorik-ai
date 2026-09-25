@@ -180,3 +180,16 @@ body {
 .min-h-svh {
   touch-action: pan-y;
 }
+
+/* Ticking a to-do: the box fills in your colour with one small pop.
+   The only celebratory motion in the app, and skipped when the system
+   asks for reduced motion. */
+@keyframes tick-pop {
+  0%   { transform: scale(0.6); }
+  60%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.tick-pop { animation: tick-pop 260ms cubic-bezier(.3,1.4,.5,1); }
+@media (prefers-reduced-motion: reduce) {
+  .tick-pop { animation: none; }
+}

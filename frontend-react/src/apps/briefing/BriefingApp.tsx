@@ -364,7 +364,7 @@ function RenderSection({ section }: { section: SectionResult }) {
   }
   if (section.render === "list") {
     const lines = section.lines || [];
-    if (lines.length === 0) return <p className="text-sm text-muted-foreground italic">Nothing to show.</p>;
+    if (lines.length === 0) return <p className="text-sm text-muted-foreground">Nothing here today.</p>;
     return (
       <ul className="space-y-1.5 text-sm">
         {lines.map((l, i) => (

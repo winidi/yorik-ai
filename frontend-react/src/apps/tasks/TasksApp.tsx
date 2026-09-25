@@ -38,6 +38,8 @@ import { Dock } from "@/components/Dock";
 import { useAuth } from "@/components/AuthGate";
 import type { Task } from "../calendar/types";
 import { toast } from "@/components/Toast";
+import { ListSkeleton } from "@/components/Skeleton";
+import { TickMark } from "@/components/TickMark";
 import { MemberStack } from "@/components/PersonAvatar";
 
 const ROLE = "admin";
@@ -860,9 +862,7 @@ export function TasksApp() {
             distribute across columns instead of one tall middle column. */}
         <div className="flex-1">
           {tasksApi.loading && tasks.length === 0 && (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading…
-            </div>
+            <ListSkeleton rows={4} />
           )}
           {!tasksApi.loading && renderedGroups.length === 0 && (
             <div className="text-center py-12 text-muted-foreground text-sm">
@@ -1335,9 +1335,7 @@ function TaskRow({
           role="checkbox"
           aria-checked={!!task.done}
         >
-          {task.done
-            ? <CheckSquare className="w-5 h-5 md:w-4 md:h-4 text-emerald-500" />
-            : <Square className="w-5 h-5 md:w-4 md:h-4 text-muted-foreground hover:text-foreground" />}
+          <TickMark done={!!task.done} />
         </button>
         <button
           onClick={clickGuarded}
@@ -1533,9 +1531,7 @@ function TaskRow({
                     role="checkbox"
                     aria-checked={!!c.done}
                   >
-                    {c.done
-                      ? <CheckSquare className="w-4 h-4 md:w-3.5 md:h-3.5 text-emerald-500" />
-                      : <Square className="w-4 h-4 md:w-3.5 md:h-3.5 text-muted-foreground hover:text-foreground" />}
+                    <TickMark done={!!c.done} size={15} />
                   </button>
                   <span className={cn(
                     "flex-1 text-xs truncate",

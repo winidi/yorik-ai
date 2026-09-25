@@ -45,6 +45,7 @@ import {
   History, RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DocKindIcon } from "@/components/DocKindIcon";
 import { api } from "@/lib/api";
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -94,11 +95,6 @@ const KIND_LABEL: Record<string, string> = {
   memo:    "Notiz",
 };
 
-function kindIcon(kind: string): string {
-  if (kind === "invoice" || kind === "offer") return "💶";
-  if (kind === "email") return "📧";
-  return "📄";
-}
 
 /** Default send method based on the draft's kind. Invoices + formal
  *  letters lean PDF; emails kind obviously lean email; everything else
@@ -425,7 +421,7 @@ export function InlineComposeDraft({
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="px-3 pt-2.5 pb-2 border-b border-border/60">
         <div className="flex items-center gap-1.5 mb-1.5">
-          <span className="text-base leading-none">{kindIcon(k)}</span>
+          <DocKindIcon kind={k} />
           <span className="text-xs font-semibold">{KIND_LABEL[k] || "Dokument"}</span>
           <span className="text-2xs text-muted-foreground font-mono">#{draftId}</span>
           {saveState === "saving" && (
