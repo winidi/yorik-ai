@@ -97,12 +97,13 @@ function Overview() {
 
       {items === null && <div className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Lädt…</div>}
 
-      {items && items.length === 0 && (
-        <div className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground leading-relaxed">
-          Noch keine Pipeline. Nimm eine Mail, die du geschickt hast, zum Beispiel eine Kündigung oder eine
-          Anfrage: Yorik schaut, ob eine Antwort kommt, auch von einer anderen Adresse, und schlägt dir
-          sonst eine Erinnerung vor.
-        </div>
+      {items && items.length === 0 && me?.enabled !== false && (
+        <FirstSteps onPicked={async (mailId) => {
+          try {
+            const p = await api.post<Pipeline>("/api/pipelines", { mail_id: mailId });
+            navigate(`/pipelines/${p.id}`);
+          } catch (e: any) { toast(e?.message || "Anlegen fehlgeschlagen", "error"); }
+        }} />
       )}
 
       {needs.length > 0 && (
@@ -176,6 +177,61 @@ function Row({ p }: { p: Pipeline }) {
       )}
       <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
     </button>
+  );
+}
+
+/** The empty page: how it works in three steps, and the latest sent
+ *  mails right here, so the first pipeline is one tap away. */
+function FirstSteps({ onPicked }: { onPicked: (id: number) => void }) {
+  const [mails, setMails] = useState<SentMail[] | null>(null);
+  const [busy, setBusy] = useState<number | null>(null);
+  useEffect(() => {
+    api.get<SentMail[]>("/api/pipelines/sent-mails").then(m => setMails(m.slice(0, 6))).catch(() => setMails([]));
+  }, []);
+  const steps = [
+    ["Mail wählen", "eine Kündigung, Anfrage oder Forderung, die du geschickt hast"],
+    ["Ablauf freigeben", "Yorik schlägt Erinnerungen vor; du passt Tage und Texte an und gibst jede frei"],
+    ["Yorik bleibt dran", "er sucht die Antwort in all deiner Post, auch von anderen Adressen, und fragt dich vor jeder Erinnerung"],
+  ];
+  return (
+    <div className="space-y-6">
+      <ol className="grid gap-2 sm:grid-cols-3">
+        {steps.map(([title, text], i) => (
+          <li key={title} className="rounded-xl border border-border bg-card p-3.5">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-5 h-5 rounded-full bg-primary/15 text-primary text-[11px] font-semibold flex items-center justify-center">{i + 1}</span>
+              <span className="text-sm font-medium">{title}</span>
+            </div>
+            <p className="text-[12px] text-muted-foreground leading-snug">{text}</p>
+          </li>
+        ))}
+      </ol>
+      <div>
+        <div className="text-[13px] font-medium text-muted-foreground mb-2">Zuletzt gesendet — welche soll Yorik verfolgen?</div>
+        {mails === null && <div className="text-sm text-muted-foreground">Lädt…</div>}
+        {mails && mails.length === 0 && (
+          <div className="text-sm text-muted-foreground">Noch keine gesendeten Mails in Yorik. Schreib eine in Mail, dann taucht sie hier auf.</div>
+        )}
+        <div className="space-y-2">
+          {mails?.map(m => (
+            <div key={m.id} className="rounded-xl border border-border bg-card px-4 py-3 flex items-center gap-3">
+              <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium truncate">{m.subject || "(ohne Betreff)"}</div>
+                <div className="text-[12px] text-muted-foreground truncate">an {m.to.join(", ")} · {relDay(m.date)}</div>
+              </div>
+              <button
+                disabled={busy !== null}
+                onClick={() => { setBusy(m.id); onPicked(m.id); }}
+                className="shrink-0 text-[13px] rounded-md border border-primary/40 text-primary px-2.5 py-1 hover:bg-primary/10 disabled:opacity-40 flex items-center gap-1"
+              >
+                {busy === m.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null} Verfolgen
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
