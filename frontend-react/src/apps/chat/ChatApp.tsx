@@ -39,6 +39,7 @@ import {
 } from "./AttachmentStashTray";
 import { AttachmentCard, attachmentIdsIn } from "./AttachmentCard";
 import { useAuth } from "@/components/AuthGate";
+import { MemberAvatar } from "@/components/PersonAvatar";
 import {
   useTriPane, MobileTopBar, MobileBackdrop,
   mobileAsideLeft,
@@ -1557,6 +1558,7 @@ function MessageBubble({
   onAttach?: (item: StashItem) => void;
   isAttached?: (url: string, filename: string) => boolean;
 }) {
+  const me = useAuth().user;
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
   // Inline edit — local to the bubble. Save commits via onEditContent
@@ -1586,16 +1588,15 @@ function MessageBubble({
   }
   return (
     <div className={cn("flex gap-3 group", isUser ? "flex-row-reverse" : "flex-row", isLast && "pb-2")}>
-      <div className={cn(
-        "w-7 h-7 md:w-9 md:h-9 rounded-full shrink-0 flex items-center justify-center mt-0.5",
-        isUser
-          ? "bg-gradient-to-br from-blue-500 to-violet-500 text-white"
-          : "bg-gradient-to-br from-violet-500/30 to-blue-500/30",
-      )}>
-        {isUser
-          ? <span className="text-xs font-semibold">You</span>
-          : <Sparkles className="w-4 h-4 text-violet-500" />}
-      </div>
+      {isUser ? (
+        // Your own face (photo or initials on your colour), like on the
+        // family board, instead of a generic "You" disc.
+        <MemberAvatar who={String(me?.id ?? "")} name={me?.name} size={32} className="mt-0.5 md:w-9 md:h-9" />
+      ) : (
+        <div className="w-7 h-7 md:w-9 md:h-9 rounded-full shrink-0 flex items-center justify-center mt-0.5 bg-gradient-to-br from-violet-500/30 to-blue-500/30">
+          <Sparkles className="w-4 h-4 text-violet-500" />
+        </div>
+      )}
       <div className={cn(
         // Mobile: bubbles fill the available width (minus avatar +
         // gap). At 375px viewport this gives ~270px of text width

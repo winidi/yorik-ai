@@ -38,6 +38,7 @@ import { Dock } from "@/components/Dock";
 import { useAuth } from "@/components/AuthGate";
 import type { Task } from "../calendar/types";
 import { toast } from "@/components/Toast";
+import { MemberStack } from "@/components/PersonAvatar";
 
 const ROLE = "admin";
 
@@ -1440,7 +1441,7 @@ function TaskRow({
               </span>
             )}
             {task.assignees && task.assignees.length > 0 && (
-              <span className="hidden md:inline opacity-60">{task.assignees.map(a => a.name).join(", ")}</span>
+              <MemberStack people={task.assignees.map(a => ({ id: String(a.user_id), name: a.name }))} size={18} />
             )}
           </div>
         </button>

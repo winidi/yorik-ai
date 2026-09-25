@@ -18,7 +18,7 @@ import {
   X, ExternalLink, Eye, FolderOpen, Sparkles, FileImage, FileCode,
   File as FileIcon, AlertCircle, Plus, Check, Bookmark, BookmarkCheck,
   Type, CheckCircle2, XCircle, Info, Mail,
-  Tag as TagIcon, User as UserIcon2, Files as FilesIcon, Calendar as CalIcon, ChevronRight,
+  Tag as TagIcon, User as UserIcon2, Files as FilesIcon, Calendar as CalIcon, ChevronRight, Lock, UsersRound, Briefcase, House,
 } from "lucide-react";
 import { useDocBucket } from "./DocBucketContext";
 import { cn } from "@/lib/utils";
@@ -792,15 +792,15 @@ function DocumentRow({ doc, active, onClick, onVisibilityChanged }:
 // learns the model in one read instead of having to dig into docs.
 
 const VISIBILITY_META: Record<DocVisibility, {
-  label: string; emoji: string; color: string; desc: string;
+  label: string; Icon: React.ComponentType<{ className?: string }>; color: string; desc: string;
 }> = {
-  private:  { label: "Private",  emoji: "🔒", color: "bg-red-500/15 text-red-500",
+  private:  { label: "Private",  Icon: Lock, color: "bg-red-500/15 text-red-500",
               desc: "Only you see this." },
-  parents:  { label: "Parents",  emoji: "🧑‍🤝‍🧑", color: "bg-violet-500/15 text-violet-500",
+  parents:  { label: "Parents",  Icon: UsersRound, color: "bg-violet-500/15 text-violet-500",
               desc: "Visible to the adults of the household, not to the children's accounts." },
-  business: { label: "Business", emoji: "💼", color: "bg-blue-500/15 text-blue-500",
+  business: { label: "Business", Icon: Briefcase, color: "bg-blue-500/15 text-blue-500",
               desc: "Visible to everyone in the business group." },
-  shared:   { label: "Shared",   emoji: "👥", color: "bg-emerald-500/15 text-emerald-500",
+  shared:   { label: "Shared",   Icon: House, color: "bg-emerald-500/15 text-emerald-500",
               desc: "Visible to the whole household, the children's accounts included." },
 };
 
@@ -850,7 +850,7 @@ function VisibilityChip({
         )}
         title={`${meta.label} — ${meta.desc} (click to change)`}
       >
-        <span>{meta.emoji}</span>
+        <meta.Icon className="w-3 h-3" />
         <span className="">{meta.label}</span>
       </button>
       {open && (
@@ -870,7 +870,7 @@ function VisibilityChip({
                   current === v && "bg-muted/40",
                 )}
               >
-                <span className="text-sm leading-none mt-0.5">{m.emoji}</span>
+                <m.Icon className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="font-medium">{m.label}</div>
                   <div className="text-2xs text-muted-foreground">{m.desc}</div>
