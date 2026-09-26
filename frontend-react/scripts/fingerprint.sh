@@ -14,6 +14,10 @@
 # .tsbuildinfo TypeScript incremental cache (regenerated every build),
 # and dotfiles (.git, .DS_Store).
 set -euo pipefail
+# The file order must not depend on the machine's language: a German and
+# a C.UTF-8 locale sort "_" and "-" differently, and the fingerprint then
+# never matches on a fresh install (found by scripts/test-fresh-install.sh).
+export LC_ALL=C
 cd "$(dirname "$0")/.."
 
 find . -type f \
@@ -23,7 +27,7 @@ find . -type f \
     -not -name '*.tsbuildinfo' \
     -not -name '.*' \
     -print0 \
-  | sort -z \
+  | LC_ALL=C sort -z \
   | xargs -0 sha256sum \
   | sha256sum \
   | awk '{print $1}'

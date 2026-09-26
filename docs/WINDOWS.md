@@ -1,36 +1,44 @@
-# Yorik on Windows (WSL2)
+# Yorik on Windows
 
-Yorik is a Linux server. On Windows it runs inside WSL2, the Ubuntu that
-Docker Desktop uses anyway. Nothing about the install changes; what
-changes is the box around it. This page lists the four things that trip
-people up and the one honest caveat.
+Yorik runs on Windows as the same Docker stack as everywhere else, in
+Docker Desktop on WSL2. The setup does all of that for you.
 
-**The caveat first:** a gaming PC that is off at night is not a home
-server. Calendar reminders, the WhatsApp bridge and email fetching want
-to run around the clock. WSL2 is the right way to *try* Yorik on the PC
-you already have. For the family, a used mini-PC or an old laptop with
-Ubuntu is the setup the rest of the docs assume, and the Windows PC then
-uses Yorik in the browser.
+**The caveat first:** a PC that is off at night is not a home server.
+Calendar reminders, the WhatsApp bridge and email fetching want to run
+around the clock. Windows is the right way to *try* Yorik on the PC you
+already have. For the family, a used mini PC with the install stick
+([INSTALL.md](INSTALL.md#a-mini-pc-as-the-familys-box)) is the better
+home, and the Windows PC then uses Yorik in the browser.
 
 ## Install
 
-1. **WSL2 with Ubuntu.** In PowerShell as administrator:
-   ```
-   wsl --install -d Ubuntu-24.04
-   ```
-   Reboot, open "Ubuntu" from the Start menu, pick a user name.
-2. **Docker Desktop** with the WSL2 backend (default). In Docker Desktop →
-   Settings → Resources → WSL integration, enable it for `Ubuntu-24.04`.
-3. In the Ubuntu window, follow [INSTALL.md](INSTALL.md) from step 1. The
-   installer sees an Ubuntu with Docker and does what it always does.
+1. From the [latest release](https://github.com/winidi/yorik-ai/releases/latest)
+   download `Yorik-Setup-Windows.zip` and unzip it.
+2. Double-click `Yorik-Setup.cmd`, allow administrator rights.
 
-## The four stumbling blocks
+Windows 10 22H2 or Windows 11. What it does:
 
-### 1. Memory
+- turns on WSL2 and installs Docker Desktop with winget, if missing.
+  Windows then restarts **once**; after you sign in again the setup
+  continues by itself (Docker Desktop may ask you to accept its terms —
+  it's free for personal use and small businesses);
+- sets Docker Desktop to start with Windows;
+- puts Yorik in `%LOCALAPPDATA%\Yorik`, backups in `Documents\Yorik Backups`;
+- starts Yorik, puts a "Yorik" shortcut on the desktop and opens the
+  browser, where you create your account.
 
-WSL2 takes half of the machine's RAM by default. With 16 GB that is 8 GB
-for Ubuntu *and* Docker together, which is tight for Supabase + Immich +
-Paperless. Create `C:\Users\<you>\.wslconfig`:
+The first start downloads several GB and can take up to 20 minutes.
+
+## After the install
+
+**Phones at home** reach Yorik at `http://<this PC's address>:8000`. If
+Windows asks whether Docker may accept connections, allow it for private
+networks. **On the go**: Yorik → Settings → System → Phones, sign in to
+Tailscale once.
+
+**Memory.** WSL2 takes half the RAM by default. With 16 GB that's tight
+for Yorik, photos and documents together. Create
+`C:\Users\<you>\.wslconfig`:
 
 ```
 [wsl2]
@@ -38,57 +46,32 @@ memory=12GB
 swap=4GB
 ```
 
-then `wsl --shutdown` in PowerShell and reopen Ubuntu.
+then in PowerShell `wsl --shutdown` and start Docker Desktop again.
 
-### 2. Where the data lives
+**Keep it running.** Yorik runs while Docker Desktop runs. Switch off
+sleep while you rely on it (Settings → System → Power).
 
-Keep Yorik and its `data/` directory on the Linux side (`~/yorik-ai`),
-never under `/mnt/c/...`. Files on the Windows drive go through a
-translation layer that makes Immich's photo scanning and Paperless OCR
-many times slower.
+**Updates** come through Yorik itself: Settings → System → Updates.
 
-### 3. Reaching Yorik from phones and tablets
+**By hand**, in PowerShell:
 
-WSL2 has its own network. Two ways out:
+```
+cd $env:LOCALAPPDATA\Yorik
+docker compose ps
+docker compose logs -f yorik
+docker compose stop
+docker compose up -d
+```
 
-- **Windows 11 22H2 or newer:** add to `.wslconfig`
-  ```
-  [wsl2]
-  networkingMode=mirrored
-  ```
-  Ubuntu then shares the PC's address and `http://<pc-name>:8000` works
-  from any device on the Wi-Fi. Allow port 8000 in Windows Defender
-  Firewall (inbound rule, TCP 8000).
-- **Older Windows:** forward the port in PowerShell as administrator,
-  once per boot or as a scheduled task:
-  ```
-  netsh interface portproxy add v4tov4 listenport=8000 listenaddress=0.0.0.0 connectport=8000 connectaddress=$(wsl hostname -I)
-  ```
-
-### 4. Starting at boot
-
-WSL2 does not start services when Windows boots. Options, best first:
-
-- Enable systemd in WSL (`/etc/wsl.conf`, `[boot] systemd=true`, then
-  `wsl --shutdown`). The `yorik` unit the installer creates then behaves
-  as on a real Ubuntu, as soon as any WSL shell has been opened once.
-- Task Scheduler: a task at logon that runs `wsl -d Ubuntu-24.04 -u <you> -- sudo systemctl start yorik`.
-
-Also switch off "fast startup" and set the PC to never sleep while you
-rely on it.
+**Removing Yorik:** `docker compose down -v` in that folder deletes Yorik
+and all its data (the backups folder stays), then delete the folder.
 
 ## Windows as a client
 
-Everything a Windows user usually wants works without WSL:
+Against a Yorik on another machine, nothing needs installing:
 
 - Yorik in the browser (`http://<server>:8000`).
 - [Dictate](https://github.com/winidi/dictate) with the *Yorik* provider
   sends recordings to the server; no model on the laptop.
 - Hermes or any MCP client connects to `http://<server>:8000/mcp` with a
   personal token, see [MCP.md](MCP.md).
-
-## Not supported
-
-A native Windows install without WSL2. The containers Yorik bundles are
-Linux images; a PowerShell installer would end up starting the same
-Ubuntu underneath.

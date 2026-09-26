@@ -37,10 +37,31 @@ _TTL_S = 300
 JOIN_PAGE_PORT = int(os.getenv("YORIK_JOIN_PAGE_PORT", "10000"))
 
 
+_SOCKET = "/var/run/tailscale/tailscaled.sock"
+# CLI command → tailscaled local API path, for the container install
+# where only the socket is mounted (no tailscale binary inside).
+_LOCALAPI = {("status", "--json"): "/localapi/v0/status",
+             ("serve", "status", "--json"): "/localapi/v0/serve-config"}
+
+
+def _localapi(args: tuple[str, ...]) -> Optional[dict[str, Any]]:
+    path = _LOCALAPI.get(args)
+    if not path or not os.path.exists(_SOCKET):
+        return None
+    try:
+        transport = httpx.HTTPTransport(uds=_SOCKET)
+        with httpx.Client(transport=transport, timeout=6) as c:
+            r = c.get(f"http://local-tailscaled.sock{path}", headers={"Sec-Tailscale": "localapi"})
+        return r.json() if r.status_code == 200 else None
+    except Exception as exc:  # noqa: BLE001
+        log.info("tailscale local API %s failed: %s", path, exc)
+        return None
+
+
 def _run_json(*args: str) -> Optional[dict[str, Any]]:
     exe = shutil.which("tailscale")
     if not exe:
-        return None
+        return _localapi(tuple(args))
     try:
         out = subprocess.run([exe, *args], capture_output=True, text=True, timeout=6)
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -74,6 +95,15 @@ def self_info() -> Optional[dict[str, str]]:
             return None
         return {"dns_name": dns, "node_id": me.get("ID") or ""}
     return _cached("self", load)
+
+
+def login_state() -> dict[str, Any]:
+    """{'state': 'Running'|'NeedsLogin'|…, 'auth_url': link to sign this
+    machine in, if tailscaled is waiting for that}. Not cached: the
+    settings card polls it while someone signs in."""
+    st = _run_json("status", "--json") or {}
+    return {"state": st.get("BackendState") or ("missing" if not st else "unknown"),
+            "auth_url": st.get("AuthURL") or None}
 
 
 def base_url() -> Optional[str]:

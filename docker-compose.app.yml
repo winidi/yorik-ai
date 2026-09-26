@@ -1,0 +1,36 @@
+# Yorik itself as a container (the "--container" install). Used next to
+# docker-compose.yml (photos, documents, WhatsApp) and the Supabase
+# stack, which start.sh brings up first.
+#
+#   docker compose -f docker-compose.app.yml up -d --build yorik
+services:
+  yorik:
+    build: .
+    image: yorik-ai:local
+    container_name: yorik-app
+    restart: unless-stopped
+    # Host networking: same ports and same localhost as the classic
+    # install (database :5435, model :8080/:11434, Immich :2283 …), and
+    # `tailscale serve` keeps proxying localhost:8000.
+    network_mode: host
+    # The host user's id (start.sh exports it), so files in data/ stay
+    # yours and the classic scripts (backup, uninstall) can read them.
+    user: "${YORIK_UID:-1000}:${YORIK_GID:-1000}"
+    environment:
+      HOME: /app/data/.home
+    env_file: config.env
+    volumes:
+      - ./data:/app/data
+      - ./config.env:/app/config.env:ro
+      # The database password lives here (scripts/bootstrap-supabase.sh);
+      # Yorik reads it the same way as the classic install.
+      - ./infra/supabase/docker/.env:/app/infra/supabase/docker/.env:ro
+      # The host's Tailscale socket, read-only: Yorik asks tailscaled for
+      # its own tailnet address (for invite links) over the local API.
+      - /var/run/tailscale:/var/run/tailscale:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10m

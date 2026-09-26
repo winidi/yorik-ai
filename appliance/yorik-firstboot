@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# First boot of a Yorik box: run the normal installer as the yorik user,
+# once. The console (yorik-console on tty1) shows progress and, when
+# done, the QR code. Re-runs on the next boot if it didn't finish
+# (no network yet, power cut), because the done-marker is only written
+# at the end.
+set -uo pipefail
+LOG=/var/log/yorik-firstboot.log
+DONE=/var/lib/yorik/firstboot.done
+mkdir -p /var/lib/yorik
+[[ -f "$DONE" ]] && exit 0
+echo "[$(date -Is)] first boot: waiting for the network" >> "$LOG"
+for _ in $(seq 1 120); do curl -fsS --max-time 5 https://github.com >/dev/null 2>&1 && break; sleep 5; done
+# avahi answers yorik.local at home; the console needs qrencode before
+# install.sh (which installs the rest) gets to it.
+echo "[$(date -Is)] installing avahi-daemon, qrencode" >> "$LOG"
+apt-get update -qq >> "$LOG" 2>&1
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq avahi-daemon qrencode jq git >> "$LOG" 2>&1 \
+  || { echo "[$(date -Is)] package install failed; will retry on next boot" >> "$LOG"; exit 1; }
+echo "[$(date -Is)] running install.sh" >> "$LOG"
+if sudo -u yorik -H bash -lc 'cd ~/yorik-ai && bash install.sh </dev/null' >> "$LOG" 2>&1; then
+  touch "$DONE"
+  # The installer needed sudo without a password; the finished box doesn't.
+  rm -f /etc/sudoers.d/90-yorik-installer
+  echo "[$(date -Is)] done" >> "$LOG"
+else
+  echo "[$(date -Is)] install.sh failed; will retry on next boot" >> "$LOG"
+  exit 1
+fi

@@ -219,6 +219,8 @@ from . import member_invites as _member_invites
 app.include_router(_member_invites.router)
 from . import setup_checklist as _setup_checklist
 app.include_router(_setup_checklist.router)
+from . import update_routes as _update_routes
+app.include_router(_update_routes.router)
 
 # Paperless reverse-proxy — gives the Documents app an "Open in Paperless"
 # button that drops the user inside Paperless already authenticated as
@@ -806,7 +808,10 @@ def auth_setup(body: _SetupBody, request: Request, response: Response):
         is_tenant_mode = bool(os.getenv("YORIK_DB_NAME") and
                               os.getenv("YORIK_DB_NAME") != "postgres")
 
-        if is_tenant_mode:
+        # The all-in-one Docker install (deploy/compose.yaml) runs plain
+        # Postgres with the same auth.users shim as a tenant and no
+        # GoTrue: YORIK_AUTH_MODE=local takes the tenant's path.
+        if is_tenant_mode or os.getenv("YORIK_AUTH_MODE") == "local":
             import uuid as _uuid
             new_uid = str(_uuid.uuid4())
             try:
@@ -7065,6 +7070,13 @@ def storage_volumes_route(
     info disclosure."""
     if (user.get("role") or "").lower() not in ("admin", "platform_admin"):
         raise HTTPException(403, "admin only")
+    # All-in-one Docker install: the container can't see the computer's
+    # drives; compose mounts one host folder (YORIK_BACKUP_DIR, the
+    # installer's choice) at /backups, and that's the target.
+    if os.getenv("YORIK_RUNTIME") == "docker":
+        return [{"name": "backups", "mountpoint": "/backups", "hotplug": False,
+                 "label": os.getenv("YORIK_BACKUP_DIR_LABEL") or "The Yorik backups folder on this computer",
+                 "suggested_target": "/backups"}] if os.path.isdir("/backups") else []
     from . import storage as _st
     return _st.detect_volumes()
 

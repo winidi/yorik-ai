@@ -44,30 +44,22 @@ https://github.com/user-attachments/assets/cff3dbc7-9411-4144-ba67-3ffef706771c
 **Chat finds your photos** — "what's my last picture taken?" returns the actual photo inline, served through Yorik's proxy from your local Immich library. Same pattern for `find_photo(of_person="Anna")` or CLIP-content queries like "photos from the beach".
 ![Chat — find a photo](docs/screenshots/chat-photos.png)
 
-Click **Seed demo data** on Home after install to reproduce this state.
+Click **Add example data** on Home after install to reproduce this state.
 
 ## Install
 
-Fresh Ubuntu 24.04+ / Debian 12+ / Fedora 39+, ≥8 GB RAM (16 recommended), ≥50 GB free disk. Works inside WSL2 Ubuntu 24 with the same script (with a couple of WSL caveats it'll print). macOS uses a separate path — see [docs/INSTALL.md](docs/INSTALL.md).
+Yorik runs as one Docker stack — the same on Linux, Windows and macOS. 16 GB RAM recommended, 50 GB free disk.
 
-```bash
-git clone https://github.com/winidi/yorik-ai && cd yorik-ai
-bash install.sh              # one-shot: deps + Docker + LLM + Yorik
-```
+| | |
+|---|---|
+| **Windows 10/11** | download `Yorik-Setup-Windows.zip` from the [latest release](https://github.com/winidi/yorik-ai/releases/latest), unzip, double-click `Yorik-Setup.cmd` |
+| **macOS** | `Yorik-Setup-Mac.zip` from the release, double-click `Yorik Setup.command` (not yet tested on a real Mac) |
+| **Linux** | `git clone https://github.com/winidi/yorik-ai && cd yorik-ai && bash install.sh` |
+| **A spare mini PC** | `bash scripts/build-appliance.sh` makes an install stick; boot the PC from it |
 
-The installer pre-checks RAM/disk/ports/network, installs system packages, sets up Docker, and picks an LLM strategy automatically:
+Each one sets up Docker if needed, starts Yorik, photos, documents, WhatsApp, a local AI model and [Tailscale](https://tailscale.com), and opens Yorik in the browser. Create your account, then invite the family from Home, one QR code per person. For access on the go, sign in to Tailscale once under Settings → System → Phones.
 
-- **Existing LLM running on `:8080` / `:11434` / `:1234` / `:8081` / `:5000`** → uses it.
-- **NVIDIA GPU detected** → installs `ghcr.io/ggml-org/llama.cpp:server-cuda` + the unsloth Qwen3.5-9B **MTP** GGUF (UD-Q5_K_XL) + vision projector, with multi-token-prediction speculative decoding (≈200 tok/s on tool calls on an RTX 5090). Matches the maintainer's setup.
-- **No GPU** → installs Ollama + `robit/qwen3.5-9b-r7-research-vision:q4km` (vision works, slightly distilled text behavior).
-
-Override the LLM choice: `bash install.sh --llm=ollama` / `--llm=cuda` / `--llm=existing` / `--no-llm`. Skip all prompts: `--yes`.
-
-Then open **http://localhost:8000** and create the admin account.
-
-By default Yorik binds to `0.0.0.0` — reachable from your phone and any other device on the same LAN, which is how most self-hosters use it. The admin login is bcrypt but the connection is plain HTTP, so for anything beyond a trusted home network put Tailscale or a reverse proxy with TLS (Caddy works well) in front. To restrict Yorik to the host machine only, start with `YORIK_BIND=127.0.0.1 bash start.sh`.
-
-Full prereqs + verification: [docs/INSTALL.md](docs/INSTALL.md). Broken? [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md). Uninstall: `bash scripts/uninstall.sh` — stops the stack and removes everything Yorik put on the machine.
+Details, what lives where, updates: [docs/INSTALL.md](docs/INSTALL.md). Broken? [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ## Bring your own LLM
 

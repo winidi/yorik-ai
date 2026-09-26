@@ -66,3 +66,69 @@ jobs:
             --title "${{ github.ref_name }}" \
             --notes-file release-body.md \
             $(if [ "${{ steps.prerelease.outputs.is_prerelease }}" = "true" ]; then echo "--prerelease"; fi)
+
+  # ── Docker images for the all-in-one install (deploy/compose.yaml) ──
+  # ghcr.io/winidi/yorik-ai and …-whatsapp-bridge, tagged with the
+  # version and, for non-prereleases, "stable" (what installs follow and
+  # what "Update now" pulls).
+  images:
+    runs-on: ubuntu-22.04
+    needs: release
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tags
+        id: tags
+        run: |
+          V="${{ github.ref_name }}"
+          APP="ghcr.io/${{ github.repository_owner }}/yorik-ai"
+          WA="${APP}-whatsapp-bridge"
+          APP_TAGS="${APP}:${V#v}"
+          WA_TAGS="${WA}:${V#v}"
+          if [[ ! "$V" =~ -(alpha|beta|rc) ]]; then
+            APP_TAGS="${APP_TAGS},${APP}:stable"
+            WA_TAGS="${WA_TAGS},${WA}:stable"
+          fi
+          echo "app=${APP_TAGS}" >> $GITHUB_OUTPUT
+          echo "wa=${WA_TAGS}" >> $GITHUB_OUTPUT
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.app }}
+          build-args: YORIK_VERSION=${{ github.ref_name }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./whatsapp-bridge
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.wa }}
+
+  # ── What people download: the deploy folder and the two starters ───
+  bundles:
+    runs-on: ubuntu-22.04
+    needs: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pack
+        run: |
+          mkdir -p out
+          (cd deploy && zip -qr ../out/yorik-deploy.zip . -x '.env' 'backups/*')
+          (cd deploy && zip -q ../out/Yorik-Setup-Windows.zip Yorik-Setup.cmd install-windows.ps1)
+          (cd deploy && zip -q "../out/Yorik-Setup-Mac.zip" "Yorik Setup.command" install-mac.sh)
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" out/*.zip --clobber

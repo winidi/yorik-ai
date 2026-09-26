@@ -36,6 +36,13 @@ polkit.addRule(function(action, subject) {
     if (unit.indexOf("yorik-tenant@") === 0) {
         return polkit.Result.YES;
     }
+    if (unit === "yorik-update.service") {
+        // Settings → System → "Update now". The unit runs `yorik upgrade`
+        // as this same user and then restarts yorik.service itself; a
+        // compromised Yorik gains nothing it couldn't do as that user,
+        // except restarting itself.
+        return polkit.Result.YES;
+    }
     if (unit === "caddy.service") {
         // Narrow to reload — a compromised Yorik shouldn't be able
         // to stop or restart Caddy. The D-Bus action lookup doesn't

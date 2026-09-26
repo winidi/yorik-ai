@@ -1,0 +1,259 @@
+# Yorik, all in one: the same stack on Linux, Windows and macOS (Docker
+# Desktop or Docker Engine). Everything runs in containers on one
+# private network; only Yorik (8000) and the photo library (2283, for the
+# Immich phone app at home) are published.
+#
+#   docker compose up -d          (the installers do this for you)
+#
+# The installers write .env next to this file with generated passwords;
+# env.template lists every value. Data lives in named Docker volumes
+# (yorik_data, db_data, photos, documents, ...), not in this folder.
+#
+# Add compose.gpu.yaml for an NVIDIA GPU, compose.build.yaml to build the
+# Yorik images from a source checkout instead of pulling them.
+name: yorik
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  # ── Yorik ──────────────────────────────────────────────────────────
+  yorik:
+    <<: *restart
+    image: ${YORIK_IMAGE:-ghcr.io/winidi/yorik-ai}:${YORIK_VERSION:-stable}
+    depends_on:
+      db: { condition: service_healthy }
+    ports:
+      - "${YORIK_PORT:-8000}:8000"
+    environment:
+      YORIK_RUNTIME: docker
+      YORIK_AUTH_MODE: local
+      YORIK_DB_HOST: db
+      YORIK_DB_PORT: "5432"
+      YORIK_DB_USER: postgres
+      YORIK_DB_NAME: postgres
+      YORIK_DB_PASSWORD: ${YORIK_DB_PASSWORD:?run the installer or copy env.template to .env}
+      YORIK_SUPABASE_JWT_SECRET: ${YORIK_JWT_SECRET}
+      HOMEOS_LLM_BASE_URL: ${YORIK_LLM_URL:-http://ollama:11434/v1}
+      HOMEOS_MODEL: ${YORIK_MODEL:-robit/qwen3.5-9b-r7-research-vision:q4km}
+      YORIK_WA_BRIDGE_URL: http://whatsapp-bridge:3015
+      YORIK_WA_BRIDGE_WS: ws://whatsapp-bridge:3015/events
+      YORIK_WA_BRIDGE_TOKEN: ${YORIK_WA_BRIDGE_TOKEN}
+      PAPERLESS_INTERNAL_URL: http://paperless-web:8000
+      PAPERLESS_ADMIN_USER: yorik_service
+      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD}
+      PAPERLESS_YORIK_TOKEN: ${PAPERLESS_YORIK_TOKEN}
+      IMMICH_INTERNAL_URL: http://immich-server:2283
+      IMMICH_DB_HOST: immich-postgres
+      IMMICH_DB_PASSWORD: ${IMMICH_DB_PASSWORD}
+      HOMEOS_GOTENBERG_URL: http://paperless-gotenberg:3000
+      YORIK_TAILSCALE_HTTPS_PORT: "443"
+      YORIK_TZ: ${TZ:-Europe/Berlin}
+      YORIK_BACKUP_DIR_LABEL: ${YORIK_BACKUP_DIR:-the backups folder next to Yorik's settings}
+      TZ: ${TZ:-Europe/Berlin}
+    volumes:
+      - yorik_data:/app/data
+      # tailscaled's socket (read-only): Yorik learns its tailnet
+      # address and the sign-in link from it.
+      - ts_socket:/var/run/tailscale:ro
+      # Where "Update now" leaves its request for the updater below.
+      - updater:/updater
+      # Backups land in a folder on the computer (the installer picks
+      # it; point it at a USB or cloud drive to keep copies off the box).
+      - type: bind
+        source: ${YORIK_BACKUP_DIR:-./backups}
+        target: /backups
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15m
+
+  db:
+    <<: *restart
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_PASSWORD: ${YORIK_DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # ── AI model (CPU; compose.gpu.yaml adds the NVIDIA GPU) ───────────
+  ollama:
+    <<: *restart
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_models:/root/.ollama
+
+  # ── Access from phones: Tailscale, HTTPS, no open ports ────────────
+  # Signs in once (link shown in Yorik → Settings → System → Phones, or
+  # TS_AUTHKEY in .env), then publishes Yorik on https://<name>.<tailnet>.ts.net,
+  # photos on :8443 and documents on :8444 (tailscale/serve.json).
+  tailscale:
+    <<: *restart
+    image: tailscale/tailscale:stable
+    hostname: ${YORIK_TS_HOSTNAME:-yorik}
+    environment:
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SOCKET: /var/run/tailscale/tailscaled.sock
+      TS_USERSPACE: "true"
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_SERVE_CONFIG: /config/${YORIK_TS_SERVE:-serve.json}
+    volumes:
+      - ts_state:/var/lib/tailscale
+      - ts_socket:/var/run/tailscale
+      - ./tailscale:/config:ro
+      - ./join-page:/join-page:ro
+
+  # ── Photos (Immich) ────────────────────────────────────────────────
+  immich-server:
+    <<: *restart
+    image: ghcr.io/immich-app/immich-server:release
+    ports:
+      - "${YORIK_PHOTOS_PORT:-2283}:2283"
+    environment:
+      DB_HOSTNAME: immich-postgres
+      DB_USERNAME: immich
+      DB_PASSWORD: ${IMMICH_DB_PASSWORD}
+      DB_DATABASE_NAME: immich
+      REDIS_HOSTNAME: immich-redis
+      TZ: ${TZ:-Europe/Berlin}
+    volumes:
+      - photos:/data
+    depends_on: [immich-redis, immich-postgres]
+
+  immich-machine-learning:
+    <<: *restart
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    volumes:
+      - immich_model_cache:/cache
+
+  immich-redis:
+    <<: *restart
+    image: docker.io/valkey/valkey:8-bookworm
+    healthcheck:
+      test: redis-cli ping || exit 1
+
+  immich-postgres:
+    <<: *restart
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0
+    environment:
+      POSTGRES_PASSWORD: ${IMMICH_DB_PASSWORD}
+      POSTGRES_USER: immich
+      POSTGRES_DB: immich
+    volumes:
+      - photos_db:/var/lib/postgresql/data
+
+  # ── Documents (Paperless-ngx) ──────────────────────────────────────
+  paperless-web:
+    <<: *restart
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    depends_on: [paperless-db, paperless-broker, paperless-tika, paperless-gotenberg]
+    environment:
+      PAPERLESS_REDIS: redis://paperless-broker:6379
+      PAPERLESS_DBHOST: paperless-db
+      PAPERLESS_DBUSER: paperless
+      PAPERLESS_DBPASS: ${PAPERLESS_DB_PASSWORD}
+      PAPERLESS_DBNAME: paperless
+      PAPERLESS_TIKA_ENABLED: "1"
+      PAPERLESS_TIKA_ENDPOINT: http://paperless-tika:9998
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://paperless-gotenberg:3000
+      PAPERLESS_URL: http://localhost:${YORIK_PORT:-8000}
+      PAPERLESS_ENABLE_HTTP_REMOTE_USER: "true"
+      PAPERLESS_ENABLE_HTTP_REMOTE_USER_API: "true"
+      PAPERLESS_FORCE_SCRIPT_NAME: /paperless
+      PAPERLESS_STATIC_URL: /paperless/static/
+      PAPERLESS_USE_X_FORWARD_HOST: "true"
+      PAPERLESS_CSRF_TRUSTED_ORIGINS: http://localhost:${YORIK_PORT:-8000},http://127.0.0.1:${YORIK_PORT:-8000}
+      PAPERLESS_ALLOWED_HOSTS: "*"
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_TIME_ZONE: ${TZ:-Europe/Berlin}
+      PAPERLESS_OCR_LANGUAGE: ${PAPERLESS_OCR_LANGUAGE:-deu+eng}
+      PAPERLESS_CONSUMER_POLLING: "30"
+      PAPERLESS_ADMIN_USER: yorik_service
+      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD}
+      PAPERLESS_ADMIN_MAIL: yorik-service@yorik.local
+      PAPERLESS_POST_CONSUME_SCRIPT: /usr/src/paperless/scripts/notify-yorik.sh
+      YORIK_INGEST_URL: http://yorik:8000/api/paperless/ingest
+      YORIK_PAPERLESS_TOKEN: ${PAPERLESS_YORIK_TOKEN}
+    volumes:
+      - documents_data:/usr/src/paperless/data
+      - documents_media:/usr/src/paperless/media
+      - documents_export:/usr/src/paperless/export
+      - documents_consume:/usr/src/paperless/consume
+      - ./paperless/notify-yorik.sh:/usr/src/paperless/scripts/notify-yorik.sh:ro
+
+  paperless-db:
+    <<: *restart
+    image: docker.io/library/postgres:16
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: ${PAPERLESS_DB_PASSWORD}
+    volumes:
+      - documents_db:/var/lib/postgresql/data
+
+  paperless-broker:
+    <<: *restart
+    image: docker.io/library/redis:7
+    volumes:
+      - documents_redis:/data
+
+  paperless-tika:
+    <<: *restart
+    image: docker.io/apache/tika:latest
+
+  paperless-gotenberg:
+    <<: *restart
+    image: docker.io/gotenberg/gotenberg:8
+    command: ["gotenberg", "--chromium-disable-javascript=true", "--chromium-allow-list=file:///tmp/.*"]
+
+  # ── WhatsApp ───────────────────────────────────────────────────────
+  whatsapp-bridge:
+    <<: *restart
+    image: ${YORIK_IMAGE:-ghcr.io/winidi/yorik-ai}-whatsapp-bridge:${YORIK_VERSION:-stable}
+    environment:
+      BRIDGE_PORT: "3015"
+      BRIDGE_TOKEN: ${YORIK_WA_BRIDGE_TOKEN}
+      BRIDGE_AUTH_DIR: /data/baileys-auth
+      LOG_LEVEL: warn
+    volumes:
+      - whatsapp:/data
+
+  # ── Updates ────────────────────────────────────────────────────────
+  # "Update now" in Yorik leaves a request file in the shared volume;
+  # this pulls the new images and restarts the stack. The only service
+  # with the Docker socket, and it only ever runs pull + up here.
+  updater:
+    <<: *restart
+    image: docker:27-cli
+    working_dir: /deploy
+    entrypoint: ["sh", "/deploy/updater.sh"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/deploy
+      - updater:/updater
+
+volumes:
+  yorik_data:
+  db_data:
+  ollama_models:
+  ts_state:
+  ts_socket:
+  updater:
+  photos:
+  photos_db:
+  immich_model_cache:
+  documents_data:
+  documents_media:
+  documents_export:
+  documents_consume:
+  documents_db:
+  documents_redis:
+  whatsapp:

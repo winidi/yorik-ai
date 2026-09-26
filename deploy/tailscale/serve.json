@@ -1,0 +1,12 @@
+{
+  "TCP": {
+    "443": { "HTTPS": true },
+    "8443": { "HTTPS": true },
+    "8444": { "HTTPS": true }
+  },
+  "Web": {
+    "${TS_CERT_DOMAIN}:443": { "Handlers": { "/": { "Proxy": "http://yorik:8000" } } },
+    "${TS_CERT_DOMAIN}:8443": { "Handlers": { "/": { "Proxy": "http://immich-server:2283" } } },
+    "${TS_CERT_DOMAIN}:8444": { "Handlers": { "/": { "Proxy": "http://paperless-web:8000" } } }
+  }
+}

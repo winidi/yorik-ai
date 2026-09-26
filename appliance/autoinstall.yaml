@@ -1,0 +1,33 @@
+# Ubuntu Server 24.04 autoinstall for a Yorik box. Built into the install
+# stick by scripts/build-appliance.sh. It WIPES THE WHOLE DISK of the
+# machine it boots on, without asking — that's the point of an appliance
+# stick, and the reason the stick says so on its label.
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard: { layout: de }
+  timezone: Europe/Berlin
+  identity:
+    hostname: yorik
+    username: yorik
+    # "yorik"; expires on first console login (late-commands), so whoever
+    # sits at the box sets their own. Yorik itself never uses it.
+    password: "$6$yoriksalt$Bh.KYAGRw114uK0d.8MsvvEMFfEhQ96dmdhhMW9zqnDxXDj.BZL1inUkrHhHVcxqgKESDrQJJGKz4gVcs5vQj0"
+  ssh:
+    install-server: false
+  storage:
+    layout: { name: lvm, sizing-policy: all }
+  # No extra packages here: one mirror hiccup during the Ubuntu install
+  # stops it on an error screen. yorik-firstboot installs them instead,
+  # and retries on the next boot.
+  late-commands:
+    - curtin in-target -- chage -d 0 yorik
+    - cp -a /cdrom/yorik /target/home/yorik/yorik-ai
+    - curtin in-target -- chown -R yorik:yorik /home/yorik/yorik-ai
+    - cp /cdrom/yorik/appliance/yorik-firstboot.service /target/etc/systemd/system/
+    - cp /cdrom/yorik/appliance/yorik-console.service /target/etc/systemd/system/
+    - install -m 0755 /cdrom/yorik/appliance/yorik-console /target/usr/local/bin/yorik-console
+    - install -m 0755 /cdrom/yorik/appliance/yorik-firstboot /target/usr/local/bin/yorik-firstboot
+    - echo 'yorik ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/90-yorik-installer
+    - curtin in-target -- systemctl enable yorik-firstboot.service yorik-console.service
+    - curtin in-target -- systemctl disable getty@tty1.service

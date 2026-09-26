@@ -139,7 +139,11 @@ def _upgrade(args: argparse.Namespace) -> int:
             print("  · no snapshot found — skipping (configure backups via Settings, "
                   "or pass --skip-backup-verify to silence this)")
         else:
-            passphrase = (_os.environ.get("YORIK_BACKUP_PASSPHRASE")
+            # Started from Settings → System there's no terminal: use the
+            # passphrase Yorik already keeps (encrypted) for its backups.
+            from backend import credential_store as _cs
+            stored = (_cs.get("backup_passphrase") or {}).get("passphrase")
+            passphrase = (_os.environ.get("YORIK_BACKUP_PASSPHRASE") or stored
                           or getpass.getpass(f"backup passphrase for {snap.name}: "))
             res = backup.verify_snapshot(snap, passphrase)
             if not res["ok"]:
@@ -196,6 +200,20 @@ def _upgrade(args: argparse.Namespace) -> int:
     r = _run(["git", "diff", "--name-only", f"{old_head}..HEAD"])
     changed = set(r.stdout.strip().splitlines())
 
+    if (_repo / ".yorik-runtime").is_file() and (_repo / ".yorik-runtime").read_text().strip() == "container":
+        # Container runtime: the image carries the deps and the bundle;
+        # rebuild it and let the new container apply the migrations.
+        _step("rebuilding the Yorik container")
+        env = dict(_os.environ, YORIK_UID=str(_os.getuid()), YORIK_GID=str(_os.getgid()))
+        r = _run(["bash", "scripts/bootstrap-supabase.sh"])
+        if r.returncode != 0:
+            return _fail(f"bootstrap-supabase.sh failed:\n{r.stderr[-1500:]}")
+        r = _run(["docker", "compose", "-f", "docker-compose.app.yml", "up", "-d", "--build", "yorik"], env=env)
+        if r.returncode != 0:
+            return _fail(f"container rebuild failed:\n{r.stderr[-2000:]}")
+        print("  ✓ new container running (docker logs -f yorik-app)")
+        return 0
+
     needs_pip = any(f.startswith("backend/requirements") for f in changed)
     needs_npm_install = any(f.startswith("frontend-react/package") for f in changed)
     needs_npm_build = any(f.startswith("frontend-react/src/") or f.startswith("frontend-react/package")
@@ -248,6 +266,12 @@ def _upgrade(args: argparse.Namespace) -> int:
     # whole stack up). Otherwise SIGTERM the manual uvicorn — never
     # SIGKILL: a KILL orphans the TTS child, which keeps port 8000 and
     # turns the next start into an endless restart loop.
+    if args.no_restart:
+        # yorik-update.service restarts yorik.service itself (as root,
+        # ExecStartPost=+), which the Yorik user can't do.
+        print("\n  · restart left to the caller (--no-restart)")
+        return 0
+
     _step("restarting Yorik")
     log_path = "/tmp/homeos-api.log"
     pid_path = "/tmp/homeos-api.pid"
@@ -518,6 +542,11 @@ def main(argv: list[str] | None = None) -> int:
         "--skip-backup-verify", action="store_true",
         help="Skip the pre-upgrade backup verify (fresh installs without "
              "backups configured, or when you've verified manually already)",
+    )
+    sp_upgrade.add_argument(
+        "--no-restart", action="store_true",
+        help="Stop after migrations; whoever started the upgrade restarts "
+             "Yorik (used by yorik-update.service, the in-app update)",
     )
     sp_upgrade.set_defaults(func=_upgrade)
     sub.add_parser(

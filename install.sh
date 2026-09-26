@@ -5,37 +5,44 @@
 # WSL2 Ubuntu — see the warning printed if WSL is detected).
 # macOS uses a separate path — see docs/INSTALL.md for the brew route.
 #
+# One command, no questions: it picks sensible defaults for everything
+# and ends with a QR code you scan with your phone to finish in the
+# browser. The only thing it may ask for is your sudo password.
+#
+# By default Yorik runs as the all-in-one Docker stack (deploy/), the
+# same one Windows and macOS use. --classic installs it directly on this
+# machine instead (Python venv + systemd; the maintainer's development
+# setup), which is what the steps below describe.
+#
 # What it does:
 #   1. Pre-flight checks — OS, RAM, disk, ports, network. Fail fast.
-#   2. One question (or skip with --yes).
-#   3. System packages (apt or dnf).
-#   4. Docker (if missing).
-#   5. LLM — detect existing endpoint, OR install Ollama + R7, OR install
-#      llama.cpp:server-cuda + the unsloth Qwen3.5-9B GGUF if you have
-#      an NVIDIA GPU.
-#   6. Clone Yorik (if not already in a clone), write config.env.
-#   7. Run start.sh — Python venv, voice models, Supabase stack, FastAPI.
-#   8. Wait for /api/health, optional cold-install smoke.
-#   9. Optional: systemd autostart.
-#  10. Security checklist.
+#   2. System packages (apt or dnf) and Docker if missing.
+#   3. AI model — use one already running, else llama.cpp + Qwen 3.5 9B
+#      on an NVIDIA GPU (with NVIDIA's container toolkit), else Ollama on
+#      the CPU. Downloads resume if interrupted.
+#   4. Clone Yorik (if not already in a clone), write config.env.
+#   5. Start Yorik (start.sh), wait until it answers.
+#   6. Autostart at boot (systemd).
+#   7. Tailscale: phones reach Yorik over HTTPS at home and on the go,
+#      and invites get a public join page (Funnel).
+#   8. A QR code to finish setup on your phone.
 #
 # Re-runnable: every step short-circuits when its work is already done.
 #
-# Flags:
-#   --yes         Accept all defaults. No prompts.
-#   --no-llm      Skip the LLM install (you point Yorik at your own).
-#   --llm=ollama  Force the Ollama + R7 path (default when no GPU).
-#   --llm=cuda    Force llama.cpp:server-cuda (default when NVIDIA GPU
-#                 is detected). Fails if no GPU.
-#   --llm=existing  Use a chat-capable LLM already running on a
-#                   common local port (8080 / 11434 / 1234 / 8081 / 5000).
-#   --llm=remote=URL  Use a chat-capable LLM on another host (e.g.
-#                     http://10.0.0.5:8080/v1). The endpoint is probed
-#                     with a tiny /v1/chat/completions request; install
-#                     fails fast if it can't speak chat.
-#   --dir=PATH    Install Yorik here. Default: current dir if already
-#                 in a clone, otherwise $HOME/yorik.
-#   --help        This message.
+# Flags (all optional):
+#   --ask            Ask before the big steps (the old interactive mode).
+#   --llm=auto       Default: existing, else cuda (NVIDIA), else ollama.
+#   --llm=ollama|cuda|existing|none
+#   --llm=remote=URL Use a chat-capable LLM on another host
+#                    (e.g. http://10.0.0.5:8080/v1); probed first.
+#   --no-autostart   Don't install the systemd unit.
+#   --no-tailscale   Don't install or configure Tailscale (home Wi-Fi only).
+#   --classic        Install directly on this machine instead of Docker.
+#   --container      (classic) Run Yorik itself as a container; nothing
+#                    of Yorik's Python on this machine. Restarts with Docker.
+#   --dir=PATH       Install here. Default: this clone, else $HOME/yorik.
+#   --yes, --no-llm  Kept for old scripts (--no-llm = --llm=none).
+#   --help           This message.
 
 set -Eeuo pipefail
 
@@ -69,9 +76,24 @@ fatal() {
   exit 1
 }
 
+# What this installer set up beyond the clone, so scripts/uninstall.sh
+# can take exactly that away again (and nothing it didn't set up).
+record() {  # key value — one line per key in <install dir>/.install-record
+  local f="${INSTALL_DIR:-.}/.install-record"
+  touch "$f"
+  grep -v "^$1=" "$f" > "$f.tmp" 2>/dev/null || true
+  printf "%s=%s\n" "$1" "$2" >> "$f.tmp"
+  mv "$f.tmp" "$f"
+}
+
 # ─── flag parsing ─────────────────────────────────────────────────────
-FLAG_YES=0
+# No questions by default. --ask brings the prompts back.
+FLAG_YES=1
 FLAG_NO_LLM=0
+FLAG_NO_AUTOSTART=0
+FLAG_NO_TAILSCALE=0
+FLAG_CONTAINER=0
+FLAG_CLASSIC=0
 FLAG_LLM=""
 FLAG_REMOTE_LLM_URL=""
 FLAG_DIR=""
@@ -79,7 +101,13 @@ FLAG_FULL=0
 for arg in "$@"; do
   case "$arg" in
     --yes|-y)        FLAG_YES=1 ;;
-    --no-llm)        FLAG_NO_LLM=1 ;;
+    --ask)           FLAG_YES=0 ;;
+    --no-llm|--llm=none) FLAG_NO_LLM=1 ;;
+    --llm=auto)      FLAG_LLM="" ;;
+    --no-autostart)  FLAG_NO_AUTOSTART=1 ;;
+    --no-tailscale)  FLAG_NO_TAILSCALE=1 ;;
+    --container)     FLAG_CONTAINER=1; FLAG_CLASSIC=1 ;;
+    --classic)       FLAG_CLASSIC=1 ;;
     --llm=ollama)    FLAG_LLM="ollama" ;;
     --llm=cuda)      FLAG_LLM="cuda" ;;
     --llm=existing)  FLAG_LLM="existing" ;;
@@ -88,15 +116,26 @@ for arg in "$@"; do
     --dir=*)         FLAG_DIR="${arg#--dir=}" ;;
     --full)          FLAG_FULL=1 ;;
     --help|-h)
-      sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
+    "") ;;  # tolerate an empty argument (old re-exec, wrappers)
     *) fatal "unknown flag: $arg" "see --help" ;;
   esac
 done
+# docker (default): the all-in-one stack in deploy/; classic: venv +
+# systemd + Supabase on this machine (flags --classic / --container).
+INSTALL_MODE="docker"
+[[ "$FLAG_CLASSIC" == "1" ]] && INSTALL_MODE="classic"
+
 # Kept for the docker-group re-exec below (`exec sg docker -c …`).
 SELF="$(readlink -f "$0")"
-INSTALL_ARGS="$(printf '%q ' "$@")"
+# With no flags, printf '%q ' still prints '' — an empty argument that
+# the re-exec below then rejected as "unknown flag", so a plain
+# `bash install.sh` died on every machine that got Docker from us.
+# (Found by the appliance test, which is the first to pass no flags.)
+INSTALL_ARGS=""
+(( $# > 0 )) && INSTALL_ARGS="$(printf '%q ' "$@")"
 
 # ─── pre-flight checks ────────────────────────────────────────────────
 phase "Pre-flight checks"
@@ -230,6 +269,11 @@ if [[ "$PLANNED_BACKEND" == "postgres" ]]; then
   )
 fi
 
+if [[ "$INSTALL_MODE" == "docker" ]]; then
+  # Everything else stays inside Docker's own network.
+  REQUIRED_PORTS=("8000:Yorik" "2283:photos (Immich phone app)")
+fi
+
 PORT_BUSY=0
 for entry in "${REQUIRED_PORTS[@]}"; do
   port="${entry%%:*}"
@@ -289,6 +333,44 @@ phase "Plan"
 
 has_nvidia_gpu() {
   command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L 2>/dev/null | grep -q GPU
+}
+
+# NVIDIA's container toolkit, so Docker can hand the GPU to the model
+# (llama.cpp on --classic, Ollama in the Docker stack).
+ensure_nvidia_toolkit() {
+  # `docker run --gpus all` needs NVIDIA's container toolkit on the
+  # host. Nothing else installs it, and without it the model unit
+  # fails on the very first GPU box ("could not select device driver").
+  if ! command -v nvidia-ctk >/dev/null 2>&1; then
+    say "installing NVIDIA container toolkit (lets Docker use the GPU)"
+    if [[ "$PKG_MGR" == "apt" ]]; then
+      wait_for_dpkg_lock
+      curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+        | sudo gpg --dearmor --yes -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+      curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+        | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+        | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
+      sudo apt-get update -qq
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nvidia-container-toolkit >/dev/null
+    elif [[ "$PKG_MGR" == "dnf" ]]; then
+      curl -fsSL https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo \
+        | sudo tee /etc/yum.repos.d/nvidia-container-toolkit.repo >/dev/null
+      sudo dnf install -y -q nvidia-container-toolkit
+    fi
+    command -v nvidia-ctk >/dev/null 2>&1 \
+      || fatal "NVIDIA container toolkit didn't install" \
+               "see docs/LLM-LLAMACPP-CUDA.md, or re-run with --llm=ollama to use the CPU"
+    ok "NVIDIA container toolkit installed"
+  else
+    skip "NVIDIA container toolkit already present"
+  fi
+  # Register the nvidia runtime with Docker once. Restarting Docker
+  # only happens here, on a box that didn't have the runtime yet.
+  if ! docker info 2>/dev/null | grep -qi 'runtimes:.*nvidia'; then
+    sudo nvidia-ctk runtime configure --runtime=docker >/dev/null
+    sudo systemctl restart docker
+    ok "Docker can use the GPU"
+  fi
 }
 
 _is_obvious_embedder() {
@@ -571,7 +653,12 @@ else
   printf "  • Clone Yorik into %s%s%s\n" "${BOLD}" "$INSTALL_DIR" "${RST}"
 fi
 printf "  • System packages via %s + Docker if missing\n" "$PKG_MGR"
-printf "  • LLM: %s\n" "$LLM_LINE"
+if [[ "$INSTALL_MODE" == "docker" ]]; then
+  printf "  • Yorik as the all-in-one Docker stack (deploy/compose.yaml)\n"
+  printf "  • AI model: Ollama in the stack%s\n" "$(has_nvidia_gpu && echo ', on the NVIDIA GPU' || echo ', on the CPU')"
+else
+  printf "  • LLM: %s\n" "$LLM_LINE"
+fi
 printf "  • Start Yorik on http://localhost:8000\n\n"
 
 if [[ "$FLAG_YES" != "1" ]]; then
@@ -613,17 +700,17 @@ if [[ "$PKG_MGR" == "apt" ]]; then
     git curl ca-certificates \
     python3 python3-venv python3-pip \
     ffmpeg sqlite3 jq \
-    iproute2 \
+    iproute2 qrencode \
     >/dev/null
 elif [[ "$PKG_MGR" == "dnf" ]]; then
   sudo dnf install -y -q \
     git curl ca-certificates \
     python3 python3-pip python3-virtualenv \
     ffmpeg-free sqlite jq \
-    iproute \
+    iproute qrencode \
     >/dev/null
 fi
-ok "git curl python3 ffmpeg sqlite3 jq"
+ok "git curl python3 ffmpeg sqlite3 jq qrencode"
 
 # ─── Docker ───────────────────────────────────────────────────────────
 phase "Docker"
@@ -685,9 +772,19 @@ fi
 
 # ─── LLM ──────────────────────────────────────────────────────────────
 phase "LLM"
-
 LLM_BASE_URL=""
 LLM_MODEL=""
+
+if [[ "$INSTALL_MODE" == "docker" ]]; then
+  # The model runs in the stack's Ollama container. With an NVIDIA GPU,
+  # Docker needs NVIDIA's container toolkit to hand it over.
+  if has_nvidia_gpu; then
+    ensure_nvidia_toolkit
+  else
+    skip "no NVIDIA GPU — the AI model runs on the CPU (5–10 s per reply)"
+  fi
+  DECIDED_LLM="docker"
+else
 
 case "$DECIDED_LLM" in
   existing|remote)
@@ -717,39 +814,7 @@ case "$DECIDED_LLM" in
     # somewhere to write.
     mkdir -p "$MODEL_DIR"
 
-    # `docker run --gpus all` needs NVIDIA's container toolkit on the
-    # host. Nothing else installs it, and without it the model unit
-    # fails on the very first GPU box ("could not select device driver").
-    if ! command -v nvidia-ctk >/dev/null 2>&1; then
-      say "installing NVIDIA container toolkit (lets Docker use the GPU)"
-      if [[ "$PKG_MGR" == "apt" ]]; then
-        wait_for_dpkg_lock
-        curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
-          | sudo gpg --dearmor --yes -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-        curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
-          | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
-          | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
-        sudo apt-get update -qq
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nvidia-container-toolkit >/dev/null
-      elif [[ "$PKG_MGR" == "dnf" ]]; then
-        curl -fsSL https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo \
-          | sudo tee /etc/yum.repos.d/nvidia-container-toolkit.repo >/dev/null
-        sudo dnf install -y -q nvidia-container-toolkit
-      fi
-      command -v nvidia-ctk >/dev/null 2>&1 \
-        || fatal "NVIDIA container toolkit didn't install" \
-                 "see docs/LLM-LLAMACPP-CUDA.md, or re-run with --llm=ollama to use the CPU"
-      ok "NVIDIA container toolkit installed"
-    else
-      skip "NVIDIA container toolkit already present"
-    fi
-    # Register the nvidia runtime with Docker once. Restarting Docker
-    # only happens here, on a box that didn't have the runtime yet.
-    if ! docker info 2>/dev/null | grep -qi 'runtimes:.*nvidia'; then
-      sudo nvidia-ctk runtime configure --runtime=docker >/dev/null
-      sudo systemctl restart docker
-      ok "Docker can use the GPU"
-    fi
+    ensure_nvidia_toolkit
 
     say "pulling llama.cpp:server-cuda Docker image (~3 GB, one-time)"
     docker pull ghcr.io/ggml-org/llama.cpp:server-cuda >/dev/null
@@ -774,14 +839,15 @@ case "$DECIDED_LLM" in
     MMPROJ_URL="https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/main/mmproj-F16.gguf"
     if [[ ! -f "$MODEL_DIR/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf" ]]; then
       say "downloading Qwen3.5-9B MTP UD-Q5_K_XL (~7 GB) — this is the long step"
-      curl -fL --progress-bar -o "$MODEL_DIR/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf.partial" "$GGUF_URL"
+      # -C -: an interrupted download (Wi-Fi drop, Ctrl-C) continues where it stopped on re-run.
+      curl -fL -C - --retry 5 --retry-delay 5 --progress-bar -o "$MODEL_DIR/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf.partial" "$GGUF_URL"
       mv "$MODEL_DIR/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf.partial" "$MODEL_DIR/Qwen3.5-9B-MTP-UD-Q5_K_XL.gguf"
     else
       skip "model file already present"
     fi
     if [[ ! -f "$MODEL_DIR/mmproj-Qwen3.5-9B-F16.gguf" ]]; then
       say "downloading vision projector (mmproj)"
-      curl -fL --progress-bar -o "$MODEL_DIR/mmproj-Qwen3.5-9B-F16.gguf.partial" "$MMPROJ_URL"
+      curl -fL -C - --retry 5 --retry-delay 5 --progress-bar -o "$MODEL_DIR/mmproj-Qwen3.5-9B-F16.gguf.partial" "$MMPROJ_URL"
       mv "$MODEL_DIR/mmproj-Qwen3.5-9B-F16.gguf.partial" "$MODEL_DIR/mmproj-Qwen3.5-9B-F16.gguf"
     else
       skip "mmproj already present"
@@ -881,6 +947,8 @@ EOF
     ;;
 esac
 
+fi  # classic LLM install
+
 # ─── Yorik source + config.env ────────────────────────────────────────
 phase "Yorik source"
 
@@ -897,6 +965,12 @@ else
 fi
 
 cd "$INSTALL_DIR"
+
+record installed_at "$(date -Is)"
+case "$DECIDED_LLM" in
+  cuda)   record llm cuda; record model_dir "$INSTALL_DIR/models/qwen3.5-9b" ;;
+  ollama) record llm ollama; record ollama_model "${OLLAMA_MODEL:-}" ;;
+esac
 
 if [[ ! -f config.env ]]; then
   cp config.env.example config.env
@@ -925,6 +999,11 @@ else
 fi
 ok "Immich ML variant: ${IMMICH_GPU_VAL}"
 
+if [[ "$INSTALL_MODE" == "docker" ]]; then
+  # shellcheck source=deploy/linux-docker-start.sh
+  source "$INSTALL_DIR/deploy/linux-docker-start.sh"   # ends with exit 0
+fi
+
 # ─── start Yorik via start.sh ─────────────────────────────────────────
 phase "Start Yorik (start.sh)"
 
@@ -940,6 +1019,13 @@ phase "Start Yorik (start.sh)"
 # prompt (line 1078) that would otherwise hang install.sh. The check
 # at line 1052 (`[[ -t 0 ]]`) auto-skips it when stdin isn't a TTY.
 # Our own systemd handling runs in the next phase below.
+# --container: start.sh builds the image and runs Yorik from it; the
+# choice is remembered in .yorik-runtime for re-runs and upgrades.
+if [[ "$FLAG_CONTAINER" == "1" ]]; then
+  echo container > .yorik-runtime
+  record runtime container
+  ok "runtime: container (Dockerfile, docker-compose.app.yml)"
+fi
 YORIK_ALLOW_STALE_DIST=1 bash start.sh </dev/null
 
 # ─── wait for health ──────────────────────────────────────────────────
@@ -1030,6 +1116,25 @@ _install_tenant_template() {
 # is unusable from inside the service. systemctl talks to systemd
 # over D-Bus and polkit authorises; the rule narrows authorization to
 # yorik-tenant@* units + caddy reload only.
+# The in-app update (Settings → System → Update now) starts this oneshot
+# unit through polkit: `yorik upgrade` as the install user, then a
+# restart of yorik.service with root rights (ExecStartPost=+).
+_install_update_unit() {
+  local dir="$1" user="$2"
+  local src="$dir/infra/systemd/yorik-update.service"
+  local target="/etc/systemd/system/yorik-update.service"
+  [[ -f "$src" ]] || return 0
+  if [[ -f "$target" ]] && grep -q "$dir" "$target" 2>/dev/null; then
+    return 0
+  fi
+  local tmp
+  tmp=$(mktemp --suffix=.service)
+  sed -e "s|{{INSTALL_DIR}}|$dir|g" -e "s|{{INSTALL_USER}}|$user|g" "$src" > "$tmp"
+  sudo install -m 0644 "$tmp" "$target"
+  rm -f "$tmp"
+  sudo systemctl daemon-reload
+}
+
 _install_polkit_rule() {
   local dir="$1" user="$2"
   local rule_src="$dir/infra/polkit/50-yorik-tenant.rules"
@@ -1055,13 +1160,18 @@ _install_polkit_rule() {
 }
 
 SYSTEMD_UNIT="/etc/systemd/system/yorik.service"
-if [[ -f "$SYSTEMD_UNIT" ]]; then
+if [[ -f .yorik-runtime && "$(cat .yorik-runtime)" == "container" ]]; then
+  skip "container runtime: Docker restarts Yorik at boot (restart: unless-stopped)"
+elif [[ "$FLAG_NO_AUTOSTART" == "1" ]]; then
+  skip "autostart skipped (--no-autostart); Yorik runs until the next reboot"
+elif [[ -f "$SYSTEMD_UNIT" ]]; then
   skip "yorik.service already installed at $SYSTEMD_UNIT"
   # Catch up the tenant template if a previous install ran before it
   # was shipped (idempotent — short-circuits when already installed
   # for this layout).
   _install_tenant_template "$INSTALL_DIR" "$INSTALL_USER"
   _install_polkit_rule "$INSTALL_DIR" "$INSTALL_USER"
+  _install_update_unit "$INSTALL_DIR" "$INSTALL_USER"
 elif [[ "$FLAG_YES" == "1" ]]; then
   TEMPLATE="$INSTALL_DIR/yorik.service.template"
   if [[ -f "$TEMPLATE" ]]; then
@@ -1075,6 +1185,7 @@ elif [[ "$FLAG_YES" == "1" ]]; then
     sudo systemctl enable yorik >/dev/null 2>&1
     _install_tenant_template "$INSTALL_DIR" "$INSTALL_USER"
   _install_polkit_rule "$INSTALL_DIR" "$INSTALL_USER"
+  _install_update_unit "$INSTALL_DIR" "$INSTALL_USER"
     ok "systemd unit installed + enabled (--yes mode)"
     if _handoff_to_systemd; then
       ok "manual launch handed off to systemd (systemctl status yorik → active)"
@@ -1103,6 +1214,7 @@ else
       sudo systemctl enable yorik >/dev/null 2>&1
       _install_tenant_template "$INSTALL_DIR" "$INSTALL_USER"
   _install_polkit_rule "$INSTALL_DIR" "$INSTALL_USER"
+  _install_update_unit "$INSTALL_DIR" "$INSTALL_USER"
       ok "systemd unit installed + enabled"
       if _handoff_to_systemd; then
         ok "manual launch handed off to systemd"
@@ -1114,6 +1226,83 @@ else
     fi
   else
     skip "autostart skipped (re-run install.sh later to add it)"
+  fi
+fi
+
+# ─── Tailscale: phones at home and on the go ─────────────────────────
+# Yorik stays off the public internet. Family phones reach it through
+# Tailscale (free for up to 6 people), over HTTPS, which browsers need
+# for the microphone and "Add to Home Screen". Invites get a public join
+# page (a static file via Funnel) that explains Tailscale to newcomers.
+TS_URL=""
+phase "Tailscale"
+if [[ "$FLAG_NO_TAILSCALE" == "1" ]]; then
+  skip "Tailscale skipped (--no-tailscale): phones reach Yorik on the home Wi-Fi only"
+else
+  if ! command -v tailscale >/dev/null 2>&1; then
+    say "installing Tailscale"
+    curl -fsSL https://tailscale.com/install.sh | sh >/dev/null
+    ok "Tailscale installed"
+  else
+    skip "Tailscale already installed"
+  fi
+  _ts_state() { tailscale status --json 2>/dev/null | jq -r '.BackendState // "NoState"'; }
+  if [[ "$(_ts_state)" != "Running" ]]; then
+    if [[ -t 0 && -t 1 ]]; then
+      say "sign this machine in to Tailscale: scan the code with your phone (or open the link)"
+      sudo tailscale up --qr --timeout=15m || warn "Tailscale sign-in didn't finish; re-run install.sh to try again"
+    else
+      warn "Tailscale isn't signed in and there's no terminal to show the sign-in code"
+      info "run: sudo tailscale up --qr   then re-run install.sh"
+    fi
+  fi
+  if [[ "$(_ts_state)" == "Running" ]]; then
+    TS_NAME="$(tailscale status --json | jq -r '.Self.DNSName' | sed 's/\.$//')"
+    ok "this machine is ${TS_NAME} in your tailnet"
+    # Serve: Yorik on 443, photos (Immich) on 8443, documents (Paperless)
+    # on 8444. HTTPS certificates must be allowed once in the admin
+    # console; serve says so if they aren't.
+    _serve() {  # port target label
+      local shown="https://${TS_NAME}"
+      [[ "$1" == "443" ]] || shown="${shown}:$1"
+      if tailscale serve status --json 2>/dev/null | jq -e --arg hp "${TS_NAME}:$1" '.Web[$hp]' >/dev/null; then
+        skip "$3 already on ${shown}"
+      elif sudo tailscale serve --bg --https="$1" "$2" >/dev/null 2>&1; then
+        ok "$3 on ${shown}"
+        record "ts_serve_$1" 1
+      else
+        warn "couldn't publish $3 over HTTPS"
+        info "allow HTTPS certificates: https://login.tailscale.com/admin/dns (Enable HTTPS), then re-run"
+        return 1
+      fi
+    }
+    if _serve 443 http://localhost:8000 "Yorik"; then
+      TS_URL="https://${TS_NAME}"
+      if grep -q "^YORIK_TAILSCALE_HTTPS_PORT=" config.env; then
+        sed -i.bak "s|^YORIK_TAILSCALE_HTTPS_PORT=.*|YORIK_TAILSCALE_HTTPS_PORT=443|" config.env && rm -f config.env.bak
+      else
+        printf "\nYORIK_TAILSCALE_HTTPS_PORT=443\n" >> config.env
+      fi
+      # Yorik reads config.env at start; let it learn its tailnet address.
+      if systemctl is-active --quiet yorik 2>/dev/null; then
+        sudo systemctl restart yorik && sleep 3
+      fi
+    fi
+    _serve 8443 http://localhost:2283 "photos" || true
+    _serve 8444 http://localhost:8010 "documents" || true
+    # The public join page: one static file, no data. Funnel needs a
+    # one-time "funnel" permission for this machine in the access
+    # controls; without it invites still work for phones that already
+    # have Tailscale.
+    if tailscale serve status --json 2>/dev/null | jq -e --arg hp "${TS_NAME}:10000" '.AllowFunnel[$hp]' >/dev/null; then
+      skip "public join page already on"
+    elif sudo tailscale funnel --bg --https=10000 "$INSTALL_DIR/deploy/join-page" >/dev/null 2>&1; then
+      ok "public join page on https://${TS_NAME}:10000"
+      record ts_funnel_10000 1
+    else
+      warn "public join page is off (Funnel isn't allowed for this machine yet)"
+      info "allow it once: https://login.tailscale.com/admin/acls (nodeAttrs \"funnel\"), then re-run install.sh"
+    fi
   fi
 fi
 
@@ -1142,9 +1331,9 @@ cat <<EOF
         PubkeyAuthentication  yes
      Then: sudo systemctl reload ssh
 
-  4. ★ Configure Yorik backups in Settings → Backup
-     External SSD + passphrase. Save the passphrase OFF this machine.
-     Recovery without it: not possible. That's the whole point.
+  4. ★ Turn on backups: Home → "Set up Yorik" → Turn on backups.
+     Plug in a USB disk, pick it, print the recovery sheet Yorik makes.
+     Without that passphrase a backup can't be opened. That's the point.
 
 EOF
 
@@ -1155,7 +1344,19 @@ cat <<EOF
 
 ${BOLD}${GRN}Yorik is up.${RST}
 
-  ${BOLD}Open${RST}    http://localhost:8000
+EOF
+# Finish on the phone: a QR code for the setup page, on the tailnet
+# address if there is one, else on this machine's home-network address.
+LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+FINISH_URL="${TS_URL:-http://${LAN_IP:-localhost}:8000}/r/"
+if command -v qrencode >/dev/null 2>&1 && [[ -t 1 ]]; then
+  printf "  %sScan this with your phone to finish setting up:%s\n\n" "${BOLD}" "${RST}"
+  qrencode -t ansiutf8 -m 2 "$FINISH_URL" | sed 's/^/    /'
+  echo
+fi
+cat <<EOF
+  ${BOLD}Open${RST}    ${FINISH_URL}
+          (on this machine: http://localhost:8000)
 
 EOF
 case "$DECIDED_LLM" in

@@ -7,6 +7,10 @@
 # external if you'd relocated it). The repo directory itself is left
 # in place — you delete it with `rm -rf` when you're sure.
 #
+# Also removes what install.sh set up (.install-record): the database
+# stack, the AI model service/files or Ollama model, and the Tailscale
+# HTTPS addresses + join page. Tailscale, Docker and Ollama stay.
+#
 # One big confirmation at the start. No flags. Sudo is requested for
 # the systemd unit + container-owned files in data/, if needed.
 
@@ -48,6 +52,19 @@ if [[ -f docker-compose.yml ]]; then
   fi
 fi
 
+# What install.sh set up (see record() there). Missing file = an older
+# install; then only what's detectable is offered.
+declare -A REC=()
+if [[ -f .install-record ]]; then
+  while IFS='=' read -r k v; do [[ -n "$k" ]] && REC["$k"]="$v"; done < .install-record
+fi
+LLAMA_UNIT_INSTALLED=0
+if command -v systemctl >/dev/null 2>&1 \
+   && systemctl list-unit-files yorik-llamacpp.service 2>/dev/null | grep -q yorik-llamacpp; then
+  LLAMA_UNIT_INSTALLED=1
+fi
+SUPABASE_DIR="infra/supabase/docker"
+
 UVICORN_PID=""
 if [[ -f /tmp/homeos-api.pid ]]; then
   UVICORN_PID="$(cat /tmp/homeos-api.pid 2>/dev/null || true)"
@@ -62,6 +79,12 @@ echo
 [[ -n "$COMPOSE_CMD" ]]    && echo "  • docker compose stack + volumes (immich / paperless / n8n / wa-bridge)"
 [[ $SYSTEMD_INSTALLED == 1 ]] && echo "  • systemd unit /etc/systemd/system/yorik.service (needs sudo)"
 [[ -L "$LOCAL_BIN_LINK" ]] && echo "  • CLI symlink $LOCAL_BIN_LINK"
+[[ -f "$SUPABASE_DIR/docker-compose.yml" ]] && echo "  • the database (Supabase containers + $SUPABASE_DIR/volumes)"
+[[ -f deploy/.env ]] && echo "  • the Docker stack: every container and volume (photos, documents, database, settings)"
+[[ $LLAMA_UNIT_INSTALLED == 1 ]] && echo "  • the AI model service yorik-llamacpp + its model files"
+[[ "${REC[llm]:-}" == "ollama" && -n "${REC[ollama_model]:-}" ]] && echo "  • the Ollama model ${REC[ollama_model]} (Ollama itself stays)"
+for p in 443 8443 8444; do [[ -n "${REC[ts_serve_$p]:-}" ]] && echo "  • Tailscale HTTPS address on port $p (Tailscale itself stays)"; done
+[[ -n "${REC[ts_funnel_10000]:-}" ]] && echo "  • the public join page (Tailscale Funnel on 10000)"
 [[ -d venv ]]              && echo "  • Python venv $REPO/venv"
 [[ -d data ]]              && echo "  • local data $REPO/data (family.db, photos, documents, voices, …)"
 [[ -n "$EXTERNAL_ROOT" && -d "$EXTERNAL_ROOT" ]] \
@@ -157,15 +180,84 @@ if pgrep -f "uvicorn backend.main" >/dev/null 2>&1; then
   ok "killed stray 'uvicorn backend.main' processes"
 fi
 
+if [[ -f deploy/.env ]] && command -v docker >/dev/null 2>&1; then
+  say "DOCKER STACK" "removing the all-in-one stack, its volumes (all data) and built images"
+  ( cd deploy && docker compose down -v --remove-orphans --rmi local ) 2>/dev/null \
+    && ok "stack removed" || warn "docker compose down had errors — continuing"
+  rm -f deploy/.env
+fi
+
+if [[ -f docker-compose.app.yml ]] && command -v docker >/dev/null 2>&1 \
+   && docker ps -a --format '{{.Names}}' | grep -qx yorik-app; then
+  say "CONTAINER" "removing the Yorik container + its image"
+  docker compose -f docker-compose.app.yml down --rmi local 2>/dev/null && ok "yorik-app removed" \
+    || warn "couldn't remove yorik-app — continuing"
+fi
+
 if [[ -n "$COMPOSE_CMD" ]]; then
   say "DOCKER" "tearing down containers + volumes"
-  if $COMPOSE_CMD down -v --remove-orphans 2>/dev/null; then
+  # The bundled services run under compose profiles (bundled-immich …);
+  # a plain `down` skips them. "*" takes every profile.
+  if $COMPOSE_CMD --profile "*" down -v --remove-orphans 2>/dev/null \
+     || $COMPOSE_CMD down -v --remove-orphans 2>/dev/null; then
     ok "$COMPOSE_CMD down -v complete"
   else
     warn "$COMPOSE_CMD down had errors — continuing"
   fi
 else
   skip "no docker compose stack"
+fi
+
+if [[ -f "$SUPABASE_DIR/docker-compose.yml" ]] && command -v docker >/dev/null 2>&1; then
+  say "DATABASE" "tearing down the Supabase stack"
+  if docker compose -f "$SUPABASE_DIR/docker-compose.yml" \
+       $( [[ -f "$SUPABASE_DIR/docker-compose.yorik.yml" ]] && echo -f "$SUPABASE_DIR/docker-compose.yorik.yml" ) \
+       down -v --remove-orphans 2>/dev/null; then
+    ok "Supabase containers + volumes removed"
+  else
+    warn "Supabase teardown had errors — continuing"
+  fi
+  if [[ -d "$SUPABASE_DIR/volumes" ]]; then
+    rm -rf "$SUPABASE_DIR/volumes" 2>/dev/null || sudo rm -rf "$SUPABASE_DIR/volumes"
+    ok "removed the database files"
+  fi
+fi
+
+say "AI MODEL" "removing what install.sh set up for the model"
+if [[ $LLAMA_UNIT_INSTALLED == 1 ]]; then
+  sudo systemctl disable --now yorik-llamacpp 2>/dev/null || true
+  sudo rm -f /etc/systemd/system/yorik-llamacpp.service
+  sudo systemctl daemon-reload 2>/dev/null || true
+  docker rm -f yorik-llamacpp >/dev/null 2>&1 || true
+  ok "yorik-llamacpp service removed"
+fi
+MODEL_DIR="${REC[model_dir]:-$REPO/models/qwen3.5-9b}"
+case "$MODEL_DIR" in
+  "$REPO"/models/*) if [[ -d "$MODEL_DIR" ]]; then rm -rf "$MODEL_DIR"; ok "removed model files $MODEL_DIR"; fi ;;
+  *) [[ -n "${REC[model_dir]:-}" ]] && warn "model dir outside the repo ($MODEL_DIR) — leaving it" ;;
+esac
+if [[ "${REC[llm]:-}" == "ollama" && -n "${REC[ollama_model]:-}" ]] && command -v ollama >/dev/null 2>&1; then
+  ollama rm "${REC[ollama_model]}" >/dev/null 2>&1 && ok "removed Ollama model ${REC[ollama_model]}" \
+    || skip "Ollama model ${REC[ollama_model]} already gone"
+fi
+[[ $LLAMA_UNIT_INSTALLED == 0 && "${REC[llm]:-}" != "ollama" ]] && skip "no model installed by Yorik"
+
+say "TAILSCALE" "removing Yorik's addresses (Tailscale itself stays)"
+if command -v tailscale >/dev/null 2>&1; then
+  any=0
+  for p in 443 8443 8444; do
+    if [[ -n "${REC[ts_serve_$p]:-}" ]]; then
+      sudo tailscale serve --https="$p" off >/dev/null 2>&1 && ok "HTTPS port $p off" || true
+      any=1
+    fi
+  done
+  if [[ -n "${REC[ts_funnel_10000]:-}" ]]; then
+    sudo tailscale funnel --https=10000 off >/dev/null 2>&1 && ok "public join page off" || true
+    any=1
+  fi
+  [[ $any == 0 ]] && skip "none recorded"
+else
+  skip "Tailscale not installed"
 fi
 
 # ── Remove plumbing ──────────────────────────────────────────────────
@@ -228,7 +320,7 @@ if [[ -f config.env ]]; then
   ok "removed config.env"
 fi
 
-rm -f /tmp/homeos-api.pid /tmp/homeos-api.log
+rm -f /tmp/homeos-api.pid /tmp/homeos-api.log .install-record .yorik-runtime
 ok "removed /tmp/homeos-api.{pid,log}"
 
 # ── Done ─────────────────────────────────────────────────────────────

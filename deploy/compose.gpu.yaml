@@ -1,0 +1,12 @@
+# NVIDIA GPU for the AI model (and photo recognition). Docker Desktop on
+# Windows needs WSL2 + a current NVIDIA driver; Linux needs the NVIDIA
+# container toolkit. The installers add this file when they find a GPU.
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

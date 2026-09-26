@@ -28,7 +28,7 @@ Option, nie vorausgewählt. Texte vorerst Englisch; Übersetzung am Ende.
   API. `/r/join`: Name, Farbe, PIN, Handy einrichten. Das Handy wird ein
   vertrautes Gerät (Cookie `yorik_device`); die Anmeldung fragt dort nur die
   PIN. Beitritt und PIN-Anmeldung nur aus Heimnetz oder Tailnet.
-  `join-page/index.html` ist die öffentliche Hälfte: keine Daten, alles im
+  `deploy/join-page/index.html` ist die öffentliche Hälfte: keine Daten, alles im
   `#`-Teil der URL, wartet bis Yorik über Tailscale antwortet.
 - **A4 Checkliste und Tour** (`backend/setup_checklist.py`, Migration 165):
   Schritte aus echten Daten, pro Rolle; Tour mit Hinweisen an den echten
@@ -41,11 +41,115 @@ Option, nie vorausgewählt. Texte vorerst Englisch; Übersetzung am Ende.
   „Back up this phone“ für Immich mit kopierbarer Adresse und Anmeldung;
   Sicherung per Laufwerk mit erzeugter Passphrase und Notfallblatt.
 
+## Phase B: der Installer
+
+- **B1** `install.sh` fragt nichts mehr (`--ask` holt die Fragen zurück),
+  richtet Tailscale ein (Anmelde-QR im Terminal, HTTPS für Yorik :443,
+  Fotos :8443, Dokumente :8444, Einladungsseite :10000 per Funnel) und
+  endet mit einem QR-Code fürs Handy. Downloads setzen nach Abbruch fort.
+- **B2** README und `docs/INSTALL.md` beschreiben genau diesen einen Weg.
+- **B3** `.install-record` merkt sich, was der Installer eingerichtet hat;
+  `uninstall.sh` nimmt genau das wieder weg (auch die Supabase-Daten, die
+  früher liegen blieben), Tailscale/Docker/Ollama bleiben.
+- **B4** Einstellungen › System › Updates: „Neue Version da“ und ein Knopf.
+  `yorik-update.service` (per polkit startbar) führt `yorik upgrade` aus
+  und startet Yorik neu. Kopien mit lokalen Änderungen werden nie aus der
+  App aktualisiert.
+- **B5** `scripts/test-fresh-install.sh`: echte Neuinstallation in einer
+  frischen Ubuntu-24.04-VM (KVM), 18 Prüfungen bis zum Deinstallieren.
+- **B6** Was der VM-Test fand: der Frontend-Fingerabdruck hing von der
+  Spracheinstellung ab (jede Neuinstallation startete danach nicht unter
+  systemd), `uninstall.sh` ließ die Profil-Container stehen.
+
+## Phase C: Container und fertiges Gerät
+
+- **C1** `install.sh --container`: Yorik selbst läuft aus einem Image
+  (`Dockerfile`, `docker-compose.app.yml`, Host-Netzwerk, läuft als der
+  Nutzer, startet mit Docker neu); auf dem Rechner kein Python von Yorik.
+  Der klassische Weg bleibt Standard.
+- **C2** `scripts/build-appliance.sh`: Ubuntu-Server-24.04.5-Stick, der
+  die Platte eines Mini-PCs übernimmt, beim ersten Start Yorik einrichtet
+  und auf dem Bildschirm erst den Tailscale-Code, dann den QR-Code fürs
+  Handy zeigt (`appliance/`).
+- **C3** Image baut (2,35 GB); Container findet das DB-Passwort.
+
+## Phase D: ein Docker-Stack für Linux, Windows und macOS
+
+- **D1** `deploy/compose.yaml`: Yorik, Postgres (pgvector, ohne Supabase;
+  `deploy/db-init/` legt Rollen, `auth.users`-Ersatz und die Publikation
+  an), Ollama, Tailscale (Userspace, `serve.json`), Immich, Paperless,
+  WhatsApp-Brücke, Updater. Alles in benannten Volumes, Einstellungen in
+  `deploy/.env` aus `env.template`, Anmeldung lokal (`YORIK_AUTH_MODE=local`).
+- **D2** Yorik richtet im Container Fotos und Dokumente selbst ein
+  (`backend/docker_bootstrap.py`: Paperless-Token, Immich-Admin und
+  API-Schlüssel, Modell-Download). Das Paperless-Dienstkonto heißt
+  `yorik_service`, damit es nicht mit einem Nutzer „admin" kollidiert.
+- **D3** Starter: `Yorik-Setup.cmd` → `deploy/install-windows.ps1` (WSL2,
+  Docker Desktop per winget, ein Neustart, weiter per RunOnce, Verknüpfung
+  auf dem Desktop), `Yorik Setup.command` → `deploy/install-mac.sh`
+  (nutzt die Ollama-App, wenn da). Linux: `install.sh` nimmt jetzt
+  standardmäßig diesen Weg (`deploy/linux-docker-start.sh`), `--classic`
+  ist der bisherige; der Stick installiert ebenfalls den Docker-Weg.
+- **D4** Versionen: `release.yml` baut bei jedem Release die Images
+  (amd64 + arm64, Tag der Version und `stable`) und die drei Zip-Pakete;
+  `images-edge.yml` baut `edge` bei jedem Push auf main. Veröffentlicht
+  wird erst, wenn der Admin pusht und ein Release-Tag setzt.
+- **D5** Updates im Docker-Stack: Einstellungen › System › Updates liest
+  die neueste Version von GitHub; „Update now" gibt dem Updater-Container
+  Bescheid, der `docker compose pull && up -d` macht. Die Daten bleiben in
+  den Volumes.
+- **D6** Backups laufen im Container über das Netz (`psql -h db` statt
+  `docker exec`) in einen Host-Ordner (`YORIK_BACKUP_DIR`).
+- **D7** Tests: `scripts/test-docker-stack.sh` (eigenes Projekt, nur
+  127.0.0.1, ändert nichts am Laufenden), `scripts/test-fresh-install.sh`
+  (frische Ubuntu-VM, Standardweg), PowerShell-Syntaxprüfung des
+  Windows-Skripts. Ein echter Windows- und Mac-Test steht aus.
+
+**Für die laufende Instanz ändert D nichts am Betrieb:** Dirks Rechner
+bleibt auf dem klassischen Weg (`.install-record` sagt `classic`, `start.sh`
+und der systemd-Dienst wie bisher). Einzige Stelle zum Mitziehen: die
+Einladungsseite liegt jetzt in `deploy/join-page/`. Wer Funnel schon auf
+`<repo>/join-page` eingerichtet hat, richtet ihn einmal neu ein (Befehl
+unten).
+
+## Übernahme und Zurückrollen (für den Admin)
+
+Jede Phase ist ein eigener Branch (`setup/a` → `setup/b` → `setup/c` → `setup/d`,
+aufeinander aufbauend). Vor jeder Übernahme:
+
+```bash
+docker exec supabase-db pg_dumpall -U supabase_admin | gzip > ~/yorik-db-vor-setup-$(date +%F-%H%M).sql.gz
+cd ~/yorikai/yorik-ai && git tag -f vor-setup-a   # bzw. vor-setup-b / -c / -d
+```
+
+Übernehmen (Beispiel A; für B/C den Branch tauschen):
+
+```bash
+cd ~/yorikai/yorik-ai && git merge --ff-only setup/a \
+  && (cd frontend-react && npm ci && npm run build) \
+  && git add frontend-react/dist && git commit -m "setup A: build" \
+  && sudo systemctl restart yorik \
+  && docker compose up -d --build whatsapp-bridge
+```
+
+Der Neustart wendet die Migrationen 164/165 an (nur neue Tabellen und
+eine neue Spalte). Zurück:
+
+```bash
+cd ~/yorikai/yorik-ai && git reset --hard vor-setup-a \
+  && (cd frontend-react && npm ci && npm run build) && sudo systemctl restart yorik
+```
+
+Die neuen Tabellen bleiben dann ungenutzt stehen; es gehen keine Daten
+verloren. Der Dump ist die Versicherung für den Fall, dass trotzdem etwas
+schiefgeht; zurückgespielt wird er nur in eine leere Datenbank, nicht in
+die laufende (Ablauf in `docs/RESTORE.md`, am besten gemeinsam).
+
 ## Was der Admin einmal tun muss
 
 1. In der Tailscale-Admin-Konsole Funnel für die Maschine erlauben
    (Access controls, `nodeAttrs` mit `funnel`).
-2. `sudo tailscale funnel --bg --https=10000 <repo>/join-page`
+2. `sudo tailscale funnel --bg --https=10000 <repo>/deploy/join-page`
    (Einstellungen › System › Phones zeigt den genauen Befehl).
 3. Optional: OAuth-Client mit Schreibrecht auf Geräte anlegen und in
    Einstellungen › System › Phones eintragen. Dann bringt jede Einladung

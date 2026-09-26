@@ -26,12 +26,11 @@ Reachable endpoints show with the model list. Click the model you want → done.
 
 ## Manual entry
 
-Don't have a local LLM yet? Fastest path is Ollama:
+Don't have a local LLM yet? Re-run `bash install.sh`: it installs one that fits this machine. By hand, the same model the installer uses on a machine without a GPU:
 
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
-ollama serve &
-ollama pull qwen3.5-9b
+ollama pull robit/qwen3.5-9b-r7-research-vision:q4km
 ```
 
 Then in **Settings → LLM**:

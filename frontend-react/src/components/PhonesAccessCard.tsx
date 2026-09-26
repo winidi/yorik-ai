@@ -7,12 +7,30 @@
  */
 import { useEffect, useState } from "react";
 import { Check, Copy, ExternalLink, Loader2, RefreshCw } from "lucide-react";
+import QRCode from "qrcode";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface Setup {
   tailscale_running: boolean; dns_name: string | null; base_url: string | null;
   join_page_url: string | null; join_page_port: number; api_configured: boolean; join_page_dir: string;
+  runtime?: string; login?: { state: string; auth_url: string | null };
+}
+
+// Sign this Yorik in to Tailscale: the link tailscaled is waiting on,
+// as a QR code to scan with the phone that has the Tailscale account.
+function SignInCode({ url }: { url: string }) {
+  const [img, setImg] = useState<string | null>(null);
+  useEffect(() => { QRCode.toDataURL(url, { margin: 1, width: 320 }).then(setImg).catch(() => setImg(null)); }, [url]);
+  return (
+    <div className="flex flex-col sm:flex-row gap-3 items-start">
+      {img && <img src={img} alt="Tailscale sign-in code" className="w-36 h-36 rounded-lg bg-white p-1" />}
+      <div className="space-y-2 text-xs text-muted-foreground">
+        <p>Scan with your phone, or open the link, and sign in with the account your family uses for Tailscale (a free account with Google, Apple or Microsoft works).</p>
+        <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline">Open the sign-in page <ExternalLink className="w-3 h-3" /></a>
+      </div>
+    </div>
+  );
 }
 
 function Row({ ok, title, children }: { ok: boolean; title: string; children?: React.ReactNode }) {
@@ -52,6 +70,13 @@ export function PhonesAccessCard() {
       .then(setS).catch(() => setS(null));
   };
   useEffect(() => { load(); }, []);
+  // While Tailscale waits for its sign-in, check every few seconds so the
+  // card turns green by itself once it's done.
+  useEffect(() => {
+    if (!s || s.tailscale_running || !s.login?.auth_url) return;
+    const t = setInterval(() => load(true), 5000);
+    return () => clearInterval(t);
+  }, [s?.tailscale_running, s?.login?.auth_url]);
 
   async function save() {
     setBusy(true); setNote(null);
@@ -71,7 +96,8 @@ export function PhonesAccessCard() {
       </div>
       {!s ? <div className="text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin inline" /></div> : (
         <div className="bg-card border border-border rounded-xl px-4">
-          <Row ok={s.tailscale_running} title={s.tailscale_running ? "Tailscale is running on this machine" : "Tailscale isn't running on this machine"}>
+          <Row ok={s.tailscale_running} title={s.tailscale_running ? "Tailscale is running on this machine" : s.login?.auth_url ? "Sign this Yorik in to Tailscale" : "Tailscale isn't running on this machine"}>
+            {!s.tailscale_running && s.login?.auth_url && <SignInCode url={s.login.auth_url} />}
             {s.base_url
               ? <p className="text-xs text-muted-foreground">Family phones reach Yorik at <b>{s.base_url}</b>. Invites point there, never at localhost.</p>
               : <p className="text-xs text-muted-foreground">Install and sign in to Tailscale on this machine, then set up HTTPS with <code>tailscale serve</code> (see Help → Tailscale).</p>}
@@ -81,8 +107,10 @@ export function PhonesAccessCard() {
               <p className="text-xs text-muted-foreground">Invites open <b>{s.join_page_url}</b> first. It explains Tailscale to people who don't have it yet and holds no data.</p>
             ) : (
               <>
-                <p className="text-xs text-muted-foreground">Without it, an invite only works on a phone that already has Tailscale on. To switch it on, allow Funnel for this machine in the Tailscale admin (Access controls), then run once on this machine:</p>
-                <CopyLine text={`sudo tailscale funnel --bg --https=${s.join_page_port} ${s.join_page_dir}`} />
+                <p className="text-xs text-muted-foreground">Without it, an invite only works on a phone that already has Tailscale on. To switch it on, allow Funnel for this machine in the Tailscale admin (Access controls), then {s.runtime === "docker" ? "set this in Yorik's .env and restart the tailscale container:" : "run once on this machine:"}</p>
+                <CopyLine text={s.runtime === "docker"
+                  ? "YORIK_TS_SERVE=serve-funnel.json   (then: docker compose up -d tailscale)"
+                  : `sudo tailscale funnel --bg --https=${s.join_page_port} ${s.join_page_dir}`} />
                 <a href="https://login.tailscale.com/admin/acls" target="_blank" rel="noopener noreferrer" className="text-xs inline-flex items-center gap-1 underline text-muted-foreground">Tailscale access controls <ExternalLink className="w-3 h-3" /></a>
               </>
             )}

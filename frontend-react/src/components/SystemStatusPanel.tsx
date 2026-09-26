@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { WorkersStatus } from "@/components/WorkersStatus";
 import { PhonesAccessCard } from "@/components/PhonesAccessCard";
+import { UpdateCard } from "@/components/UpdateCard";
 
 export interface SystemStatus {
   llm: { model: string; base_url: string; reachable: boolean };
@@ -172,6 +173,8 @@ export function SystemStatusPanel() {
           />
         </div>
       </section>
+
+      <UpdateCard />
 
       <PhonesAccessCard />
 

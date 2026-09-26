@@ -106,3 +106,17 @@ def test_joining_only_from_home(fresh_app, monkeypatch):
     monkeypatch.setattr(member_invites, "is_trusted_lan_request", lambda r: False)
     r = TestClient(fresh_app).get("/api/auth/invite/whatever")
     assert r.status_code == 403
+
+
+def test_without_tailscale_the_invite_uses_the_address_in_use(fresh_app, monkeypatch):
+    from backend import member_invites, tailscale_local
+    monkeypatch.setattr(member_invites, "is_trusted_lan_request", lambda r: True)
+    monkeypatch.setattr(tailscale_local, "base_url", lambda: None)
+    monkeypatch.setattr(tailscale_local, "join_page_url", lambda: None)
+    monkeypatch.setattr(tailscale_local, "create_device_invite", lambda: {"ok": False, "reason": "not_configured"})
+    admin, _ = login_client(fresh_app, role="admin")
+    body = admin.post("/api/invites", json={"name": "Oma"}, headers={"Host": "192.168.0.99:8000"}).json()
+    assert body["join_url"].startswith("http://192.168.0.99:8000/r/join?t="), body
+    assert body["home_only"] is True
+    local = admin.post("/api/invites", json={"name": "Opa"}, headers={"Host": "localhost:8000"}).json()
+    assert local["join_url"] is None and local["problem"]
