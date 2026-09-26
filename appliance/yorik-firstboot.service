@@ -1,0 +1,14 @@
+[Unit]
+Description=Yorik first-boot setup (runs install.sh once)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/yorik/firstboot.done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/yorik-firstboot
+TimeoutStartSec=3h
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

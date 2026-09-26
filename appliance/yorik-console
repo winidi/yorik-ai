@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# The Yorik box's screen (tty1). No login prompt, no text to type: it
+# says what the box is doing and, once Yorik runs, shows a QR code to
+# scan with a phone. If Tailscale isn't signed in yet, it shows that
+# sign-in code first. A shell is still on tty2 (Ctrl+Alt+F2).
+export TERM=linux
+setterm --blank 0 --powerdown 0 2>/dev/null || true
+LOG=/var/log/yorik-firstboot.log
+while true; do
+  clear
+  printf "\n\n   \033[1mYorik\033[0m\n\n"
+  if [[ ! -f /var/lib/yorik/firstboot.done ]]; then
+    printf "   Setting itself up. This takes 20 to 40 minutes the first time.\n"
+    printf "   Keep it plugged in and connected to the internet.\n\n"
+    tail -n 3 "$LOG" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | cut -c1-70 | sed 's/^/   /'
+    sleep 10; continue
+  fi
+  state=$(tailscale status --json 2>/dev/null | jq -r '.BackendState // "NoState"')
+  if [[ "$state" == "NeedsLogin" || "$state" == "NoState" || "$state" == "Stopped" ]]; then
+    printf "   One more step for access on the go: sign in to Tailscale.\n"
+    printf "   Scan this with your phone (free account, Google or Apple sign-in).\n\n"
+    timeout 30m tailscale up --qr --timeout=30m 2>&1 | sed 's/^/   /'
+    # Signed in: publish Yorik, photos and documents over HTTPS and the
+    # join page (the same as install.sh's Tailscale step; this runs as
+    # root, the installer's sudo rights are gone by now).
+    if [[ "$(tailscale status --json 2>/dev/null | jq -r .BackendState)" == "Running" ]]; then
+      tailscale serve --bg --https=443 http://localhost:8000 >/dev/null 2>&1
+      tailscale serve --bg --https=8443 http://localhost:2283 >/dev/null 2>&1
+      tailscale serve --bg --https=8444 http://localhost:8010 >/dev/null 2>&1
+      tailscale funnel --bg --https=10000 /home/yorik/yorik-ai/join-page >/dev/null 2>&1 || true
+      cfg=/home/yorik/yorik-ai/config.env
+      if grep -q '^YORIK_TAILSCALE_HTTPS_PORT=' "$cfg"; then sed -i 's/^YORIK_TAILSCALE_HTTPS_PORT=.*/YORIK_TAILSCALE_HTTPS_PORT=443/' "$cfg"
+      else printf '\nYORIK_TAILSCALE_HTTPS_PORT=443\n' >> "$cfg"; fi
+      systemctl restart yorik 2>/dev/null || docker restart yorik-app >/dev/null 2>&1 || true
+      echo "[$(date -Is)] tailscale signed in; HTTPS addresses on" >> "$LOG"
+    fi
+    continue
+  fi
+  name=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
+  if curl -fsS --max-time 3 http://localhost:8000/api/health >/dev/null 2>&1; then
+    url="http://yorik.local:8000/r/"
+    [[ -n "$name" ]] && url="https://${name}/r/"
+    printf "   Yorik is ready. Scan with your phone:\n\n"
+    qrencode -t ansiutf8 -m 2 "$url" | sed 's/^/     /'
+    printf "\n   %s\n" "$url"
+    printf "   (at home also: http://yorik.local:8000)\n"
+  else
+    printf "   Yorik is starting…\n"
+  fi
+  sleep 60
+done
