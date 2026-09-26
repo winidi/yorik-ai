@@ -22,6 +22,9 @@ services:
     volumes:
       - ./data:/app/data
       - ./config.env:/app/config.env:ro
+      # The database password lives here (scripts/bootstrap-supabase.sh);
+      # Yorik reads it the same way as the classic install.
+      - ./infra/supabase/docker/.env:/app/infra/supabase/docker/.env:ro
       # The host's Tailscale socket, read-only: Yorik asks tailscaled for
       # its own tailnet address (for invite links) over the local API.
       - /var/run/tailscale:/var/run/tailscale:ro
