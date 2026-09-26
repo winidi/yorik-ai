@@ -17,7 +17,9 @@ autoinstall:
     install-server: false
   storage:
     layout: { name: lvm, sizing-policy: all }
-  packages: [git, curl, jq, qrencode, avahi-daemon]
+  # No extra packages here: one mirror hiccup during the Ubuntu install
+  # stops it on an error screen. yorik-firstboot installs them instead,
+  # and retries on the next boot.
   late-commands:
     - curtin in-target -- chage -d 0 yorik
     - cp -a /cdrom/yorik /target/home/yorik/yorik-ai
