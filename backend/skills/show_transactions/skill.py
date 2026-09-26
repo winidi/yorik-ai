@@ -54,9 +54,18 @@ async def execute(ctx, days: int = 30, account_id: Optional[int] = None,
         return {"transactions": [], "_llm_hint": f"No transactions found for the last {days} days "
                                                   f"(with the given filters). Say so plainly; don't guess numbers."
                                                   + _categories_note(user_id, getattr(ctx, "role", None))}
-    return {"transactions": txs, "days": days,
+    # Totals come from here, not from the model: in the replay the model
+    # listed all seven transfers correctly and then added them up wrong.
+    amounts = [float(t["amount"] or 0) for t in txs]
+    # Totals first: when the row list is cut for the model, they survive.
+    return {"count": len(txs), "total": round(sum(amounts), 2),
+            "total_outgoing": round(sum(a for a in amounts if a < 0), 2),
+            "total_incoming": round(sum(a for a in amounts if a > 0), 2),
+            "days": days, "transactions": txs,
             "_llm_hint": f"{len(txs)} transaction(s) over {days} days. Quote amounts/dates verbatim; "
-                         f"if capped at 200, say the list was cut and offer a narrower range."}
+                         f"if capped at 200, say the list was cut and offer a narrower range. "
+                         f"Totals are already computed (count, total, total_outgoing, total_incoming) — "
+                         f"quote them, don't add up rows yourself."}
 
 
 def _window(days: int, from_date: Optional[str], to_date: Optional[str]) -> tuple[str, Optional[str]]:

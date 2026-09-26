@@ -287,6 +287,7 @@ class TestFinanceFilters:
         from backend.skills.show_transactions.skill import execute
         out = asyncio.run(execute(ctx=_mk_ctx(role="admin", user_id=person), days=30, search="anna beispiel"))
         assert [t["counterparty"] for t in out["transactions"]] == ["Anna Beispiel"]
+        assert (out["count"], out["total"], out["total_outgoing"]) == (1, -2300.0, -2300.0)
 
     def test_short_category_name_matches(self, person, account):
         from backend.skills.show_transactions.skill import execute
@@ -436,3 +437,15 @@ class TestRemindMe:
         rid = reminders.create(person, "Müll", datetime.now(timezone.utc) + timedelta(minutes=5))
         assert reminders.cancel(rid, person)
         assert reminders.fire_due(datetime.now(timezone.utc) + timedelta(hours=1)) == 0
+
+
+def test_transaction_totals_survive_the_cut(fresh_app):
+    from backend.ui_tools import render_skill_result
+    from backend.skills.show_transactions import skill as st
+    rows = [{"counterparty": f"Kiosk {i}", "amount": -1.0} for i in range(400)]
+    fake = {"count": 400, "total": -400.0, "total_outgoing": -400.0, "total_incoming": 0.0,
+            "days": 30, "transactions": rows, "_llm_hint": "x"}
+    assert '"total":-400.0' in render_skill_result(fake, skill="show_transactions")
+    import inspect
+    src = inspect.getsource(st.execute)
+    assert src.index('"count": len(txs)') < src.index('"transactions": txs')
