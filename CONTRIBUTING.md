@@ -80,6 +80,11 @@ npm run dev                                      # :5173 with hot reload
 npm run build                                    # writes to dist/, served by backend at /r/*
 ```
 
+## Releases
+
+How a version is cut, and the rules that keep one-click updates safe
+(additive migrations, settings only added): [docs/RELEASING.md](docs/RELEASING.md).
+
 ## Reporting bugs
 
 Use the [bug report template](https://github.com/winidi/yorik-ai/issues/new?template=bug.yml). The most useful bug reports include:

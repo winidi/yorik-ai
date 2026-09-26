@@ -1,13 +1,9 @@
 name: Release
 
-# Triggers when a new tag matching v* is pushed. Creates a GitHub
-# release with auto-generated notes (commits between this tag and the
-# previous one). Prereleases get the "prerelease" flag automatically
-# when the tag includes `-alpha`, `-beta`, or `-rc`.
-#
-# For v0.1.0-alpha (the first tag), there's no previous tag, so the
-# release body falls back to the matching CHANGELOG.md section that
-# `gh release create --generate-notes` extracts.
+# Triggers when a tag matching v* is pushed: the GitHub release (notes =
+# the tag's section of CHANGELOG.md), the images and the download
+# bundles. Tags with -alpha/-beta/-rc become prereleases (no "stable",
+# never offered to installs). How to cut a release: docs/RELEASING.md.
 
 on:
   push:
@@ -39,9 +35,6 @@ jobs:
         run: |
           # Pull the matching [vX.Y.Z-tag] section out of CHANGELOG.md
           # so the GitHub release body matches what we already document.
-          # Falls back to "see CHANGELOG.md" if no match (e.g. tag landed
-          # before the CHANGELOG was updated — author can fix the release
-          # body manually).
           TAG_NO_V="${{ github.ref_name }}"
           TAG_NO_V="${TAG_NO_V#v}"
           awk -v tag="$TAG_NO_V" '
@@ -53,7 +46,15 @@ jobs:
             found { print }
           ' CHANGELOG.md > release-body.md
           if [ ! -s release-body.md ]; then
-            echo "(See CHANGELOG.md for changes in this release.)" > release-body.md
+            # Families see these notes in the app (docs/RELEASING.md):
+            # no release without its CHANGELOG section.
+            echo "::error::CHANGELOG.md has no '## [$TAG_NO_V]' section. Add it, then tag again."
+            exit 1
+          fi
+          grep -q '^### Highlights' release-body.md \
+            || echo "::warning::no '### Highlights' in the CHANGELOG section; the app will show the first list it finds"
+          if [[ "$TAG_NO_V" =~ -(alpha|beta|rc) ]]; then
+            echo "::warning::prerelease: no 'stable' images, and installs won't offer it as an update"
           fi
           echo "--- release body ---"
           head -30 release-body.md

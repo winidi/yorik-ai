@@ -58,3 +58,24 @@ def test_docker_mode_asks_the_updater(fresh_app, monkeypatch, tmp_path):
     assert st["behind"] == 1 and st["can_update"] and st["changes"] == ["faster", "nicer"]
     assert admin.post("/api/system/update").status_code == 200
     assert (tmp_path / "request").exists()
+
+
+def test_docker_mode_reports_a_failed_update(fresh_app, monkeypatch, tmp_path):
+    from backend import update_routes as u
+    monkeypatch.setenv("YORIK_RUNTIME", "docker")
+    monkeypatch.setenv("YORIK_VERSION", "0.9.0")
+    monkeypatch.setattr(u, "_UPDATER", tmp_path)
+    monkeypatch.setattr(u, "_latest_release", lambda check: {"tag": "v0.9.1", "notes": ""})
+    admin, _ = login_client(fresh_app, role="admin")
+    (tmp_path / "status").write_text("fetching 2026-09-26T10:00:00+00:00")
+    st = admin.get("/api/system/update").json()
+    assert st["running"] and st["last_failed"] is None
+    (tmp_path / "status").write_text("failed couldn't download the new images 2026-09-26T10:01:00+00:00")
+    st = admin.get("/api/system/update").json()
+    assert not st["running"] and st["last_failed"] == "couldn't download the new images"
+
+
+def test_highlights_are_the_first_list():
+    from backend.update_routes import _highlights
+    body = "### Highlights\n\n- Install anywhere.\n- **Invite** by QR.\n\nIntro text.\n\n### Added\n\n- Long entry\n"
+    assert _highlights(body) == ["Install anywhere.", "Invite by QR."]

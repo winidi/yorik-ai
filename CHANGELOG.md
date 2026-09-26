@@ -5,13 +5,45 @@ All notable changes to Yorik are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — robustness pass (August 2026)
+## [Unreleased]
 
-No new features. This is the "works on a stranger's box" pass after the
-first two alpha months, done with the code audit of 2026-08-24 as the
-worklist.
+### Highlights
+
+- Install on Windows, macOS or Linux from one download, or make an install stick for a spare mini PC.
+- Invite your family with a QR code; everyone signs in on their phone with a 4-digit PIN.
+- A friendlier look for the whole family, with a softer light mode.
+- A checklist and a short tour on first start, and help right in the app.
+- Updates from the app: Settings → System → Updates.
+- New apps: Pipelines (follow up on a mail), Finance (read-only bank accounts), Schreiben (letters and invoices).
+
+The "works on a stranger's box" pass after the first two alpha months
+(the code audit of 2026-08-24 as the worklist), then setting up without
+a technician (September 2026, `docs/plans/2026-09-26-einrichten.md`).
 
 ### Added
+
+- **One install for Windows, macOS and Linux.** Yorik, its database,
+  photos, documents, WhatsApp, the AI model and Tailscale run as one
+  Docker stack (`deploy/compose.yaml`). Windows: `Yorik-Setup.cmd` sets
+  up WSL2 and Docker Desktop; macOS: `Yorik Setup.command`; Linux:
+  `bash install.sh` asks nothing and ends with a QR code for the phone.
+  `bash scripts/build-appliance.sh` makes an install stick for a mini PC.
+  Yorik connects photos and documents by itself. `install.sh --classic`
+  keeps the previous way.
+- **Updates from the app** (Settings → System → Updates). Docker installs
+  get new versions as images plus the release's install files
+  (`deploy/updater.sh`); settings a version adds are filled into `.env`.
+  Releases are built by `.github/workflows/release.yml`; see
+  `docs/RELEASING.md`.
+- **The family gets in by QR code.** Invite with a QR code; the person
+  picks a name, a colour and a 4-digit PIN on their phone. Tailscale for
+  outside the home, guided from Settings → System → Phones.
+- **First start.** A checklist on Home, a short tour on the real
+  buttons, one hint per app, help in the app; email in three steps,
+  calendar links, WhatsApp by pairing code, photos from the phone,
+  backups to a USB drive.
+- **The family look.** Rounder, warmer, friendlier type, one accent per
+  app, a softer light mode.
 
 - **Pipelines: the model writes the reminders.** When a pipeline is
   created, the local model reads the sent mail, names the expected

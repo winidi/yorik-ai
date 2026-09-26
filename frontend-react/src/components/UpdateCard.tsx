@@ -1,7 +1,9 @@
 /**
  * Settings → System → Updates: is a new version ready, and one button
  * to install it. Backend: /api/system/update (update_routes.py), which
- * starts yorik-update.service; Yorik restarts itself afterwards.
+ * starts yorik-update.service (classic install) or asks the updater
+ * container (Docker install, deploy/updater.sh); Yorik restarts itself
+ * afterwards.
  */
 import { useEffect, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
@@ -10,6 +12,7 @@ import { api } from "@/lib/api";
 interface Status {
   available: boolean; reason?: string; current?: string; behind?: number; changes?: string[];
   local_changes?: boolean; can_update?: boolean; running?: boolean;
+  runtime?: string; last_failed?: string | null;
 }
 
 export function UpdateCard() {
@@ -25,11 +28,20 @@ export function UpdateCard() {
     try {
       const r = await api.post<{ message: string }>("/api/system/update");
       setNote(r.message);
-      // Wait for the restart: poll health until Yorik answers again.
+      // Wait for the restart: poll until Yorik answers again (Docker: until
+      // the updater says it's done or failed).
       const t0 = Date.now();
       const tick = setInterval(async () => {
-        try { const r2 = await fetch("/api/health", { cache: "no-store" }); if (r2.ok && Date.now() - t0 > 20000) { clearInterval(tick); window.location.reload(); } }
-        catch { /* restarting */ }
+        try {
+          if (s?.runtime === "docker") {
+            const st = await api.get<Status>("/api/system/update");
+            if (st.last_failed) { clearInterval(tick); setS(st); setBusy(false); setNote(null); return; }
+            if (!st.running && Date.now() - t0 > 20000) { clearInterval(tick); window.location.reload(); }
+          } else {
+            const r2 = await fetch("/api/health", { cache: "no-store" });
+            if (r2.ok && Date.now() - t0 > 20000) { clearInterval(tick); window.location.reload(); }
+          }
+        } catch { /* restarting */ }
         if (Date.now() - t0 > 15 * 60_000) clearInterval(tick);
       }, 5000);
     } catch (e: any) { setNote(e?.message || "The update couldn't start."); setBusy(false); }
@@ -59,7 +71,14 @@ export function UpdateCard() {
             ) : (
               <p className="text-xs text-muted-foreground">Updating from here needs a one-time setup: run <code>bash install.sh</code> again. Or use <code>./scripts/yorik upgrade</code>.</p>
             )}
-            <p className="text-xs text-muted-foreground">Yorik makes sure the last backup opens, updates, and restarts in a minute or two.</p>
+            {s.last_failed && !busy && (
+              <p className="text-sm text-destructive">The last update didn't finish: {s.last_failed}. Your data is safe. Try again later.</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {s.runtime === "docker"
+                ? "Yorik downloads the new version and restarts in a few minutes. Your data stays."
+                : "Yorik makes sure the last backup opens, updates, and restarts in a minute or two."}
+            </p>
           </>
         ) : (
           <div className="text-sm">Yorik is up to date <span className="text-muted-foreground">({s.current})</span></div>

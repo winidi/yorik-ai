@@ -80,6 +80,19 @@ def _latest_release(check: bool) -> dict[str, Any]:
     return _release_cache
 
 
+def _highlights(body: str) -> list[str]:
+    """What the app shows as "what's new": the first list in the release
+    notes (the CHANGELOG's ### Highlights, see docs/RELEASING.md)."""
+    out: list[str] = []
+    for line in body.splitlines():
+        t = line.strip()
+        if t.startswith(("- ", "* ")):
+            out.append(t[2:].replace("**", "").strip())
+        elif out and t.startswith("#"):
+            break
+    return out[:8]
+
+
 def _docker_status(check: bool) -> dict[str, Any]:
     import os
     current = os.getenv("YORIK_VERSION") or "dev"
@@ -91,13 +104,15 @@ def _docker_status(check: bool) -> dict[str, Any]:
         status = (_UPDATER / "status").read_text().strip()
     except OSError:
         pass
-    notes = [l.strip("-* ").strip() for l in (rel.get("notes") or "").splitlines() if l.strip()][:12]
+    notes = _highlights(rel.get("notes") or "")
     return {
         "available": True, "runtime": "docker", "current": current, "latest": latest or None,
         "behind": 1 if newer else 0, "changes": notes if newer else [],
         "local_changes": False, "can_update": _UPDATER.is_dir(),
-        "running": status.startswith("pulling") or (_UPDATER / "request").exists(),
+        "running": status.startswith(("fetching", "pulling")) or (_UPDATER / "request").exists(),
         "updater_status": status or None, "checked": bool(rel),
+        # "failed <why> <when>" from deploy/updater.sh → just the why
+        "last_failed": status[7:].rsplit(" ", 1)[0] if status.startswith("failed ") else None,
     }
 
 
