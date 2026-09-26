@@ -772,20 +772,19 @@ fi
 
 # ─── LLM ──────────────────────────────────────────────────────────────
 phase "LLM"
+LLM_BASE_URL=""
+LLM_MODEL=""
+
 if [[ "$INSTALL_MODE" == "docker" ]]; then
   # The model runs in the stack's Ollama container. With an NVIDIA GPU,
   # Docker needs NVIDIA's container toolkit to hand it over.
   if has_nvidia_gpu; then
-    DECIDED_LLM="cuda"
     ensure_nvidia_toolkit
   else
     skip "no NVIDIA GPU — the AI model runs on the CPU (5–10 s per reply)"
   fi
   DECIDED_LLM="docker"
 else
-
-LLM_BASE_URL=""
-LLM_MODEL=""
 
 case "$DECIDED_LLM" in
   existing|remote)
