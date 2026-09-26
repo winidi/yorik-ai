@@ -139,30 +139,10 @@ class SkillTool:
                        if len(after_actions) >= len(before_actions)
                        else list(after_actions))
 
-        # When a skill returns `_llm_hint`, surface BOTH the hint (steering
-        # rule) AND the structured data (truth). Earlier versions exposed
-        # only the hint to prevent the LLM from echoing dict-text into the
-        # user's reply — but that left briefing-style asks ("Überblick über
-        # heute") with no data to summarise, so the LLM hallucinated. The
-        # hint already tells the LLM how to phrase the reply; including the
-        # raw data behind it lets it stay honest when it must enumerate.
-        if isinstance(result, dict) and result.get("_llm_hint"):
-            hint = str(result["_llm_hint"])
-            data = {k: v for k, v in result.items() if k != "_llm_hint"}
-            if data:
-                preview = (
-                    f"{hint}\n\n"
-                    f"Source data (quote only what is here — do not invent rows):\n"
-                    f"{_compact_json(data, max_chars=1500)}"
-                )
-            else:
-                preview = hint
-        elif isinstance(result, dict):
-            preview = str(result)
-            if len(preview) > 800:
-                preview = preview[:800] + "…(truncated)"
-        else:
-            preview = str(result)
+        # Same rendering as invoke_skill (hint + data, per-skill limits,
+        # PARTIAL RESULT note when cut) — backend/ui_tools.render_skill_result.
+        from backend.ui_tools import render_skill_result
+        preview = render_skill_result(result, skill=self._skill.name)
         return ToolResult(result_for_llm=preview, ui_actions=list(new_actions))
 
 

@@ -103,8 +103,25 @@ def test_never_ending_tool_calls_hit_the_budget_in_the_users_language(admin_id):
         for i in range(10)
     ])
     out = _run(fake, tool, language="de", max_iterations=3, user_id=admin_id)
-    assert "Schritte" in out["response"]
+    # The wrap-up call got another tool call back (no text) → the
+    # approved fallback sentence, not the old "Schritte ausgegangen".
+    assert out["response"].startswith("Dazu habe ich nichts Sicheres gefunden")
     assert len(tool.seen) <= 3
+
+
+def test_budget_end_answers_with_what_was_found(admin_id):
+    """Chat test 2026-09-26: the step budget ended on a technical note;
+    now one tool-less call turns the findings into an answer."""
+    tool = _EchoTool()
+    replies = [
+        {"role": "assistant", "content": "", "tool_calls": [_tool_call("echo_tool", '{"text": "again"}', f"c{i}")]}
+        for i in range(3)
+    ] + [{"role": "assistant", "content": "Ich habe nur 'again' gefunden, mehr nicht."}]
+    fake = _FakeLlm(replies)
+    out = _run(fake, tool, language="de", max_iterations=3, user_id=admin_id)
+    assert out["response"] == "Ich habe nur 'again' gefunden, mehr nicht."
+    last_prompt = fake.calls[-1]
+    assert last_prompt[-1]["content"].startswith("No more tool calls this turn.")
 
 
 def test_llm_failure_is_one_readable_sentence(admin_id):

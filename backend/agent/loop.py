@@ -540,7 +540,7 @@ async def ask(
             )
             # Emit a final "stop, change strategy" message instead of
             # leaving the assistant on a partial tool_call turn.
-            final_text = _user_text("looping", user_language)
+            final_text = await _wrap_up_answer(llm, messages, user_language)
             break
     else:
         # Budget exhausted with tool_calls still pending.
@@ -548,7 +548,7 @@ async def ask(
             "iteration budget (%d) exhausted for conversation %s — returning what we have",
             budget.max_total, conversation_id,
         )
-        final_text = _user_text("exhausted", user_language)
+        final_text = await _wrap_up_answer(llm, messages, user_language)
 
     # 5) Persist updated conversation ──────────────────────────────────
     # Stash this turn's photos / documents / ui_actions onto the FINAL
@@ -1154,10 +1154,10 @@ async def ask_stream(
                 break
 
         if halted:
-            final_text = _user_text("looping", user_language)
+            final_text = await _wrap_up_answer(llm, messages, user_language)
             break
     else:
-        final_text = _user_text("exhausted", user_language)
+        final_text = await _wrap_up_answer(llm, messages, user_language)
 
     # 5) Persist + yield final result
     # Mirror the non-streaming path: stash this turn's photos / documents /
@@ -1586,6 +1586,12 @@ _USER_TEXTS = {
         "en": "(I ran out of steps before finishing. Try splitting the request into smaller asks.)",
         "de": "(Mir sind die Schritte ausgegangen, bevor ich fertig war. Teile die Anfrage bitte in kleinere Schritte auf.)",
     },
+    # Shown only when the tool-less wrap-up answer (_wrap_up_answer) fails
+    # too. Wording approved by Dirk 2026-09-26.
+    "gave_up": {
+        "en": "I couldn't find anything reliable on that. Tell me where it might be — mail, WhatsApp or a document — and I'll look there.",
+        "de": "Dazu habe ich nichts Sicheres gefunden. Sag mir gern, wo es stehen könnte – Mail, WhatsApp oder ein Dokument –, dann suche ich gezielt dort.",
+    },
     "llm_unreachable": {
         "en": "I can't reach the language model right now ({where}). Check that it is running — Settings → LLM — and try again.",
         "de": "Ich erreiche das Sprachmodell gerade nicht ({where}). Prüfe unter Einstellungen → LLM, ob es läuft, und versuche es dann noch einmal.",
@@ -1603,6 +1609,47 @@ _USER_TEXTS = {
         "de": "Das Sprachmodell hat einen Fehler gemeldet ({detail}). Versuche es noch einmal; wenn es wieder passiert, prüfe Einstellungen → LLM.",
     },
 }
+
+
+# Instead of "(Mir sind die Schritte ausgegangen …)" the person gets an
+# answer built from what the turn already found: one more LLM call, no
+# tools. Wording approved by Dirk 2026-09-26 (chat test: three turns
+# ended on the step message after 20–27 identical tool calls).
+_WRAP_UP_INSTRUCTION = (
+    "No more tool calls this turn. Answer the user now with what you found so far. "
+    "Say plainly what you could not find or finish, in one or two sentences, and "
+    "suggest one concrete next step they can take."
+)
+
+
+def _drop_unanswered_tool_calls(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """A halted batch can leave tool_calls without a tool result; an
+    OpenAI-style API rejects that. Keep only answered calls."""
+    answered = {m.get("tool_call_id") for m in messages if m.get("role") == "tool"}
+    out: List[Dict[str, Any]] = []
+    for m in messages:
+        calls = m.get("tool_calls") if m.get("role") == "assistant" else None
+        if calls:
+            kept = [c for c in calls if c.get("id") in answered]
+            if not kept and not (m.get("content") or "").strip():
+                continue
+            m = {**m, "tool_calls": kept} if kept else {k: v for k, v in m.items() if k != "tool_calls"}
+        out.append(m)
+    return out
+
+
+async def _wrap_up_answer(llm: Any, messages: List[Dict[str, Any]], language: Optional[str]) -> str:
+    """The final text when the budget ran out or a guardrail halted."""
+    try:
+        msgs = conversation_io.sanitize_for_llm(_drop_unanswered_tool_calls(messages))
+        msgs = list(msgs) + [{"role": "user", "content": _WRAP_UP_INSTRUCTION}]
+        resp = await asyncio.to_thread(llm.chat, msgs, None, max_tokens=400, temperature=0.3)
+        text = ((resp or {}).get("content") or "").strip()
+        if text:
+            return text
+    except Exception:  # noqa: BLE001 — the fallback text below is the answer then
+        log.exception("wrap-up answer failed")
+    return _user_text("gave_up", language)
 
 
 def _user_text(key: str, language: Optional[str], **fmt: Any) -> str:

@@ -8,7 +8,9 @@ def test_hint_plus_data_is_capped_unless_full_output():
     big = {"_llm_hint": "Draft the day.", "context": {"open_tasks": [{"title": f"Task {i}"} for i in range(200)]},
            "agent_candidates": [{"title": "Video 9 schneiden"}]}
     short = render_skill_result(big)
-    assert short.startswith("Draft the day.") and "(truncated)" in short and "Video 9" not in short
+    # cut → the PARTIAL RESULT note goes in front of the hint (chat test 2026-09-26)
+    assert short.startswith("PARTIAL RESULT:") and "Draft the day." in short
+    assert "(truncated)" in short and "Video 9" not in short
     full = render_skill_result({**big, "_full_output": True})
     assert full.startswith("Draft the day.") and "Video 9 schneiden" in full and "_full_output" not in full
     assert len(full) <= FULL_OUTPUT_MAX_CHARS + 200

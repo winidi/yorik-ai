@@ -233,3 +233,25 @@ class TestReadLoopIsNoticed:
         args = {"name": "add_task", "args": {"title": "Milch"}}
         g.after_call("invoke_skill", args, "created task 1")
         assert g.after_call("invoke_skill", args, "created task 1").action == "allow"
+
+
+class TestPartialResultNote:
+    """A1/A8/G5: cut results read as complete to the model."""
+
+    def test_document_fits_in_full(self):
+        from backend.ui_tools import render_skill_result
+        doc = {"ok": True, "doc_id": 1, "text": "Zwischensumme 463,08 EUR\n" * 60 + "Invoice amount 551,07 EUR"}
+        out = render_skill_result(doc, skill="read_document")
+        assert "551,07" in out and "PARTIAL RESULT" not in out
+
+    def test_cut_rows_carry_the_note_in_front(self):
+        from backend.ui_tools import render_skill_result
+        rows = {"transactions": [{"counterparty": f"Firma {i}", "amount": -10.0} for i in range(400)],
+                "_llm_hint": "400 transaction(s)."}
+        out = render_skill_result(rows, skill="show_transactions")
+        assert out.startswith("PARTIAL RESULT: you see only 6000 of ")
+        assert "400 transaction(s)." in out
+
+    def test_small_result_has_no_note(self):
+        from backend.ui_tools import render_skill_result
+        assert "PARTIAL" not in render_skill_result({"events": [], "_llm_hint": "none"}, skill="check_calendar")

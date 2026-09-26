@@ -641,39 +641,68 @@ class UseSkillTool(Tool[UseSkillArgs]):
         # accurate about, so it invented five. Including both keeps the
         # narration discipline AND gives the LLM ground truth when a
         # legitimate enumeration is asked for.
-        return ToolResult(success=True, result_for_llm=render_skill_result(result))
+        return ToolResult(success=True, result_for_llm=render_skill_result(result, skill=args.name))
 
 
 FULL_OUTPUT_MAX_CHARS = 24_000
 
+# Room for the data behind a result, per skill. The chat test on real
+# data (2026-09-26) found the model reading ~650 characters of a
+# document and ~8 of 200 bank rows, then stating the rest did not exist
+# ("keine Steuerzeile", "kein einziger Eintrag an Beate Mayer").
+DEFAULT_MAX_CHARS = 1500
+SHORT_MAX_CHARS = 800
+SKILL_MAX_CHARS = {
+    "read_document": 12_000,
+    "universal_search": 6_000,
+    "show_transactions": 6_000,
+}
 
-def render_skill_result(result: Any) -> str:
+
+def _partial_note(shown: int, total: int) -> str:
+    return (f"PARTIAL RESULT: you see only {shown} of {total} characters of this result. "
+            "Do not claim you checked everything. If what you need is not in the visible "
+            "part, narrow the request (filter, shorter period) or tell the user the list "
+            "was too long.\n\n")
+
+
+def render_skill_result(result: Any, skill: str = "") -> str:
     """What the LLM reads after a skill ran.
 
     `_llm_hint` + data: the steering rule first, then the structured data
-    as compact JSON, cut at 1500 chars — enough for a card, not for a
-    day plan. A skill that returns `_full_output: True` (plan_my_day with
+    as compact JSON, cut at the skill's limit (SKILL_MAX_CHARS, else
+    1500). A skill that returns `_full_output: True` (plan_my_day with
     its candidates, recording_status with the transcript, read_email)
     gets its whole payload, up to FULL_OUTPUT_MAX_CHARS, with the hint
-    still on top. Anything else is a short str()."""
-    from .skills.skill_tool import _compact_json
+    still on top. Anything else is a short str(). Whenever data is cut,
+    a PARTIAL RESULT line goes in front, so the model knows it did not
+    see everything."""
+    import json as _json
     if isinstance(result, dict) and result.get("_llm_hint"):
         hint = str(result["_llm_hint"])
         full = bool(result.get("_full_output"))
         data = {k: v for k, v in result.items() if k not in ("_llm_hint", "_full_output")}
         if not data:
             return hint
+        limit = FULL_OUTPUT_MAX_CHARS if full else SKILL_MAX_CHARS.get(skill, DEFAULT_MAX_CHARS)
+        try:
+            raw = _json.dumps(data, default=str, ensure_ascii=False, separators=(",", ":"))
+        except Exception:  # noqa: BLE001
+            raw = str(data)
+        note = _partial_note(limit, len(raw)) if len(raw) > limit else ""
+        body = raw if not note else raw[: limit - 16] + "…(truncated)"
         return (
-            f"{hint}\n\n"
+            f"{note}{hint}\n\n"
             f"Source data (quote only what is here — do not invent rows):\n"
-            f"{_compact_json(data, max_chars=FULL_OUTPUT_MAX_CHARS if full else 1500)}"
+            f"{body}"
         )
     if isinstance(result, dict) and result.get("_full_output"):
         data = {k: v for k, v in result.items() if k != "_full_output"}
         return str(data)
     preview = str(result)
-    if len(preview) > 800:
-        preview = preview[:800] + "…(truncated)"
+    limit = SKILL_MAX_CHARS.get(skill, SHORT_MAX_CHARS)
+    if len(preview) > limit:
+        preview = _partial_note(limit, len(preview)) + preview[:limit] + "…(truncated)"
     return preview
 
 
