@@ -249,8 +249,10 @@ def _search_paperless(q: str, user_id: str) -> list[dict[str, Any]]:
         "subtitle":    h.get("correspondent") or "",
         "snippet":     (h.get("text") or "")[:200],
         "timestamp":   h.get("doc_date"),
-        "navigate_to": h.get("doc_url") or "/docs",
-        "thumbnail_url": h.get("preview_url"),
+        # In-app links only: Paperless' own doc_url/preview_url point at
+        # http://localhost:8010, dead on a phone (chat test 2026-09-26).
+        "navigate_to": (f"/r/documents?doc={h['paperless_doc_id']}&source=paperless"
+                        if h.get("paperless_doc_id") else "/r/documents"),
     } for h in relevant]
 
 
@@ -273,7 +275,7 @@ def _search_immich(q: str, user_id: str) -> list[dict[str, Any]]:
         "subtitle":    "",
         "snippet":     "",
         "timestamp":   p.get("taken_at"),
-        "navigate_to": p.get("view_url") or "/photos",
+        "navigate_to": f"/r/photos?asset={p['id']}" if p.get("id") else "/r/photos",
         "thumbnail_url": p.get("thumbnail_url"),
     } for p in photos]
 

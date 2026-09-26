@@ -12,6 +12,23 @@ from typing import Any
 UNDO_WINDOW_SECONDS = 60 * 60  # only undo actions younger than 60 min
 
 
+def _age_seconds(created_at: Any) -> int:
+    """Seconds since `created_at` — a UTC 'YYYY-MM-DD HH:MM:SS' text
+    (or a datetime). Computed here because julianday() exists only in
+    SQLite; on Postgres the query failed and undo never worked."""
+    from datetime import datetime, timezone
+    if isinstance(created_at, datetime):
+        ts = created_at
+    else:
+        try:
+            ts = datetime.fromisoformat(str(created_at).strip().replace("Z", "+00:00"))
+        except ValueError:
+            return 0
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return max(0, int((datetime.now(timezone.utc) - ts).total_seconds()))
+
+
 async def execute(ctx) -> dict[str, Any]:
     user_id = getattr(ctx, "user_id", None)
     if user_id is None:
@@ -21,8 +38,7 @@ async def execute(ctx) -> dict[str, Any]:
     with get_conn() as conn:
         row = conn.execute(
             "SELECT id, skill, preview_json, rollback_kind, created_at, "
-            "       llm_model, language, params_json, "
-            "       CAST((julianday('now') - julianday(created_at)) * 86400 AS INTEGER) AS age_s "
+            "       llm_model, language, params_json "
             "FROM pending_actions "
             "WHERE user_id = ? "
             "  AND rollback_kind != '' "
@@ -40,7 +56,7 @@ async def execute(ctx) -> dict[str, Any]:
             "message":     "no recent action to undo",
         }
 
-    age_s = int(row["age_s"] or 0)
+    age_s = _age_seconds(row["created_at"])
     if age_s > UNDO_WINDOW_SECONDS:
         return {
             "undone":      "",

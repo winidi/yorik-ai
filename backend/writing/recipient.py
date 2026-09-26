@@ -29,7 +29,11 @@ def from_contact(contact: Dict[str, Any], *, sender_country: str = "DE") -> Dict
     addresses = contact.get("addresses") or []
     # a letter goes to the billing or work address of a business, home of a person
     order = {"billing": 0, "work": 1, "home": 2} if contact.get("kind") == "business" else {"home": 0, "billing": 1, "work": 2}
-    addresses = sorted(addresses, key=lambda a: order.get(a.get("kind") or "", 9))
+    # Within a kind the complete address wins: a stray "Peine"-only row
+    # used to beat "Niedersachsenstraße 14, 31226 Peine" (chat test 2026-09-26).
+    addresses = sorted(addresses, key=lambda a: (order.get(a.get("kind") or "", 9),
+                                                 not str(a.get("line1") or "").strip(),
+                                                 not str(a.get("postcode") or "").strip()))
     lines: List[str] = []
     if addresses:
         a = addresses[0]

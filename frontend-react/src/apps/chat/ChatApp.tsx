@@ -31,6 +31,7 @@ import { PeoplePickerCard, type PeoplePickerAction } from "@/components/PeoplePi
 import { InlineComposeDraft } from "@/apps/chat/InlineComposeDraft";
 import { WritingDraftCard } from "./WritingDraftCard";
 import { EmailDraftReadyCard } from "./EmailDraftReadyCard";
+import { WhatsAppDraftCard } from "./WhatsAppDraftCard";
 import { AssistantMarkdown } from "@/components/AssistantMarkdown";
 import { VcardImportModal } from "@/components/VcardImportModal";
 import { MentionPopover, type MentionPick } from "./MentionPopover";
@@ -795,6 +796,7 @@ function Thread({
             "price_summary",
             "venue_saved",
             "email_ready",
+            "whatsapp_draft_created",
           ]);
           if (!STICKS_TO_MESSAGE.has(a.type)) {
             dispatchableActions.push(a);
@@ -1808,6 +1810,14 @@ function MessageBubble({
           .map((a: any, i: number) => (
             <EmailDraftReadyCard key={i} to={a.to || ""} subject={a.subject || ""}
                                   preview={a.preview} attachmentFilename={a.attachment_filename} />
+          ))}
+        {/* A WhatsApp message written by whatsapp_draft — editable,
+            with Send and a jump into the thread. */}
+        {!isUser && message.ui_actions && message.ui_actions
+          .filter(a => a.type === "whatsapp_draft_created")
+          .map((a: any, i: number) => (
+            <WhatsAppDraftCard key={`${a.chat_jid}-${i}`} chatJid={a.chat_jid} recipient={a.recipient || ""}
+                               text={a.text || ""} isNewChat={!!a.is_new_chat} />
           ))}
         {/* Template picker — the LLM called compose_draft with a vague
             body, so the skill emitted picker candidates instead of a
@@ -3154,7 +3164,7 @@ function EventsFoundCard({
           const who = e.who || e.person || "";
           return (
             <button
-              key={e.id}
+              key={`${e.id}_${e.starts_at}`}
               type="button"
               onClick={() => navigate(`/calendar?event=${e.id}`)}
               className="w-full text-left px-3 py-2 hover:bg-sky-500/[0.06] transition group"

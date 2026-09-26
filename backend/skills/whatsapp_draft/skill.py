@@ -91,14 +91,21 @@ async def execute(
                 "value=...) or pick a different recipient."
             )
         import re as _re
-        digits = _re.sub(r"\D", "", wa_channel["value"])
-        if not digits or len(digits) < 6:
-            raise ValueError(
-                f"contact {contact_obj.get('display_name')!r}'s WhatsApp "
-                f"channel value {wa_channel['value']!r} doesn't look like "
-                "a phone number. Ask the user to correct it in contacts."
-            )
-        chat_jid = f"{digits}@s.whatsapp.net"
+        value = (wa_channel["value"] or "").strip()
+        if "@" in value:
+            # Already a JID. Most contacts carry a LID ("…@lid"), which
+            # is not a phone number — rebuilding it as "<digits>@s.whatsapp.net"
+            # addressed a chat that does not exist (chat test 2026-09-26).
+            chat_jid = value.lower()
+        else:
+            digits = _re.sub(r"\D", "", value)
+            if not digits or len(digits) < 6:
+                raise ValueError(
+                    f"contact {contact_obj.get('display_name')!r}'s WhatsApp "
+                    f"channel value {wa_channel['value']!r} doesn't look like "
+                    "a phone number. Ask the user to correct it in contacts."
+                )
+            chat_jid = f"{digits}@s.whatsapp.net"
 
     if not chat_jid:
         raise ValueError(
@@ -172,6 +179,7 @@ async def execute(
         # so the user reads it in chat and either says "send it" (which
         # routes through /send and creates the real row) or refines /
         # discards it.
+        _show_card(chat_jid, contact_name, drafts, is_new_chat=True)
         return {"drafts": drafts, "sources": sources, "group_id": group_id,
                  "chat_jid": chat_jid, "initiate": True,
                  # Surface "not persisted" so the frontend draft-options
@@ -233,7 +241,10 @@ async def execute(
             recent=recent,
             cross_hits=cross_hits,
             calendar=calendar,
-            extra=extra_instructions,
+            # The user's own "what to say" — without it a reply drafted
+            # to the last inbound message ("Alles klar, danke dir!")
+            # instead of "ich bringe nachher Brot mit" (chat test 2026-09-26).
+            extra="\n".join(x for x in ((intent or "").strip(), (extra_instructions or "").strip()) if x) or None,
         )
         text = await wa._call_llm(prompt)
         drafts = [{"label": "default", "text": text}]
@@ -256,7 +267,22 @@ async def execute(
                 )
             conn.commit()
 
+    recipient = (contact_obj or {}).get("display_name") or chat_row["name"] or ""
+    _show_card(chat_jid, recipient, drafts, is_new_chat=False)
     return {"drafts": drafts, "sources": sources, "group_id": group_id}
+
+
+def _show_card(chat_jid: str, recipient: str, drafts: list, *, is_new_chat: bool) -> None:
+    """The chat's WhatsAppDraftCard: the draft in an editable box with
+    Send. Without it the chat said "you can send it below" and there was
+    nothing below. Outside a chat turn the ui-action list is simply
+    dropped, so the HTTP draft route and autodraft are unaffected."""
+    if not drafts:
+        return
+    from backend.ui_tools import _append
+    _append({"type": "whatsapp_draft_created", "chat_jid": chat_jid,
+             "recipient": recipient or "", "text": drafts[0].get("text") or "",
+             "is_new_chat": bool(is_new_chat)})
 
 
 def _build_initiate_prompt(

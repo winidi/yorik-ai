@@ -151,12 +151,25 @@ def _query_events(start: datetime, end: datetime,
     else:
         where.append("1=0")           # no person, no events
 
-    sql = ("SELECT id, title, starts_at, ends_at, all_day, person, "
-           "       calendar_id, owner_user_id, visibility, notes "
-           "FROM events WHERE " + " AND ".join(where) +
-           " ORDER BY starts_at ASC")
+    cols = ("SELECT id, title, starts_at, ends_at, all_day, person, "
+            "       calendar_id, owner_user_id, visibility, notes, recurring "
+            "FROM events WHERE ")
+    sql = cols + " AND ".join(where) + " ORDER BY starts_at ASC"
+    # Series that started before the window end: their later instances
+    # may fall inside it (weekly training, daily routine). Same filters,
+    # only the time condition differs.
+    series_where = ["recurring IS NOT NULL", "recurring <> ''", "starts_at <= ?"] + where[2:]
+    series_params = [end.isoformat()] + params[2:]
     with get_conn() as conn:
-        rows = conn.execute(sql, params).fetchall()
+        rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
+        series = [dict(r) for r in conn.execute(cols + " AND ".join(series_where),
+                                                 series_params).fetchall()]
+    if series:
+        from backend.event_recurrence import _expand_recurring
+        lo, hi = start.isoformat(), end.isoformat()
+        instances = _expand_recurring(series, lo, (end + timedelta(days=1)).isoformat())
+        rows.extend(i for i in instances if lo <= (i.get("starts_at") or "") <= hi)
+        rows.sort(key=lambda r: r.get("starts_at") or "")
     # Private events of others read "Busy", as in the calendar app
     # (audit 2026-09-25, L7); the owner's first name says whose it is.
     from backend import calendars as _cal

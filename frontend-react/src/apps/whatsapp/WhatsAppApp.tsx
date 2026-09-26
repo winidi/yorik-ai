@@ -28,6 +28,7 @@ import { PersonHover } from "@/components/PersonCard";
 import { SharedPhotoBanner } from "@/components/SharedPhotoBanner";
 import { SuggestionPanel } from "@/apps/email/SuggestionPanel";
 import { toast } from "@/components/Toast";
+import { WA_PREFILL_KEY } from "@/apps/chat/WhatsAppDraftCard";
 import {
   useTriPane, MobileTopBar, MobileBackdrop,
   mobileAsideLeft, mobileAsideRight,
@@ -502,8 +503,18 @@ function Thread({ jid, chat, onSent }:
     return () => window.removeEventListener("wa-load-draft", handler);
   }, []);
 
-  // Reset composer when switching chats.
-  useEffect(() => { setText(""); }, [jid]);
+  // Reset composer when switching chats — unless the chat's WhatsApp
+  // draft card handed over a text for this thread ("Im WhatsApp-Chat
+  // öffnen"); then it lands in the composer, ready to edit and send.
+  useEffect(() => {
+    let prefill = "";
+    try {
+      prefill = sessionStorage.getItem(WA_PREFILL_KEY(jid)) || "";
+      sessionStorage.removeItem(WA_PREFILL_KEY(jid));
+    } catch { /* storage blocked — plain reset */ }
+    setText(prefill);
+    if (prefill) composerRef.current?.focus();
+  }, [jid]);
 
   async function send() {
     const t = text.trim();

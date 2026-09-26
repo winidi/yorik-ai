@@ -64,6 +64,24 @@ IDEMPOTENT_TOOL_NAMES: frozenset[str] = frozenset({
     "web_extract",
 })
 
+# Skills behind invoke_skill that only read. invoke_skill as a whole is
+# mutating (below), which kept the no-progress check blind to the loops
+# the chat test found on 2026-09-26: check_calendar 27x, universal_search
+# 27x with identical arguments, until the step budget ran out. For these
+# skills an identical repeat now gets the no-progress warning.
+READ_ONLY_SKILLS: frozenset[str] = frozenset({
+    "check_calendar", "check_tasks", "search_documents", "read_document",
+    "read_document_vision", "universal_search", "show_transactions",
+    "spending_summary", "list_bank_accounts", "find_person", "find_contact",
+    "find_user", "find_email_by_subject", "read_email", "find_event_by_title",
+    "find_task_by_title", "list_subtasks", "email_briefing", "whatsapp_briefing",
+    "find_photo", "calculate_travel_time", "find_known_provider",
+    "find_provider_nearby", "recording_status", "recording_report",
+    "read_my_profile", "yorik_help", "list_contacts_for_picking",
+    "find_recipient_address_from_documents", "read_attachment",
+    "check_bills", "find_bill_by_name",
+})
+
 MUTATING_TOOL_NAMES: frozenset[str] = frozenset({
     # invoke_skill is mutating when the inner skill is in
     # audit.MUTATION_SKILLS. The controller can't know that without
@@ -259,7 +277,7 @@ class GuardrailController:
             self._halt_decision = decision
             return decision
 
-        if self._is_idempotent(tool_name):
+        if self._is_idempotent(tool_name, args):
             record = self._no_progress.get(signature)
             if record is not None and record[1] >= self.config.no_progress_block_after:
                 decision = GuardrailDecision(
@@ -295,7 +313,7 @@ class GuardrailController:
 
         if failed:
             return self._on_failure(tool_name, signature)
-        return self._on_success(tool_name, signature, result)
+        return self._on_success(tool_name, signature, result, args)
 
     # ------------------------------------------------------------------
     # Failure / success paths
@@ -359,12 +377,13 @@ class GuardrailController:
         tool_name: str,
         signature: ToolCallSignature,
         result: Optional[str],
+        args: Optional[Mapping[str, Any]] = None,
     ) -> GuardrailDecision:
         # Reset failure counters for this signature/tool on success.
         self._exact_failure_counts.pop(signature, None)
         self._same_tool_failure_counts.pop(tool_name, None)
 
-        if not self._is_idempotent(tool_name):
+        if not self._is_idempotent(tool_name, args):
             self._no_progress.pop(signature, None)
             return GuardrailDecision(tool_name=tool_name, signature=signature)
 
@@ -395,7 +414,9 @@ class GuardrailController:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _is_idempotent(self, tool_name: str) -> bool:
+    def _is_idempotent(self, tool_name: str, args: Optional[Mapping[str, Any]] = None) -> bool:
+        if tool_name == "invoke_skill" and isinstance(args, Mapping):
+            return str(args.get("name") or "") in READ_ONLY_SKILLS
         if tool_name in self.config.mutating_tools:
             return False
         return tool_name in self.config.idempotent_tools
