@@ -48,16 +48,18 @@ Click **Add example data** on Home after install to reproduce this state.
 
 ## Install
 
-A fresh Ubuntu 24.04+ / Debian 12+ / Fedora 39+ machine, 8 GB RAM (16 recommended), 50 GB free disk. Windows via WSL2: [docs/WINDOWS.md](docs/WINDOWS.md).
+Yorik runs as one Docker stack — the same on Linux, Windows and macOS. 16 GB RAM recommended, 50 GB free disk.
 
-```bash
-git clone https://github.com/winidi/yorik-ai && cd yorik-ai
-bash install.sh
-```
+| | |
+|---|---|
+| **Windows 10/11** | download `Yorik-Setup-Windows.zip` from the [latest release](https://github.com/winidi/yorik-ai/releases/latest), unzip, double-click `Yorik-Setup.cmd` |
+| **macOS** | `Yorik-Setup-Mac.zip` from the release, double-click `Yorik Setup.command` (not yet tested on a real Mac) |
+| **Linux** | `git clone https://github.com/winidi/yorik-ai && cd yorik-ai && bash install.sh` |
+| **A spare mini PC** | `bash scripts/build-appliance.sh` makes an install stick; boot the PC from it |
 
-No questions: it installs the packages and Docker, picks an AI model (one already running → an NVIDIA GPU with llama.cpp + Qwen 3.5 9B → Ollama on the CPU), starts Yorik with autostart, and sets up [Tailscale](https://tailscale.com) so phones reach Yorik over HTTPS at home and on the go. It ends with a QR code: scan it with your phone and create your account there. Then invite the family from Home, one QR code per person.
+Each one sets up Docker if needed, starts Yorik, photos, documents, WhatsApp, a local AI model and [Tailscale](https://tailscale.com), and opens Yorik in the browser. Create your account, then invite the family from Home, one QR code per person. For access on the go, sign in to Tailscale once under Settings → System → Phones.
 
-Flags, the two Tailscale settings the installer can't flip for you, and what lives where: [docs/INSTALL.md](docs/INSTALL.md). Broken? [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md). Remove: `bash scripts/uninstall.sh`.
+Details, what lives where, updates: [docs/INSTALL.md](docs/INSTALL.md). Broken? [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ## Bring your own LLM
 

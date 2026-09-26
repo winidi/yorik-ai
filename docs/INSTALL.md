@@ -1,161 +1,144 @@
 # Installing Yorik
 
-One command sets up everything on a fresh Linux machine and ends with a
-QR code you scan with your phone to finish in the browser. This page
-explains what that command does, what it needs, and what to do when a
-step can't finish on its own. The short version is in the
-[README](../README.md#install).
+Yorik runs as one Docker stack (`deploy/compose.yaml`), the same on
+Linux, Windows and macOS. Each installer below sets up Docker if needed,
+starts the stack, and opens Yorik in the browser, where you create your
+account. The short version is in the [README](../README.md#install).
 
 > Yorik is in **alpha**. It runs every day in the maintainer's household,
 > but you may be among the first to install it elsewhere. Don't make it
-> your only copy of your photos yet. Already run Paperless or Immich?
-> Yorik uses them as they are.
+> your only copy of your photos yet.
 
 ## What you need
 
 | | Minimum | Recommended | Why |
 |---|---|---|---|
-| OS | Ubuntu 24.04, Debian 12, Fedora 39 (or Pop!_OS / Mint on 24.04) | Ubuntu 24.04 | the installer stops on anything older |
 | RAM | 8 GB | 16 GB | AI model 4–8 GB, photos 2 GB, documents 1 GB, Yorik 0.5 GB |
-| Disk | 50 GB free | 100 GB+ | photos and scans grow fast |
-| GPU | none | NVIDIA | replies in about a second instead of 5–10 |
-| Network | internet during install | | Docker images and the AI model (~7 GB) |
-| Ports free | 8000, 5434, 6544, 8453, 2283, 8010, 3015 | | the installer names the program in the way if one is taken |
+| Disk | 50 GB free | 100 GB+ | the images (~8 GB), the model (~7 GB), then photos and scans |
+| GPU | none | NVIDIA | replies in about a second instead of 5–10 (Windows and Linux) |
+| Network | internet during install | | images and the model download once |
 
-A non-root user with `sudo`. Windows: see [WINDOWS.md](WINDOWS.md)
-(WSL2). macOS isn't supported by the installer.
+**Where it lives matters more than the operating system.** Yorik is a
+butler for the family: reminders, mail and WhatsApp want a machine that
+is on around the clock. A PC that sleeps at night takes Yorik with it.
+Trying it on your PC is fine; for everyday family use, a used mini PC
+with the install stick (below) is the setup to aim for.
 
-## Install
+## Windows 10 / 11
+
+1. From the [latest release](https://github.com/winidi/yorik-ai/releases/latest)
+   download `Yorik-Setup-Windows.zip`, unzip it.
+2. Double-click `Yorik-Setup.cmd` and allow administrator rights.
+
+It turns on WSL2 and installs Docker Desktop through winget if they're
+missing (Windows then needs **one restart**; setup continues by itself
+after you sign in again), puts Yorik in `%LOCALAPPDATA%\Yorik`, backups
+in `Documents\Yorik Backups`, starts the stack, adds a "Yorik" shortcut
+to the desktop and opens the browser. Docker Desktop is free for
+personal use and small businesses; its license applies.
+
+Phones at home reach Yorik at `http://<this PC's address>:8000`; Windows
+may ask once whether Docker may accept connections on private networks,
+say yes.
+
+## macOS
+
+From the release, `Yorik-Setup-Mac.zip`, then double-click
+`Yorik Setup.command`. It installs Docker Desktop (Homebrew if present,
+otherwise the official download), puts Yorik in
+`~/Library/Application Support/Yorik`, backups in `~/Documents/Yorik Backups`.
+Docker can't use the Apple GPU; with the [Ollama app](https://ollama.com)
+installed, Yorik uses it instead, which is much faster.
+
+Not yet tested on a real Mac. Reports welcome.
+
+## Linux
 
 ```bash
 git clone https://github.com/winidi/yorik-ai && cd yorik-ai
 bash install.sh
 ```
 
-It asks nothing except, if needed, your `sudo` password and, once, a
-Tailscale sign-in (a QR code in the terminal). In order:
+Ubuntu 24.04+, Debian 12+ or Fedora 39+. It asks nothing except your
+`sudo` password: installs Docker Engine (and NVIDIA's container toolkit
+if there's a GPU), starts the stack from `deploy/`, and ends with a QR
+code for your phone. Flags: `--llm=none` (no model now), `--ask`.
+`--classic` installs the pre-Docker way (see the end of this page).
 
-1. **Checks**: OS, RAM, disk, free ports, network, clock.
-2. **Packages**: git, curl, Python, ffmpeg, jq, qrencode; Docker if missing.
-3. **AI model**:
-   - one already running on a common local port → Yorik uses it;
-   - else an NVIDIA GPU → llama.cpp in Docker with Qwen 3.5 9B (MTP,
-     UD-Q5_K_XL) and the vision projector; the installer adds NVIDIA's
-     container toolkit if it's missing;
-   - else → Ollama with `robit/qwen3.5-9b-r7-research-vision:q4km` on
-     the CPU (5–10 s per reply).
-   Model downloads continue where they stopped if you re-run.
-4. **Yorik**: config, Python environment, voice models, the database
-   (Supabase), photos (Immich), documents (Paperless), then Yorik itself.
-5. **Autostart** at boot (systemd).
-6. **Tailscale**, so phones reach Yorik over HTTPS at home and on the go
-   (next section).
-7. **A QR code**: scan it with your phone to create your account there.
+## A mini PC as the family's box
 
-Re-running `bash install.sh` is safe: finished steps are skipped.
+```bash
+bash scripts/build-appliance.sh      # → dist/yorik-appliance.iso
+```
 
-### Flags
+Write the image to a USB stick (balenaEtcher, Raspberry Pi Imager),
+boot the PC from it. **It erases that PC's disk** and installs Ubuntu
+Server and Yorik by itself; the screen then shows a Tailscale sign-in
+code and, once Yorik runs, a QR code for your phone. At home it also
+answers at `http://yorik.local:8000`.
 
-| Flag | Effect |
-|---|---|
-| `--ask` | ask before the big steps (the old interactive mode) |
-| `--llm=auto` | default, as described above |
-| `--llm=ollama` / `--llm=cuda` / `--llm=existing` / `--llm=none` | force one path |
-| `--llm=remote=http://10.0.0.5:8080/v1` | a model on another machine (probed first) |
-| `--no-autostart` | no systemd unit |
-| `--no-tailscale` | home Wi-Fi only, no Tailscale |
-| `--dir=PATH` | install somewhere other than this clone / `~/yorik` |
+## Access on the go: Tailscale
 
-## Tailscale: phones at home and on the go
+Yorik never faces the open internet. The stack includes
+[Tailscale](https://tailscale.com) (free for up to 6 people). Sign in
+once: Yorik → Settings → System → Phones shows a QR code (on the box's
+screen too). Then Yorik is at `https://yorik.<your-tailnet>.ts.net`,
+photos on `:8443`, documents on `:8444`, with real HTTPS, which browsers
+need for the microphone and "Add to Home Screen".
 
-Yorik never faces the open internet. Phones reach it through
-[Tailscale](https://tailscale.com), a free private network (the Personal
-plan covers 6 people). The installer installs it, shows a QR code to
-sign this machine in to your Tailscale account, and publishes:
-
-| Address | What |
-|---|---|
-| `https://<machine>.<tailnet>.ts.net` | Yorik |
-| `…:8443` | photos (for the Immich phone app) |
-| `…:8444` | documents |
-| `…:10000` | the public join page for invites (a static page, no data) |
-
-HTTPS matters: browsers only allow the microphone and "Add to Home
-Screen" on secure pages.
-
-Two switches in the Tailscale admin console the installer can't flip for
-you. It tells you when one is missing; set them and re-run the installer:
+Two switches in the Tailscale admin console:
 
 1. **HTTPS certificates**: [DNS settings](https://login.tailscale.com/admin/dns)
-   → enable MagicDNS and HTTPS.
-2. **Funnel** for the join page: [Access controls](https://login.tailscale.com/admin/acls)
-   → allow the `funnel` node attribute for this machine. Without it,
-   invites still work for phones that already have Tailscale.
-
-Optional, in Yorik → Settings → System → Phones: an OAuth client with
-write access to devices. Then every invite also carries a link that
-shares only this machine with the new person, so they never see your
-other devices.
+   → MagicDNS and HTTPS on.
+2. **Funnel** for the public invite page (optional):
+   [Access controls](https://login.tailscale.com/admin/acls) → allow the
+   `funnel` node attribute, then `YORIK_TS_SERVE=serve-funnel.json` in
+   `.env` and `docker compose up -d tailscale`.
 
 ## Getting the family in
 
-In Yorik: Home → "Set up Yorik" → **Invite your family**, or Settings →
-Users → **Invite with a QR code**. The person scans the code with the
-phone camera, gets Tailscale if they don't have it yet, picks a name,
-a colour and a 4-digit PIN, and puts Yorik on the home screen. No
-password, no email needed. Children's accounts get a simpler Yorik.
+Home → "Set up Yorik" → **Invite your family**, or Settings → Users →
+**Invite with a QR code**. The person scans it with the phone camera,
+picks a name, a colour and a 4-digit PIN, and puts Yorik on the home
+screen. Children's accounts get a simpler Yorik.
 
-## After the install
+## Updates
 
-| Want to… | Do this |
+Settings → System → Updates shows when a new version is out, with its
+changes, and **Update now** pulls the new images and restarts; your data
+stays. Installs follow `stable` (released versions); `YORIK_VERSION` in
+`.env` pins a version or picks `edge` (every change on main).
+
+## Where things are
+
+| | |
 |---|---|
-| Update | Settings → System → **Update now** when a new version is ready; or `./scripts/yorik upgrade` |
-| Turn on backups | Home → "Set up Yorik" → Turn on backups (USB disk + printed recovery sheet) |
-| Tail logs | `journalctl -u yorik -f` |
-| Stop / start | `sudo systemctl stop yorik` / `start` |
-| Check the schema | `./scripts/yorik db status` |
-| Remove Yorik | `bash scripts/uninstall.sh` (see below) |
+| `.env` next to `compose.yaml` | settings and generated passwords (keep private) |
+| Docker volumes `yorik_*` | database, photos, documents, WhatsApp session, model, Yorik's files |
+| Backups folder (`YORIK_BACKUP_DIR`) | encrypted snapshots; Home → "Set up Yorik" → Turn on backups |
 
-Quick health check: `curl -fsS http://localhost:8000/api/health`.
+Useful commands, in the folder with `compose.yaml`:
+`docker compose ps`, `docker compose logs -f yorik`, `docker compose stop`,
+`docker compose up -d`.
 
 ## Removing Yorik
 
-`bash scripts/uninstall.sh` stops everything and deletes Yorik's
-containers, data, systemd units, the AI model it installed and its
-Tailscale addresses. It asks you to type `yes` first. Tailscale itself,
-Docker and Ollama stay installed (other programs may use them).
+Linux: `bash scripts/uninstall.sh`. Elsewhere, in the folder with
+`compose.yaml`: `docker compose down -v` (removes everything including
+the data; the backups folder stays).
 
-## Where data lives
+## Classic install (development)
 
-| Path | What |
-|---|---|
-| `infra/supabase/docker/volumes/db/` | the database: events, tasks, contacts, mail, chats, sessions |
-| `data/documents/` | uploaded document files |
-| `data/.credential_key` | the key for stored passwords and tokens. **Back it up**; the built-in backup includes it |
-| `data/backups/` | encrypted backup snapshots (default target) |
-| `data/immich/`, `data/paperless/` | photos and documents |
-| `models/` | the AI model files (llama.cpp path) |
-| `venv/`, `frontend-react/dist/` | rebuildable |
-
-## Variations
-
-**Manual start without the installer** (development): `bash start.sh`
-starts the stack in this clone; `YORIK_BIND=127.0.0.1 bash start.sh`
-keeps it on this machine only.
-
-**A model you already run** (LM Studio, vLLM, llama-swap, another box):
-`--llm=existing` or `--llm=remote=URL`, or later Settings → LLM → Scan now.
-
-**Raspberry Pi 5 (8 GB)**: `HOMEOS_DISABLE_IMMICH=1` in `config.env`
-before the first run and a small (1–2B) model. It works, slowly.
-
-**Moving to a new machine**: install there, then restore a backup
-(`docs/RESTORE.md`) or copy `data/` and the database volume over;
-migrations bring the schema up to date.
+`bash install.sh --classic` sets Yorik up directly on the machine:
+Python venv, systemd unit, the Supabase stack via `start.sh`, Tailscale
+on the host. It's the maintainer's development setup (fast reloads, no
+image builds) and what older installs run. `--container` is the classic
+setup with Yorik itself in a container. `bash start.sh` starts a classic
+checkout by hand.
 
 ## When something goes wrong
 
-The installer prints a `fix:` line under every error. More in
+The installers print what to do under every error. More in
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md). What Yorik does and doesn't
 protect against: [THREAT_MODEL.md](../THREAT_MODEL.md). What touches the
 network: [PRIVACY.md](PRIVACY.md).
