@@ -68,12 +68,16 @@ qemu-img create -q -f qcow2 "$DISK" 80G
 qemu-system-x86_64 -enable-kvm -cpu host -m 12G -smp 6 \
   -drive file="$DISK",if=virtio -cdrom "$OUT" -boot order=c,once=d \
   -netdev user,id=n0,hostfwd=tcp:127.0.0.1:${WEB_PORT:-18001}-:8000 -device virtio-net,netdev=n0 \
-  -display none -serial file:"$WORK/serial.log" -daemonize -pidfile "$WORK/qemu.pid"
+  -display none -serial file:"$WORK/serial.log" -daemonize -pidfile "$WORK/qemu.pid" \
+  -monitor unix:"$WORK/mon.sock",server,nowait
 trap 'kill "$(cat "$WORK/qemu.pid" 2>/dev/null)" 2>/dev/null; sleep 2; rm -rf "$WORK"' EXIT
 start=$(date +%s)
 until curl -fsS --max-time 3 "http://127.0.0.1:${WEB_PORT:-18001}/api/health" >/dev/null 2>&1; do
   if (( $(date +%s) - start > 90 * 60 )); then
-    echo "✗ Yorik didn't answer within 90 minutes (serial log: $WORK/serial.log)"; tail -20 "$WORK/serial.log"; exit 1
+    # What the box's screen shows (yorik-console on tty1) says why.
+    shot="$REPO/dist/appliance-test-screen.ppm"
+    python3 -c "import socket,time,sys;s=socket.socket(socket.AF_UNIX);s.connect(sys.argv[1]);s.recv(4096);s.send(('screendump '+sys.argv[2]+'\\n').encode());time.sleep(2)" "$WORK/mon.sock" "$shot" || true
+    echo "✗ Yorik didn't answer within 90 minutes; the box's screen: $shot"; exit 1
   fi
   sleep 30
 done
