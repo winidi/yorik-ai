@@ -613,6 +613,9 @@ fi
 # the https scheme through X-Forwarded-Proto from 127.0.0.1.
 if [[ "$YORIK_RUNTIME" == "container" ]]; then
   export YORIK_UID="$(id -u)" YORIK_GID="$(id -g)"
+  # Create data/ as this user first: if Docker creates the bind-mount
+  # source itself, it's root's, and nothing below can write into it.
+  mkdir -p data data/voices
   say "CONTAINER" "building + starting the Yorik container (first build ~5 min)"
   docker compose -f docker-compose.app.yml up -d --build yorik >"$LOG" 2>&1 \
     || fail "the Yorik container didn't start — see $LOG"
