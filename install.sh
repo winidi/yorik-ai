@@ -111,12 +111,18 @@ for arg in "$@"; do
       sed -n '2,38p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
+    "") ;;  # tolerate an empty argument (old re-exec, wrappers)
     *) fatal "unknown flag: $arg" "see --help" ;;
   esac
 done
 # Kept for the docker-group re-exec below (`exec sg docker -c …`).
 SELF="$(readlink -f "$0")"
-INSTALL_ARGS="$(printf '%q ' "$@")"
+# With no flags, printf '%q ' still prints '' — an empty argument that
+# the re-exec below then rejected as "unknown flag", so a plain
+# `bash install.sh` died on every machine that got Docker from us.
+# (Found by the appliance test, which is the first to pass no flags.)
+INSTALL_ARGS=""
+(( $# > 0 )) && INSTALL_ARGS="$(printf '%q ' "$@")"
 
 # ─── pre-flight checks ────────────────────────────────────────────────
 phase "Pre-flight checks"
