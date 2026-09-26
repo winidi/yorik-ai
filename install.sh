@@ -919,6 +919,7 @@ fi
 
 cd "$INSTALL_DIR"
 
+record installed_at "$(date -Is)"
 case "$DECIDED_LLM" in
   cuda)   record llm cuda; record model_dir "$INSTALL_DIR/models/qwen3.5-9b" ;;
   ollama) record llm ollama; record ollama_model "${OLLAMA_MODEL:-}" ;;

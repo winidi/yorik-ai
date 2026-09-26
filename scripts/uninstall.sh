@@ -188,7 +188,10 @@ fi
 
 if [[ -n "$COMPOSE_CMD" ]]; then
   say "DOCKER" "tearing down containers + volumes"
-  if $COMPOSE_CMD down -v --remove-orphans 2>/dev/null; then
+  # The bundled services run under compose profiles (bundled-immich …);
+  # a plain `down` skips them. "*" takes every profile.
+  if $COMPOSE_CMD --profile "*" down -v --remove-orphans 2>/dev/null \
+     || $COMPOSE_CMD down -v --remove-orphans 2>/dev/null; then
     ok "$COMPOSE_CMD down -v complete"
   else
     warn "$COMPOSE_CMD down had errors — continuing"

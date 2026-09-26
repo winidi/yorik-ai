@@ -570,7 +570,14 @@ if [[ -d "frontend-react/src" && -f "frontend-react/scripts/fingerprint.sh" ]]; 
         warn "  npm or node_modules unavailable — can't auto-rebuild"
         warn "  install Node and run: (cd frontend-react && npm install && npm run build)"
         warn "  OR start with the existing (possibly stale) dist anyway: YORIK_ALLOW_STALE_DIST=1 bash start.sh"
-        fail "refusing to start with stale dist/"
+        # Under systemd (boot, restart, in-app update) nobody reads this
+        # warning, and refusing would leave the household without Yorik;
+        # serve the existing bundle. By hand, stop so the maintainer notices.
+        if [[ -n "${INVOCATION_ID:-}" ]]; then
+          warn "running as a service — starting with the existing dist/"
+        else
+          fail "refusing to start with stale dist/"
+        fi
       fi
     fi
   fi
