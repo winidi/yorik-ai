@@ -45,3 +45,16 @@ def test_members_cannot_update(fresh_app, monkeypatch):
     _fake(monkeypatch)
     member, _ = login_client(fresh_app, role="member")
     assert member.post("/api/system/update").status_code == 403
+
+
+def test_docker_mode_asks_the_updater(fresh_app, monkeypatch, tmp_path):
+    from backend import update_routes as u
+    monkeypatch.setenv("YORIK_RUNTIME", "docker")
+    monkeypatch.setenv("YORIK_VERSION", "0.9.0")
+    monkeypatch.setattr(u, "_UPDATER", tmp_path)
+    monkeypatch.setattr(u, "_latest_release", lambda check: {"tag": "v0.9.1", "notes": "- faster\n- nicer"})
+    admin, _ = login_client(fresh_app, role="admin")
+    st = admin.get("/api/system/update").json()
+    assert st["behind"] == 1 and st["can_update"] and st["changes"] == ["faster", "nicer"]
+    assert admin.post("/api/system/update").status_code == 200
+    assert (tmp_path / "request").exists()

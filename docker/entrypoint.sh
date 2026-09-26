@@ -29,5 +29,11 @@ for i in $(seq 1 60); do
   echo "[db] waiting for the database…"; sleep 3
 done
 
+# All-in-one install: connect photos, documents and the AI model once
+# they're up (backend/docker_bootstrap.py; idempotent, in the background).
+if [[ "${YORIK_RUNTIME:-}" == "docker" ]]; then
+  python -m backend.docker_bootstrap &
+fi
+
 exec uvicorn backend.main:app --host "${YORIK_BIND:-0.0.0.0}" --port "${HOMEOS_PORT:-8000}" \
      --proxy-headers --forwarded-allow-ips 127.0.0.1

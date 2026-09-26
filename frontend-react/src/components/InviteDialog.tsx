@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 interface Created {
   id: number; name: string; role: string; expires_at: string;
   join_url: string | null; qr_url: string | null; join_page: boolean;
-  tailscale: string; tailscale_invite_url: string | null; problem?: string;
+  tailscale: string; tailscale_invite_url: string | null; problem?: string; home_only?: boolean;
 }
 
 export function InviteDialog({ onClose }: { onClose: () => void }) {
@@ -97,7 +97,9 @@ export function InviteDialog({ onClose }: { onClose: () => void }) {
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Works once, for 24 hours.{" "}
-                  {made.join_page
+                  {made.home_only
+                    ? "This code works on your home Wi-Fi. For Yorik on the go, connect Tailscale under Settings → System → Phones."
+                    : made.join_page
                     ? (made.tailscale_invite_url
                         ? "The page walks them through Tailscale first."
                         : "The page explains Tailscale; you'll still need to share Yorik with them in Tailscale.")

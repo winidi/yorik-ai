@@ -26,6 +26,11 @@ log = logging.getLogger("yorik.update")
 router = APIRouter(prefix="/api/system", tags=["update"])
 
 _REPO = Path(__file__).resolve().parent.parent
+# All-in-one Docker install: releases come as images; the updater
+# service (deploy/updater.sh) watches this shared folder.
+_UPDATER = Path("/updater")
+_RELEASES = "https://api.github.com/repos/winidi/yorik-ai/releases/latest"
+_release_cache: dict[str, Any] = {}
 _FETCH_EVERY_S = 6 * 3600
 _last_fetch = 0.0
 
@@ -54,9 +59,53 @@ def _unit_installed() -> bool:
         return False
 
 
+def _docker_mode() -> bool:
+    import os
+    return os.getenv("YORIK_RUNTIME") == "docker"
+
+
+def _latest_release(check: bool) -> dict[str, Any]:
+    """The newest published release (tag, name, notes), cached 6 h."""
+    import httpx
+    if not check and _release_cache and time.time() - _release_cache.get("at", 0) < _FETCH_EVERY_S:
+        return _release_cache
+    try:
+        r = httpx.get(_RELEASES, timeout=10, headers={"Accept": "application/vnd.github+json"})
+        if r.status_code == 200:
+            d = r.json()
+            _release_cache.update(at=time.time(), tag=d.get("tag_name") or "",
+                                  name=d.get("name") or "", notes=(d.get("body") or "")[:2000])
+    except Exception as exc:  # noqa: BLE001 — offline is fine
+        log.info("release check failed: %s", exc)
+    return _release_cache
+
+
+def _docker_status(check: bool) -> dict[str, Any]:
+    import os
+    current = os.getenv("YORIK_VERSION") or "dev"
+    rel = _latest_release(check)
+    latest = rel.get("tag") or ""
+    newer = bool(latest) and latest.lstrip("v") != current.lstrip("v") and current not in ("dev", "local")
+    status = ""
+    try:
+        status = (_UPDATER / "status").read_text().strip()
+    except OSError:
+        pass
+    notes = [l.strip("-* ").strip() for l in (rel.get("notes") or "").splitlines() if l.strip()][:12]
+    return {
+        "available": True, "runtime": "docker", "current": current, "latest": latest or None,
+        "behind": 1 if newer else 0, "changes": notes if newer else [],
+        "local_changes": False, "can_update": _UPDATER.is_dir(),
+        "running": status.startswith("pulling") or (_UPDATER / "request").exists(),
+        "updater_status": status or None, "checked": bool(rel),
+    }
+
+
 @router.get("/update", dependencies=[Depends(require_admin)])
 def update_status(check: int = 0) -> dict[str, Any]:
     global _last_fetch
+    if _docker_mode():
+        return _docker_status(bool(check))
     if not (_REPO / ".git").exists():
         return {"available": False, "reason": "not a git checkout"}
     fetched = False
@@ -85,6 +134,12 @@ def update_status(check: int = 0) -> dict[str, Any]:
 
 @router.post("/update", dependencies=[Depends(require_admin)])
 def start_update() -> dict[str, Any]:
+    if _docker_mode():
+        if not _UPDATER.is_dir():
+            raise HTTPException(409, "The updater isn't part of this install.")
+        (_UPDATER / "request").write_text(str(time.time()))
+        log.info("in-app update requested (docker)")
+        return {"ok": True, "message": "Updating. Yorik restarts by itself in a few minutes."}
     st = update_status()
     if not st.get("can_update"):
         raise HTTPException(409, "In-app updates aren't set up on this machine. Run bash install.sh once more, or ./scripts/yorik upgrade.")

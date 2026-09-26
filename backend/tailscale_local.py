@@ -97,6 +97,15 @@ def self_info() -> Optional[dict[str, str]]:
     return _cached("self", load)
 
 
+def login_state() -> dict[str, Any]:
+    """{'state': 'Running'|'NeedsLogin'|…, 'auth_url': link to sign this
+    machine in, if tailscaled is waiting for that}. Not cached: the
+    settings card polls it while someone signs in."""
+    st = _run_json("status", "--json") or {}
+    return {"state": st.get("BackendState") or ("missing" if not st else "unknown"),
+            "auth_url": st.get("AuthURL") or None}
+
+
 def base_url() -> Optional[str]:
     """How phones reach Yorik over the tailnet. YORIK_PUBLIC_URL wins;
     otherwise the MagicDNS name on the Serve HTTPS port."""

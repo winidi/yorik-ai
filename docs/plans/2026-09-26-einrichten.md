@@ -28,7 +28,7 @@ Option, nie vorausgewählt. Texte vorerst Englisch; Übersetzung am Ende.
   API. `/r/join`: Name, Farbe, PIN, Handy einrichten. Das Handy wird ein
   vertrautes Gerät (Cookie `yorik_device`); die Anmeldung fragt dort nur die
   PIN. Beitritt und PIN-Anmeldung nur aus Heimnetz oder Tailnet.
-  `join-page/index.html` ist die öffentliche Hälfte: keine Daten, alles im
+  `deploy/join-page/index.html` ist die öffentliche Hälfte: keine Daten, alles im
   `#`-Teil der URL, wartet bis Yorik über Tailscale antwortet.
 - **A4 Checkliste und Tour** (`backend/setup_checklist.py`, Migration 165):
   Schritte aus echten Daten, pro Rolle; Tour mit Hinweisen an den echten
@@ -110,7 +110,7 @@ die laufende (Ablauf in `docs/RESTORE.md`, am besten gemeinsam).
 
 1. In der Tailscale-Admin-Konsole Funnel für die Maschine erlauben
    (Access controls, `nodeAttrs` mit `funnel`).
-2. `sudo tailscale funnel --bg --https=10000 <repo>/join-page`
+2. `sudo tailscale funnel --bg --https=10000 <repo>/deploy/join-page`
    (Einstellungen › System › Phones zeigt den genauen Befehl).
 3. Optional: OAuth-Client mit Schreibrecht auf Geräte anlegen und in
    Einstellungen › System › Phones eintragen. Dann bringt jede Einladung

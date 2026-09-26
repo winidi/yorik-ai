@@ -25,7 +25,7 @@ FROM python:3.12-slim
 # tini: a proper PID 1; git: the in-app version check reads the image's
 # version file instead, but some deps install from VCS.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ffmpeg libgomp1 curl ca-certificates tini git build-essential \
+        ffmpeg libgomp1 curl ca-certificates tini git build-essential postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY backend/requirements.txt /app/backend/requirements.txt
@@ -35,7 +35,15 @@ RUN python -m venv /opt/venv \
     && apt-get purge -y build-essential && apt-get autoremove -y
 COPY . /app/
 COPY --from=web /build/dist /app/frontend-react/dist/
+# Runs as an ordinary user. data/ belongs to it, so a fresh named volume
+# (the all-in-one install) starts out writable.
+RUN useradd -u 1000 -m yorik && mkdir -p /app/data /updater && chown -R yorik:yorik /app/data /updater
+ARG YORIK_VERSION=dev
+LABEL org.opencontainers.image.source="https://github.com/winidi/yorik-ai" \
+      org.opencontainers.image.version="${YORIK_VERSION}"
 ENV PATH="/opt/venv/bin:${PATH}" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
-    YORIK_RUNTIME=container
+    YORIK_RUNTIME=container YORIK_VERSION=${YORIK_VERSION} \
+    HF_HOME=/app/data/.cache/huggingface
+USER yorik
 VOLUME ["/app/data"]
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/docker/entrypoint.sh"]

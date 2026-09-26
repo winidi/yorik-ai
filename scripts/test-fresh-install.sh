@@ -112,7 +112,13 @@ curl -fsS -b "$JAR" "http://127.0.0.1:$WEB_PORT/api/help" | grep -q '"topics"' &
 curl -fsS "http://127.0.0.1:$WEB_PORT/r/home" | grep -q '<div id="root">' && pass "the app page is served" || fail "/r/home not served"
 
 step "Services"
-if [[ "$EXTRA" == *--container* ]]; then
+if [[ "$EXTRA" != *--classic* && "$EXTRA" != *--container* ]]; then
+  # Default install: the all-in-one Docker stack.
+  n_up=$("${SSH[@]}" "cd ~/yorik-ai/deploy && sudo docker compose ps --status running --format '{{.Service}}' | wc -l")
+  [[ "${n_up:-0}" -ge 12 ]] && pass "Docker stack running ($n_up services)" || fail "only ${n_up:-0} services running"
+  "${SSH[@]}" "test ! -d ~/yorik-ai/venv" && pass "no Python venv on the host" || fail "a host venv exists in docker mode"
+  "${SSH[@]}" "systemctl list-unit-files yorik.service | grep -q yorik.service" && fail "a yorik.service exists in docker mode" || pass "no systemd unit needed"
+elif [[ "$EXTRA" == *--container* ]]; then
   "${SSH[@]}" "sudo docker inspect -f '{{.State.Health.Status}}' yorik-app" 2>/dev/null | grep -q healthy \
     && pass "Yorik runs as the yorik-app container (healthy)" || fail "yorik-app container not healthy"
   "${SSH[@]}" "test ! -d ~/yorik-ai/venv" && pass "no Python venv on the host" || fail "a host venv exists in container mode"

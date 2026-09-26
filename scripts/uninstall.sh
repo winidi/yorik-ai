@@ -80,6 +80,7 @@ echo
 [[ $SYSTEMD_INSTALLED == 1 ]] && echo "  • systemd unit /etc/systemd/system/yorik.service (needs sudo)"
 [[ -L "$LOCAL_BIN_LINK" ]] && echo "  • CLI symlink $LOCAL_BIN_LINK"
 [[ -f "$SUPABASE_DIR/docker-compose.yml" ]] && echo "  • the database (Supabase containers + $SUPABASE_DIR/volumes)"
+[[ -f deploy/.env ]] && echo "  • the Docker stack: every container and volume (photos, documents, database, settings)"
 [[ $LLAMA_UNIT_INSTALLED == 1 ]] && echo "  • the AI model service yorik-llamacpp + its model files"
 [[ "${REC[llm]:-}" == "ollama" && -n "${REC[ollama_model]:-}" ]] && echo "  • the Ollama model ${REC[ollama_model]} (Ollama itself stays)"
 for p in 443 8443 8444; do [[ -n "${REC[ts_serve_$p]:-}" ]] && echo "  • Tailscale HTTPS address on port $p (Tailscale itself stays)"; done
@@ -177,6 +178,13 @@ fi
 if pgrep -f "uvicorn backend.main" >/dev/null 2>&1; then
   pkill -KILL -f "uvicorn backend.main" 2>/dev/null || true
   ok "killed stray 'uvicorn backend.main' processes"
+fi
+
+if [[ -f deploy/.env ]] && command -v docker >/dev/null 2>&1; then
+  say "DOCKER STACK" "removing the all-in-one stack, its volumes (all data) and built images"
+  ( cd deploy && docker compose down -v --remove-orphans --rmi local ) 2>/dev/null \
+    && ok "stack removed" || warn "docker compose down had errors — continuing"
+  rm -f deploy/.env
 fi
 
 if [[ -f docker-compose.app.yml ]] && command -v docker >/dev/null 2>&1 \

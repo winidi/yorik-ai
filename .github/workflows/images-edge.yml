@@ -1,0 +1,37 @@
+name: Images (edge)
+
+# Every push to main builds ghcr.io/…/yorik-ai:edge (amd64) so the
+# nightly container test and brave testers can run the newest code.
+# Installs follow "stable" (release.yml) unless YORIK_VERSION=edge.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  edge:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/yorik-ai:edge
+          build-args: YORIK_VERSION=edge
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./whatsapp-bridge
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/yorik-ai-whatsapp-bridge:edge

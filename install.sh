@@ -9,6 +9,11 @@
 # and ends with a QR code you scan with your phone to finish in the
 # browser. The only thing it may ask for is your sudo password.
 #
+# By default Yorik runs as the all-in-one Docker stack (deploy/), the
+# same one Windows and macOS use. --classic installs it directly on this
+# machine instead (Python venv + systemd; the maintainer's development
+# setup), which is what the steps below describe.
+#
 # What it does:
 #   1. Pre-flight checks — OS, RAM, disk, ports, network. Fail fast.
 #   2. System packages (apt or dnf) and Docker if missing.
@@ -32,7 +37,8 @@
 #                    (e.g. http://10.0.0.5:8080/v1); probed first.
 #   --no-autostart   Don't install the systemd unit.
 #   --no-tailscale   Don't install or configure Tailscale (home Wi-Fi only).
-#   --container      Run Yorik itself as a container (Dockerfile); nothing
+#   --classic        Install directly on this machine instead of Docker.
+#   --container      (classic) Run Yorik itself as a container; nothing
 #                    of Yorik's Python on this machine. Restarts with Docker.
 #   --dir=PATH       Install here. Default: this clone, else $HOME/yorik.
 #   --yes, --no-llm  Kept for old scripts (--no-llm = --llm=none).
@@ -87,6 +93,7 @@ FLAG_NO_LLM=0
 FLAG_NO_AUTOSTART=0
 FLAG_NO_TAILSCALE=0
 FLAG_CONTAINER=0
+FLAG_CLASSIC=0
 FLAG_LLM=""
 FLAG_REMOTE_LLM_URL=""
 FLAG_DIR=""
@@ -99,7 +106,8 @@ for arg in "$@"; do
     --llm=auto)      FLAG_LLM="" ;;
     --no-autostart)  FLAG_NO_AUTOSTART=1 ;;
     --no-tailscale)  FLAG_NO_TAILSCALE=1 ;;
-    --container)     FLAG_CONTAINER=1 ;;
+    --container)     FLAG_CONTAINER=1; FLAG_CLASSIC=1 ;;
+    --classic)       FLAG_CLASSIC=1 ;;
     --llm=ollama)    FLAG_LLM="ollama" ;;
     --llm=cuda)      FLAG_LLM="cuda" ;;
     --llm=existing)  FLAG_LLM="existing" ;;
@@ -108,13 +116,18 @@ for arg in "$@"; do
     --dir=*)         FLAG_DIR="${arg#--dir=}" ;;
     --full)          FLAG_FULL=1 ;;
     --help|-h)
-      sed -n '2,38p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     "") ;;  # tolerate an empty argument (old re-exec, wrappers)
     *) fatal "unknown flag: $arg" "see --help" ;;
   esac
 done
+# docker (default): the all-in-one stack in deploy/; classic: venv +
+# systemd + Supabase on this machine (flags --classic / --container).
+INSTALL_MODE="docker"
+[[ "$FLAG_CLASSIC" == "1" ]] && INSTALL_MODE="classic"
+
 # Kept for the docker-group re-exec below (`exec sg docker -c …`).
 SELF="$(readlink -f "$0")"
 # With no flags, printf '%q ' still prints '' — an empty argument that
@@ -256,6 +269,11 @@ if [[ "$PLANNED_BACKEND" == "postgres" ]]; then
   )
 fi
 
+if [[ "$INSTALL_MODE" == "docker" ]]; then
+  # Everything else stays inside Docker's own network.
+  REQUIRED_PORTS=("8000:Yorik" "2283:photos (Immich phone app)")
+fi
+
 PORT_BUSY=0
 for entry in "${REQUIRED_PORTS[@]}"; do
   port="${entry%%:*}"
@@ -315,6 +333,44 @@ phase "Plan"
 
 has_nvidia_gpu() {
   command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L 2>/dev/null | grep -q GPU
+}
+
+# NVIDIA's container toolkit, so Docker can hand the GPU to the model
+# (llama.cpp on --classic, Ollama in the Docker stack).
+ensure_nvidia_toolkit() {
+  # `docker run --gpus all` needs NVIDIA's container toolkit on the
+  # host. Nothing else installs it, and without it the model unit
+  # fails on the very first GPU box ("could not select device driver").
+  if ! command -v nvidia-ctk >/dev/null 2>&1; then
+    say "installing NVIDIA container toolkit (lets Docker use the GPU)"
+    if [[ "$PKG_MGR" == "apt" ]]; then
+      wait_for_dpkg_lock
+      curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+        | sudo gpg --dearmor --yes -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+      curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+        | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+        | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
+      sudo apt-get update -qq
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nvidia-container-toolkit >/dev/null
+    elif [[ "$PKG_MGR" == "dnf" ]]; then
+      curl -fsSL https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo \
+        | sudo tee /etc/yum.repos.d/nvidia-container-toolkit.repo >/dev/null
+      sudo dnf install -y -q nvidia-container-toolkit
+    fi
+    command -v nvidia-ctk >/dev/null 2>&1 \
+      || fatal "NVIDIA container toolkit didn't install" \
+               "see docs/LLM-LLAMACPP-CUDA.md, or re-run with --llm=ollama to use the CPU"
+    ok "NVIDIA container toolkit installed"
+  else
+    skip "NVIDIA container toolkit already present"
+  fi
+  # Register the nvidia runtime with Docker once. Restarting Docker
+  # only happens here, on a box that didn't have the runtime yet.
+  if ! docker info 2>/dev/null | grep -qi 'runtimes:.*nvidia'; then
+    sudo nvidia-ctk runtime configure --runtime=docker >/dev/null
+    sudo systemctl restart docker
+    ok "Docker can use the GPU"
+  fi
 }
 
 _is_obvious_embedder() {
@@ -597,7 +653,12 @@ else
   printf "  • Clone Yorik into %s%s%s\n" "${BOLD}" "$INSTALL_DIR" "${RST}"
 fi
 printf "  • System packages via %s + Docker if missing\n" "$PKG_MGR"
-printf "  • LLM: %s\n" "$LLM_LINE"
+if [[ "$INSTALL_MODE" == "docker" ]]; then
+  printf "  • Yorik as the all-in-one Docker stack (deploy/compose.yaml)\n"
+  printf "  • AI model: Ollama in the stack%s\n" "$(has_nvidia_gpu && echo ', on the NVIDIA GPU' || echo ', on the CPU')"
+else
+  printf "  • LLM: %s\n" "$LLM_LINE"
+fi
 printf "  • Start Yorik on http://localhost:8000\n\n"
 
 if [[ "$FLAG_YES" != "1" ]]; then
@@ -711,6 +772,17 @@ fi
 
 # ─── LLM ──────────────────────────────────────────────────────────────
 phase "LLM"
+if [[ "$INSTALL_MODE" == "docker" ]]; then
+  # The model runs in the stack's Ollama container. With an NVIDIA GPU,
+  # Docker needs NVIDIA's container toolkit to hand it over.
+  if has_nvidia_gpu; then
+    DECIDED_LLM="cuda"
+    ensure_nvidia_toolkit
+  else
+    skip "no NVIDIA GPU — the AI model runs on the CPU (5–10 s per reply)"
+  fi
+  DECIDED_LLM="docker"
+else
 
 LLM_BASE_URL=""
 LLM_MODEL=""
@@ -743,39 +815,7 @@ case "$DECIDED_LLM" in
     # somewhere to write.
     mkdir -p "$MODEL_DIR"
 
-    # `docker run --gpus all` needs NVIDIA's container toolkit on the
-    # host. Nothing else installs it, and without it the model unit
-    # fails on the very first GPU box ("could not select device driver").
-    if ! command -v nvidia-ctk >/dev/null 2>&1; then
-      say "installing NVIDIA container toolkit (lets Docker use the GPU)"
-      if [[ "$PKG_MGR" == "apt" ]]; then
-        wait_for_dpkg_lock
-        curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
-          | sudo gpg --dearmor --yes -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-        curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
-          | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
-          | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
-        sudo apt-get update -qq
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nvidia-container-toolkit >/dev/null
-      elif [[ "$PKG_MGR" == "dnf" ]]; then
-        curl -fsSL https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo \
-          | sudo tee /etc/yum.repos.d/nvidia-container-toolkit.repo >/dev/null
-        sudo dnf install -y -q nvidia-container-toolkit
-      fi
-      command -v nvidia-ctk >/dev/null 2>&1 \
-        || fatal "NVIDIA container toolkit didn't install" \
-                 "see docs/LLM-LLAMACPP-CUDA.md, or re-run with --llm=ollama to use the CPU"
-      ok "NVIDIA container toolkit installed"
-    else
-      skip "NVIDIA container toolkit already present"
-    fi
-    # Register the nvidia runtime with Docker once. Restarting Docker
-    # only happens here, on a box that didn't have the runtime yet.
-    if ! docker info 2>/dev/null | grep -qi 'runtimes:.*nvidia'; then
-      sudo nvidia-ctk runtime configure --runtime=docker >/dev/null
-      sudo systemctl restart docker
-      ok "Docker can use the GPU"
-    fi
+    ensure_nvidia_toolkit
 
     say "pulling llama.cpp:server-cuda Docker image (~3 GB, one-time)"
     docker pull ghcr.io/ggml-org/llama.cpp:server-cuda >/dev/null
@@ -908,6 +948,8 @@ EOF
     ;;
 esac
 
+fi  # classic LLM install
+
 # ─── Yorik source + config.env ────────────────────────────────────────
 phase "Yorik source"
 
@@ -957,6 +999,11 @@ else
   printf "\nYORIK_IMMICH_GPU=%s\n" "$IMMICH_GPU_VAL" >> config.env
 fi
 ok "Immich ML variant: ${IMMICH_GPU_VAL}"
+
+if [[ "$INSTALL_MODE" == "docker" ]]; then
+  # shellcheck source=deploy/linux-docker-start.sh
+  source "$INSTALL_DIR/deploy/linux-docker-start.sh"   # ends with exit 0
+fi
 
 # ─── start Yorik via start.sh ─────────────────────────────────────────
 phase "Start Yorik (start.sh)"
@@ -1250,7 +1297,7 @@ else
     # have Tailscale.
     if tailscale serve status --json 2>/dev/null | jq -e --arg hp "${TS_NAME}:10000" '.AllowFunnel[$hp]' >/dev/null; then
       skip "public join page already on"
-    elif sudo tailscale funnel --bg --https=10000 "$INSTALL_DIR/join-page" >/dev/null 2>&1; then
+    elif sudo tailscale funnel --bg --https=10000 "$INSTALL_DIR/deploy/join-page" >/dev/null 2>&1; then
       ok "public join page on https://${TS_NAME}:10000"
       record ts_funnel_10000 1
     else

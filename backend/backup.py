@@ -44,6 +44,44 @@ from .database import get_conn
 
 log = logging.getLogger("yorik.backup")
 
+
+# ── where pg_dump / psql run ──────────────────────────────────────────
+# Classic install: inside the database container (`docker exec`), which
+# brings the right client version and needs no password on the host.
+# All-in-one Docker install (YORIK_RUNTIME=docker): Yorik's container
+# has the Postgres client and no Docker access, so it talks to the
+# database services by their compose name over the network, and the
+# Supabase-only role supabase_admin becomes the database's superuser.
+_PG_HOST_FOR = {
+    "supabase-db": lambda: os.getenv("YORIK_DB_HOST", "db"),
+    "yorik-immich-postgres": lambda: os.getenv("IMMICH_DB_HOST", "immich-postgres"),
+}
+
+
+def _in_docker_stack() -> bool:
+    return os.getenv("YORIK_RUNTIME") == "docker"
+
+
+def _pg_argv(container: str, pw: str, args: list[str], *, stdin: bool = False) -> list[str]:
+    """argv for a Postgres client call (`args[0]` is pg_dump or psql)."""
+    if _in_docker_stack():
+        host_for = _PG_HOST_FOR.get(container)
+        host = host_for() if host_for else container
+        out = list(args)
+        for i in range(len(out) - 1):
+            if out[i] == "-U" and out[i + 1] == "supabase_admin":
+                out[i + 1] = os.getenv("YORIK_DB_USER", "postgres")
+        return ["env", f"PGPASSWORD={pw}", out[0], "-h", host] + out[1:]
+    return ["docker", "exec"] + (["-i"] if stdin else []) + ["-e", f"PGPASSWORD={pw}", container] + list(args)
+
+
+def _probe_argv(container: str) -> list[str]:
+    """Is the database container up? In the Docker stack compose starts
+    it before Yorik; the client call itself reports if it isn't."""
+    if _in_docker_stack():
+        return ["echo", "true"]
+    return _probe_argv(container)
+
 # Backups never touch the originals — only the snapshots. So the only
 # way one backup can hurt another is racing on the temp-dir cleanup.
 # A simple lock protects against concurrent /api/backup/run.
@@ -369,7 +407,7 @@ def _dump_yorik_postgres(dst: Path, *, which: str = "main") -> bool:
 
     try:
         probe = subprocess.run(
-            ["docker", "inspect", "-f", "{{.State.Running}}", container],
+            _probe_argv(container),
             capture_output=True, text=True, timeout=5, check=False,
         )
         if probe.returncode != 0 or probe.stdout.strip() != "true":
@@ -383,9 +421,8 @@ def _dump_yorik_postgres(dst: Path, *, which: str = "main") -> bool:
         # path resets the target schemas wholesale (DROP SCHEMA …
         # CASCADE) before piping the dump back, so the dump only
         # needs to recreate, not clean up.
-        cmd = ["docker", "exec", "-e", f"PGPASSWORD={pw}", container,
-               "pg_dump", "-U", user, "-d", db,
-               "--no-owner", "--no-privileges"]
+        cmd = _pg_argv(container, pw, ["pg_dump", "-U", user, "-d", db,
+               "--no-owner", "--no-privileges"])
         if which == "docs":
             cmd.extend(["--schema=docs"])
         elif which == "main":
@@ -461,11 +498,10 @@ def _dump_tenant_postgres(tenant_name: str, dst: Path) -> bool:
         # is what made an earlier round-trip silently lose the admin
         # row on restore (FK from user_profiles.id → auth.users.id
         # failed with "Key (id)=(...) is not present in table users").
-        cmd = ["docker", "exec", "-e", f"PGPASSWORD={pw}", container,
-               "pg_dump", "-U", user, "-d", db,
+        cmd = _pg_argv(container, pw, ["pg_dump", "-U", user, "-d", db,
                "--no-owner", "--no-privileges",
                "--schema=public", "--schema=yorik",
-               "--schema=auth", "--schema=docs"]
+               "--schema=auth", "--schema=docs"])
         with _gzip.open(dst, "wb") as gz:
             res = subprocess.run(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -531,7 +567,7 @@ def _dump_immich_postgres(dst: Path) -> bool:
         # photo originals will still be in the bundle; we just won't
         # have the metadata to go with them.
         probe = subprocess.run(
-            ["docker", "inspect", "-f", "{{.State.Running}}", container],
+            _probe_argv(container),
             capture_output=True, text=True, timeout=5, check=False,
         )
         if probe.returncode != 0 or probe.stdout.strip() != "true":
@@ -540,9 +576,8 @@ def _dump_immich_postgres(dst: Path) -> bool:
 
         with open(dst, "wb") as f:
             res = subprocess.run(
-                ["docker", "exec", container,
-                 "pg_dump", "-U", user, "-d", db,
-                 "--clean", "--if-exists", "--no-owner", "--no-privileges"],
+                _pg_argv(container, os.getenv("IMMICH_DB_PASSWORD", ""), ["pg_dump", "-U", user, "-d", db,
+                 "--clean", "--if-exists", "--no-owner", "--no-privileges"]),
                 stdout=f, stderr=subprocess.PIPE, timeout=600, check=False,
             )
         if res.returncode != 0:
@@ -875,9 +910,8 @@ def restore_snapshot(snapshot_path: Path, passphrase: str, *,
         with _gzip.open(dump_path, "rb") as gz:
             sql = gz.read()
         res = _subprocess.run(
-            ["docker", "exec", "-i", "-e", f"PGPASSWORD={pw}", container,
-             "psql", "-U", as_user, "-d", dbname,
-             "-v", "ON_ERROR_STOP=1", "--no-psqlrc"],
+            _pg_argv(container, pw, ["psql", "-U", as_user, "-d", dbname,
+             "-v", "ON_ERROR_STOP=1", "--no-psqlrc"], stdin=True),
             input=sql, capture_output=True, timeout=1800, check=False,
         )
         return res.returncode, (res.stderr or b"").decode("utf-8", "replace")
@@ -885,9 +919,8 @@ def restore_snapshot(snapshot_path: Path, passphrase: str, *,
     def _exec_target(dbname: str, sql: str) -> tuple[int, str]:
         """Run SQL as supabase_admin in the named DB."""
         res = _subprocess.run(
-            ["docker", "exec", "-i", "-e", f"PGPASSWORD={pw}", container,
-             "psql", "-U", "supabase_admin", "-d", dbname,
-             "-v", "ON_ERROR_STOP=1", "--no-psqlrc"],
+            _pg_argv(container, pw, ["psql", "-U", "supabase_admin", "-d", dbname,
+             "-v", "ON_ERROR_STOP=1", "--no-psqlrc"], stdin=True),
             input=sql.encode(), capture_output=True, timeout=120, check=False,
         )
         return res.returncode, (res.stderr or b"").decode("utf-8", "replace")
@@ -907,9 +940,8 @@ def restore_snapshot(snapshot_path: Path, passphrase: str, *,
         sql = sql.replace("CREATE SCHEMA public;",
                           "-- CREATE SCHEMA public;  -- stripped on restore")
         res = _subprocess.run(
-            ["docker", "exec", "-i", "-e", f"PGPASSWORD={pw}", container,
-             "psql", "-U", "supabase_admin", "-d", dbname,
-             "-v", "ON_ERROR_STOP=1", "--no-psqlrc"],
+            _pg_argv(container, pw, ["psql", "-U", "supabase_admin", "-d", dbname,
+             "-v", "ON_ERROR_STOP=1", "--no-psqlrc"], stdin=True),
             input=sql.encode(), capture_output=True, timeout=1800, check=False,
         )
         return res.returncode, (res.stderr or b"").decode("utf-8", "replace")
@@ -922,9 +954,8 @@ def restore_snapshot(snapshot_path: Path, passphrase: str, *,
             def _exec_admin(sql: str) -> tuple[int, str]:
                 """Run SQL as supabase_admin in the host DB."""
                 res = _subprocess.run(
-                    ["docker", "exec", "-i", "-e", f"PGPASSWORD={pw}", container,
-                     "psql", "-U", "supabase_admin", "-d", pg_db,
-                     "-v", "ON_ERROR_STOP=1", "--no-psqlrc"],
+                    _pg_argv(container, pw, ["psql", "-U", "supabase_admin", "-d", pg_db,
+                     "-v", "ON_ERROR_STOP=1", "--no-psqlrc"], stdin=True),
                     input=sql.encode(), capture_output=True, timeout=120, check=False,
                 )
                 return res.returncode, (res.stderr or b"").decode("utf-8", "replace")
@@ -1031,9 +1062,8 @@ def restore_snapshot(snapshot_path: Path, passphrase: str, *,
                         f"  postgres, anon, authenticated, service_role;\n"
                     )
                     res = _subprocess.run(
-                        ["docker", "exec", "-i", "-e", f"PGPASSWORD={pw}", container,
-                         "psql", "-U", "supabase_admin", "-d", "postgres",
-                         "-v", "ON_ERROR_STOP=1", "--no-psqlrc"],
+                        _pg_argv(container, pw, ["psql", "-U", "supabase_admin", "-d", "postgres",
+                         "-v", "ON_ERROR_STOP=1", "--no-psqlrc"], stdin=True),
                         input=setup.encode(), capture_output=True, timeout=60, check=False,
                     )
                     if res.returncode != 0:
@@ -1070,9 +1100,8 @@ def restore_snapshot(snapshot_path: Path, passphrase: str, *,
                                 f"GRANT ALL ON ALL FUNCTIONS IN SCHEMA {sch} TO postgres, anon, authenticated, service_role;\n"
                             )
                             _subprocess.run(
-                                ["docker", "exec", "-i", "-e", f"PGPASSWORD={pw}", container,
-                                 "psql", "-U", "supabase_admin", "-d", db_name,
-                                 "-v", "ON_ERROR_STOP=1", "--no-psqlrc"],
+                                _pg_argv(container, pw, ["psql", "-U", "supabase_admin", "-d", db_name,
+                                 "-v", "ON_ERROR_STOP=1", "--no-psqlrc"], stdin=True),
                                 input=regrant.encode(), capture_output=True, timeout=60, check=False,
                             )
 

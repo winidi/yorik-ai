@@ -1,0 +1,13 @@
+# Build Yorik's own images from this source checkout instead of pulling
+# them (development, tests, or before the first published release):
+#   docker compose -f compose.yaml -f compose.build.yaml up -d --build
+services:
+  yorik:
+    image: yorik-ai:local
+    build:
+      context: ..
+      dockerfile: Dockerfile
+  whatsapp-bridge:
+    image: yorik-ai-whatsapp-bridge:local
+    build:
+      context: ../whatsapp-bridge

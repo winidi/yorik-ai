@@ -21,6 +21,7 @@ for 400 days. PIN attempts share the login throttle (per device and IP).
 from __future__ import annotations
 
 import hashlib
+import os
 import logging
 import re
 import secrets
@@ -46,7 +47,7 @@ router = APIRouter(prefix="/api", tags=["invites"])
 INVITE_TTL = timedelta(hours=24)
 # The static public join page (served by Tailscale Funnel, not by Yorik).
 from pathlib import Path as _Path
-_JOIN_PAGE_DIR = _Path(__file__).resolve().parent.parent / "join-page"
+_JOIN_PAGE_DIR = _Path(__file__).resolve().parent.parent / "deploy" / "join-page"
 DEVICE_COOKIE = "yorik_device"
 DEVICE_TTL_DAYS = 400
 _PIN_RE = re.compile(r"^\d{4}$")
@@ -74,11 +75,21 @@ class InviteCreate(BaseModel):
     color: Optional[str] = None
 
 
-def _links(token: str, name: str, ts_url: Optional[str]) -> dict[str, Any]:
+def _origin_fallback(request: Request) -> Optional[str]:
+    """Without Tailscale, the address the admin is using right now works
+    for phones on the same Wi-Fi (http://192.168.0.45:8000), unless it's
+    this machine's own name for itself."""
+    host = (request.headers.get("host") or "").split(":")[0].lower()
+    if not host or host in ("localhost", "127.0.0.1", "::1", "[::1]"):
+        return None
+    return str(request.base_url).rstrip("/")
+
+
+def _links(token: str, name: str, ts_url: Optional[str], fallback: Optional[str] = None) -> dict[str, Any]:
     """Where the QR code points. With a public join page (Funnel) it goes
     there first and carries the rest in the #fragment, which browsers
     never send to a server; without one it points straight at Yorik."""
-    base = tailscale_local.base_url()
+    base = tailscale_local.base_url() or fallback
     join_url = f"{base}/r/join?t={token}" if base else None
     page = tailscale_local.join_page_url()
     if page and join_url:
@@ -93,7 +104,7 @@ def _links(token: str, name: str, ts_url: Optional[str]) -> dict[str, Any]:
 
 
 @router.post("/invites", status_code=201, dependencies=[Depends(require_admin)])
-def create_invite(body: InviteCreate, user: dict = Depends(current_user)) -> dict[str, Any]:
+def create_invite(body: InviteCreate, request: Request, user: dict = Depends(current_user)) -> dict[str, Any]:
     role = body.role if body.role in ("member", "restricted") else "member"
     color = body.color if body.color and _COLOR_RE.match(body.color) else None
     token = secrets.token_urlsafe(32)
@@ -109,10 +120,12 @@ def create_invite(body: InviteCreate, user: dict = Depends(current_user)) -> dic
         conn.commit()
     out = {"id": row["id"], "name": body.name.strip(), "role": role, "color": color,
            "expires_at": expires.isoformat(), "tailscale": ts.get("reason") or "ok"}
-    out.update(_links(token, body.name.strip(), ts_url))
+    out.update(_links(token, body.name.strip(), ts_url, _origin_fallback(request)))
+    out["home_only"] = bool(out["join_url"]) and not tailscale_local.base_url()
     if not out["join_url"]:
-        out["problem"] = ("Yorik doesn't know its own Tailscale address. Is Tailscale "
-                          "running on this machine? (Settings → System → Phones)")
+        out["problem"] = ("Yorik doesn't know an address phones can reach. Open Yorik on this "
+                          "computer by its network address (not localhost), or connect "
+                          "Tailscale under Settings → System → Phones.")
     return out
 
 
@@ -343,6 +356,8 @@ def invite_setup() -> dict[str, Any]:
         "join_page_port": tailscale_local.JOIN_PAGE_PORT,
         "api_configured": tailscale_local.api_configured(),
         "join_page_dir": str(_JOIN_PAGE_DIR),
+        "runtime": os.getenv("YORIK_RUNTIME") or "classic",
+        "login": tailscale_local.login_state(),
     }
 
 

@@ -15,6 +15,31 @@ while true; do
     tail -n 3 "$LOG" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | cut -c1-70 | sed 's/^/   /'
     sleep 10; continue
   fi
+  # Docker install (the default): Tailscale lives in the stack's
+  # container; classic: on the machine itself.
+  if docker inspect yorik-tailscale-1 >/dev/null 2>&1; then
+    tsj=$(docker exec yorik-tailscale-1 tailscale --socket=/var/run/tailscale/tailscaled.sock status --json 2>/dev/null)
+    state=$(echo "$tsj" | jq -r '.BackendState // "NoState"')
+    if [[ "$state" != "Running" ]]; then
+      auth=$(echo "$tsj" | jq -r '.AuthURL // empty')
+      printf "   One more step for access on the go: sign in to Tailscale.\n"
+      printf "   Scan this with your phone (free account, Google or Apple sign-in).\n\n"
+      if [[ -n "$auth" ]]; then qrencode -t ansiutf8 -m 2 "$auth" | sed 's/^/     /'; printf "\n   %s\n" "$auth"
+      else printf "   (waiting for Tailscale to start…)\n"; fi
+      printf "\n   Yorik already works at home: http://yorik.local:8000\n"
+      sleep 15; continue
+    fi
+    name=$(echo "$tsj" | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
+    if curl -fsS --max-time 3 http://localhost:8000/api/health >/dev/null 2>&1; then
+      url="https://${name}/r/"
+      printf "   Yorik is ready. Scan with your phone:\n\n"
+      qrencode -t ansiutf8 -m 2 "$url" | sed 's/^/     /'
+      printf "\n   %s\n   (at home also: http://yorik.local:8000)\n" "$url"
+    else
+      printf "   Yorik is starting…\n"
+    fi
+    sleep 60; continue
+  fi
   state=$(tailscale status --json 2>/dev/null | jq -r '.BackendState // "NoState"')
   if [[ "$state" == "NeedsLogin" || "$state" == "NoState" || "$state" == "Stopped" ]]; then
     printf "   One more step for access on the go: sign in to Tailscale.\n"
@@ -27,7 +52,7 @@ while true; do
       tailscale serve --bg --https=443 http://localhost:8000 >/dev/null 2>&1
       tailscale serve --bg --https=8443 http://localhost:2283 >/dev/null 2>&1
       tailscale serve --bg --https=8444 http://localhost:8010 >/dev/null 2>&1
-      tailscale funnel --bg --https=10000 /home/yorik/yorik-ai/join-page >/dev/null 2>&1 || true
+      tailscale funnel --bg --https=10000 /home/yorik/yorik-ai/deploy/join-page >/dev/null 2>&1 || true
       cfg=/home/yorik/yorik-ai/config.env
       if grep -q '^YORIK_TAILSCALE_HTTPS_PORT=' "$cfg"; then sed -i 's/^YORIK_TAILSCALE_HTTPS_PORT=.*/YORIK_TAILSCALE_HTTPS_PORT=443/' "$cfg"
       else printf '\nYORIK_TAILSCALE_HTTPS_PORT=443\n' >> "$cfg"; fi
