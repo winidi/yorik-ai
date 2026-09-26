@@ -83,7 +83,7 @@ if "${SSH[@]}" "cloud-init status --wait >/dev/null; true" 2>/dev/null; then pas
 step "Copy this checkout into the VM (as if cloned)"
 tar -C "$REPO" --exclude=./venv --exclude=./data --exclude=./node_modules --exclude=./frontend-react/node_modules \
     --exclude=./e2e --exclude=./models --exclude=./infra/supabase/docker --exclude=./config.env \
-    --exclude=./.install-record --exclude=./archive --exclude=./.git -czf "$WORK/src.tgz" .
+    --exclude=./.install-record --exclude=./archive --exclude=./.git --exclude=./dist -czf "$WORK/src.tgz" .
 cat "$WORK/src.tgz" | "${SSH[@]}" "mkdir -p ~/yorik-ai && tar -xzf - -C ~/yorik-ai" && pass "source copied ($(du -h "$WORK/src.tgz" | cut -f1))"
 
 step "bash install.sh --llm=$LLM --no-tailscale $EXTRA  (no terminal: it must not ask anything)"
