@@ -380,6 +380,17 @@ class TestHouseholdBlock:
         assert "also called Yorik" not in _household_block(me, "Max")
 
 
+    def test_block_reaches_the_real_system_prompt(self, fresh_app):
+        """The prompt builder got a user without an id, so the block
+        stayed empty in the live chat (replay 2026-09-26)."""
+        from backend.ask import _build_user_and_prompt
+        me = seed_user(name="Max Muster", role="admin", email="max@example.com")
+        seed_user(name="Erika Muster", role="member", email="erika@example.com")
+        _, prompt = asyncio.run(_build_user_and_prompt(role="admin", user_language="de",
+                                                       identified_name=None, user_id=me))
+        assert "═══ HOUSEHOLD ═══" in prompt and "Erika (adult)" in prompt
+
+
 class TestRemindMe:
     """E5: "sag mir in einer Stunde Bescheid" pushed at once."""
 

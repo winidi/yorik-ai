@@ -1640,7 +1640,7 @@ async def _build_user_and_prompt(
         full = ((row["name"] if row else None) or identified_name or "").strip()
         first = ((row["first_name"] if row else None) or (full.split(" ")[0] if full else "")).strip()
         full = full or first
-        prompt_user = SimpleNamespace(role=role, name=full, first_name=first)
+        prompt_user = SimpleNamespace(id=user_id, role=role, name=full, first_name=first)
     system_prompt = await builder.build_system_prompt(user=prompt_user, tools=None)
     return user, system_prompt
 
