@@ -12,6 +12,8 @@
 # keeps pointing at localhost:8000. data/ and config.env stay on the host.
 
 FROM node:22-alpine AS web
+# bash + coreutils for the build's fingerprint step (scripts/fingerprint.sh)
+RUN apk add --no-cache bash coreutils findutils
 WORKDIR /build
 COPY frontend-react/package.json frontend-react/package-lock.json ./
 RUN npm ci --no-audit --no-fund
