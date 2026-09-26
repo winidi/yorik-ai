@@ -23,6 +23,18 @@ inputs:
     type: string
     required: false
     description: Limit to one category, e.g. Lebensmittel, Wohnen, Abos.
+  search:
+    type: string
+    required: false
+    description: Text to find in the counterparty or purpose, case-insensitive (e.g. "Hetzner", "Stadtwerke", "Miete").
+  from_date:
+    type: string
+    required: false
+    description: First booking day to include, YYYY-MM-DD. For a calendar month ("im September") pass the 1st here and the last day as to_date; overrides days.
+  to_date:
+    type: string
+    required: false
+    description: Last booking day to include, YYYY-MM-DD.
 outputs:
   transactions:
     type: array

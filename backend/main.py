@@ -2857,6 +2857,9 @@ def _startup() -> None:
     _bs_mod.start_scheduler(_aio.get_event_loop())
     # Web Push nudges (morning "plan your day", evening review).
     _push.start_scheduler(_aio.get_event_loop())
+    # Reminders at a time ("sag mir in einer Stunde Bescheid").
+    from . import reminders as _reminders
+    _reminders.start_scheduler(_aio.get_event_loop())
     # Recordings: hourly retention sweep (audio deleted after N days, transcript stays).
     _recordings.start_scheduler(_aio.get_event_loop())
     # Search: the semantic index over mail, WhatsApp, tasks, contacts,

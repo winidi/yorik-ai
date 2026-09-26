@@ -17,6 +17,14 @@ inputs:
     type: integer
     required: false
     description: Limit to one account (from list_bank_accounts).
+  from_date:
+    type: string
+    required: false
+    description: First booking day to include, YYYY-MM-DD. For a calendar month ("im September") pass the 1st here and the last day as to_date; overrides days.
+  to_date:
+    type: string
+    required: false
+    description: Last booking day to include, YYYY-MM-DD.
 outputs:
   by_category:
     type: array

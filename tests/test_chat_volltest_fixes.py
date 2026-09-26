@@ -255,3 +255,173 @@ class TestPartialResultNote:
     def test_small_result_has_no_note(self):
         from backend.ui_tools import render_skill_result
         assert "PARTIAL" not in render_skill_result({"events": [], "_llm_hint": "none"}, skill="check_calendar")
+
+
+class TestFinanceFilters:
+    """A2/A8/G2/G3/G5: no way to search by counterparty, exact category
+    names only, and "im September" meant the last 30 days."""
+
+    @pytest.fixture
+    def account(self, person):
+        from datetime import date, timedelta
+        from backend.database import get_conn
+        today = date.today()
+        rows = [
+            (today - timedelta(days=3), -2300.0, "Anna Beispiel", "Haushalt", "Sonstiges"),
+            (today - timedelta(days=5), -59.49, "VISA HETZNER ONLINE GMBH", "", "Verträge & Abos"),
+            (today - timedelta(days=6), -40.0, "REWE", "", "Lebensmittel"),
+        ] + [(today - timedelta(days=1), -1.0, f"Kiosk {i}", "", "Sonstiges") for i in range(250)]
+        with get_conn() as conn:
+            acc = int(conn.execute(
+                "INSERT INTO bank_accounts (owner_user_id, space_id, display_name, bank_url, blz, login_name, credential_key) "
+                "VALUES (?, NULL, 'Giro', 'https://example.invalid', '00000000', 'x', 'unused') RETURNING id",
+                (person,)).fetchone()["id"])
+            for i, (d, amt, cp, purpose, cat) in enumerate(rows):
+                conn.execute("INSERT INTO bank_transactions (account_id, booking_date, amount, counterparty, purpose, "
+                             "category, dedup_hash) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                             (acc, d.isoformat(), amt, cp, purpose, cat, f"h{i}"))
+            conn.commit()
+        return acc
+
+    def test_search_finds_counterparty_hidden_by_the_row_cap(self, person, account):
+        from backend.skills.show_transactions.skill import execute
+        out = asyncio.run(execute(ctx=_mk_ctx(role="admin", user_id=person), days=30, search="anna beispiel"))
+        assert [t["counterparty"] for t in out["transactions"]] == ["Anna Beispiel"]
+
+    def test_short_category_name_matches(self, person, account):
+        from backend.skills.show_transactions.skill import execute
+        out = asyncio.run(execute(ctx=_mk_ctx(role="admin", user_id=person), days=30, category="abos"))
+        assert [t["counterparty"] for t in out["transactions"]] == ["VISA HETZNER ONLINE GMBH"]
+
+    def test_empty_result_names_existing_categories(self, person, account):
+        from backend.skills.show_transactions.skill import execute
+        out = asyncio.run(execute(ctx=_mk_ctx(role="admin", user_id=person), days=30, category="Software"))
+        assert out["transactions"] == []
+        assert "Categories that exist: Lebensmittel, Sonstiges, Verträge & Abos." in out["_llm_hint"]
+
+    def test_date_range_wins_over_days(self, person, account):
+        from datetime import date, timedelta
+        from backend.skills.spending_summary.skill import execute
+        d = (date.today() - timedelta(days=6)).isoformat()
+        out = asyncio.run(execute(ctx=_mk_ctx(role="admin", user_id=person), from_date=d, to_date=d))
+        assert [(c["category"], round(c["total"], 2)) for c in out["by_category"]] == [("Lebensmittel", -40.0)]
+
+
+class TestPrepareEmailWithoutChatFile:
+    """B7/B8: a plain mail needed an attachment, an archive document could not be attached."""
+
+    def _run(self, person, **kw):
+        from backend.skills.prepare_email.skill import execute
+        from backend.ui_tools import _pending_ui_actions
+
+        async def run():
+            _pending_ui_actions.set([])
+            out = await execute(ctx=_mk_ctx(role="admin", user_id=person), to="someone@example.com",
+                                subject="Freitag", body="Ich komme später.", **kw)
+            return out, _pending_ui_actions.get()
+        return asyncio.run(run())
+
+    def _staged(self, person):
+        import json
+        from backend.database import get_conn
+        with get_conn() as conn:
+            row = conn.execute("SELECT value FROM app_settings WHERE key = ?",
+                               (f"pending_email_draft_{person}",)).fetchone()
+        return json.loads(row["value"])
+
+    def test_plain_mail(self, person):
+        out, actions = self._run(person)
+        assert out["ok"] is True
+        assert self._staged(person)["attachments"] == []
+        card = [a for a in actions if a["type"] == "email_ready"][0]
+        assert card["attachment_filename"] == ""
+
+    def test_archive_document_goes_through_the_proxy(self, person, monkeypatch):
+        from backend import paperless_ingest
+        monkeypatch.setattr(paperless_ingest, "user_creds", lambda uid: {"api_key": "k", "base_url": "http://x"})
+        monkeypatch.setattr(paperless_ingest, "_fetch_doc", lambda doc_id, creds_override=None:
+                            {"title": "netcup Rechnung", "original_file_name": "nc-5276888.pdf",
+                             "mime_type": "application/pdf"} if doc_id == 1 else None)
+        out, _ = self._run(person, paperless_doc_id=1)
+        assert out["ok"] is True
+        assert self._staged(person)["attachments"] == [{"url": "/paperless/api/documents/1/download/",
+                                                        "filename": "nc-5276888.pdf",
+                                                        "mimetype": "application/pdf"}]
+        refused, _ = self._run(person, paperless_doc_id=4)
+        assert refused["ok"] is False
+
+
+class TestHouseholdBlock:
+    """C1/C4/B7/J3: the model did not know who lives here, which mail
+    addresses are the user's own, or that a child shares its name."""
+
+    def test_block_from_profiles(self, fresh_app):
+        from backend.ask import _household_block
+        from backend.database import get_conn
+        me = seed_user(name="Max Muster", role="admin", email="max@example.com")
+        seed_user(name="Erika Muster", role="member", email="erika@example.com")
+        seed_user(name="Yorik Muster", role="restricted", email="kind@example.com")
+        seed_user(name="Weg Gezogen", role="member", email="weg@example.com", disabled=1)
+        with get_conn() as conn:
+            conn.execute("INSERT INTO email_accounts (owner_user_id, email, imap_host, imap_username, smtp_host, "
+                         "smtp_username, credential_key) VALUES (?, 'max@mail.example', 'imap.x', 'max', 'smtp.x', "
+                         "'max', 'k')", (me,))
+            conn.commit()
+        block = _household_block(me, "Max")
+        assert "Members: Erika (adult), Yorik (child)." in block
+        assert "Weg" not in block and "Max (" not in block
+        assert "own email addresses: max@mail.example." in block
+        assert "it means the child Yorik, not you." in block
+
+    def test_no_namesake_no_yorik_line(self, fresh_app):
+        from backend.ask import _household_block
+        me = seed_user(name="Max Muster", role="admin", email="max@example.com")
+        seed_user(name="Erika Muster", role="member", email="erika@example.com")
+        assert "also called Yorik" not in _household_block(me, "Max")
+
+
+class TestRemindMe:
+    """E5: "sag mir in einer Stunde Bescheid" pushed at once."""
+
+    def test_reminder_fires_only_when_due(self, person):
+        from datetime import datetime, timedelta, timezone
+        from backend import reminders
+        from backend.database import get_conn
+        from backend.skills.remind_me.skill import execute
+        out = asyncio.run(execute(ctx=_mk_ctx(role="admin", user_id=person),
+                                  title="Wäsche aufhängen", in_minutes=60))
+        assert out["reminder_id"]
+
+        def bell():
+            with get_conn() as conn:
+                return [r["title"] for r in conn.execute(
+                    "SELECT title FROM notifications WHERE user_id = ? AND kind = 'reminder'", (person,)).fetchall()]
+
+        now = datetime.now(timezone.utc)
+        assert reminders.fire_due(now) == 0 and bell() == []
+        assert reminders.fire_due(now + timedelta(minutes=61)) == 1
+        assert bell() == ["Wäsche aufhängen"]
+        assert reminders.fire_due(now + timedelta(minutes=62)) == 0   # fires once
+
+    def test_clock_time_is_household_local(self):
+        from datetime import datetime, timezone
+        from zoneinfo import ZoneInfo
+        from backend import reminders
+        now = datetime(2026, 9, 26, 12, 0, tzinfo=timezone.utc)
+        due = reminders.parse_when("2026-10-01T07:00", None, now=now)
+        assert due.astimezone(ZoneInfo("Europe/Berlin")).strftime("%Y-%m-%d %H:%M") == "2026-10-01 07:00"
+
+    def test_past_or_missing_time_is_refused(self):
+        from datetime import datetime, timezone
+        from backend import reminders
+        now = datetime(2026, 9, 26, 12, 0, tzinfo=timezone.utc)
+        for at, mins in (("2026-09-25T07:00", None), (None, None), (None, 0)):
+            with pytest.raises(ValueError):
+                reminders.parse_when(at, mins, now=now)
+
+    def test_cancelled_never_fires(self, person):
+        from datetime import datetime, timedelta, timezone
+        from backend import reminders
+        rid = reminders.create(person, "Müll", datetime.now(timezone.utc) + timedelta(minutes=5))
+        assert reminders.cancel(rid, person)
+        assert reminders.fire_due(datetime.now(timezone.utc) + timedelta(hours=1)) == 0

@@ -7,7 +7,8 @@ from datetime import date, timedelta
 from typing import Any, Optional
 
 
-async def execute(ctx, days: int = 30, account_id: Optional[int] = None) -> dict[str, Any]:
+async def execute(ctx, days: int = 30, account_id: Optional[int] = None,
+                  from_date: Optional[str] = None, to_date: Optional[str] = None) -> dict[str, Any]:
     user_id = getattr(ctx, "user_id", None)
     if not user_id:
         return {"_llm_hint": "No signed-in user — cannot summarise spending."}
@@ -16,7 +17,8 @@ async def execute(ctx, days: int = 30, account_id: Optional[int] = None) -> dict
     from backend.database import get_conn
 
     days = max(1, min(int(days or 30), 365))
-    since = (date.today() - timedelta(days=days)).isoformat()
+    from backend.skills.show_transactions.skill import _window
+    since, until = _window(days, from_date, to_date)
 
     frag, params = spaces.row_filter(user_id, getattr(ctx, "role", None), "bank_accounts",
                                      table_alias="a")
@@ -27,6 +29,9 @@ async def execute(ctx, days: int = 30, account_id: Optional[int] = None) -> dict
         f"WHERE {frag} AND t.booking_date >= ?"
     )
     params = list(params) + [since]
+    if until:
+        q += " AND t.booking_date <= ?"
+        params.append(until)
     if account_id is not None:
         q += " AND t.account_id = ?"
         params.append(account_id)

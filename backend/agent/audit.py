@@ -66,6 +66,7 @@ _deletes_this_turn: ContextVar[int] = ContextVar(
 MUTATION_SKILLS: frozenset[str] = frozenset({
     "add_calendar_event", "update_calendar_event", "delete_calendar_event",
     "add_task", "update_task", "delete_task",
+    "remind_me",
     "add_bill", "update_bill", "delete_bill",
     "compose_draft", "email_draft", "whatsapp_draft",
     # Contacts (identity hub) — every mutating one disables the

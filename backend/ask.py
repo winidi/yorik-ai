@@ -911,6 +911,53 @@ def _format_date_context(now: datetime) -> Dict[str, str]:
 _LANG_NAMES = {"en": "English", "de": "German (Deutsch)", "fr": "French", "es": "Spanish", "it": "Italian"}
 
 
+def _household_block(user_id: Any, first_name: str) -> str:
+    """Who else lives here and which mail addresses are the user's own,
+    from the profiles — nothing about a family is written into code.
+
+    The chat test on 2026-09-26 found the model asking "welche Beate?"
+    every time, not knowing "Dirk" was the signed-in user, and reading
+    "Fotos von Yorik" as photos of itself. Wording approved by Dirk."""
+    if not user_id:
+        return ""
+    try:
+        from .database import get_conn
+        with get_conn() as conn:
+            people = conn.execute(
+                "SELECT id, name, first_name, role FROM user_profiles "
+                "WHERE COALESCE(disabled, 0) = 0 ORDER BY created_at").fetchall()
+            mails = conn.execute(
+                "SELECT email FROM email_accounts WHERE owner_user_id = ? AND COALESCE(enabled, 1) = 1 "
+                "ORDER BY id", (str(user_id),)).fetchall()
+    except Exception:  # noqa: BLE001 — the prompt never fails on this block
+        return ""
+    members = []
+    namesake = None
+    for p in people:
+        if str(p["id"]) == str(user_id):
+            continue
+        name = (p["first_name"] or (p["name"] or "").split(" ")[0] or "").strip()
+        if not name:
+            continue
+        kind = "child" if (p["role"] or "") == "restricted" else "adult"
+        members.append(f"{name} ({kind})")
+        if name.lower() == "yorik":
+            namesake = kind
+    lines = ["\n\n═══ HOUSEHOLD ═══"]
+    if members:
+        lines.append(f"Members: {', '.join(members)}. A member's name on its own means that household "
+                     "member — not a contact that merely contains the name; ask only if two are equally likely.")
+    own = [m["email"] for m in mails if m["email"]]
+    if own:
+        lines.append(f"The user's own email addresses: {', '.join(own)}. "
+                     f"\"Schreib mir\" / \"schreib {first_name or 'mir'} an …\" means one of these.")
+    if namesake:
+        who = "the child Yorik" if namesake == "child" else "the household member Yorik"
+        lines.append("You, the assistant, are also called Yorik. When a request is about photos, school, "
+                     f"clubs, appointments or letters of \"Yorik\", it means {who}, not you.")
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
 class HomeOSSystemPromptBuilder(SystemPromptBuilder):
     """Rebuilds the system prompt on every request so today's date never
     goes stale.
@@ -958,6 +1005,8 @@ class HomeOSSystemPromptBuilder(SystemPromptBuilder):
                 + f"**{first_for_resolution}'s own** — check_tasks and check_calendar return "
                 + f"exactly that by default. Other household members' things only when "
                 + f"asked for (person=… / everyone=true), and then always say whose they are."
+                + _household_block(getattr(user, "id", None) if user is not None else None,
+                                     first_for_resolution)
             )
         else:
             ctx["identified_user_block"] = (

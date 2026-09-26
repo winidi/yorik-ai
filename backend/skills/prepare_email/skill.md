@@ -1,6 +1,6 @@
 ---
 name: prepare_email
-description: Stage a new email with a recipient, subject, body and one attachment for the user to review and send.
+description: Stage a new email with a recipient, subject, body and optionally one attachment (chat file or archive document) for the user to review and send.
 when_to_use: |
   The user wants to send something from the chat by email — a filled
   form, a document, a result — as a brand-new outgoing email (not a
@@ -32,8 +32,12 @@ inputs:
     description: A short plain-text cover message, written from the conversation.
   attachment_id:
     type: integer
-    required: true
+    required: false
     description: "The attachment number (Anhang #<n>) of the file to include."
+  paperless_doc_id:
+    type: integer
+    required: false
+    description: A document from the archive (doc_id from search_documents) to attach instead of a chat attachment.
   from_email:
     type: string
     required: false

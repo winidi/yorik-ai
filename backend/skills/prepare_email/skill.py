@@ -1,5 +1,5 @@
-"""prepare_email — stage an email draft (recipient, subject, body, one
-attachment) for the user to review and send themselves in the Email app.
+"""prepare_email — stage an email draft (recipient, subject, body, at
+most one attachment: a chat file or an archive document) for the user to review and send themselves in the Email app.
 
 Never calls email_sender.send() and never touches SMTP. Two things
 happen:
@@ -32,8 +32,9 @@ async def execute(
     to: str,
     subject: str,
     body: str,
-    attachment_id: int,
+    attachment_id: Optional[int] = None,
     from_email: Optional[str] = None,
+    paperless_doc_id: Optional[int] = None,
 ) -> dict[str, Any]:
     user_id = getattr(ctx, "user_id", None)
     if not user_id:
@@ -44,11 +45,33 @@ async def execute(
         return {"ok": False, "_llm_hint": f"REJECTED: {to!r} doesn't look like an email address. "
                                           f"Ask the user for a real recipient."}
 
-    from backend import chat_attachments as A
-    row = A.get(int(attachment_id), str(user_id))
-    if not row:
-        return {"ok": False, "_llm_hint": "REJECTED: there is no attachment with this number for this user. "
-                                          "Ask them to attach or create the file again."}
+    # The attachment is optional: "schreib Dirk, dass ich später komme"
+    # has none, and until 2026-09-26 the chat asked for "an empty file".
+    # An archive document comes through the Paperless proxy as the
+    # person themselves, so a document they may not see cannot be sent.
+    attachments: list[dict[str, Any]] = []
+    attachment_filename = ""
+    row = None
+    if attachment_id not in (None, "", 0):
+        from backend import chat_attachments as A
+        row = A.get(int(attachment_id), str(user_id))
+        if not row:
+            return {"ok": False, "_llm_hint": "REJECTED: there is no attachment with this number for this user. "
+                                              "Ask them to attach or create the file again."}
+        attachment_filename = row["filename"]
+        attachments.append({"url": f"/api/chat/attachments/{row['id']}/raw", "filename": row["filename"],
+                            "mimetype": row["mime_type"] or "application/octet-stream"})
+    elif paperless_doc_id not in (None, "", 0):
+        from backend.paperless_ingest import _fetch_doc, user_creds
+        creds = user_creds(user_id)
+        meta = _fetch_doc(int(paperless_doc_id), creds_override=creds) if creds else None
+        if not meta:
+            return {"ok": False, "_llm_hint": "REJECTED: this archive document is not available to this user. "
+                                              "Search again with search_documents and use a doc_id from there."}
+        attachment_filename = (meta.get("original_file_name") or f"{meta.get('title') or 'Dokument'}.pdf")
+        attachments.append({"url": f"/paperless/api/documents/{int(paperless_doc_id)}/download/",
+                            "filename": attachment_filename,
+                            "mimetype": meta.get("mime_type") or "application/pdf"})
 
     account_id: Optional[int] = None
     account_note = ""
@@ -68,11 +91,7 @@ async def execute(
         "subject":     (subject or "").strip(),
         "body":        body or "",
         "account_id":  account_id,
-        "attachments": [{
-            "url":      f"/api/chat/attachments/{row['id']}/raw",
-            "filename": row["filename"],
-            "mimetype": row["mime_type"] or "application/octet-stream",
-        }],
+        "attachments": attachments,
     }
 
     # 1. Durable — survives a different tab, a reload, or the user
@@ -97,13 +116,13 @@ async def execute(
         "to":                  to,
         "subject":             payload["subject"],
         "preview":             body_preview,
-        "attachment_filename": row["filename"],
+        "attachment_filename": attachment_filename,
     })
 
     return {
         "ok":            True,
         "staged_to":     to,
-        "attachment_id": row["id"],
+        "attachment_id": row["id"] if row else None,
         "_llm_hint": (
             f"Staged, NOT sent — a card with an 'open and send' button already showed the user everything "
             f"(recipient, subject, preview, attachment). Just confirm in one short line that it's ready; don't "
