@@ -82,6 +82,8 @@ async def universal_search(q: str = Query(..., min_length=2),
         "contacts":   asyncio.to_thread(_search_contacts, q, user_id, role, qvec),
         "recordings": asyncio.to_thread(_search_recordings, q, user_id, role, qvec),
         "drafts":     asyncio.to_thread(_search_drafts, q, user_id, qvec),
+        "bank":       asyncio.to_thread(_search_bank, q, user_id, role, qvec),
+        "letters":    asyncio.to_thread(_search_letters, q, user_id, qvec),
     }
     # Apply a hard deadline so the slow sources don't block the UI.
     try:
@@ -207,6 +209,8 @@ def _search_whatsapp(q: str, user_id: str, qvec: Optional[str] = None) -> list[d
             "snippet":     text[:200],
             "timestamp":   r["timestamp"],
             "navigate_to": f"/r/whatsapp?chat={r['chat_jid']}",
+            # where it lies, so the chat can read the messages around it
+            "chat_jid":    r["chat_jid"],
         })
     return out
 
@@ -419,6 +423,60 @@ def _search_drafts(q: str, user_id: str, qvec: Optional[str] = None) -> list[dic
         "timestamp":   r["updated_at"],
         "navigate_to": f"/r/compose?draft_id={r['id']}",
     } for r in rows]
+
+
+# ───────────────────────── bank ─────────────────────────────────────
+
+def _search_bank(q: str, user_id: str, role: Optional[str] = None,
+                 qvec: Optional[str] = None) -> list[dict[str, Any]]:
+    """Bookings on the accounts the person may see (own and shared),
+    the same rule as the finance skills."""
+    from . import spaces as _sp
+    frag, params = _sp.row_filter(user_id, role, "bank_accounts", table_alias="a")
+    rows = _hybrid(
+        source="bank", table="bank_transactions",
+        columns="bank_transactions.id, booking_date, amount, counterparty, purpose, category",
+        visible=(f"bank_transactions.account_id IN (SELECT a.id FROM bank_accounts a WHERE {frag})", list(params)),
+        keyword=_like(q, "bank_transactions.counterparty", "bank_transactions.purpose", "bank_transactions.category"),
+        order="booking_date DESC", qvec=qvec,
+    )
+    return [{
+        "source":      "bank",
+        "id":          r["id"],
+        "title":       r["counterparty"] or "(ohne Empfänger)",
+        "subtitle":    f"{r['booking_date']} · {r['amount']} EUR",
+        "snippet":     (r["purpose"] or "")[:200],
+        "timestamp":   r["booking_date"],
+        "navigate_to": "/r/finance",
+    } for r in rows]
+
+
+# ───────────────────────── letters (Schreiben) ──────────────────────
+
+def _search_letters(q: str, user_id: str, qvec: Optional[str] = None) -> list[dict[str, Any]]:
+    rows = _hybrid(
+        source="letters", table="written_documents",
+        columns="written_documents.id, kind, status, title, recipient, updated_at",
+        visible=("written_documents.user_id = ?", [user_id]),
+        keyword=_like(q, "written_documents.title", "written_documents.recipient", "written_documents.content"),
+        order="updated_at DESC", qvec=qvec,
+    )
+    out = []
+    for r in rows:
+        try:
+            name = (json.loads(r["recipient"] or "{}") or {}).get("name") or ""
+        except ValueError:
+            name = ""
+        out.append({
+            "source":      "letters",
+            "id":          r["id"],
+            "title":       r["title"] or "(ohne Titel)",
+            "subtitle":    " · ".join(x for x in (r["kind"], r["status"], name) if x),
+            "snippet":     (r.get("_snippet") or "")[:200],
+            "timestamp":   r["updated_at"],
+            "navigate_to": f"/r/write?id={r['id']}",
+        })
+    return out
 
 
 # ───────────────────────── settings: search by meaning ──────────────

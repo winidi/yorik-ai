@@ -154,6 +154,70 @@ class Source:
     where: str = "TRUE"               # rows worth indexing
     immutable: bool = False           # index once vs. compare by hash
     max_chunks: int = 2
+    # Bump when the text of an immutable source changes shape: its rows
+    # are then written again, a batch per sweep, the old chunks staying
+    # searchable until replaced (content_hash carries "v<n>:").
+    version: int = 1
+
+
+_IBAN = re.compile(r"\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}(?:\s?[A-Z0-9]{1,4})?\b")
+_PHONE = re.compile(r"(?<![\w+])(?:\+|00)?\d[\d /-]{7,}\d(?!\w)")
+_MAIL = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
+
+
+def _entity_hints(text: str) -> str:
+    """Words a person would search for next to a bare value: a message
+    that is only "DE85500105175438012374" must be found by "Kontonummer
+    von Mama" (chat test 2026-09-26)."""
+    hints = []
+    if _IBAN.search(text or ""):
+        hints.append("IBAN Kontonummer Bankverbindung")
+    if _PHONE.search(text or ""):
+        hints.append("Telefonnummer Handynummer")
+    if _MAIL.search(text or ""):
+        hints.append("E-Mail-Adresse")
+    return f"[{'; '.join(hints)}]" if hints else ""
+
+
+def _wa_text(r) -> str:
+    """Who wrote it in which chat and when, then the message — the bare
+    text alone could not answer "was hat Mama geschickt"."""
+    body = r["text"] or r["transcript"]
+    if not body or len((body or "").strip()) < MIN_TEXT_CHARS:
+        return _clean(body)
+    who = "ich" if r["from_me"] else (r["push_name"] or "")
+    when = ""
+    try:
+        when = datetime.fromtimestamp(int(r["timestamp"])).strftime("%d.%m.%Y")
+    except (TypeError, ValueError, OSError):
+        pass
+    head = " · ".join(x for x in (f"WhatsApp-Chat {r['chat_name']}" if r["chat_name"] else "WhatsApp", who, when) if x)
+    return _clean(f"{head}:", body, _entity_hints(body))
+
+
+def _bank_text(r) -> str:
+    amount = r["amount"]
+    try:
+        amount = f"{float(amount):.2f}".replace(".", ",")
+    except (TypeError, ValueError):
+        pass
+    kind = "Eingang" if (r["amount"] or 0) > 0 else "Abbuchung"
+    return _clean(f"Kontoumsatz {r['booking_date']} · {kind} {amount} EUR · {r['counterparty'] or ''}",
+                  r["purpose"], r["category"], _entity_hints(r["purpose"] or ""))
+
+
+def _letter_text(r) -> str:
+    try:
+        content = json.loads(r["content"] or "{}")
+    except ValueError:
+        content = {}
+    try:
+        recipient = json.loads(r["recipient"] or "{}")
+    except ValueError:
+        recipient = {}
+    kind = {"letter": "Brief", "invoice": "Rechnung", "quote": "Angebot"}.get(r["kind"] or "", r["kind"] or "")
+    return _clean(f"{kind} ({r['status']}) an {recipient.get('name') or ''}", r["title"],
+                  content.get("subject"), _strip_html(content.get("text_html")))
 
 
 def _recording_text(r) -> str:
@@ -178,11 +242,14 @@ def _recording_text(r) -> str:
 
 SOURCES: dict[str, Source] = {s.name: s for s in (
     Source("email", "email_messages", "id, subject, from_name, from_email, snippet, body_text",
-           lambda r: _clean(r["subject"], r["from_name"] or r["from_email"], r["body_text"] or r["snippet"]),
+           lambda r: _clean(r["subject"], r["from_name"] or r["from_email"], r["body_text"] or r["snippet"],
+                            _entity_hints(r["body_text"] or r["snippet"] or "")),
            where="COALESCE(is_draft, 0) = 0", immutable=True, max_chunks=3),
-    Source("whatsapp", "wa_messages", "id, text, transcript, push_name",
-           lambda r: _clean(r["text"] or r["transcript"]),
-           where="COALESCE(text, transcript, '') <> ''", immutable=True, max_chunks=2),
+    Source("whatsapp", "wa_messages",
+           "t.id, t.text, t.transcript, t.push_name, t.from_me, t.timestamp, "
+           "(SELECT c.name FROM wa_chats c WHERE c.jid = t.chat_jid AND c.owner_user_id = t.owner_user_id LIMIT 1) AS chat_name",
+           _wa_text,
+           where="COALESCE(text, transcript, '') <> ''", immutable=True, max_chunks=2, version=2),
     Source("tasks", "tasks", "id, title, notes, person, category",
            lambda r: _clean(r["title"], r["notes"], r["person"], r["category"])),
     Source("contacts", "contacts",
@@ -196,6 +263,12 @@ SOURCES: dict[str, Source] = {s.name: s for s in (
            _recording_text, where="status = 'done'", immutable=True, max_chunks=60),
     Source("drafts", "compose_drafts", "id, subject, recipient, body_html",
            lambda r: _clean(r["subject"], r["recipient"], _strip_html(r["body_html"])), max_chunks=4),
+    # Added 2026-09-26: bank rows and Schreiben documents were not
+    # searchable at all ("Abos", "Überweisungen an …", "mein Brief an …").
+    Source("bank", "bank_transactions", "id, booking_date, amount, counterparty, purpose, category",
+           _bank_text, immutable=True, max_chunks=1),
+    Source("letters", "written_documents", "id, kind, status, title, recipient, content",
+           _letter_text, max_chunks=4),
 )}
 
 
@@ -291,7 +364,7 @@ def _write_rows(src: Source, rows: list[Any]) -> int:
                 conn.execute(
                     "INSERT INTO search_chunks (source, row_id, chunk_no, text, content_hash, embedding, model, indexed_at) "
                     "VALUES (?, ?, 0, '', ?, NULL, ?, ?)",
-                    (src.name, int(r["id"]), hashlib.sha1(src.text(r).encode("utf-8")).hexdigest(),
+                    (src.name, int(r["id"]), _hash(src, src.text(r)),
                      model_tag(), _now()))
                 conn.commit()
             done += 1
@@ -304,7 +377,7 @@ def _write_batch(src: Source, rows: list[Any]) -> int:
     pending: list[tuple[int, int, str, str]] = []     # row_id, chunk_no, text, hash
     for r in rows:
         text = src.text(r)
-        digest = hashlib.sha1(text.encode("utf-8")).hexdigest()
+        digest = _hash(src, text)
         chunks = chunk_text(text, src.max_chunks) or [""]
         pending.extend((int(r["id"]), i, c, digest) for i, c in enumerate(chunks))
     to_embed = [p[2] for p in pending if p[2]]
@@ -324,15 +397,25 @@ def _write_batch(src: Source, rows: list[Any]) -> int:
     return len(rows)
 
 
+def _hash(src: Source, text: str) -> str:
+    digest = hashlib.sha1(text.encode("utf-8")).hexdigest()
+    return f"v{src.version}:{digest}" if src.version > 1 else digest
+
+
 def _index_immutable(src: Source) -> int:
     done = 0
+    # Rows without chunks, and — after a version bump — rows whose
+    # chunks were written with an older text shape.
+    stale = ("" if src.version <= 1 else
+             f" OR NOT EXISTS (SELECT 1 FROM search_chunks sc2 WHERE sc2.source = ? AND sc2.row_id = t.id "
+             f"AND sc2.content_hash LIKE 'v{src.version}:%')")
     while done < MAX_ROWS_PER_PASS:
         with get_conn() as conn:
             rows = conn.execute(
-                f"SELECT {src.columns} FROM {src.table} t WHERE ({src.where}) AND NOT EXISTS "
-                f"(SELECT 1 FROM search_chunks sc WHERE sc.source = ? AND sc.row_id = t.id) "
+                f"SELECT {src.columns} FROM {src.table} t WHERE ({src.where}) AND (NOT EXISTS "
+                f"(SELECT 1 FROM search_chunks sc WHERE sc.source = ? AND sc.row_id = t.id){stale}) "
                 f"ORDER BY t.id DESC LIMIT ?",
-                (src.name, BATCH_ROWS),
+                (src.name, *( [src.name] if stale else [] ), BATCH_ROWS),
             ).fetchall()
         if not rows:
             break
@@ -347,7 +430,7 @@ def _index_mutable(src: Source) -> int:
             "SELECT DISTINCT row_id, content_hash FROM search_chunks WHERE source = ?", (src.name,),
         ).fetchall()}
     changed = [r for r in rows
-               if known.get(int(r["id"])) != hashlib.sha1(src.text(r).encode("utf-8")).hexdigest()]
+               if known.get(int(r["id"])) != _hash(src, src.text(r))]
     done = 0
     for i in range(0, len(changed), BATCH_ROWS):
         done += _write_rows(src, changed[i:i + BATCH_ROWS])

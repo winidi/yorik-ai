@@ -2814,6 +2814,15 @@ def _startup() -> None:
     # Each account-task does its own reconnect / IDLE handling.
     from . import email_fetcher as ef_mod
     ef_mod.start_background(_aio.get_event_loop())
+    # Broken umlauts in stored mail ("fÃ¼r") — repaired once, in batches,
+    # off the event loop; the search index then re-reads those mails.
+    def _repair_mail_umlauts() -> None:
+        try:
+            while ef_mod.repair_stored_mojibake() > 0:
+                pass
+        except Exception:  # noqa: BLE001 — a repair must never stop the start
+            log.exception("mail umlaut repair failed")
+    _aio.get_event_loop().run_in_executor(None, _repair_mail_umlauts)
     # Paperless reconciler — diffs Paperless live ids vs the local
     # chunk mirror and ingests anything missing. Runs once at startup
     # (catches docs added while Yorik was down, webhook misses, or

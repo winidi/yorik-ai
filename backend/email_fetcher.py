@@ -54,6 +54,35 @@ RECONNECT_INITIAL_S = 5
 RECONNECT_MAX_S = 60
 SNIPPET_LEN = 220
 
+# UTF-8 bytes read as Latin-1/cp1252 ("fÃ¼r", "SchlÃ¼ssel"): about 3 % of
+# the stored mail, still happening for new mail on 2026-09-26. Shown
+# broken in the app and never found by a search for an umlaut word.
+_MOJIBAKE = re.compile("Ã[\u0080-\u00bf\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u0192\u02c6\u02dc\u2013\u2014\u2018-\u201e\u2020-\u2022\u2026\u2030\u2039\u203a\u20ac\u2122]|Â[\u00a0-\u00bf]|â[\u0080-\u00bf\u0152-\u2122]")
+
+
+def fix_mojibake(text: Optional[str]) -> Optional[str]:
+    """Undo UTF-8-read-as-Latin-1 when the text shows its marks and the
+    round trip gives valid UTF-8; otherwise the text as it was."""
+    if not text or not _MOJIBAKE.search(text):
+        return text
+    for codec in ("cp1252", "latin-1"):
+        try:
+            fixed = text.encode(codec).decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            continue
+        if not _MOJIBAKE.search(fixed):
+            return fixed
+    # mixed text: repair piece by piece, each run of non-ASCII on its own
+    def _one(m: "re.Match[str]") -> str:
+        chunk = m.group(0)
+        for codec in ("cp1252", "latin-1"):
+            try:
+                return chunk.encode(codec).decode("utf-8")
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                continue
+        return chunk
+    return re.sub(r"[\u0080-\u024f\u02c6\u02dc\u2013-\u2122]+", _one, text)
+
 # How much of each folder 'recent' keeps (the default import scope), and
 # how many mails one sync pass may bring in before it goes back to
 # listening for new mail (a big import continues on the next pass).
@@ -917,8 +946,8 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
     thread_id = (references_list[0].strip("<>") if references_list
                   else in_reply_to or message_id)
 
-    body_text = (parsed.text_plain or [""])[0] if parsed.text_plain else ""
-    body_html = (parsed.text_html or [""])[0] if parsed.text_html else ""
+    body_text = fix_mojibake((parsed.text_plain or [""])[0] if parsed.text_plain else "") or ""
+    body_html = fix_mojibake((parsed.text_html or [""])[0] if parsed.text_html else "") or ""
     if not body_text and body_html:
         # Strip tags for a snippet — full text/html stripping is
         # better but for snippet purposes this is fine.
@@ -927,7 +956,7 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
     snippet = (body_text or "")[:SNIPPET_LEN].replace("\n", " ").strip()
 
     # a long subject arrives folded over several header lines; store it as the one line it is
-    subject = re.sub(r"\s*[\r\n]+\s*", " ", parsed.subject or "").strip()
+    subject = fix_mojibake(re.sub(r"\s*[\r\n]+\s*", " ", parsed.subject or "").strip()) or ""
     has_attachments = 1 if parsed.attachments else 0
     size_bytes = data.get(b"RFC822.SIZE", 0)
 
@@ -1564,3 +1593,27 @@ async def trigger_sync(account_id: int) -> dict:
         return {"ok": True, "kicked": True}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+def repair_stored_mojibake(batch: int = 200) -> int:
+    """One pass over stored mail with broken umlauts: repaired in place,
+    their search chunks dropped so the index sweep writes them again.
+    Runs at start; cheap when nothing is left."""
+    fixed = 0
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, subject, snippet, body_text, body_html FROM email_messages "
+            "WHERE body_text LIKE '%Ã%' OR subject LIKE '%Ã%' OR body_text LIKE '%Â%' LIMIT ?", (batch * 50,),
+        ).fetchall()
+        for r in rows:
+            new = {k: fix_mojibake(r[k]) for k in ("subject", "snippet", "body_text", "body_html")}
+            if all(new[k] == r[k] for k in new):
+                continue
+            conn.execute("UPDATE email_messages SET subject = ?, snippet = ?, body_text = ?, body_html = ? "
+                         "WHERE id = ?", (new["subject"], new["snippet"], new["body_text"], new["body_html"], r["id"]))
+            conn.execute("DELETE FROM search_chunks WHERE source = 'email' AND row_id = ?", (r["id"],))
+            fixed += 1
+        conn.commit()
+    if fixed:
+        log.info("mail umlaut repair: %d message(s) fixed", fixed)
+    return fixed

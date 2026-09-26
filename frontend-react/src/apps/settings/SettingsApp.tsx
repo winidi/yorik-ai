@@ -2661,6 +2661,7 @@ type SearchIndexStatus = {
 const SEARCH_SOURCE_LABEL: Record<string, string> = {
   email: "Email", whatsapp: "WhatsApp", tasks: "Tasks", contacts: "Contacts",
   events: "Calendar", recordings: "Recordings", drafts: "Letters & drafts",
+  bank: "Bank", letters: "Schreiben",
 };
 
 /** Settings → Embeddings: search by meaning on/off, which model, how

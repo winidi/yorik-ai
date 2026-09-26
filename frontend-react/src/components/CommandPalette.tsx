@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Search, Mail, MessageSquare, FileText, Image as ImageIcon,
-  Calendar, X, Loader2, ArrowRight, CheckSquare, Users, Mic, PenLine,
+  Calendar, X, Loader2, ArrowRight, CheckSquare, Users, Mic, PenLine, Landmark,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -44,11 +44,13 @@ const SOURCE_META: Record<string, { label: string; icon: any; tint: string }> = 
   contacts:  { label: "Contacts",  icon: Users,        tint: "text-orange-500" },
   recordings: { label: "Recordings", icon: Mic,        tint: "text-rose-500" },
   drafts:    { label: "Letters & drafts", icon: PenLine, tint: "text-sky-500" },
+  letters:   { label: "Schreiben", icon: PenLine,      tint: "text-sky-500" },
+  bank:      { label: "Bank",      icon: Landmark,     tint: "text-lime-600" },
 };
 
 const SOURCE_ORDER: Array<keyof typeof SOURCE_META> = [
   "calendar", "tasks", "email", "whatsapp", "paperless", "contacts",
-  "recordings", "drafts", "immich",
+  "recordings", "drafts", "letters", "bank", "immich",
 ];
 
 export function CommandPalette() {
