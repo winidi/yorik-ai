@@ -7,6 +7,8 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-26
+
 ### Highlights
 
 - Install on Windows, macOS or Linux from one download, or make an install stick for a spare mini PC.
