@@ -659,6 +659,7 @@ SKILL_MAX_CHARS = {
     "read_document": 12_000,
     "universal_search": 6_000,
     "show_transactions": 6_000,
+    "payments_to": 6_000,          # ten Anthropic payments were 3400 characters (2026-09-27)
     "whatsapp_read": 6_000,
 }
 
