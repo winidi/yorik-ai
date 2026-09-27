@@ -6,6 +6,7 @@ when_to_use: |
   - User mentions a person/topic that could be in any channel
   - The chat agent needs to gather context from multiple places before drafting
   - "What did Müller say?" / "Have I seen this invoice before?" / "Show me everything from last summer"
+  - Pass `also` whenever the item may be written in another language or under another name (an English invoice, the company behind a product: "Claude" → "Anthropic").
 inputs:
   query:
     type: string
