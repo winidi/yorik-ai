@@ -355,7 +355,10 @@ def _search_paperless(q: str, user_id: str) -> list[dict[str, Any]]:
     sem_ids = [h.get("paperless_doc_id") for h in sem]
     both = [h for h in fts if h.get("paperless_doc_id") in sem_ids]
     relevant, seen = [], set()
-    for h in both + fts + sem:
+    # Meaning before a bare word match since the documents share the
+    # multilingual index: "rechnung" put "test-rechnung" above the netcup
+    # invoice (document test set 2026-09-27).
+    for h in both + sem + fts:
         did = h.get("paperless_doc_id")
         if did in seen:
             continue
