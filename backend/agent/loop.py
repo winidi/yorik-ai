@@ -400,13 +400,16 @@ async def ask(
             if _gate[0] == "retry":
                 grounding_retried = True
                 messages.pop()                      # the unbacked answer never reaches the person
-                messages.append(_gate[1])
+                messages.extend(_gate[1])
                 continue
             if _gate[0] == "fallback":
                 final_text = _gate[1]
                 messages[-1] = {**assistant_msg, "content": final_text}
             elif _gate[1]:
                 ui_actions.append(_gate[1])
+            if grounding_retried:
+                final_text = _grounding.strip_check_talk(final_text)
+                messages[-1] = {**messages[-1], "content": final_text}
             # weekdays next to dates are corrected by the calendar, not trusted
             _fixed = _grounding.fix_weekdays(final_text)
             if _fixed != final_text:
@@ -1133,13 +1136,16 @@ async def ask_stream(
             if _gate[0] == "retry":
                 grounding_retried = True
                 messages.pop()
-                messages.append(_gate[1])
+                messages.extend(_gate[1])
                 continue
             if _gate[0] == "fallback":
                 final_text = _gate[1]
                 messages[-1] = {**assistant_msg, "content": final_text}
             elif _gate[1]:
                 ui_actions.append(_gate[1])
+            if grounding_retried:
+                final_text = _grounding.strip_check_talk(final_text)
+                messages[-1] = {**messages[-1], "content": final_text}
             # weekdays next to dates are corrected by the calendar, not trusted
             _fixed = _grounding.fix_weekdays(final_text)
             if _fixed != final_text:

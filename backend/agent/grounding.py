@@ -346,13 +346,45 @@ def check(answer: str, messages: List[Dict[str, Any]], raws: Optional[List[Tuple
 NUDGE_MARK = "[check]"
 
 
-def nudge_message(missing: List[str]) -> Dict[str, Any]:
+CHECK_CALL_ID = "check_facts"
+
+
+def nudge_message(missing: List[str]) -> List[Dict[str, Any]]:
     """Sent back to the model once when a value or quote is not backed.
-    Wording approved by Dirk (see chat test report)."""
-    return {"role": "user", "internal": True, "content": (
-        f"{NUDGE_MARK} Not in any tool result: {', '.join(missing[:6])}. "
-        "Look it up and quote it exactly; a number you worked out: compute it with calculate; "
-        "otherwise say you did not find it.")}
+    Wording approved by Dirk (see chat test report). It comes as the
+    result of a check the model "ran" (like the prefetch search), not as
+    a message from the person: as a user message the model answered it
+    to Mama — "Die Summe 366,44 € taucht in keinem Tool-Ergebnis auf"
+    (2026-09-27). Both messages are internal: never evidence, never shown."""
+    note = (f"{NUDGE_MARK} Not in any tool result: {', '.join(missing[:6])}. "
+            "Look it up and quote it exactly; a number you worked out: compute it with calculate; "
+            "otherwise say you did not find it.")
+    call = {"id": CHECK_CALL_ID, "type": "function",
+            "function": {"name": "check_facts", "arguments": "{}"}}
+    return [{"role": "assistant", "internal": True, "content": None, "tool_calls": [call]},
+            {"role": "tool", "internal": True, "tool_call_id": CHECK_CALL_ID, "name": "check_facts",
+             "content": note}]
+
+
+# Sentences in which the answer talks about the check instead of to the
+# person; a safety net behind the note's new shape.
+_CHECK_TALK = re.compile(
+    r"(?i)(\[check\]|tool[- ]?(?:ergebnis|result|resultat)|werkzeug[- ]?ergebnis|check_facts)")
+
+
+def strip_check_talk(text: str) -> str:
+    """Drop the sentences that talk about the check."""
+    if not text or not _CHECK_TALK.search(text):
+        return text
+    out_lines = []
+    for line in text.splitlines():
+        if not _CHECK_TALK.search(line):
+            out_lines.append(line)
+            continue
+        kept = [s for s in re.split(r"(?<=[.!?])\s+", line) if not _CHECK_TALK.search(s)]
+        if kept:
+            out_lines.append(" ".join(kept))
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out_lines)).strip()
 
 
 def fallback_text(missing: List[str], language: Optional[str], answer: str = "") -> str:

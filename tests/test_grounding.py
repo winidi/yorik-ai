@@ -52,7 +52,10 @@ def test_invented_value_is_sent_back_once(uid):
     ])
     out = _run(fake, user_id=uid)
     assert out["response"] == "Das habe ich nicht gefunden."
-    nudge = fake.calls[1][-1]["content"]
+    nudge = fake.calls[1][-1]
+    # the note comes as the result of a check, not from the person (2026-09-27)
+    assert nudge["role"] == "tool" and fake.calls[1][-2]["tool_calls"][0]["function"]["name"] == "check_facts"
+    nudge = nudge["content"]
     assert nudge.startswith("[check] Not in any tool result: DE44 5002 0500 4500 4500 03.")
     assert "compute it with calculate" in nudge
 
@@ -219,3 +222,16 @@ def test_quote_with_a_remark_after_it_and_a_dash_between_pieces():
     assert not check("> „€214.20 paid on September 24, 2026 – yearly plan“", receipt).ok        # invented piece
     # the model closed the line with a second mark after its remark
     assert check("> „€214.20 paid on September 24, 2026“ (bezahlt mit Mastercard)“", receipt).ok
+
+
+def test_the_answer_does_not_talk_about_the_check(uid):
+    """Rerun 2026-09-27: "Hinweis: Die Summe „366,44 €" taucht in keinem
+    Tool-Ergebnis auf" reached Mama."""
+    fake = _FakeLlm([
+        {"role": "assistant", "content": "Zusammen 366,44 €."},
+        {"role": "assistant", "content": "Das sind drei Zahlungen. Hinweis: Die Summe 366,44 € taucht in keinem "
+                                         "Tool-Ergebnis auf. Soll ich genauer schauen?"},
+    ])
+    out = _run(fake, user_id=uid)
+    assert "Tool-Ergebnis" not in out["response"]
+    assert out["response"].startswith("Das sind drei Zahlungen. Soll ich genauer schauen?")
