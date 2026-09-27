@@ -798,6 +798,7 @@ function Thread({
             "email_ready",
             "whatsapp_draft_created",
             "sources",
+            "pipeline_ready",
           ]);
           if (!STICKS_TO_MESSAGE.has(a.type)) {
             dispatchableActions.push(a);
@@ -1811,6 +1812,26 @@ function MessageBubble({
           .map((a: any, i: number) => (
             <EmailDraftReadyCard key={i} to={a.to || ""} subject={a.subject || ""}
                                   preview={a.preview} attachmentFilename={a.attachment_filename} />
+          ))}
+        {/* A follow-up pipeline created from the chat ("fass da nach") —
+            the reminders are approved on its page before anything is sent. */}
+        {!isUser && message.ui_actions && message.ui_actions
+          .filter(a => a.type === "pipeline_ready")
+          .map((a: any, i: number) => (
+            <div key={`pl-${i}`} className="mt-2 max-w-xl rounded-xl border border-border bg-card p-4">
+              <div className="font-semibold truncate">Nachfassen: {a.title || "Mail"}</div>
+              {Array.isArray(a.to) && a.to.length > 0 && (
+                <div className="text-xs text-muted-foreground truncate">an {a.to.join(", ")}</div>
+              )}
+              <p className="mt-2 text-sm text-muted-foreground">
+                Yorik schreibt die Erinnerungen. Jede wird dir vor dem Senden gezeigt.
+              </p>
+              <div className="mt-3 flex justify-end">
+                <a href={a.link} className="rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium">
+                  Ansehen und freigeben →
+                </a>
+              </div>
+            </div>
           ))}
         {/* Where hard values and quotes in this answer come from — built by
             the grounding check on the server, not written by the model. */}

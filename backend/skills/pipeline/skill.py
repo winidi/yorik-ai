@@ -1,0 +1,124 @@
+"""pipeline — the Pipelines app from the chat: follow up a sent mail,
+list what Yorik is following, pause or resume one.
+
+Dirk (2026-09-27): after a mail went out, "fass da nach, wenn keine
+Antwort kommt" in the same chat should start the follow-up. The
+pipeline is created as a draft, Yorik writes the reminders, and the
+person approves each reminder on the pipeline page before it starts —
+the rule for the Pipelines app (every outgoing mail is approved).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from typing import Any, Dict, Optional
+
+LOOKBACK_DAYS = 14
+
+
+async def execute(ctx, op: str = "list", to: Optional[str] = None, subject: Optional[str] = None,
+                  mail_id: Optional[int] = None, pipeline_id: Optional[int] = None) -> Dict[str, Any]:
+    from backend.skills.registry import require_user_id
+    owner = str(require_user_id(ctx))
+    op = (op or "list").strip().lower()
+    if op in ("follow_up", "nachfassen", "create"):
+        return await _follow_up(owner, to, subject, mail_id)
+    if op == "list":
+        return _list(owner)
+    if op in ("pause", "resume"):
+        return _set_running(owner, pipeline_id, op)
+    raise ValueError("op must be follow_up, list, pause or resume")
+
+
+def _find_sent_mail(owner: str, to: Optional[str], subject: Optional[str]) -> Optional[Dict[str, Any]]:
+    from backend.database import get_conn
+    where = ["owner_user_id = ?", "COALESCE(is_sent, 0) = 1", "COALESCE(is_draft, 0) = 0",
+             "COALESCE(date_sent, date_received) >= ?"]
+    from datetime import datetime, timedelta, timezone
+    params: list[Any] = [owner, (datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)).isoformat()]
+    if to:
+        where.append("LOWER(to_addrs) LIKE ?")
+        params.append(f"%{to.strip().lower()}%")
+    if subject:
+        where.append("LOWER(COALESCE(subject, '')) LIKE ?")
+        params.append(f"%{subject.strip().lower()}%")
+    with get_conn() as conn:
+        r = conn.execute(
+            "SELECT id, subject, to_addrs, COALESCE(date_sent, date_received) AS sent FROM email_messages "
+            f"WHERE {' AND '.join(where)} ORDER BY COALESCE(date_sent, date_received) DESC LIMIT 1", params,
+        ).fetchone()
+    return dict(r) if r else None
+
+
+def _staged_only(owner: str, to: Optional[str]) -> bool:
+    """A mail prepared in the chat but not sent yet (prepare_email's draft)."""
+    from backend.database import get_conn
+    with get_conn() as conn:
+        r = conn.execute("SELECT value FROM app_settings WHERE key = ?", (f"pending_email_draft_{owner}",)).fetchone()
+    if not r:
+        return False
+    try:
+        staged = json.loads(r["value"] or "{}")
+    except ValueError:
+        return False
+    return not to or to.strip().lower() in str(staged.get("to", "")).lower()
+
+
+async def _follow_up(owner: str, to: Optional[str], subject: Optional[str], mail_id: Optional[int]) -> Dict[str, Any]:
+    from backend.pipelines import routes, store
+    mail = {"id": int(mail_id)} if mail_id else _find_sent_mail(owner, to, subject)
+    if not mail:
+        why = ("The mail was prepared in the chat but not sent yet — it has to be sent first (the card's "
+               "\"Öffnen und senden\"), then follow-up can start."
+               if _staged_only(owner, to) else
+               f"No mail sent in the last {LOOKBACK_DAYS} days matches"
+               + (f" to {to}" if to else "") + (f" about {subject}" if subject else "") + ".")
+        return {"ok": False, "_llm_hint": why + " Tell the person in one short sentence."}
+    try:
+        pid = routes.create_follow_up(owner, int(mail["id"]))
+    except routes.CreateError as exc:
+        return {"ok": False, "_llm_hint": f"Could not start follow-up: {exc}. Tell the person."}
+    asyncio.get_running_loop().run_in_executor(None, routes.draft_with_llm, pid, owner)
+    p = store.get(pid, owner) or {}
+    link = f"/r/pipelines/{pid}"
+    from backend.ui_tools import _append
+    _append({"type": "pipeline_ready", "pipeline_id": pid, "title": p.get("title") or "",
+             "to": (p.get("origin") or {}).get("to") or [], "link": link})
+    return {"ok": True, "pipeline_id": pid, "title": p.get("title"), "link": link,
+            "_llm_hint": ("shown_to_user: a card links the new follow-up. Yorik is writing the reminders now; "
+                          "the person approves each reminder on that page and starts it — nothing is sent "
+                          "before. Say this in one or two short sentences.")}
+
+
+def _list(owner: str) -> Dict[str, Any]:
+    from backend.pipelines import engine, store
+    rows = []
+    for p in store.list_for(owner):
+        steps = store.steps(p["id"])
+        nxt = engine.next_open_step(steps)
+        rows.append({"pipeline_id": p["id"], "title": p["title"], "state": p["state"], "mode": p["mode"],
+                     "attention": p.get("attention"), "next_step": nxt["action"] if nxt else None,
+                     "link": f"/r/pipelines/{p['id']}"})
+    return {"pipelines": rows,
+            "_llm_hint": ("States: entwurf = draft, not started; laeuft = running; pausiert = paused; "
+                          "erledigt = done; abgebrochen = cancelled. Answer from this list only.")}
+
+
+def _set_running(owner: str, pipeline_id: Optional[int], op: str) -> Dict[str, Any]:
+    from backend.pipelines import store
+    if not pipeline_id:
+        return {"ok": False, "_llm_hint": "Which pipeline? Call pipeline with op=list first and pass pipeline_id."}
+    p = store.get(int(pipeline_id), owner)
+    if not p:
+        return {"ok": False, "_llm_hint": f"Pipeline {pipeline_id} not found for this person."}
+    want_from, want_to, note = (("laeuft", "pausiert", "Pausiert (Chat)") if op == "pause"
+                                else ("pausiert", "laeuft", "Fortgesetzt (Chat)"))
+    if op == "resume" and not store.person_enabled(owner):
+        return {"ok": False, "_llm_hint": "Pipelines are switched off for this person. Tell them."}
+    if p["state"] != want_from:
+        return {"ok": False, "_llm_hint": f"Pipeline is '{p['state']}', cannot {op}. Tell the person."}
+    store.update(p["id"], state=want_to, next_run_at=None if op == "pause" else store.now())
+    store.event(p["id"], "mensch", note)
+    return {"ok": True, "pipeline_id": p["id"], "state": want_to,
+            "_llm_hint": f"Pipeline '{p['title']}' is now {want_to}. Confirm in one short sentence."}

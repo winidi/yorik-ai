@@ -54,6 +54,7 @@ def test_invented_value_is_sent_back_once(uid):
     assert out["response"] == "Das habe ich nicht gefunden."
     nudge = fake.calls[1][-1]["content"]
     assert nudge.startswith("[check] Not in any tool result: DE44 5002 0500 4500 4500 03.")
+    assert "compute it with calculate" in nudge
 
 
 def test_invented_twice_gives_the_honest_fallback(uid):
@@ -62,7 +63,8 @@ def test_invented_twice_gives_the_honest_fallback(uid):
         {"role": "assistant", "content": "Doch, es ist 1234567890."},
     ])
     out = _run(fake, user_id=uid)
-    assert out["response"].startswith("Das konnte ich nicht sicher belegen, deshalb nenne ich es nicht: 1234567890.")
+    assert out["response"].startswith("Doch, es ist 1234567890 *(nicht belegt)*.")
+    assert "in keiner Quelle gefunden" in out["response"]
 
 
 def test_backed_value_and_quote_pass_with_sources(uid):
@@ -162,3 +164,42 @@ def test_chip_names_the_user_as_sender():
                                             "text": "DE85500105175438012374"}]})]
     v = check("Die Nummer ist DE85 5001 0517 5438 0123 74.", [], raw)
     assert v.ok and v.sources[0]["label"] == "WhatsApp · Mama Nowa · von dir · Do 24.09.2026 19:39"
+
+
+def test_fallback_drops_an_unbacked_quote_and_keeps_the_rest():
+    from backend.agent.grounding import fallback_text
+    out = fallback_text(["„Lass uns ins Kino gehen“"], "de",
+                        "Jan hat sich gemeldet:\n> „Lass uns ins Kino gehen“\nEr klang gut gelaunt.")
+    assert "Kino" not in out and "Jan hat sich gemeldet:" in out and "Er klang gut gelaunt." in out
+
+
+def test_question_searches_everything_first(fresh_app, monkeypatch):
+    """Prefetch: a question puts the universal search hits in front of
+    the model before it chooses a tool (Dirk: "bei generellen suchen
+    überall suchen")."""
+    from backend import search_index
+    from backend.agent.prefetch import should_search, HEADER
+    from backend.database import get_conn
+    from tests.test_search_foundation import _embed
+    monkeypatch.setattr(search_index, "embed_many", _embed)
+    monkeypatch.setattr(search_index, "EMBED_URL", "")
+    uid = seed_user(name="Max", role="admin", email="max@example.com")
+    jid = "491770000000@s.whatsapp.net"
+    with get_conn() as conn:
+        conn.execute("INSERT INTO wa_chats (jid, name, is_group, owner_user_id) VALUES (?, 'Mama Nowa', 0, ?)", (jid, uid))
+        conn.execute("INSERT INTO wa_messages (msg_id, chat_jid, from_me, push_name, timestamp, text, owner_user_id) "
+                     "VALUES ('m1', ?, 0, 'Mama', 1767990000, 'DE32500105175422716331', ?)", (jid, uid))
+        conn.commit()
+    search_index.sweep()
+    assert should_search("welche kontonummer hat mama geschickt?")
+    assert not should_search("trag das bitte ein") and not should_search("ja genau die")
+    fake = _FakeLlm([{"role": "assistant", "content": "Mama schickte DE32 5001 0517 5422 7163 31."}])
+    from backend.agent import loop
+    from backend.agent.context import User
+    from backend.agent.tools import ToolRegistry
+    out = asyncio.run(loop.ask("welche kontonummer hat mama bei whatsapp geschickt?",
+                               user=User(id=uid, role="admin", language="de"), registry=ToolRegistry(),
+                               llm=fake, system_prompt="test"))
+    first_prompt = fake.calls[0]
+    assert first_prompt[-1]["role"] == "tool" and first_prompt[-1]["content"].startswith(HEADER)
+    assert "DE32 5001 0517 5422 7163 31" in out["response"]          # backed by the prefetch hit

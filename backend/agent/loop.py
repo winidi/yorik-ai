@@ -70,6 +70,7 @@ from .messages import (
 )
 from .tools import ToolRegistry
 from . import grounding as _grounding
+from . import prefetch as _prefetch
 
 log = logging.getLogger("yorik.agent.loop")
 
@@ -242,6 +243,11 @@ async def ask(
     ui_actions: List[Dict[str, Any]] = []
     turn_raws: List[Any] = []          # (skill, raw result) for grounding sources
     grounding_retried = False
+    # A question searches everything first (backend/agent/prefetch.py).
+    _pre = await _prefetch.run(message, user_id=user.id, role=role)
+    if _pre:
+        messages.extend(_pre["messages"])
+        turn_raws.append(("universal_search", _pre["raw"]))
     components_seen: List[str] = []  # debug trail
     interim_text_parts: List[str] = []  # "thinking" content interleaved with tool calls
     final_text: Optional[str] = None
@@ -873,6 +879,16 @@ async def ask_stream(
     ui_actions: List[Dict[str, Any]] = []
     turn_raws: List[Any] = []          # (skill, raw result) for grounding sources
     grounding_retried = False
+    # A question searches everything first (backend/agent/prefetch.py);
+    # the chat shows it like any other tool step.
+    _pre = await _prefetch.run(message, user_id=user.id, role=role)
+    if _pre:
+        messages.extend(_pre["messages"])
+        turn_raws.append(("universal_search", _pre["raw"]))
+        _args = {"name": "universal_search", "args": {"query": _pre["query"]}}
+        yield _stream.ToolCallReady(id=_prefetch.CALL_ID, name="invoke_skill", arguments=_args)
+        yield _stream.ToolResultEvent(id=_prefetch.CALL_ID, name="invoke_skill",
+                                      result_for_llm="", ui_actions=[])
     iteration = 0
     halted = False
     final_text: Optional[str] = None
@@ -1708,7 +1724,7 @@ def _grounding_gate(text: str, messages: List[Dict[str, Any]], raws: List[Any],
     log.info("grounding: unbacked %s (retried=%s)", verdict.missing, retried)
     if not retried:
         return ("retry", _grounding.nudge_message(verdict.missing))
-    return ("fallback", _grounding.fallback_text(verdict.missing, language))
+    return ("fallback", _grounding.fallback_text(verdict.missing, language, text))
 
 
 def _user_text(key: str, language: Optional[str], **fmt: Any) -> str:

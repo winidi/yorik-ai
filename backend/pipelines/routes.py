@@ -153,18 +153,26 @@ def draft_with_llm(pipeline_id: int, owner: str) -> None:
         store.event(pipeline_id, "status", "Das Sprachmodell war nicht erreichbar — Vorlage bleibt stehen")
 
 
-@router.post("", status_code=201)
-def create(body: CreateBody, background: BackgroundTasks, user: dict = Depends(current_user)) -> dict[str, Any]:
-    _require_enabled(user)
-    owner = _uid(user)
-    mail = mail_src.load_sent_mail(owner, body.mail_id)
+class CreateError(Exception):
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
+
+
+def create_follow_up(owner: str, mail_id: int) -> int:
+    """A follow-up pipeline in draft from one sent mail; the reminders are
+    written afterwards by draft_with_llm. Shared by the route and the
+    chat's pipeline skill."""
+    if not store.person_enabled(owner):
+        raise CreateError(403, "Pipelines sind für dich ausgeschaltet.")
+    mail = mail_src.load_sent_mail(owner, mail_id)
     if not mail:
-        raise HTTPException(404, "Mail nicht gefunden")
+        raise CreateError(404, "Mail nicht gefunden")
     if not mail.get("is_sent"):
-        raise HTTPException(400, "Nur eine gesendete Mail lässt sich verfolgen.")
+        raise CreateError(400, "Nur eine gesendete Mail lässt sich verfolgen.")
     origin = nachfassen.origin_from_mail(mail)
     if not origin["to"]:
-        raise HTTPException(400, "Die Mail hat keinen Empfänger.")
+        raise CreateError(400, "Die Mail hat keinen Empfänger.")
     since = store.to_dt(origin["sent_at"]) or store.now()
     subject = origin["subject"] or "(ohne Betreff)"
     pid = store.create(
@@ -176,6 +184,16 @@ def create(body: CreateBody, background: BackgroundTasks, user: dict = Depends(c
     )
     store.replace_steps(pid, nachfassen.default_steps(origin, owner))
     store.event(pid, "status", "Entwurf angelegt aus der gesendeten Mail")
+    return pid
+
+
+@router.post("", status_code=201)
+def create(body: CreateBody, background: BackgroundTasks, user: dict = Depends(current_user)) -> dict[str, Any]:
+    owner = _uid(user)
+    try:
+        pid = create_follow_up(owner, body.mail_id)
+    except CreateError as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
     background.add_task(draft_with_llm, pid, owner)
     return _detail(store.get(pid, owner))
 

@@ -339,16 +339,33 @@ def nudge_message(missing: List[str]) -> Dict[str, Any]:
     Wording approved by Dirk (see chat test report)."""
     return {"role": "user", "internal": True, "content": (
         f"{NUDGE_MARK} Not in any tool result: {', '.join(missing[:6])}. "
-        "Look it up and quote it exactly, or say you did not find it.")}
+        "Look it up and quote it exactly; a number you worked out: compute it with calculate; "
+        "otherwise say you did not find it.")}
 
 
-def fallback_text(missing: List[str], language: Optional[str]) -> str:
-    items = ", ".join(missing[:4])
-    if (language or "").lower().startswith("de"):
-        return (f"Das konnte ich nicht sicher belegen, deshalb nenne ich es nicht: {items}. "
-                "Sag mir, wo es stehen könnte, dann suche ich gezielt dort.")
-    return (f"I could not back this up, so I won't state it: {items}. "
-            "Tell me where it might be and I'll look there.")
+def fallback_text(missing: List[str], language: Optional[str], answer: str = "") -> str:
+    """Second miss: the answer stays, every unbacked value is marked and an
+    unbacked quote is dropped (Dirk 2026-09-27: withholding the whole
+    answer threw away the useful rest)."""
+    de = (language or "").lower().startswith("de")
+    mark = " *(nicht belegt)*" if de else " *(not verified)*"
+    text = answer or ""
+    quotes = {m.strip("„“") for m in missing if m.startswith("„")}
+    if quotes:
+        kept = []
+        for line in text.splitlines():
+            body = line.strip().lstrip("> ").strip().strip("„“”\"«» ")
+            if line.strip().startswith(">") and body in quotes:
+                continue
+            kept.append(line)
+        text = "\n".join(kept)
+    for value in (m for m in missing if not m.startswith("„")):
+        text = re.sub(re.escape(value) + r"(?!\s*\*\((?:nicht belegt|not verified)\))", value + mark, text, count=0)
+    if not text.strip():
+        text = ("Dazu habe ich nichts Sicheres gefunden." if de else "I found nothing reliable on that.")
+    note = ("Werte mit *(nicht belegt)* habe ich in keiner Quelle gefunden." if de
+            else "Values marked *(not verified)* were not found in any source.")
+    return f"{text.rstrip()}\n\n_{note}_"
 
 
 def sources_action(verdict: Verdict) -> Optional[Dict[str, Any]]:
