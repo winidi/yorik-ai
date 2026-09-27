@@ -1204,9 +1204,9 @@ async def ask_stream(
                     "[REPLY INSTRUCTIONS — VOICE MODE]\n"
                     "Your next reply will be read OUT LOUD on a kitchen\n"
                     "tablet. ONE short sentence is ideal, TWO is the absolute\n"
-                    "maximum. NO lists. NO bullets. NO markdown. Speak numbers\n"
-                    "and dates naturally ('tomorrow at three', not "
-                    "'2026-06-11 15:00'). If the user needs detail, end with a\n"
+                    "maximum. NO lists. NO bullets. NO markdown. Write times,\n"
+                    "dates and amounts exactly (\"9:15\", \"551,07 €\"); the app\n"
+                    "speaks them. If the user needs detail, end with a\n"
                     "single pointer sentence ('open the calendar to see the\n"
                     "rest') — do NOT dump the detail itself."
                 )

@@ -13266,13 +13266,9 @@ def _humanize_for_tts(text: str, language: str) -> str:
     if not text or (language or "").lower() != "de":
         return text
     try:
-        from .agent.humanize import humanize_times_de, humanize_dates_de
-        # Dates BEFORE times — a date pattern like "01.06." with a trailing
-        # dot doesn't collide with HH:MM, but doing dates first protects
-        # against any future overlap.
-        out = humanize_dates_de(text)
-        out = humanize_times_de(out)
-        return out
+        # Dates before times, amounts and IBANs too (agent/humanize.for_tts).
+        from .agent.humanize import for_tts
+        return for_tts(text, language)
     except Exception:  # noqa: BLE001
         # Never break TTS over a humanizer bug — fall back to raw text.
         logging.getLogger("homeos.tts").warning(

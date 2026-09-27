@@ -127,6 +127,12 @@ async def speech(
     voice = (body.voice or "").strip().upper()
     if voice not in _SUPERTONIC_VOICES:
         voice = ""  # "alloy" and friends → the household's voice for that language
+    # The model writes exact values ("9:15", "551,07 €"); spoken form here.
+    try:
+        from .agent.humanize import for_tts
+        text = for_tts(text, language)
+    except Exception:  # noqa: BLE001 — never break speech over the humanizer
+        pass
     wav = await asyncio.to_thread(_tts.synthesize, text, language, voice or None)
     if not wav:
         raise HTTPException(status_code=503, detail="text-to-speech is not available on this install")

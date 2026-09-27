@@ -206,7 +206,7 @@ def humanize_range(h1: int, m1: int, h2: int, m2: int) -> str:
 # Match HH:MM ranges first (dash, en-dash, em-dash, " bis "), then bare HH:MM.
 # Bounded by \b on the outer edges to avoid mangling currency / versions.
 _RANGE_RE = re.compile(
-    r"\b(?P<h1>\d{1,2}):(?P<m1>\d{2})\s*"
+    r"(?:\bvon\s+)?\b(?P<h1>\d{1,2}):(?P<m1>\d{2})\s*"
     r"(?:[-‐-―−]|bis)\s*"  # ASCII -, all Unicode dashes, or "bis"
     r"(?P<h2>\d{1,2}):(?P<m2>\d{2})\b",
 )
@@ -231,6 +231,8 @@ def humanize_times_de(text: str) -> str:
         h2 = int(m.group("h2")); m2 = int(m.group("m2"))
         return humanize_range(h1, m1, h2, m2)
 
+    # "9.15 Uhr" is a time, not a date (no trailing dot)
+    text = re.sub(r"\b(\d{1,2})\.(\d{2})(\s*Uhr)\b", r"\1:\2\3", text)
     out = _RANGE_RE.sub(_range_sub, text)
 
     def _single_sub(m: re.Match) -> str:
@@ -238,6 +240,9 @@ def humanize_times_de(text: str) -> str:
         return humanize_single(h, mm)
 
     out = _SINGLE_RE.sub(_single_sub, out)
+    # "um 14 Uhr" → "um zwei Uhr nachmittags"
+    out = re.sub(r"\b(\d{1,2})\s+Uhr\b(?!\s+\w*zig|\s+(?:morgens|mittags|nachmittags|abends|nachts))",
+                 lambda m: humanize_single(int(m.group(1)), 0) if int(m.group(1)) <= 24 else m.group(0), out)
 
     # Tidy a few common follow-on tokens the LLM emits:
     # "<humanized> Uhr" → "<humanized>" when the humanized form already
@@ -403,7 +408,10 @@ def humanize_dates_de(text: str, now: Optional[datetime] = None) -> str:
                                   with_article=not has_prep)
         return prep + spoken if has_prep else spoken
 
-    out = text
+    # "Sa, 10.10." / "Samstag, 10.10.": the rendered date carries the
+    # weekday itself ("am Samstag nächste Woche"); spoken twice it jars.
+    out = re.sub(r"\b(?:Mo|Di|Mi|Do|Fr|Sa|So|Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag)"
+                 r"\.?,?\s+(?:de[nm]\s+)?(?=\d{1,2}\.\d{1,2}\.)", "", text)
     for i, pat in enumerate(_DATE_PATTERNS):
         is_two_digit = (i == 1)
         # IGNORECASE so "Vom 30.05." / "Am 28.05." (sentence-start capitalisation)
@@ -413,7 +421,68 @@ def humanize_dates_de(text: str, now: Optional[datetime] = None) -> str:
     return out
 
 
+def number_de(n: int) -> str:
+    """0 – 999 999 as one German word ("fünfhunderteinundfünfzig")."""
+    if n < 0 or n > 999_999:
+        return str(n)
+    if n < 100:
+        return "eins" if n == 1 else _german_word(n)
+    thousands, rest = divmod(n, 1000)
+    hundreds, below = divmod(rest, 100)
+    out = ""
+    if thousands:
+        out += ("ein" if thousands == 1 else number_de(thousands)) + "tausend"
+    if hundreds:
+        out += ("ein" if hundreds == 1 else _german_word(hundreds)) + "hundert"
+    if below:
+        out += "eins" if below == 1 else _german_word(below)
+    return out
+
+
+_MONEY_RE = re.compile(
+    r"(?P<pre>€|EUR\s?)?(?P<int>\d{1,3}(?:\.\d{3})+(?!\d)|\d+)(?:[,.](?P<dec>\d{2})(?!\d))?(?:\s?(?P<post>€|EUR\b|Euro\b))?")
+_IBAN_RE = re.compile(r"\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}(?:\s?[A-Z0-9]{1,4})?\b")
+_DIGIT_WORD = ["null", "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun"]
+
+
+def humanize_money_de(text: str) -> str:
+    """"551,07 €" → "fünfhunderteinundfünfzig Euro sieben"; "€1.234,00" →
+    "eintausendzweihundertvierunddreißig Euro"."""
+    def sub(m: re.Match) -> str:
+        if not (m.group("pre") or m.group("post")):
+            return m.group(0)
+        euros = int(m.group("int").replace(".", ""))
+        cents = int(m.group("dec") or 0)
+        words = f"{number_de(euros) if euros != 1 else 'ein'} Euro"
+        return f"{words} {number_de(cents)}" if cents else words
+    return _MONEY_RE.sub(sub, text or "")
+
+
+def humanize_iban(text: str) -> str:
+    """An IBAN read out character by character, in its groups of four."""
+    def sub(m: re.Match) -> str:
+        raw = re.sub(r"\s", "", m.group(0))
+        groups = [raw[i:i + 4] for i in range(0, len(raw), 4)]
+        spoken = [" ".join(_DIGIT_WORD[int(c)] if c.isdigit() else c for c in g) for g in groups]
+        return ", ".join(spoken)
+    return _IBAN_RE.sub(sub, text or "")
+
+
+def for_tts(text: str, language: str, now: Optional[datetime] = None) -> str:
+    """Everything the voice reads, in spoken form — the model writes exact
+    values ("9:15", "10.10.", "551,07 €") everywhere, this turns them into
+    speech right before synthesis (2026-09-27: the prompt made the model
+    say "halb neun" for 9:15). German only; other languages unchanged."""
+    if not text or (language or "").lower()[:2] != "de":
+        return text
+    out = humanize_iban(text)                  # before numbers eat its digits
+    out = humanize_dates_de(out, now=now)
+    out = humanize_times_de(out)
+    return humanize_money_de(out)
+
+
 __all__ = [
+    "for_tts",
     "humanize_times_de",
     "humanize_dates_de",
     "humanize_single",
