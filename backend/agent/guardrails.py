@@ -79,7 +79,7 @@ READ_ONLY_SKILLS: frozenset[str] = frozenset({
     "find_provider_nearby", "recording_status", "recording_report",
     "read_my_profile", "yorik_help", "list_contacts_for_picking",
     "find_recipient_address_from_documents", "read_attachment",
-    "check_bills", "find_bill_by_name",
+    "check_bills", "find_bill_by_name", "whatsapp_read", "calculate", "date_info",
 })
 
 MUTATING_TOOL_NAMES: frozenset[str] = frozenset({
