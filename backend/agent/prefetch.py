@@ -34,7 +34,9 @@ _AGENDA = re.compile(
 
 HEADER = ("Automatic search across all sources for this question (mail, WhatsApp, documents, calendar, "
           "tasks, contacts, bank, letters, recordings, photos). Open a hit that fits and check it before "
-          "you answer; if none fits, search more specifically or say you found nothing.")
+          "you answer; if none fits, search more specifically or say you found nothing. "
+          "This search used the user's own words only. If what they ask about may be written in another "
+          "language or under another name, search again with universal_search and `also`.")
 
 CALL_ID = "prefetch_search"
 
