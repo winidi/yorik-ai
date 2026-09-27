@@ -315,8 +315,11 @@ class TestPrepareEmailWithoutChatFile:
         from backend.skills.prepare_email.skill import execute
         from backend.ui_tools import _pending_ui_actions
 
+        from backend.email_addresses import current_user_text
+
         async def run():
             _pending_ui_actions.set([])
+            current_user_text.set("schreib someone@example.com, dass ich später komme")
             out = await execute(ctx=_mk_ctx(role="admin", user_id=person), to="someone@example.com",
                                 subject="Freitag", body="Ich komme später.", **kw)
             return out, _pending_ui_actions.get()
@@ -449,3 +452,100 @@ def test_transaction_totals_survive_the_cut(fresh_app):
     import inspect
     src = inspect.getsource(st.execute)
     assert src.index('"count": len(txs)') < src.index('"transactions": txs')
+
+
+
+class TestUnknownRecipientCard:
+    """Rerun #12: "an seine web.de-Adresse" became a made-up address; an
+    unknown recipient now gets a card with the closest known ones."""
+
+    def test_unknown_address_is_held_with_suggestions(self, person):
+        from backend.database import get_conn
+        from backend.skills.prepare_email.skill import execute
+        from backend.ui_tools import _pending_ui_actions
+        from backend.email_addresses import current_user_text
+        with get_conn() as conn:
+            for mail in ("maxmustermann@web.de", "max.mustermann@freenet.de"):
+                conn.execute("INSERT INTO email_accounts (owner_user_id, email, imap_host, imap_username, smtp_host, "
+                             "smtp_username, credential_key) VALUES (?, ?, 'i', 'u', 's', 'u', 'k')", (person, mail))
+            conn.commit()
+
+        async def run():
+            _pending_ui_actions.set([])
+            current_user_text.set("schreib max an seine web.de adresse")
+            out = await execute(ctx=_mk_ctx(role="admin", user_id=person), to="max.mustermann@web.de",
+                                subject="Freitag", body="Ich komme später.")
+            return out, _pending_ui_actions.get()
+        out, actions = asyncio.run(run())
+        assert out["ok"] is False and out["unknown_recipient"] == "max.mustermann@web.de"
+        card = [a for a in actions if a["type"] == "email_recipient_check"][0]
+        assert card["suggestions"][:2] == ["maxmustermann@web.de", "max.mustermann@freenet.de"]
+        with get_conn() as conn:
+            assert conn.execute("SELECT 1 FROM app_settings WHERE key = ?",
+                                (f"pending_email_draft_{person}",)).fetchone() is None
+
+    def test_confirm_turns_the_held_mail_into_the_draft(self, fresh_app):
+        import json
+        from tests.conftest import login_client
+        from backend.database import get_conn
+        client, uid = login_client(fresh_app, role="admin", name="Max", email="m@example.com")
+        with get_conn() as conn:
+            conn.execute("INSERT INTO app_settings (key, value) VALUES (?, ?)", (f"pending_email_check_{uid}",
+                         json.dumps({"to": "x@web.de", "subject": "Freitag", "body": "Später", "attachments": []})))
+            conn.commit()
+        r = client.post("/api/email/pending-draft/confirm", json={"to": "maxmustermann@web.de"})
+        assert r.status_code == 200, r.text
+        draft = client.get("/api/email/pending-draft").json()["draft"]
+        assert draft["to"] == "maxmustermann@web.de" and draft["subject"] == "Freitag"
+        assert client.post("/api/email/pending-draft/confirm", json={"to": "kaputt"}).status_code == 400
+
+
+def test_email_briefing_leaves_newsletters_out(fresh_app, monkeypatch):
+    """Rerun #9: newsletters took 12 of 15 slots; the school letter fell off."""
+    from datetime import datetime, timedelta, timezone
+    from backend.database import get_conn
+    from backend.skills.email_briefing import skill as eb
+    import backend.whatsapp as wa
+    uid = seed_user(name="Max", role="admin", email="max@example.com")
+    seen = {}
+
+    async def fake_llm(prompt, *a, **kw):
+        seen["prompt"] = prompt
+        return "ok"
+    monkeypatch.setattr(wa, "_call_llm", fake_llm)
+    now = datetime.now(timezone.utc)
+    with get_conn() as conn:
+        acc = conn.execute("INSERT INTO email_accounts (owner_user_id, email, imap_host, imap_username, smtp_host, "
+                           "smtp_username, credential_key, enabled) VALUES (?, 'm@x.de', 'i', 'u', 's', 'u', 'k', 1) "
+                           "RETURNING id", (uid,)).fetchone()["id"]
+        for i in range(20):
+            conn.execute("INSERT INTO email_messages (account_id, uid, thread_id, subject, from_email, date_received, "
+                         "is_sent, category, owner_user_id) VALUES (?, ?, ?, ?, 'news@shop.de', ?, 0, 'newsletter', ?)",
+                         (acc, 100 + i, f"n{i}", f"Sale {i}", (now - timedelta(hours=1)).isoformat(), uid))
+        conn.execute("INSERT INTO email_messages (account_id, uid, thread_id, subject, from_email, date_received, "
+                     "is_sent, category, owner_user_id) VALUES (?, 1, 's1', 'Elternbrief Erntedank', 'iserv@schule.de', ?, "
+                     "0, 'notification', ?)", (acc, (now - timedelta(hours=30)).isoformat(), uid))
+        conn.commit()
+    out = asyncio.run(eb.execute(ctx=_mk_ctx(role="admin", user_id=uid), hours=96))
+    assert "Elternbrief Erntedank" in seen["prompt"] and "Sale 3" not in seen["prompt"]
+    assert out["stats"]["newsletters_and_spam_left_out"] == 20
+
+
+def test_weekday_next_to_a_date_is_corrected():
+    from datetime import date
+    from backend.agent.grounding import fix_weekdays
+    today = date(2026, 9, 27)
+    assert fix_weekdays("Stichtag **Sonntag, der 10. Oktober**", today) == "Stichtag **Samstag, der 10. Oktober**"
+    assert fix_weekdays("am Freitag, 2. Oktober", today) == "am Freitag, 2. Oktober"
+    assert fix_weekdays("Montag, 5. Januar 2027", today) == "Dienstag, 5. Januar 2027"
+
+
+def test_navigate_only_on_an_explicit_open(fresh_app):
+    from backend.email_addresses import current_user_text
+    from backend.skills.navigate_to.skill import execute
+
+    async def run(said):
+        current_user_text.set(said)
+        return await execute(ctx=None, app="documents")
+    assert asyncio.run(run("zeig mir mal alles was wir zu kobra haben"))["ok"] is False
+    assert asyncio.run(run("öffne mal die dokumente")).get("ok") is not False

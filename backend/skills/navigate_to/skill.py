@@ -57,11 +57,28 @@ _APP_ROUTES = {
 }
 
 
+import re as _re
+
+# Only an explicit "open" moves the screen away from the chat: "zeig mir
+# mal alles zu Kobra" jumped into Documents and the answer was a single
+# line (rerun 2026-09-27).
+_OPEN = _re.compile(
+    r"\b(?:öffne\w*|mach\w*\s+(?:\w+\s+){0,3}auf|geh\w*\s+(?:zu|in|auf|nach)|wechsel\w*|navigier\w*|"
+    r"bring\s+mich|open|go\s+to|switch\s+to|take\s+me)\b"
+    r"|\bzeig\w*\s+(?:mir\s+)?(?:mal\s+)?(?:den|die|das|meinen|meine|mein)?\s*"
+    r"(?:kalender|mails?|postfach|whatsapp|fotos|bilder|dokumente|aufgaben|kontakte|einstellungen|startseite|app)\b",
+    _re.I)
+
+
 async def execute(
     ctx,  # noqa: ARG001
     app: str,
     query_params: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
+    from backend.email_addresses import current_user_text
+    said = current_user_text.get()
+    if said and not _OPEN.search(said):
+        return {"ok": False, "_llm_hint": "NOT OPENED: the user did not ask to open an app. Answer in the chat instead."}
     key = (app or "").strip().lower()
     if not key:
         raise ValueError("app is required")

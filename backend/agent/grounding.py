@@ -359,9 +359,13 @@ def fallback_text(missing: List[str], language: Optional[str], answer: str = "")
     quotes = {m.strip("„“") for m in missing if m.startswith("„")}
     if quotes:
         kept = []
+        gone = "_(Zitat nicht belegt, weggelassen)_" if de else "_(quote not verified, left out)_"
         for line in text.splitlines():
             body = line.strip().lstrip("> ").strip().strip("„“”\"«» ")
             if line.strip().startswith(">") and body in quotes:
+                # a note instead of nothing — "… steht:" must not end in the void
+                if not kept or kept[-1] != gone:
+                    kept.append(gone)
                 continue
             kept.append(line)
         text = "\n".join(kept)
@@ -386,3 +390,40 @@ def raw_from(name: str, args: Any, result: Any) -> Optional[Tuple[str, Any]]:
         return None
     skill = meta.get("skill") or (args.get("name") if isinstance(args, dict) else None) or name
     return (str(skill), raw)
+
+
+# ─── weekdays ────────────────────────────────────────────────────────
+
+_WD_DE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+_MONTHS = {m: i for i, m in enumerate(
+    ["januar", "februar", "märz", "april", "mai", "juni", "juli", "august", "september",
+     "oktober", "november", "dezember"], 1)}
+_WD_DATE = re.compile(
+    r"\b(?P<wd>Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag)(?P<mid>,?\s+(?:de[nrm]\s+)?)"
+    r"(?P<day>\d{1,2})\.\s*(?:(?P<mname>Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|"
+    r"November|Dezember)|(?P<mnum>\d{1,2})\.)(?:\s*(?P<year>\d{4}))?", re.I)
+
+
+def fix_weekdays(text: str, today=None) -> str:
+    """A weekday next to a date is checked by the calendar and corrected
+    ("Sonntag, 10. Oktober" → "Samstag, …" in 2026). Without a year the
+    date nearest to today is meant."""
+    from datetime import date, timedelta
+    today = today or date.today()
+
+    def repl(m: "re.Match[str]") -> str:
+        try:
+            day = int(m.group("day"))
+            month = _MONTHS[m.group("mname").lower()] if m.group("mname") else int(m.group("mnum"))
+            if m.group("year"):
+                d = date(int(m.group("year")), month, day)
+            else:
+                options = [date(today.year + dy, month, day) for dy in (-1, 0, 1)]
+                d = min(options, key=lambda x: abs((x - today).days))
+        except (ValueError, KeyError):
+            return m.group(0)
+        right = _WD_DE[d.weekday()]
+        if m.group("wd").lower() == right.lower():
+            return m.group(0)
+        return right + m.group(0)[len(m.group("wd")):]
+    return _WD_DATE.sub(repl, text or "")

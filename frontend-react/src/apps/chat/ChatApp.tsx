@@ -32,6 +32,7 @@ import { InlineComposeDraft } from "@/apps/chat/InlineComposeDraft";
 import { WritingDraftCard } from "./WritingDraftCard";
 import { EmailDraftReadyCard } from "./EmailDraftReadyCard";
 import { WhatsAppDraftCard } from "./WhatsAppDraftCard";
+import { EmailRecipientCheckCard } from "./EmailRecipientCheckCard";
 import { AssistantMarkdown } from "@/components/AssistantMarkdown";
 import { VcardImportModal } from "@/components/VcardImportModal";
 import { MentionPopover, type MentionPick } from "./MentionPopover";
@@ -799,6 +800,7 @@ function Thread({
             "whatsapp_draft_created",
             "sources",
             "pipeline_ready",
+            "email_recipient_check",
           ]);
           if (!STICKS_TO_MESSAGE.has(a.type)) {
             dispatchableActions.push(a);
@@ -1812,6 +1814,12 @@ function MessageBubble({
           .map((a: any, i: number) => (
             <EmailDraftReadyCard key={i} to={a.to || ""} subject={a.subject || ""}
                                   preview={a.preview} attachmentFilename={a.attachment_filename} />
+          ))}
+        {!isUser && message.ui_actions && message.ui_actions
+          .filter(a => a.type === "email_recipient_check")
+          .map((a: any, i: number) => (
+            <EmailRecipientCheckCard key={`rc-${i}`} typed={a.typed || ""} suggestions={a.suggestions || []}
+                                     subject={a.subject} />
           ))}
         {/* A follow-up pipeline created from the chat ("fass da nach") —
             the reminders are approved on its page before anything is sent. */}

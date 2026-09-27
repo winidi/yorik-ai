@@ -243,6 +243,8 @@ async def ask(
     ui_actions: List[Dict[str, Any]] = []
     turn_raws: List[Any] = []          # (skill, raw result) for grounding sources
     grounding_retried = False
+    from backend.email_addresses import current_user_text as _cut
+    _cut.set(message or "")
     # A question searches everything first (backend/agent/prefetch.py).
     _pre = await _prefetch.run(message, user_id=user.id, role=role)
     if _pre:
@@ -405,6 +407,11 @@ async def ask(
                 messages[-1] = {**assistant_msg, "content": final_text}
             elif _gate[1]:
                 ui_actions.append(_gate[1])
+            # weekdays next to dates are corrected by the calendar, not trusted
+            _fixed = _grounding.fix_weekdays(final_text)
+            if _fixed != final_text:
+                final_text = _fixed
+                messages[-1] = {**messages[-1], "content": final_text}
             if include_trace:
                 trace_iterations.append({
                     "n":            iteration,
@@ -879,6 +886,8 @@ async def ask_stream(
     ui_actions: List[Dict[str, Any]] = []
     turn_raws: List[Any] = []          # (skill, raw result) for grounding sources
     grounding_retried = False
+    from backend.email_addresses import current_user_text as _cut
+    _cut.set(message or "")
     # A question searches everything first (backend/agent/prefetch.py);
     # the chat shows it like any other tool step.
     _pre = await _prefetch.run(message, user_id=user.id, role=role)
@@ -1131,6 +1140,11 @@ async def ask_stream(
                 messages[-1] = {**assistant_msg, "content": final_text}
             elif _gate[1]:
                 ui_actions.append(_gate[1])
+            # weekdays next to dates are corrected by the calendar, not trusted
+            _fixed = _grounding.fix_weekdays(final_text)
+            if _fixed != final_text:
+                final_text = _fixed
+                messages[-1] = {**messages[-1], "content": final_text}
             break
 
         # Dispatch each ready tool call

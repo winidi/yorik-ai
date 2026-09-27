@@ -31,14 +31,25 @@ async def execute(ctx, hours: int = 24) -> dict[str, Any]:
         # from_email/from_name = original sender — close enough for a
         # briefing's "you have N threads" summary).
         thread_rows = conn.execute(
+            # Newsletters and spam stay out (they were 12 of the 15 slots and
+            # pushed a school letter and a signature request off the list,
+            # rerun 2026-09-27); personal, bills and appointments first.
             "SELECT thread_id, MIN(from_email) AS from_email, "
             "       MIN(from_name) AS from_name, MIN(subject) AS subject, "
-            "       MAX(date_received) AS last_ts, COUNT(*) AS msg_count "
+            "       MAX(date_received) AS last_ts, COUNT(*) AS msg_count, "
+            "       MIN(CASE WHEN category IN ('personal','bill','appointment') THEN 0 "
+            "                WHEN category = 'notification' THEN 1 ELSE 2 END) AS prio "
             "FROM email_messages "
             "WHERE owner_user_id=? AND date_received >= ? AND is_sent=0 "
-            "GROUP BY thread_id ORDER BY last_ts DESC LIMIT 15",
+            "  AND COALESCE(category, '') NOT IN ('newsletter', 'spam') "
+            "GROUP BY thread_id ORDER BY prio ASC, last_ts DESC LIMIT 15",
             (user_id, since_iso),
         ).fetchall()
+        bulk_count = conn.execute(
+            "SELECT COUNT(*) FROM email_messages WHERE owner_user_id=? AND date_received >= ? AND is_sent=0 "
+            "AND COALESCE(category, '') IN ('newsletter', 'spam')",
+            (user_id, since_iso),
+        ).fetchone()[0]
         # Total counts.
         new_count = conn.execute(
             "SELECT COUNT(*) FROM email_messages WHERE owner_user_id=? AND date_received >= ? AND is_sent=0",
@@ -88,6 +99,7 @@ async def execute(ctx, hours: int = 24) -> dict[str, Any]:
         "new_messages": new_count,
         "threads_needing_reply": len(needing_reply),
         "unread_count": unread_count,
+        "newsletters_and_spam_left_out": bulk_count,
     }
     threads_needing_reply_serialised = [{
         "id":         r["id"],                 # integer PK — use for /r/email?msg=

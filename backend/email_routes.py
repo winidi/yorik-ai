@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import logging
 import secrets
 from typing import Any, Optional
@@ -1986,6 +1987,39 @@ def get_pending_draft(user: dict = Depends(current_user)) -> dict:
         return {"draft": json.loads(row["value"])}
     except (TypeError, ValueError, json.JSONDecodeError):
         return {"draft": None}
+
+
+class ConfirmRecipientBody(BaseModel):
+    to: str
+
+
+@router.post("/pending-draft/confirm")
+def confirm_pending_recipient(body: ConfirmRecipientBody, user: dict = Depends(current_user)) -> dict:
+    """The chat's recipient card: the person picked or corrected the
+    address of a mail prepare_email held back (unknown recipient). The
+    held mail becomes the pending draft the Composer opens."""
+    to = (body.to or "").strip()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", to):
+        raise HTTPException(400, "Das sieht nicht wie eine Mail-Adresse aus.")
+    uid = user["id"]
+    with get_conn() as conn:
+        row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (f"pending_email_check_{uid}",)).fetchone()
+        if not row:
+            raise HTTPException(404, "Kein vorbereiteter Entwurf mehr da.")
+        held = json.loads(row["value"] or "{}")
+        account_id = None
+        if held.get("from_email"):
+            from . import email_sender
+            acct = email_sender.resolve_account_for_from_address(held["from_email"])
+            if acct and str(acct.get("owner_user_id")) == str(uid):
+                account_id = acct["id"]
+        draft = {"to": to, "subject": held.get("subject") or "", "body": held.get("body") or "",
+                 "account_id": account_id, "attachments": held.get("attachments") or []}
+        conn.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+                     (_pending_draft_key(uid), json.dumps(draft)))
+        conn.execute("DELETE FROM app_settings WHERE key = ?", (f"pending_email_check_{uid}",))
+        conn.commit()
+    return {"ok": True, "to": to}
 
 
 @router.get("/briefing")

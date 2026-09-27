@@ -73,6 +73,27 @@ async def execute(
                             "filename": attachment_filename,
                             "mimetype": meta.get("mime_type") or "application/pdf"})
 
+    # An address the person never used and did not type gets a card with
+    # the closest known addresses (Dirk 2026-09-27); nothing is staged yet.
+    from backend import email_addresses as _ea
+    known = _ea.known(user_id, getattr(ctx, "role", None), getattr(ctx, "conversation_id", None))
+    if to.lower() not in known:
+        suggestions = _ea.closest(to, known)
+        pending = {"to": to, "subject": (subject or "").strip(), "body": body or "",
+                   "attachments": attachments, "from_email": from_email}
+        from backend.database import get_conn as _gc
+        with _gc() as conn:
+            conn.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+                         (f"pending_email_check_{user_id}", json.dumps(pending)))
+            conn.commit()
+        from backend.ui_tools import _append
+        _append({"type": "email_recipient_check", "typed": to, "suggestions": suggestions,
+                 "subject": pending["subject"], "attachment_filename": attachment_filename})
+        return {"ok": False, "unknown_recipient": to, "suggestions": suggestions,
+                "_llm_hint": (f"UNKNOWN RECIPIENT: {to} is not a known address (contacts, own accounts, earlier "
+                              "mail, or typed by the user). A card shows the closest known addresses to pick or "
+                              "correct; tell the user in one sentence to check the address there.")}
+
     account_id: Optional[int] = None
     account_note = ""
     if from_email:
