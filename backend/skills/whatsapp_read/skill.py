@@ -90,11 +90,15 @@ async def execute(ctx, chat_jid: Optional[str] = None, contact_id: Optional[int]
     return out
 
 
+_WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+
 def _when(ts: Any) -> str:
     try:
-        return datetime.fromtimestamp(int(ts)).strftime("%a %d.%m.%Y %H:%M")
+        d = datetime.fromtimestamp(int(ts))
     except (TypeError, ValueError, OSError):
         return ""
+    return f"{_WD[d.weekday()]} {d.strftime('%d.%m.%Y %H:%M')}"
 
 
 def _jid_for_contact(contact_id: int, ctx) -> Optional[str]:

@@ -216,7 +216,11 @@ def _label(skill: str, chain: List[Dict[str, Any]]) -> Dict[str, str]:
         chat = pick("chat", "title", "chat_name")
         jid = pick("chat_jid")
         link = f"/r/whatsapp?chat={jid}" if jid else pick("navigate_to")
-        return {"label": " · ".join(x for x in ("WhatsApp", chat, when) if x), "link": link}
+        # who wrote it, on the chip: "DE85 … von Mama" was the user's own
+        # message (live test 2026-09-27) — the chip makes that visible
+        who = str(inner.get("who") or inner.get("subtitle") or "")
+        by = "von dir" if who.lower() == "ich" else (f"von {who}" if who and who != chat else "")
+        return {"label": " · ".join(x for x in ("WhatsApp", chat, by, when) if x), "link": link}
     if skill == "read_email" or src == "email":
         subject = pick("subject", "title")
         sender = pick("from_name", "from_email", "subtitle")

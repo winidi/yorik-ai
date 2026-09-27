@@ -76,7 +76,7 @@ def test_backed_value_and_quote_pass_with_sources(uid):
     assert "DE32 5001 0517 5422 7163 31" in out["response"]
     sources = [a for a in out["ui_actions"] if a.get("type") == "sources"]
     labels = [it["label"] for it in sources[0]["items"]]
-    assert labels[0] == "WhatsApp · Mama Nowa · Fr 09.01.2026 21:51"
+    assert labels[0] == "WhatsApp · Mama Nowa · von Mama · Fr 09.01.2026 21:51"
     assert sources[0]["items"][0]["link"] == "/r/whatsapp?chat=4917@s.whatsapp.net"
 
 
@@ -153,3 +153,12 @@ def test_stream_plain_text_still_streams(uid):
     fake = _StreamLlm(["Morgen hast du zwei Termine."])
     shown, final = _stream(fake, uid)
     assert shown == "Morgen hast du zwei Termine." and final["response"] == shown
+
+
+def test_chip_names_the_user_as_sender():
+    from backend.agent.grounding import check
+    raw = [("whatsapp_read", {"chat": "Mama Nowa", "chat_jid": "4917@s.whatsapp.net",
+                              "messages": [{"id": 5, "when": "Do 24.09.2026 19:39", "who": "ich",
+                                            "text": "DE85500105175438012374"}]})]
+    v = check("Die Nummer ist DE85 5001 0517 5438 0123 74.", [], raw)
+    assert v.ok and v.sources[0]["label"] == "WhatsApp · Mama Nowa · von dir · Do 24.09.2026 19:39"
