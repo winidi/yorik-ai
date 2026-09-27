@@ -24,6 +24,14 @@ _COMMAND = re.compile(
     r"schick|sende|ruf|antworte|markier|hak|stell|setz|kündig|bestätig|öffne|sag\s+(?!mir\b)\w+|"
     r"write|add|remind|delete|create|send|plan|schedule|move|mark)\b", re.I)
 
+# Agenda questions have their own path with cards (check_calendar /
+# check_tasks / plan_my_day); a search in front of them made the model
+# answer from hits and drop the task card (e2e 2026-09-27).
+_AGENDA = re.compile(
+    r"\b(?:heute|morgen|übermorgen|gestern|nächste\s+woche|diese\s+woche|wochenende|montag|dienstag|mittwoch|"
+    r"donnerstag|freitag|samstag|sonntag|termin\w*|aufgab\w*|to-?dos?|zu\s+tun|steht\s+\w*\s*an|kalender|"
+    r"frei|today|tomorrow|tonight|this\s+week|next\s+week|appointment\w*|tasks?|chores?|calendar)\b", re.I)
+
 HEADER = ("Automatic search across all sources for this question (mail, WhatsApp, documents, calendar, "
           "tasks, contacts, bank, letters, recordings, photos). Open a hit that fits and check it before "
           "you answer; if none fits, search more specifically or say you found nothing.")
@@ -54,7 +62,7 @@ def should_search(message: str) -> bool:
     text = (message or "").strip()
     if len(text.split()) < 4 or text.startswith(("Ich habe „", "[")):
         return False
-    if _COMMAND.search(text):
+    if _COMMAND.search(text) or _AGENDA.search(text):
         return False
     return bool(_QUESTION.search(text))
 

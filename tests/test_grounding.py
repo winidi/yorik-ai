@@ -193,6 +193,9 @@ def test_question_searches_everything_first(fresh_app, monkeypatch):
     search_index.sweep()
     assert should_search("welche kontonummer hat mama geschickt?")
     assert not should_search("trag das bitte ein") and not should_search("ja genau die")
+    # agenda questions keep their own path with cards (e2e 2026-09-27)
+    assert not should_search("Was muss ich heute noch machen?")
+    assert not should_search("was hab ich am montag alles für termine?")
     fake = _FakeLlm([{"role": "assistant", "content": "Mama schickte DE32 5001 0517 5422 7163 31."}])
     from backend.agent import loop
     from backend.agent.context import User
