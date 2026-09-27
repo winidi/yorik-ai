@@ -16,4 +16,5 @@ async def execute(ctx, query: str) -> dict[str, Any]:
     # Build a fake user dict matching what current_user gives back.
     # No role is no reason to search as admin (audit 2026-09-25, pattern D).
     fake_user = {"id": user_id, "role": getattr(ctx, "role", None) or "member"}
-    return await universal_search(q=query, user=fake_user)
+    from backend.agent.prefetch import for_model
+    return for_model(await universal_search(q=query, user=fake_user), query, per_source=5)

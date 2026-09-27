@@ -201,3 +201,30 @@ def test_timestamps_are_local_with_offset():
     from backend.search_routes import _local
     assert _local("2026-09-27 10:07:57") == "2026-09-27T12:07+02:00"
     assert _local(1790000000).endswith("+02:00") and _local("2026-09-27") == "2026-09-27"
+
+
+def test_search_for_model_keeps_every_source_and_puts_title_hits_first():
+    """Rerun 2026-09-27: twenty long mail/WhatsApp hits pushed the
+    recording "Regeln für Yorik" past the 6000-character cut."""
+    from backend.agent.prefetch import for_model
+    long = "x" * 900
+    raw = {"query": "regeln yorik", "total": 21, "results": {
+        "email": [{"source": "email", "id": i, "title": f"Mail {i}", "snippet": long} for i in range(10)],
+        "whatsapp": [{"source": "whatsapp", "id": i, "title": "Chat", "snippet": long} for i in range(10)],
+        "recordings": [{"source": "recordings", "id": 8, "title": "Regeln für Yorik", "thumbnail_url": None}],
+    }}
+    out = for_model(raw, "besprochen regeln yorik")
+    assert list(out["results"])[0] == "recordings"
+    assert out["results"]["recordings"][0]["source"] == "recordings"
+    assert all(len(h) <= 3 for h in out["results"].values())
+    assert all(len(h.get("snippet", "")) <= 160 for v in out["results"].values() for h in v)
+    assert "14 further hits" in out["more"]
+
+
+def test_references_header_is_split_into_ids():
+    """The fetcher stored "<a@x> <b@y>" as single characters (2026-09-27)."""
+    from backend.email_fetcher import message_ids
+    assert message_ids("<a@x.de>\r\n <b.1@y.com>") == ["a@x.de", "b.1@y.com"]
+    assert message_ids(["<a@x.de>", "<b@y>"]) == ["a@x.de", "b@y"]
+    assert message_ids("a@x.de b@y") == ["a@x.de", "b@y"]
+    assert message_ids(None) == []

@@ -916,6 +916,16 @@ def backfill_older(account_id: int, count: int = 200) -> dict:
     return {"fetched": n, "uid_range": [start, end], "previous_min_uid": local_min}
 
 
+def message_ids(value) -> list[str]:
+    """The ids of a References header. mail-parser hands it over as the
+    raw string "<a@x> <b@y>"; iterating that gave single characters."""
+    if not value:
+        return []
+    if isinstance(value, (list, tuple)):
+        value = " ".join(str(v) for v in value)
+    return re.findall(r"<([^<>\s]+)>", value) or [v.strip("<>") for v in re.split(r"[\s,]+", value) if v.strip("<>")]
+
+
 def _insert_message(cfg: dict, folder_id: int, uid: int,
                     data: dict, parsed: mailparser.MailParser,
                     quiet: bool = False) -> Optional[int]:
@@ -940,11 +950,10 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
 
     message_id = (parsed.message_id or "").strip("<>") or None
     in_reply_to = (parsed.in_reply_to or "").strip("<>") or None
-    references_list = parsed.references or []
-    refs_json = json.dumps([r.strip("<>") for r in references_list]) if references_list else None
+    references_list = message_ids(parsed.references)
+    refs_json = json.dumps(references_list) if references_list else None
     # Thread id: root of References chain, fall back to In-Reply-To, then Message-ID.
-    thread_id = (references_list[0].strip("<>") if references_list
-                  else in_reply_to or message_id)
+    thread_id = references_list[0] if references_list else in_reply_to or message_id
 
     body_text = fix_mojibake((parsed.text_plain or [""])[0] if parsed.text_plain else "") or ""
     body_html = fix_mojibake((parsed.text_html or [""])[0] if parsed.text_html else "") or ""

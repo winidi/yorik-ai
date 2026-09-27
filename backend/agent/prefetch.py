@@ -60,6 +60,31 @@ def keywords(message: str) -> str:
     return " ".join(kept[:6]) or (message or "").strip()
 
 
+def for_model(raw: Dict[str, Any], query: str, per_source: int = 3) -> Dict[str, Any]:
+    """The search result as the model sees it: at most `per_source` hits
+    per source with short snippets, sources whose titles carry a query
+    word first. The whole list overran the 6000-character cut, and the
+    recording "Regeln für Yorik" fell off behind twenty mail and
+    WhatsApp hits (rerun 2026-09-27)."""
+    words = [w for w in re.findall(r"\w+", (query or "").lower()) if len(w) > 3]
+
+    def title_hits(hits: List[Dict[str, Any]]) -> int:
+        return sum(1 for h in hits for w in words if w in str(h.get("title") or "").lower())
+
+    results = raw.get("results") or {}
+    order = sorted((k for k, v in results.items() if v), key=lambda k: -title_hits(results[k]))
+    out: Dict[str, Any] = {}
+    for k in order:
+        out[k] = [{kk: (str(vv)[:160] if kk == "snippet" else vv)
+                   for kk, vv in h.items() if kk != "thumbnail_url" and vv not in (None, "")}
+                  for h in results[k][:per_source]]
+    shown = sum(len(v) for v in out.values())
+    res = {**{k: v for k, v in raw.items() if k != "results"}, "results": out}
+    if shown < (raw.get("total") or 0):
+        res["more"] = f"{raw['total'] - shown} further hits not shown; search more specifically to see them."
+    return res
+
+
 def should_search(message: str) -> bool:
     text = (message or "").strip()
     if len(text.split()) < 4 or text.startswith(("Ich habe „", "[")):
@@ -96,7 +121,7 @@ async def run(message: str, *, user_id: Any, role: Optional[str]) -> Optional[Di
         if not raw["total"]:
             return None
     from backend.ui_tools import render_skill_result
-    body = render_skill_result({**raw, "_llm_hint": HEADER}, skill="universal_search")
+    body = render_skill_result({**for_model(raw, query), "_llm_hint": HEADER}, skill="universal_search")
     call = {"id": CALL_ID, "type": "function", "function": {
         "name": "invoke_skill",
         "arguments": json.dumps({"name": "universal_search", "args": {"query": query}},
