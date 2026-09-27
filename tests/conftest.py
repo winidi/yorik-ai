@@ -290,3 +290,15 @@ def pg_scratch_conn(pg_template: dict[str, str]) -> Iterator[psycopg.Connection]
         conn.close()
         with _admin_conn(pg_template) as admin:
             admin.execute(f'DROP DATABASE IF EXISTS "{dbname}" WITH (FORCE)')
+
+
+@pytest.fixture(autouse=True)
+def _no_llm_search_variants(monkeypatch):
+    """The prefetch asks the local model for other search wordings; tests
+    must not reach a real model. A test that wants variants patches
+    backend.agent.prefetch.variants itself."""
+    from backend.agent import prefetch
+
+    async def none(message, query):
+        return []
+    monkeypatch.setattr(prefetch, "variants", none)

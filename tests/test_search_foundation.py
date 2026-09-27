@@ -311,3 +311,48 @@ def test_universal_search_runs_the_models_other_wordings(house, monkeypatch):
     assert [h["id"] for h in out["results"]["bank"]] == [1]                 # no duplicate
     assert out["results"]["paperless"][0]["id"] == 7
     assert out["also_searched"] == ["anthropic receipt"]
+
+
+def test_prefetch_searches_the_models_variants_too(house, monkeypatch):
+    """Dirk 2026-09-27: a short model call before the search supplies
+    other wordings ("claude" → "anthropic invoice")."""
+    import asyncio, json
+    from backend import search_routes
+    from backend.agent import prefetch
+    asked = []
+    async def fake_variants(message, query):
+        return ["anthropic invoice"]
+    async def fake_search(q, user):
+        asked.append(q)
+        docs = [{"source": "paperless", "id": 7, "title": "Your receipt from Anthropic"}] if "anthropic" in q else []
+        bank = [{"source": "bank", "id": 1, "title": "ANTHROPIC CLAUDE SUB"}]
+        return {"query": q, "total": 1 + len(docs), "results": {"bank": bank, "paperless": docs}}
+    monkeypatch.setattr(prefetch, "variants", fake_variants)
+    monkeypatch.setattr(search_routes, "universal_search", fake_search)
+    _, dirk = house["dirk"]
+    out = asyncio.run(prefetch.run("was hab ich für claude bezahlt", user_id=dirk, role="platform_admin"))
+    assert asked == ["claude bezahlt", "anthropic invoice"]
+    assert [h["id"] for h in out["raw"]["results"]["bank"]] == [1]
+    assert out["raw"]["results"]["paperless"][0]["id"] == 7
+    args = json.loads(out["messages"][0]["tool_calls"][0]["function"]["arguments"])["args"]
+    assert args == {"query": "claude bezahlt", "also": ["anthropic invoice"]}
+
+
+def test_variants_parse_the_models_json_and_survive_nonsense(monkeypatch):
+    import asyncio
+    import httpx
+    from backend.agent import prefetch
+    monkeypatch.undo()                     # the real variants(), not the conftest stub
+    class _R:
+        def __init__(self, text): self.text = text
+        def raise_for_status(self): pass
+        def json(self): return {"choices": [{"message": {"content": self.text}}]}
+    answers = iter(['Sure! {"also": ["anthropic invoice", "Claude Bezahlt", "x", "y", "z"]}', "no json here"])
+    class _Client:
+        def __init__(self, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, *a, **kw): return _R(next(answers))
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+    assert asyncio.run(prefetch.variants("was hab ich für claude bezahlt", "claude bezahlt")) == ["anthropic invoice", "x", "y"]
+    assert asyncio.run(prefetch.variants("q", "q")) == []

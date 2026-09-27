@@ -12,6 +12,7 @@ replies ("ja", "ok") are left alone.
 from __future__ import annotations
 
 import json
+import os
 import re
 from typing import Any, Dict, List, Optional
 
@@ -35,8 +36,8 @@ _AGENDA = re.compile(
 HEADER = ("Automatic search across all sources for this question (mail, WhatsApp, documents, calendar, "
           "tasks, contacts, bank, letters, recordings, photos). Open a hit that fits and check it before "
           "you answer; if none fits, search more specifically or say you found nothing. "
-          "This search used the user's own words only. If what they ask about may be written in another "
-          "language or under another name, search again with universal_search and `also`.")
+          "If what they ask about may be written in another language or under another name than searched, "
+          "search again with universal_search and `also`.")
 
 CALL_ID = "prefetch_search"
 
@@ -87,6 +88,65 @@ def for_model(raw: Dict[str, Any], query: str, per_source: int = 3) -> Dict[str,
     return res
 
 
+VARIANTS_PROMPT = (
+    "You help a household search find what the user means. The user asked: \"{message}\"\n"
+    "The search uses these words: \"{query}\".\n"
+    "Give up to 3 other search wordings that would find the same thing if it is written in another "
+    "language (often English) or under another name: the company behind a product, a brand or legal "
+    "name, the usual word on an invoice or receipt. A few words each, no explanations. "
+    "Answer only JSON: {{\"also\": [\"...\"]}}; if nothing makes sense, {{\"also\": []}}.")
+VARIANTS_TIMEOUT_S = 4.0
+
+
+async def variants(message: str, query: str) -> List[str]:
+    """Other wordings from the model, before the search: the user's own
+    words missed the English invoice and the Anthropic receipt for
+    "Claude" (2026-09-27; Dirk chose this over a second search by code).
+    Nothing when the model is slow or answers oddly — the search then
+    runs with the user's words alone."""
+    import httpx
+    from .llm import _thinking_kwargs_enabled
+    body: Dict[str, Any] = {
+        "messages": [{"role": "user", "content": VARIANTS_PROMPT.format(message=message, query=query)}],
+        "temperature": 0.2, "max_tokens": 80}
+    if os.getenv("HOMEOS_MODEL"):
+        body["model"] = os.getenv("HOMEOS_MODEL")
+    if _thinking_kwargs_enabled():
+        body["chat_template_kwargs"] = {"enable_thinking": False}
+        body["reasoning_effort"] = "none"
+    base = os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1")
+    try:
+        async with httpx.AsyncClient(timeout=VARIANTS_TIMEOUT_S) as client:
+            r = await client.post(f"{base}/chat/completions", json=body,
+                                  headers={"Authorization": "Bearer not-used"})
+        r.raise_for_status()
+        raw = (r.json().get("choices") or [{}])[0].get("message", {}).get("content") or ""
+        found = re.search(r"\{.*\}", raw, re.S)
+        also = json.loads(found.group(0)).get("also") if found else []
+    except Exception:  # noqa: BLE001
+        return []
+    seen = {query.strip().lower()}
+    out: List[str] = []
+    for v in also if isinstance(also, list) else []:
+        v = str(v).strip()[:80]
+        if v and v.lower() not in seen:
+            seen.add(v.lower())
+            out.append(v)
+    return out[:3]
+
+
+def merge(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Several search results as one: the first run's hits first, each
+    hit once per source."""
+    merged: Dict[str, List[Dict[str, Any]]] = {}
+    for run in runs:
+        for source, hits in (run.get("results") or {}).items():
+            have = merged.setdefault(source, [])
+            ids = {h.get("id") for h in have}
+            have.extend(h for h in hits if h.get("id") not in ids)
+    return {**runs[0], "results": merged, "total": sum(len(v) for v in merged.values())}
+
+
 def should_search(message: str) -> bool:
     text = (message or "").strip()
     if len(text.split()) < 4 or text.startswith(("Ich habe „", "[")):
@@ -108,9 +168,13 @@ async def run(message: str, *, user_id: Any, role: Optional[str]) -> Optional[Di
     if skill is None or (perms and eff not in perms and "*" not in perms):
         return None
     from backend.search_routes import universal_search
+    import asyncio
+    user = {"id": user_id, "role": role or "member"}
+    query = keywords(message)
+    also = await variants(message, query)
     try:
-        query = keywords(message)
-        raw = await universal_search(q=query, user={"id": user_id, "role": role or "member"})
+        runs = await asyncio.gather(*(universal_search(q=q, user=user) for q in [query, *also]))
+        raw = merge(list(runs))
     except Exception:  # noqa: BLE001 — a failed prefetch leaves the model to search itself
         return None
     if not raw or not raw.get("total"):
@@ -123,11 +187,12 @@ async def run(message: str, *, user_id: Any, role: Optional[str]) -> Optional[Di
         if not raw["total"]:
             return None
     from backend.ui_tools import render_skill_result
-    body = render_skill_result({**for_model(raw, query), "_llm_hint": HEADER}, skill="universal_search")
+    body = render_skill_result({**for_model(raw, " ".join([query, *also])), "_llm_hint": HEADER},
+                               skill="universal_search")
+    args: Dict[str, Any] = {"query": query, **({"also": also} if also else {})}
     call = {"id": CALL_ID, "type": "function", "function": {
         "name": "invoke_skill",
-        "arguments": json.dumps({"name": "universal_search", "args": {"query": query}},
-                                ensure_ascii=False)}}
+        "arguments": json.dumps({"name": "universal_search", "args": args}, ensure_ascii=False)}}
     messages: List[Dict[str, Any]] = [
         {"role": "assistant", "content": None, "tool_calls": [call]},
         {"role": "tool", "tool_call_id": CALL_ID, "name": "invoke_skill", "content": body},

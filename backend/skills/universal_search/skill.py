@@ -26,13 +26,8 @@ async def execute(ctx, query: str, also: Optional[list] = None) -> dict[str, Any
     variants = [v.strip() for v in (also or []) if isinstance(v, str) and v.strip()
                 and v.strip().lower() != query.strip().lower()][:3]
     runs = await asyncio.gather(*(universal_search(q=q, user=fake_user) for q in [query, *variants]))
-    merged: dict[str, list] = {}
-    for run in runs:
-        for source, hits in (run.get("results") or {}).items():
-            have = merged.setdefault(source, [])
-            seen = {h.get("id") for h in have}
-            have.extend(h for h in hits if h.get("id") not in seen)
-    raw = {**runs[0], "results": merged, "total": sum(len(v) for v in merged.values())}
+    from backend.agent.prefetch import merge
+    raw = merge(list(runs))
     if variants:
         raw["also_searched"] = variants
     return for_model(raw, " ".join([query, *variants]), per_source=5)
