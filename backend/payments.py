@@ -195,15 +195,39 @@ def _paperless_text(user_id: str, doc_id: int) -> Optional[Dict[str, Any]]:
             "link": f"/r/documents?doc={int(doc_id)}&source=paperless"}
 
 
+BILL_QUERIES = ("Rechnung", "Zahlungserinnerung", "Mahnung offene Forderung", "invoice payment due",
+                "overdue payment reminder")
+MAX_CANDIDATES_ALL = 24
+
+
+async def _bank_all(ctx, since: str, until: str) -> List[Dict[str, Any]]:
+    """Every outgoing booking in the period on the accounts the person may
+    see, round-ups to savings left out — to match bills without a payee."""
+    from . import spaces
+    from .database import get_conn
+    from .skills.show_transactions.skill import is_roundup
+    frag, params = spaces.row_filter(str(ctx.user_id), getattr(ctx, "role", None), "bank_accounts", table_alias="a")
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT t.booking_date, t.amount, t.currency, t.counterparty, t.purpose, a.display_name AS account_name "
+            f"FROM bank_transactions t JOIN bank_accounts a ON a.id = t.account_id WHERE {frag} "
+            "AND t.booking_date >= ? AND t.booking_date <= ? AND t.amount < 0 ORDER BY t.booking_date DESC",
+            (*params, since, until)).fetchall()
+    return [dict(r) for r in rows if not is_roundup(dict(r))]
+
+
 async def _receipts(ctx, names: List[str]) -> List[Dict[str, Any]]:
-    """Receipts and invoices in documents and mail that name the payee."""
+    """Receipts and invoices in documents and mail that name the payee;
+    without names, the bills and reminders the search finds."""
     import asyncio
     from .search_routes import universal_search
     user_id = str(ctx.user_id)
     user = {"id": user_id, "role": getattr(ctx, "role", None) or "member"}
     # The name alone brings notifications ("GitHub Copilot: What's in your
     # free plan"); with the words of a bill the receipts come too.
-    queries = [q for n in names for q in (n, f"{n} Rechnung", f"{n} receipt invoice")]
+    queries = ([q for n in names for q in (n, f"{n} Rechnung", f"{n} receipt invoice")] if names
+               else list(BILL_QUERIES))
+    limit = MAX_CANDIDATES if names else MAX_CANDIDATES_ALL
     runs = await asyncio.gather(*(universal_search(q=q, user=user) for q in queries))
     seen, candidates = set(), []
     for run in runs:
@@ -216,15 +240,15 @@ async def _receipts(ctx, names: List[str]) -> List[Dict[str, Any]]:
                 candidates.append(key)
     low = [n.lower() for n in names]
     out = []
-    for source, ref in candidates[:MAX_CANDIDATES * 2]:
+    for source, ref in candidates[:limit * 2]:
         doc = (_paperless_text(user_id, ref) if source == "paperless" else _email_text(user_id, ref))
-        if not doc or not any(n in doc["text"].lower() for n in low):
+        if not doc or (low and not any(n in doc["text"].lower() for n in low)):
             continue                              # a search neighbour that does not name the payee
         facts = await read_receipt(source, int(ref), doc["text"])
         # "Payment Receipt" came back is_bill false, paid true (GitHub)
         if facts and (facts["is_bill"] or facts["paid"] is True) and facts["amount_cents"]:
             out.append({**facts, "title": doc["title"], "link": doc["link"]})
-        if len(out) >= MAX_CANDIDATES:
+        if len(out) >= limit:
             break
     return group_bills(out)
 
@@ -369,7 +393,7 @@ def totals(payments: List[Dict[str, Any]]) -> Dict[str, Any]:
             "open_count": sum(1 for p in payments if p["status"] == "open")}
 
 
-async def payments_to(ctx, payee: str, also: Optional[List[str]] = None,
+async def payments_to(ctx, payee: Optional[str] = None, also: Optional[List[str]] = None,
                       from_date: Optional[str] = None, to_date: Optional[str] = None) -> Dict[str, Any]:
     names = []
     for n in [payee, *(also or [])]:
@@ -379,13 +403,21 @@ async def payments_to(ctx, payee: str, also: Optional[List[str]] = None,
     names = names[:4]
     until = _iso(to_date) or date.today().isoformat()
     since = _iso(from_date) or (date.fromisoformat(until) - timedelta(days=365)).isoformat()
-    bookings = await _bank(ctx, names, since, until)
+    bookings = await (_bank(ctx, names, since, until) if names else _bank_all(ctx, since, until))
     receipts = [r for r in await _receipts(ctx, names)
                 if not r.get("bill_date") or since <= r["bill_date"] <= until]
     start = _records_start(ctx)
     pays = match(bookings, receipts, start)
+    if not names:
+        # "Welche Rechnungen sind offen?": the bills that are not settled;
+        # every other booking of the year is no answer to that.
+        checked = len(receipts)
+        pays = [p for p in pays if p["status"] in ("open", "unclear")]
     rows = [{"date": p["date"], "amount": money(p["amount_cents"], p["currency"]), "status": p["status"],
              "status_text": STATUS_TEXT[p["status"]], "what": p["what"], "sources": p["sources"]}
             for p in pays]
-    return {"payee": payee, "searched_as": names, "from": since, "to": until, "bank_records_from": start,
-            "totals": totals(pays), "payments": rows}
+    out = {"payee": payee or None, "searched_as": names, "from": since, "to": until, "bank_records_from": start,
+           "totals": totals(pays), "payments": rows}
+    if not names:
+        out["bills_checked"] = checked
+    return out

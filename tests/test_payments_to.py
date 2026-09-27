@@ -187,3 +187,12 @@ def test_three_mails_about_one_bill_are_one_bill_monthly_bills_stay():
     got = group_bills([mk("2026-06-01"), mk("2026-06-15"), mk("2026-06-19"), mk("2026-07-19")])
     assert sorted(g["bill_date"] for g in got) == ["2026-06-19", "2026-07-19"]
     assert next(g for g in got if g["bill_date"] == "2026-06-19")["earlier_notices"] == 2
+
+
+def test_without_payee_only_the_unsettled_bills(house):
+    """#35 "welche Rechnungen muss ich noch bezahlen": the model guessed
+    payees and alternated netcup / Malerbetrieb 26 times."""
+    from backend.skills.payments_to.skill import execute
+    out = asyncio.run(execute(_ctx(house["uid"])))
+    assert [(p["amount"], p["status"]) for p in out["payments"]] == [("-50,00 €", "open")]
+    assert out["totals"]["open"] == "50,00 €" and out["bills_checked"] == 3

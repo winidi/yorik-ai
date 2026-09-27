@@ -5,12 +5,13 @@ when_to_use: |
   - "Was hab ich für Claude bezahlt?", "Was kostet uns netcup?", "Ist die Rechnung von Riverty bezahlt?"
   - "Welche Rechnungen von X sind noch offen?"
   One payee per call; for several payees call it once for each.
+  Without payee: all bills and reminders found in mail and documents, matched with the bank — for "Welche Rechnungen sind noch offen?".
 when_not_to_use: |
   - A list of all bookings in a period or a category — show_transactions / spending_summary.
 inputs:
   payee:
     type: string
-    required: true
+    required: false
     description: The payee as the user names it ("Claude", "netcup").
   also:
     type: array
