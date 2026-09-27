@@ -151,12 +151,14 @@ def humanize_single(h: int, m: int, *, omit_tageszeit: bool = False,
         # "halb sieben" — refers to the NEXT hour, standalone "eins" for 1
         next_h = (h + 1) % 24
         return _join("halb", _hour_word(next_h, standalone=True),
-                     "" if omit_tageszeit else _tageszeit(next_h, 0))
+                     "" if omit_tageszeit else _tageszeit(h, m))
     if m == 45:
         # "viertel vor sieben" — refers to the NEXT hour, standalone "eins"
         next_h = (h + 1) % 24
+        # the time of day of the time itself: 21:45 is "abends", not
+        # "nachts" as 22:00 would be (2026-09-27)
         return _join("viertel vor", _hour_word(next_h, standalone=True),
-                     "" if omit_tageszeit else _tageszeit(next_h, 0))
+                     "" if omit_tageszeit else _tageszeit(h, m))
 
     # Arbitrary minutes — "ein Uhr zweiundvierzig nachmittags".
     return _join(_hour_word(h), "Uhr", _german_word(m), suffix)

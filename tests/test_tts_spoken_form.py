@@ -34,3 +34,11 @@ def test_spoken_german(written, spoken):
 
 def test_other_languages_pass_through():
     assert for_tts("The game is at 9:15, 551,07 €.", "en", now=NOW) == "The game is at 9:15, 551,07 €."
+
+
+def test_time_of_day_is_the_times_own():
+    # buckets as decided 2026-05-25: 22:00 on is "nachts"; 21:45 is still evening
+    assert for_tts("um 21:45", "de", now=NOW) == "um viertel vor zehn abends"
+    assert for_tts("um 22:45", "de", now=NOW) == "um viertel vor elf nachts"
+    assert for_tts("um 0:30", "de", now=NOW) == "um halb eins nachts"
+    assert for_tts("um 18:30", "de", now=NOW) == "um halb sieben abends"
