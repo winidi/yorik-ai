@@ -287,3 +287,27 @@ def test_ingest_writes_and_removes_the_document_row(house, monkeypatch):
     with conn_ctx_pg("docs") as conn:
         PI._delete_existing_chunks(conn, 1)
     assert PI._mirrored_ids() == set()
+
+
+def test_universal_search_runs_the_models_other_wordings(house, monkeypatch):
+    """"Claude" never reached the Anthropic receipt; the model adds
+    "Anthropic" as another wording and both result sets merge."""
+    import asyncio
+    from backend import search_routes
+    from backend.skills.registry import Registry, SkillContext
+    from backend.skills.universal_search.skill import execute
+    asked = []
+    async def fake(q, user):
+        asked.append(q)
+        hits = {"claude bezahlt": [{"source": "bank", "id": 1, "title": "CLAUDE SUB"}],
+                "anthropic receipt": [{"source": "bank", "id": 1, "title": "CLAUDE SUB"}]}.get(q, [])
+        docs = [{"source": "paperless", "id": 7, "title": "Your receipt from Anthropic"}] if "anthropic" in q else []
+        return {"query": q, "total": len(hits) + len(docs), "results": {"bank": hits, "paperless": docs}}
+    monkeypatch.setattr(search_routes, "universal_search", fake)
+    _, dirk = house["dirk"]
+    ctx = SkillContext(Registry(), role="platform_admin", user_id=dirk)
+    out = asyncio.run(execute(ctx, "claude bezahlt", also=["anthropic receipt", "Claude bezahlt", " "]))
+    assert asked == ["claude bezahlt", "anthropic receipt"]
+    assert [h["id"] for h in out["results"]["bank"]] == [1]                 # no duplicate
+    assert out["results"]["paperless"][0]["id"] == 7
+    assert out["also_searched"] == ["anthropic receipt"]

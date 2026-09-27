@@ -1,10 +1,12 @@
 """universal_search skill — same dispatch as /api/search."""
 
 from __future__ import annotations
-from typing import Any
+
+import asyncio
+from typing import Any, Optional
 
 
-async def execute(ctx, query: str) -> dict[str, Any]:
+async def execute(ctx, query: str, also: Optional[list] = None) -> dict[str, Any]:
     if not query or not query.strip():
         return {"query": query, "total": 0, "results": {}}
     from backend.skills.registry import require_user_id
@@ -17,4 +19,20 @@ async def execute(ctx, query: str) -> dict[str, Any]:
     # No role is no reason to search as admin (audit 2026-09-25, pattern D).
     fake_user = {"id": user_id, "role": getattr(ctx, "role", None) or "member"}
     from backend.agent.prefetch import for_model
-    return for_model(await universal_search(q=query, user=fake_user), query, per_source=5)
+    # The model's other wordings (synonyms, another language, the
+    # company behind a product) run next to the query; the query's own
+    # hits come first. "Claude" never reached the Anthropic receipt,
+    # which does not name Claude (document test set 2026-09-27).
+    variants = [v.strip() for v in (also or []) if isinstance(v, str) and v.strip()
+                and v.strip().lower() != query.strip().lower()][:3]
+    runs = await asyncio.gather(*(universal_search(q=q, user=fake_user) for q in [query, *variants]))
+    merged: dict[str, list] = {}
+    for run in runs:
+        for source, hits in (run.get("results") or {}).items():
+            have = merged.setdefault(source, [])
+            seen = {h.get("id") for h in have}
+            have.extend(h for h in hits if h.get("id") not in seen)
+    raw = {**runs[0], "results": merged, "total": sum(len(v) for v in merged.values())}
+    if variants:
+        raw["also_searched"] = variants
+    return for_model(raw, " ".join([query, *variants]), per_source=5)

@@ -11,6 +11,11 @@ inputs:
     type: string
     required: true
     description: Free-text search, a few words. Every source matches by keyword first and then by meaning, so a paraphrase works too.
+  also:
+    type: array
+    items: { type: string }
+    required: false
+    description: Up to 3 other wordings of the same search — synonyms, and the key words in the language the item may be written in (e.g. "Rechnung Server" → "invoice server", "netcup"; "Claude" → "Anthropic").
 outputs:
   query:
     type: string
