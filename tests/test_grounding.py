@@ -206,3 +206,16 @@ def test_question_searches_everything_first(fresh_app, monkeypatch):
     first_prompt = fake.calls[0]
     assert first_prompt[-1]["role"] == "tool" and first_prompt[-1]["content"].startswith(HEADER)
     assert "DE32 5001 0517 5422 7163 31" in out["response"]          # backed by the prefetch hit
+
+
+def test_quote_with_a_remark_after_it_and_a_dash_between_pieces():
+    """Rerun 2026-09-27: „€214.20 paid on … – Max plan - 20x“ (bezahlt mit
+    Mastercard) was dropped although both pieces stand in the receipt."""
+    from backend.agent.grounding import check
+    receipt = [{"role": "tool", "content": "€214.20 paid on September 24, 2026\nItems\nMax plan - 20x 1 €180.00"}]
+    ok = check("> „€214.20 paid on September 24, 2026 – Max plan - 20x“ (bezahlt mit Mastercard)", receipt)
+    assert ok.ok, ok.missing
+    assert not check("> „Max plan - 20x – €214.20 paid on September 24, 2026“", receipt).ok     # wrong order
+    assert not check("> „€214.20 paid on September 24, 2026 – yearly plan“", receipt).ok        # invented piece
+    # the model closed the line with a second mark after its remark
+    assert check("> „€214.20 paid on September 24, 2026“ (bezahlt mit Mastercard)“", receipt).ok

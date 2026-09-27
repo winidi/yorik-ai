@@ -175,6 +175,11 @@ def _quotes(answer: str) -> List[str]:
         s = s.lstrip("> ").strip()
         if re.match(r"(?i)(übersetzung|translation)\s*:", s):
             continue
+        # „…“ (bezahlt mit Mastercard): the model's own words after the
+        # closing mark are not part of the quote (rerun 2026-09-27).
+        inner = re.match(r"^[„“\"«‚]\s*(.+?)\s*[“”\"»‘]\s*(?:\(.*\)|[–—-].*)?[\s“”\"»‘]*$", s)
+        if inner:
+            s = inner.group(1)
         if len(re.findall(r"\w+", s)) >= 2:
             out.append(s)
     return out
@@ -314,7 +319,8 @@ def check(answer: str, messages: List[Dict[str, Any]], raws: Optional[List[Tuple
         checked += 1
         if norm_items is None:
             norm_items = [_norm_text(t) for t in evidence]
-        parts = [_norm_text(p) for p in re.split(r"…|\.\.\.", q)]
+        # "…" and a spaced dash both mark a gap between two verbatim pieces
+        parts = [_norm_text(p) for p in re.split(r"…|\.\.\.|\s[–—]\s", q)]
         parts = [p for p in parts if p]
 
         def in_order(hay: str) -> bool:
