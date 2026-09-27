@@ -195,3 +195,9 @@ def test_paperless_keyword_leg_finds_what_meaning_missed(house, monkeypatch):
 def test_rounded_bold_amount_is_not_checked():
     from backend.agent.grounding import check
     assert check("Das sind also rund **75** Euro pro Monat.", [], []).ok
+
+
+def test_timestamps_are_local_with_offset():
+    from backend.search_routes import _local
+    assert _local("2026-09-27 10:07:57") == "2026-09-27T12:07+02:00"
+    assert _local(1790000000).endswith("+02:00") and _local("2026-09-27") == "2026-09-27"

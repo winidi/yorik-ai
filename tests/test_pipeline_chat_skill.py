@@ -68,3 +68,11 @@ def test_someone_elses_pipeline_is_not_touched(home, monkeypatch):
     out, _ = _run(home["dirk"], monkeypatch, op="follow_up", subject="Kündigung Stromvertrag")
     other, _ = _run(home["beate"], monkeypatch, op="pause", pipeline_id=out["pipeline_id"])
     assert other["ok"] is False and "not found" in other["_llm_hint"]
+
+
+def test_universal_search_finds_the_pipeline(home, monkeypatch):
+    from backend import search_routes
+    _run(home["dirk"], monkeypatch, op="follow_up", subject="Kündigung Stromvertrag")
+    hits = search_routes._search_pipelines("was ist mit der stromvertrag sache", home["dirk"])
+    assert [h["title"] for h in hits] == ["Kündigung Stromvertrag"] and hits[0]["subtitle"] == "Entwurf"
+    assert search_routes._search_pipelines("stromvertrag", home["beate"]) == []

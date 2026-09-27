@@ -184,7 +184,7 @@ def _quotes(answer: str) -> List[str]:
 
 _SOURCE_NAMES = {"email": "Mail", "whatsapp": "WhatsApp", "paperless": "Dokument", "immich": "Foto",
                  "calendar": "Kalender", "tasks": "Aufgabe", "contacts": "Kontakt", "recordings": "Aufnahme",
-                 "drafts": "Entwurf", "bank": "Konto", "letters": "Schreiben"}
+                 "drafts": "Entwurf", "bank": "Konto", "letters": "Schreiben", "pipelines": "Nachfassen"}
 
 
 def _walk(obj: Any, ancestors: List[Dict[str, Any]]):

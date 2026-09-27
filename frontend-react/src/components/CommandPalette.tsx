@@ -46,11 +46,12 @@ const SOURCE_META: Record<string, { label: string; icon: any; tint: string }> = 
   drafts:    { label: "Letters & drafts", icon: PenLine, tint: "text-sky-500" },
   letters:   { label: "Schreiben", icon: PenLine,      tint: "text-sky-500" },
   bank:      { label: "Bank",      icon: Landmark,     tint: "text-lime-600" },
+  pipelines: { label: "Nachfassen", icon: ArrowRight,  tint: "text-indigo-500" },
 };
 
 const SOURCE_ORDER: Array<keyof typeof SOURCE_META> = [
   "calendar", "tasks", "email", "whatsapp", "paperless", "contacts",
-  "recordings", "drafts", "letters", "bank", "immich",
+  "recordings", "drafts", "letters", "bank", "pipelines", "immich",
 ];
 
 export function CommandPalette() {

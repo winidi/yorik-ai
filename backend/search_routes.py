@@ -99,6 +99,30 @@ def _rare_words_tsquery(query: str, table: str, owner_sql: str, owner_params: li
     return " | ".join(f"{w}:*" for w in rare)
 
 
+def _local(ts: Any) -> Any:
+    """A timestamp as household local time with its offset. Stored times
+    are UTC (epoch seconds, "+00:00" strings or naive "YYYY-MM-DD HH:MM:SS"
+    from datetime('now')); the chat read "10:07" as local and said "heute
+    Morgen um zehn" for 12:07 (rerun 2026-09-27). Plain dates stay dates."""
+    from datetime import datetime as _dt, timezone as _tz
+    if ts in (None, ""):
+        return ts
+    try:
+        if isinstance(ts, (int, float)) or (isinstance(ts, str) and ts.isdigit()):
+            d = _dt.fromtimestamp(int(ts), _tz.utc)
+        else:
+            s_ = str(ts).strip()
+            if len(s_) <= 10:
+                return ts
+            d = _dt.fromisoformat(s_.replace("Z", "+00:00").replace(" ", "T", 1))
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=_tz.utc)
+        from .push import _tz as _household_tz
+        return d.astimezone(_household_tz()).isoformat(timespec="minutes")
+    except (ValueError, OSError, TypeError):
+        return ts
+
+
 router = APIRouter(prefix="/api", tags=["search"])
 
 PER_SOURCE_LIMIT = 5
@@ -128,6 +152,7 @@ async def universal_search(q: str = Query(..., min_length=2),
         "drafts":     asyncio.to_thread(_search_drafts, q, user_id, qvec),
         "bank":       asyncio.to_thread(_search_bank, q, user_id, role, qvec),
         "letters":    asyncio.to_thread(_search_letters, q, user_id, qvec),
+        "pipelines":  asyncio.to_thread(_search_pipelines, q, user_id),
     }
     # Apply a hard deadline so the slow sources don't block the UI.
     try:
@@ -241,7 +266,7 @@ def _search_email(q: str, user_id: str, qvec: Optional[str] = None) -> list[dict
         "title":       r["subject"] or "(no subject)",
         "subtitle":    r["from_name"] or r["from_email"],
         "snippet":     (r.get("_snippet") or r["snippet"] or "")[:200],
-        "timestamp":   r["date_received"],
+        "timestamp":   _local(r["date_received"]),
         # Mig 124: react app lives at /r/email; ?msg=<id> is the deep-
         # link the EmailApp parses on mount.
         "navigate_to": f"/r/email?msg={r['id']}",
@@ -275,7 +300,7 @@ def _search_whatsapp(q: str, user_id: str, qvec: Optional[str] = None) -> list[d
             "title":       chat,
             "subtitle":    r["push_name"] or "",
             "snippet":     text[:200],
-            "timestamp":   r["timestamp"],
+            "timestamp":   _local(r["timestamp"]),
             "navigate_to": f"/r/whatsapp?chat={r['chat_jid']}",
             # where it lies, so the chat can read the messages around it
             "chat_jid":    r["chat_jid"],
@@ -365,7 +390,7 @@ def _search_immich(q: str, user_id: str) -> list[dict[str, Any]]:
         "title":       p.get("original_name") or "Photo",
         "subtitle":    "",
         "snippet":     "",
-        "timestamp":   p.get("taken_at"),
+        "timestamp":   _local(p.get("taken_at")),
         "navigate_to": f"/r/photos?asset={p['id']}" if p.get("id") else "/r/photos",
         "thumbnail_url": p.get("thumbnail_url"),
     } for p in photos]
@@ -442,7 +467,7 @@ def _search_contacts(q: str, user_id: str, role: Optional[str] = None,
         "title":       r["display_name"],
         "subtitle":    r["relation"] or r["role"] or "",
         "snippet":     (r["notes"] or "")[:200],
-        "timestamp":   r["last_interaction_at"],
+        "timestamp":   _local(r["last_interaction_at"]),
         "navigate_to": f"/r/contacts?contact={r['id']}",
     } for r in rows]
 
@@ -460,24 +485,33 @@ def _search_recordings(q: str, user_id: str, role: Optional[str] = None,
         "title":       r["title"] or "Recording",
         "subtitle":    r["kind"] or "",
         "snippet":     (r.get("_snippet") or r.get("seg_hit") or "")[:200],
-        "timestamp":   r["started_at"],
+        "timestamp":   _local(r["started_at"]),
         "navigate_to": f"/r/recordings/{r['id']}",
     } for r in rows]
 
 
 def _recordings_rows(q: str, user_id: str, role: Optional[str], qvec: Optional[str]) -> list[dict[str, Any]]:
+    """Any query word may match title, report or transcript; rows with
+    more words in the title and report come first. All words had to
+    match, so "besprochen regeln yorik" never found "Regeln für Yorik"
+    (rerun 2026-09-27)."""
     from . import spaces as _sp
-    like_sql, like_params = _like(q, "recordings.title", "recordings.report_json")
-    words = [w for w in q.lower().split() if w][:6] or [q.lower()]
-    seg_sql = " AND ".join("LOWER(s.text) LIKE ?" for _ in words)
-    seg_params = [f"%{w}%" for w in words]
+    words = [w.lower() for w in re.findall(r"\w+", q or "") if len(w) > 3][:6] or [(q or "").lower()]
+    title_hit = " + ".join("CASE WHEN LOWER(COALESCE(recordings.title,'')) LIKE ? THEN 2 ELSE 0 END" for _ in words)
+    report_hit = " + ".join("CASE WHEN LOWER(COALESCE(recordings.report_json,'')) LIKE ? THEN 1 ELSE 0 END" for _ in words)
+    likes = [f"%{w}%" for w in words]
+    any_field = " OR ".join("LOWER(COALESCE(recordings.title,'') || ' ' || COALESCE(recordings.report_json,'')) LIKE ?"
+                            for _ in words)
+    seg_any = " OR ".join("LOWER(s.text) LIKE ?" for _ in words)
     rows = _hybrid(
         source="recordings", table="recordings",
         columns="recordings.id, title, kind, started_at",
         visible=_sp.row_filter(user_id, role, "recordings"),
-        keyword=(f"(({like_sql}) OR EXISTS (SELECT 1 FROM recording_segments s "
-                 f"WHERE s.recording_id = recordings.id AND {seg_sql}))", [*like_params, *seg_params]),
-        order="started_at DESC", qvec=qvec,
+        keyword=(f"(({any_field}) OR EXISTS (SELECT 1 FROM recording_segments s "
+                 f"WHERE s.recording_id = recordings.id AND ({seg_any})))", [*likes, *likes]),
+        order=f"({title_hit} + {report_hit}) DESC, started_at DESC",
+        order_params=[*likes, *likes],
+        qvec=qvec, date_key="started_at",
     )
     # The sentence that matched, for rows found by keyword.
     with get_conn() as conn:
@@ -485,8 +519,8 @@ def _recordings_rows(q: str, user_id: str, role: Optional[str], qvec: Optional[s
             if r.get("_snippet"):
                 continue
             hit = conn.execute(
-                f"SELECT s.text FROM recording_segments s WHERE s.recording_id = ? AND {seg_sql} "
-                f"ORDER BY s.seq LIMIT 1", (r["id"], *seg_params)).fetchone()
+                f"SELECT s.text FROM recording_segments s WHERE s.recording_id = ? AND ({seg_any}) "
+                f"ORDER BY s.seq LIMIT 1", (r["id"], *likes)).fetchone()
             r["seg_hit"] = hit["text"] if hit else ""
     return rows
 
@@ -507,7 +541,7 @@ def _search_drafts(q: str, user_id: str, qvec: Optional[str] = None) -> list[dic
         "title":       r["subject"] or "(no subject)",
         "subtitle":    " · ".join(x for x in (r["kind"], r["recipient"]) if x),
         "snippet":     (r.get("_snippet") or "")[:200],
-        "timestamp":   r["updated_at"],
+        "timestamp":   _local(r["updated_at"]),
         "navigate_to": f"/r/compose?draft_id={r['id']}",
     } for r in rows]
 
@@ -560,10 +594,46 @@ def _search_letters(q: str, user_id: str, qvec: Optional[str] = None) -> list[di
             "title":       r["title"] or "(ohne Titel)",
             "subtitle":    " · ".join(x for x in (r["kind"], r["status"], name) if x),
             "snippet":     (r.get("_snippet") or "")[:200],
-            "timestamp":   r["updated_at"],
+            "timestamp":   _local(r["updated_at"]),
             "navigate_to": f"/r/write?id={r['id']}",
         })
     return out
+
+
+# ───────────────────────── pipelines ────────────────────────────────
+
+_PIPELINE_STATES = {"entwurf": "Entwurf", "laeuft": "läuft", "pausiert": "pausiert",
+                    "erledigt": "erledigt", "abgebrochen": "abgebrochen"}
+
+
+def _search_pipelines(q: str, user_id: str) -> list[dict[str, Any]]:
+    """The person's follow-ups whose title, goal or original mail matches
+    a query word — "die GoHighLevel-Sache, wo ich nachfassen wollte" found
+    the mail but not the pipeline already following it (rerun 2026-09-27)."""
+    words = [w.lower() for w in re.findall(r"\w+", q or "") if len(w) > 3]
+    if not words:
+        return []
+    try:
+        from .pipelines import store
+        rows = store.list_for(str(user_id))
+    except Exception:  # noqa: BLE001
+        return []
+    out = []
+    for p in rows:
+        origin = p.get("origin") or {}
+        hay = " ".join(str(x) for x in (p.get("title"), p.get("goal"), origin.get("subject"),
+                                        " ".join(origin.get("to") or []))).lower()
+        if any(w in hay for w in words):
+            out.append({
+                "source":      "pipelines",
+                "id":          p["id"],
+                "title":       p.get("title") or "Pipeline",
+                "subtitle":    _PIPELINE_STATES.get(p.get("state") or "", p.get("state") or ""),
+                "snippet":     (p.get("goal") or "")[:200],
+                "timestamp":   _local(p.get("updated_at")),
+                "navigate_to": f"/r/pipelines/{p['id']}",
+            })
+    return out[:PER_SOURCE_LIMIT]
 
 
 # ───────────────────────── settings: search by meaning ──────────────
