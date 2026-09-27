@@ -157,6 +157,29 @@ def _list_all_ids() -> List[int]:
     return ids
 
 
+_NAMES: Dict[Tuple[str, int], str] = {}
+
+
+def _name_of(kind: str, ref: Any) -> str:
+    """Name of a correspondent / document type; the document itself
+    carries only its id. Cached per process."""
+    if isinstance(ref, str):
+        return ref
+    if not isinstance(ref, int):
+        return ""
+    if (kind, ref) not in _NAMES:
+        s = _paperless_settings()
+        try:
+            r = requests.get(f"{s['base_url']}/api/{kind}/{ref}/",
+                             headers={"Authorization": f"Token {s['api_key']}", "Accept": "application/json"},
+                             timeout=PAPERLESS_TIMEOUT)
+            r.raise_for_status()
+            _NAMES[(kind, ref)] = str(r.json().get("name") or "")
+        except (requests.RequestException, ValueError):
+            return ""
+    return _NAMES[(kind, ref)]
+
+
 # ─── Ingestion ─────────────────────────────────────────────────────────────
 
 def _delete_existing_chunks(conn, paperless_doc_id: int) -> None:
@@ -169,6 +192,7 @@ def _delete_existing_chunks(conn, paperless_doc_id: int) -> None:
         "DELETE FROM paperless_chunks WHERE paperless_doc_id = %s",
         (paperless_doc_id,),
     )
+    conn.execute("DELETE FROM docs.paperless_documents WHERE id = %s", (paperless_doc_id,))
 
 
 def _chunk_preamble(doc: Dict[str, Any]) -> str:
@@ -240,6 +264,14 @@ def ingest_one(paperless_doc_id: int) -> Dict[str, Any]:
                      char_start, char_end, _qvec_literal(vec)),
                 )
             n_ok += 1
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO docs.paperless_documents (id, title, correspondent, doc_type, doc_date, content, updated_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, now())",
+                (paperless_doc_id, doc.get("title") or "", _name_of("correspondents", doc.get("correspondent")),
+                 _name_of("document_types", doc.get("document_type")),
+                 str(doc.get("created_date") or doc.get("created") or "")[:10], content),
+            )
     return {"ok": True, "id": paperless_doc_id, "chunks": n_ok,
             "embed_failures": n_fail, "title": doc.get("title", "")}
 
@@ -270,9 +302,10 @@ def _mirrored_ids() -> set[int]:
     from .database_pg import conn_ctx_pg
     try:
         with conn_ctx_pg("docs") as conn, conn.cursor() as cur:
-            cur.execute(
-                "SELECT DISTINCT paperless_doc_id FROM paperless_chunks"
-            )
+            # The document rows, not the chunks: a document ingested
+            # before the table existed (2026-09-27) is ingested once more
+            # and so reaches the shared search index.
+            cur.execute("SELECT id FROM docs.paperless_documents")
             rows = cur.fetchall()
         return {int(r[0]) for r in rows}
     except Exception:  # noqa: BLE001
@@ -524,6 +557,9 @@ def search(query: str, k: int = 8,
     """
     if not query or not query.strip():
         return []
+    shared = _search_shared_index(query, k)
+    if shared is not None:
+        return _hydrate(shared, creds_override) if shared else []
     try:
         qvec = _l2_normalize(embed(query))
     except EmbeddingError as exc:
@@ -581,6 +617,49 @@ def search(query: str, k: int = 8,
         return []
 
     return _hydrate(rows, creds_override)
+
+
+def _search_shared_index(query: str, k: int) -> Optional[List[Dict[str, Any]]]:
+    """The documents' chunks in the shared search index (search_chunks,
+    the multilingual embedder), shaped like the old rows. None when that
+    index is off or holds no document yet — the caller then uses the old
+    MiniLM mirror. Visibility is left to _hydrate (the person's token);
+    space_id was never set on any document."""
+    from . import search_index as _si
+    if not _si.enabled():
+        return None
+    from .database import get_conn
+    try:
+        with get_conn() as conn:
+            if not conn.execute("SELECT 1 FROM search_chunks WHERE source = 'paperless' "
+                                "AND embedding IS NOT NULL LIMIT 1").fetchone():
+                return None
+    except Exception:  # noqa: BLE001
+        return None
+    qvec = _si.embed_query(query)
+    if qvec is None:
+        return None
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT sc.id, sc.row_id AS paperless_doc_id, sc.chunk_no AS chunk_index, sc.text, "
+            "       (sc.embedding <=> ?::vector) AS distance "
+            "FROM search_chunks sc WHERE sc.source = 'paperless' AND sc.embedding IS NOT NULL "
+            "ORDER BY sc.embedding <=> ?::vector LIMIT ?",
+            (qvec, qvec, int(k) * 3),
+        ).fetchall()
+    best: Dict[int, Dict[str, Any]] = {}
+    for r in rows:                       # the best chunk of each document
+        did = int(r["paperless_doc_id"])
+        if did not in best:
+            best[did] = dict(r)
+    return list(best.values())[:int(k)]
+
+
+def semantic_max_distance() -> float:
+    """Distance up to which a document found by meaning counts: the
+    shared index's measure when it is in use, else the old MiniLM one."""
+    from . import search_index as _si
+    return _si.max_distance() if _si.enabled() and _si.use_service() else 0.55
 
 
 def _hydrate(rows: List[Any], creds_override: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:

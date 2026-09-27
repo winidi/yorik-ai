@@ -228,3 +228,62 @@ def test_references_header_is_split_into_ids():
     assert message_ids(["<a@x.de>", "<b@y>"]) == ["a@x.de", "b@y"]
     assert message_ids("a@x.de b@y") == ["a@x.de", "b@y"]
     assert message_ids(None) == []
+
+
+def test_paperless_documents_are_in_the_shared_index_and_seen_as_the_person(house, monkeypatch):
+    """Chat rerun 2026-09-27: the English netcup invoice sat only in the
+    small English MiniLM mirror and a German question never reached it.
+    Documents now share the index; the person's token still decides."""
+    from backend import paperless_ingest as PI, search_index
+    from backend.database import get_conn
+    with get_conn() as conn:
+        conn.execute("INSERT INTO docs.paperless_documents (id, title, correspondent, content) VALUES "
+                     "(1, 'Your invoice nc-5276888', 'netcup GmbH', 'RS 4000 server, invoice amount 551,07 EUR'), "
+                     "(2, 'Projektvertrag', 'Kommpact', 'Kündigung nur schriftlich')")
+        conn.commit()
+    search_index.sweep()
+    with get_conn() as conn:
+        first = conn.execute("SELECT text FROM search_chunks WHERE source = 'paperless' AND row_id = 1").fetchone()
+    assert first["text"].startswith("Your invoice nc-5276888\nnetcup GmbH")
+
+    seen = []
+    def get(url, params=None, **kw):
+        seen.append(kw["headers"]["Authorization"])
+        ids = [int(i) for i in (params or {}).get("id__in", "").split(",") if i]
+        return _Resp([{"id": i, "title": f"doc {i}", "tags": []} for i in ids if i != 2])   # 2 is not hers
+    monkeypatch.setattr(PI.requests, "get", get)
+    hits = PI.search("was kostet der server", k=5, creds_override={"base_url": "http://p", "api_key": "beate"})
+    assert [h["paperless_doc_id"] for h in hits][0] == 1
+    assert 2 not in [h["paperless_doc_id"] for h in hits]
+    assert seen == ["Token beate"]
+
+
+class _Resp:
+    ok, status_code = True, 200
+    def __init__(self, results):
+        self._r = results
+    def raise_for_status(self):
+        pass
+    def json(self):
+        return {"results": self._r, "count": len(self._r)}
+
+
+def test_ingest_writes_and_removes_the_document_row(house, monkeypatch):
+    from backend import paperless_ingest as PI
+    from backend.database import get_conn
+    monkeypatch.setattr(PI, "_fetch_doc", lambda i, creds_override=None: {
+        "id": i, "title": "Your invoice", "correspondent": 7, "document_type": None,
+        "created_date": "2026-06-18", "content": "RS 4000 invoice amount 551,07 EUR", "tags": []})
+    monkeypatch.setattr(PI, "_apply_space_marker", lambda *a: None)
+    monkeypatch.setattr(PI, "_name_of", lambda kind, ref: "netcup GmbH" if ref == 7 else "")
+    monkeypatch.setattr(PI, "embed", lambda text: [1.0] + [0.0] * 383)
+    assert PI.ingest_one(1)["ok"]
+    with get_conn() as conn:
+        row = conn.execute("SELECT title, correspondent, doc_date FROM docs.paperless_documents WHERE id = 1").fetchone()
+    assert (row["title"], row["correspondent"], row["doc_date"]) == ("Your invoice", "netcup GmbH", "2026-06-18")
+    assert PI._mirrored_ids() == {1}
+    assert PI.ingest_one(1)["ok"]                                    # re-ingest replaces, no duplicate key
+    from backend.database_pg import conn_ctx_pg
+    with conn_ctx_pg("docs") as conn:
+        PI._delete_existing_chunks(conn, 1)
+    assert PI._mirrored_ids() == set()

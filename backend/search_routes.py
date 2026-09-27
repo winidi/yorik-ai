@@ -335,8 +335,12 @@ def _search_paperless(q: str, user_id: str) -> list[dict[str, Any]]:
         sem = paperless_ingest.search(q, k=PER_SOURCE_LIMIT, creds_override=creds)
     except Exception:
         sem = []
+    try:
+        limit = paperless_ingest.semantic_max_distance()
+    except Exception:  # noqa: BLE001
+        limit = _PAPERLESS_MAX_DISTANCE
     sem = [h for h in (sem or [])
-           if h.get("distance") is not None and h["distance"] <= _PAPERLESS_MAX_DISTANCE]
+           if h.get("distance") is not None and h["distance"] <= limit]
     # Keyword leg: Paperless' own full-text search, as the person (their
     # token, so their permissions). Any word may match — "github" found
     # nothing by meaning at 0.55 and the chat concluded "no GitHub

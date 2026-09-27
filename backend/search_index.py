@@ -220,6 +220,11 @@ def _letter_text(r) -> str:
                   content.get("subject"), _strip_html(content.get("text_html")))
 
 
+def _paperless_text(r) -> str:
+    return _clean(r["title"], r["correspondent"], r["doc_type"], r["doc_date"], r["content"],
+                  _entity_hints(r["content"] or ""))
+
+
 def _recording_text(r) -> str:
     parts: list[Any] = [r["title"]]
     try:
@@ -269,6 +274,10 @@ SOURCES: dict[str, Source] = {s.name: s for s in (
            _bank_text, immutable=True, max_chunks=1),
     Source("letters", "written_documents", "id, kind, status, title, recipient, content",
            _letter_text, max_chunks=4),
+    # Added 2026-09-27: Paperless documents had only the English MiniLM
+    # mirror; a German question missed an English invoice.
+    Source("paperless", "docs.paperless_documents", "id, title, correspondent, doc_type, doc_date, content",
+           _paperless_text, max_chunks=60),
 )}
 
 
