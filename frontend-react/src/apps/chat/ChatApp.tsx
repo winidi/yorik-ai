@@ -797,6 +797,7 @@ function Thread({
             "venue_saved",
             "email_ready",
             "whatsapp_draft_created",
+            "sources",
           ]);
           if (!STICKS_TO_MESSAGE.has(a.type)) {
             dispatchableActions.push(a);
@@ -1810,6 +1811,24 @@ function MessageBubble({
           .map((a: any, i: number) => (
             <EmailDraftReadyCard key={i} to={a.to || ""} subject={a.subject || ""}
                                   preview={a.preview} attachmentFilename={a.attachment_filename} />
+          ))}
+        {/* Where hard values and quotes in this answer come from — built by
+            the grounding check on the server, not written by the model. */}
+        {!isUser && message.ui_actions && message.ui_actions
+          .filter(a => a.type === "sources" && Array.isArray((a as any).items))
+          .map((a: any, i: number) => (
+            <div key={`src-${i}`} className="mt-2 flex flex-wrap gap-1.5">
+              {a.items.map((it: { label: string; link?: string }, j: number) => (
+                it.link
+                  ? <a key={j} href={it.link.startsWith("/r/") ? it.link : `/r${it.link.startsWith("/") ? "" : "/"}${it.link}`}
+                       className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-muted-foreground hover:bg-muted">
+                      📎 {it.label}
+                    </a>
+                  : <span key={j} className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-muted-foreground">
+                      📎 {it.label}
+                    </span>
+              ))}
+            </div>
           ))}
         {/* A WhatsApp message written by whatsapp_draft — editable,
             with Send and a jump into the thread. */}

@@ -69,6 +69,7 @@ from .messages import (
     user_message,
 )
 from .tools import ToolRegistry
+from . import grounding as _grounding
 
 log = logging.getLogger("yorik.agent.loop")
 
@@ -239,6 +240,8 @@ async def ask(
         message=message,
     )
     ui_actions: List[Dict[str, Any]] = []
+    turn_raws: List[Any] = []          # (skill, raw result) for grounding sources
+    grounding_retried = False
     components_seen: List[str] = []  # debug trail
     interim_text_parts: List[str] = []  # "thinking" content interleaved with tool calls
     final_text: Optional[str] = None
@@ -384,6 +387,18 @@ async def ask(
         if not has_tool_calls(assistant_msg):
             # The model spoke its final answer.
             final_text = assistant_msg.get("content") or ""
+            # Grounding: hard values and quotes must come from tool results.
+            _gate = _grounding_gate(final_text, messages, turn_raws, grounding_retried, user_language)
+            if _gate[0] == "retry":
+                grounding_retried = True
+                messages.pop()                      # the unbacked answer never reaches the person
+                messages.append(_gate[1])
+                continue
+            if _gate[0] == "fallback":
+                final_text = _gate[1]
+                messages[-1] = {**assistant_msg, "content": final_text}
+            elif _gate[1]:
+                ui_actions.append(_gate[1])
             if include_trace:
                 trace_iterations.append({
                     "n":            iteration,
@@ -465,6 +480,9 @@ async def ask(
             _tool_started = time.perf_counter()
             tool_t0 = _tool_started if include_trace else 0.0
             result = await registry.dispatch(name, args, tool_ctx)
+            _raw = _grounding.raw_from(name, args, result)
+            if _raw:
+                turn_raws.append(_raw)
             _tool_dt = round(time.perf_counter() - _tool_started, 3)
             tool_dt = (time.perf_counter() - tool_t0) if include_trace else 0.0
             await _emit("tool_done", tool=name, duration_s=_tool_dt)
@@ -853,6 +871,8 @@ async def ask_stream(
         language=user_language, identified_name=identified_name, message=message,
     )
     ui_actions: List[Dict[str, Any]] = []
+    turn_raws: List[Any] = []          # (skill, raw result) for grounding sources
+    grounding_retried = False
     iteration = 0
     halted = False
     final_text: Optional[str] = None
@@ -886,6 +906,7 @@ async def ask_stream(
         # Inline accumulator state — same logic as consume_stream() but
         # we drive it ourselves so we can yield events between chunks.
         content_parts: List[str] = []
+        holding = False
         tc_acc: Dict[int, Dict[str, Any]] = {}
         started_tool_indices: set = set()
         finish_reason: Optional[str] = None
@@ -913,7 +934,13 @@ async def ask_stream(
             text = getattr(delta, "content", None)
             if text:
                 content_parts.append(text)
-                yield _stream.TextDelta(text=text)
+                # Hold back from the first hard value or quote on — it may
+                # be withdrawn by the grounding check (and the wall reads
+                # the stream aloud).
+                if not holding and _grounding.needs_hold("".join(content_parts)):
+                    holding = True
+                if not holding:
+                    yield _stream.TextDelta(text=text)
             for tc in (getattr(delta, "tool_calls", None) or []):
                 idx = getattr(tc, "index", 0)
                 slot = tc_acc.setdefault(idx, {
@@ -1074,8 +1101,20 @@ async def ask_stream(
                 )
 
         if not has_tool_calls(assistant_msg):
-            # Final answer — content was already streamed via TextDelta events.
+            # Final answer — streamed via TextDelta events up to the first
+            # hard value or quote; the rest waited for the grounding check.
             final_text = assistant_msg.get("content") or ""
+            _gate = _grounding_gate(final_text, messages, turn_raws, grounding_retried, user_language)
+            if _gate[0] == "retry":
+                grounding_retried = True
+                messages.pop()
+                messages.append(_gate[1])
+                continue
+            if _gate[0] == "fallback":
+                final_text = _gate[1]
+                messages[-1] = {**assistant_msg, "content": final_text}
+            elif _gate[1]:
+                ui_actions.append(_gate[1])
             break
 
         # Dispatch each ready tool call
@@ -1109,6 +1148,9 @@ async def ask_stream(
                 continue
             audit.record_tool_call(ready.name, ready.arguments)
             result = await registry.dispatch(ready.name, ready.arguments, tool_ctx)
+            _raw = _grounding.raw_from(ready.name, ready.arguments, result)
+            if _raw:
+                turn_raws.append(_raw)
             if result.ui_actions:
                 ui_actions.extend(result.ui_actions)
                 _ledger_mod.absorb(ledger, result.ui_actions)
@@ -1650,6 +1692,23 @@ async def _wrap_up_answer(llm: Any, messages: List[Dict[str, Any]], language: Op
     except Exception:  # noqa: BLE001 — the fallback text below is the answer then
         log.exception("wrap-up answer failed")
     return _user_text("gave_up", language)
+
+
+def _grounding_gate(text: str, messages: List[Dict[str, Any]], raws: List[Any],
+                    retried: bool, language: Optional[str]):
+    """("ok", sources_action|None) / ("retry", nudge message) / ("fallback", text).
+    The answer itself is messages[-1]; it is not evidence for itself."""
+    try:
+        verdict = _grounding.check(text, messages[:-1], raws)
+    except Exception:  # noqa: BLE001 — a broken check must not eat the answer
+        log.exception("grounding check failed")
+        return ("ok", None)
+    if verdict.ok:
+        return ("ok", _grounding.sources_action(verdict))
+    log.info("grounding: unbacked %s (retried=%s)", verdict.missing, retried)
+    if not retried:
+        return ("retry", _grounding.nudge_message(verdict.missing))
+    return ("fallback", _grounding.fallback_text(verdict.missing, language))
 
 
 def _user_text(key: str, language: Optional[str], **fmt: Any) -> str:

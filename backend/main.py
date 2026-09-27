@@ -9035,6 +9035,7 @@ def get_conversation(conversation_id: str, role: str = Depends(_auth.current_rol
             m for m in msgs
             if isinstance(m, dict)
             and m.get("role") in ("user", "assistant")
+            and not m.get("internal")        # the grounding check's note to the model
             and (m.get("role") == "user" or (m.get("content") or "").strip())
         ]
 

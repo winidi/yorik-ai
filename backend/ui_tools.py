@@ -641,7 +641,10 @@ class UseSkillTool(Tool[UseSkillArgs]):
         # accurate about, so it invented five. Including both keeps the
         # narration discipline AND gives the LLM ground truth when a
         # legitimate enumeration is asked for.
-        return ToolResult(success=True, result_for_llm=render_skill_result(result, skill=args.name))
+        # The raw result rides along (not shown to the model) so the
+        # grounding check can label sources — backend/agent/grounding.py.
+        return ToolResult(success=True, result_for_llm=render_skill_result(result, skill=args.name),
+                          metadata={"skill": args.name, "raw": result})
 
 
 FULL_OUTPUT_MAX_CHARS = 24_000
