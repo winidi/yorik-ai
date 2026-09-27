@@ -270,6 +270,7 @@ class TestFinanceFilters:
             (today - timedelta(days=3), -2300.0, "Anna Beispiel", "Haushalt", "Sonstiges"),
             (today - timedelta(days=5), -59.49, "VISA HETZNER ONLINE GMBH", "", "Verträge & Abos"),
             (today - timedelta(days=6), -40.0, "REWE", "", "Lebensmittel"),
+            (today - timedelta(days=5), -0.51, "Kleingeld Plus - Sparen", "Überweisung / Aus Kauf59,49. beiHETZNER ONLINE GMBHSEQ1", "Sonstiges"),
         ] + [(today - timedelta(days=1), -1.0, f"Kiosk {i}", "", "Sonstiges") for i in range(250)]
         with get_conn() as conn:
             acc = int(conn.execute(
@@ -288,6 +289,17 @@ class TestFinanceFilters:
         out = asyncio.run(execute(ctx=_mk_ctx(role="admin", user_id=person), days=30, search="anna beispiel"))
         assert [t["counterparty"] for t in out["transactions"]] == ["Anna Beispiel"]
         assert (out["count"], out["total"], out["total_outgoing"]) == (1, -2300.0, -2300.0)
+
+    def test_round_up_to_savings_is_not_a_payment_to_the_shop(self, person, account):
+        """ING's "Kleingeld Plus" names the purchase in its purpose; the
+        chat counted it as money paid to Anthropic (2026-09-27)."""
+        from backend.skills.show_transactions.skill import execute
+        out = asyncio.run(execute(ctx=_mk_ctx(role="admin", user_id=person), days=30, search="hetzner"))
+        assert [t["counterparty"] for t in out["transactions"]] == ["VISA HETZNER ONLINE GMBH"]
+        assert out["total"] == -59.49
+        assert out["not_counted"].startswith("1 round-up transfer(s) to the person's own savings (together 0.51)")
+        out = asyncio.run(execute(ctx=_mk_ctx(role="admin", user_id=person), days=30, search="kleingeld"))
+        assert [t["counterparty"] for t in out["transactions"]] == ["Kleingeld Plus - Sparen"]   # asked for by name
 
     def test_short_category_name_matches(self, person, account):
         from backend.skills.show_transactions.skill import execute

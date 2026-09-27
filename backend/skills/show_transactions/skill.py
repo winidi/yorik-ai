@@ -3,6 +3,7 @@ copy (never live FinTS — see backend/bank_sync.py)."""
 
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 from typing import Any, Optional
 
@@ -50,6 +51,15 @@ async def execute(ctx, days: int = 30, account_id: Optional[int] = None,
         rows = conn.execute(q, params).fetchall()
 
     txs = [dict(r) for r in rows]
+    # A round-up (ING "Kleingeld Plus") moves the change of a card
+    # purchase to the person's own savings and names the shop in its
+    # purpose, so "anthropic" found it and the chat counted it as money
+    # paid to Anthropic (2026-09-27). Searching for a payee, it is not
+    # a payment to that payee.
+    roundups: list[dict] = []
+    if search:
+        roundups = [t for t in txs if is_roundup(t) and search.strip().lower() not in (t.get("counterparty") or "").lower()]
+        txs = [t for t in txs if t not in roundups]
     if not txs:
         return {"transactions": [], "_llm_hint": f"No transactions found for the last {days} days "
                                                   f"(with the given filters). Say so plainly; don't guess numbers."
@@ -62,10 +72,22 @@ async def execute(ctx, days: int = 30, account_id: Optional[int] = None,
             "total_outgoing": round(sum(a for a in amounts if a < 0), 2),
             "total_incoming": round(sum(a for a in amounts if a > 0), 2),
             "days": days, "transactions": txs,
+            **({"not_counted": f"{len(roundups)} round-up transfer(s) to the person's own savings "
+                               f"(together {round(-sum(float(t['amount'] or 0) for t in roundups), 2)}), "
+                               f"not payments to {search.strip()}"} if roundups else {}),
             "_llm_hint": f"{len(txs)} transaction(s) over {days} days. Quote amounts/dates verbatim; "
                          f"if capped at 200, say the list was cut and offer a narrower range. "
                          f"Totals are already computed (count, total, total_outgoing, total_incoming) — "
                          f"quote them, don't add up rows yourself."}
+
+
+_ROUNDUP_PURPOSE = re.compile(r"\bAus Kauf\s*[\d.,]+\.?\s*bei", re.I)
+
+
+def is_roundup(t: dict) -> bool:
+    """A round-up savings transfer: ING's "Kleingeld Plus" names the
+    purchase in its purpose ("Aus Kauf 74,49. bei HETZNER …")."""
+    return "kleingeld" in (t.get("counterparty") or "").lower() or bool(_ROUNDUP_PURPOSE.search(t.get("purpose") or ""))
 
 
 def _window(days: int, from_date: Optional[str], to_date: Optional[str]) -> tuple[str, Optional[str]]:
