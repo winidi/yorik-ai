@@ -136,7 +136,13 @@ def _dump(raw: Any) -> str:
 
 # ─── answer parts ────────────────────────────────────────────────────
 
+def _plain(answer: str) -> str:
+    """Markdown emphasis out, so "rund **75 €**" still counts as rounded."""
+    return re.sub(r"(\*\*|__|\*|`)", "", answer or "")
+
+
 def _values(answer: str) -> List[Tuple[str, str]]:
+    answer = _plain(answer)
     found: List[Tuple[str, str]] = []
     for m in IBAN.finditer(answer):
         found.append(("iban", m.group(0)))

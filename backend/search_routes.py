@@ -55,6 +55,19 @@ def _build_tsquery(query: str) -> Optional[str]:
         return None
     return " & ".join(f"{t}:*" for t in cleaned)
 
+def _build_tsquery_any(query: str) -> Optional[str]:
+    """Like _build_tsquery, but any word may match (OR); ranking decides.
+    A whole question never has every word in one mail."""
+    cleaned = [re.sub(r"[^\w\-]", "", t, flags=re.UNICODE) for t in (query or "").split()]
+    cleaned = [t for t in cleaned if len(t) > 2]
+    return " | ".join(f"{t}:*" for t in cleaned[:8]) or None
+
+
+def _words_regex(query: str) -> Optional[str]:
+    words = [re.escape(w.lower()) for w in re.findall(r"\w+", query or "") if len(w) > 2][:8]
+    return "|".join(words) or None
+
+
 router = APIRouter(prefix="/api", tags=["search"])
 
 PER_SOURCE_LIMIT = 5
@@ -111,7 +124,8 @@ async def universal_search(q: str = Query(..., min_length=2),
 # ───────────────────────── email ────────────────────────────────────
 
 def _hybrid(*, source: str, table: str, columns: str, visible: tuple[str, list],
-            keyword: Optional[tuple[str, list]], order: str, qvec: Optional[str]) -> list[dict[str, Any]]:
+            keyword: Optional[tuple[str, list]], order: str, qvec: Optional[str],
+            order_params: Optional[list] = None, date_key: Optional[str] = None) -> list[dict[str, Any]]:
     """Keyword hits, then hits by meaning, one row each, for one table.
     `visible` and `keyword` are (sql, params) over the table's own name.
     Rows found by meaning carry `_snippet`, the piece of text that matched."""
@@ -125,11 +139,12 @@ def _hybrid(*, source: str, table: str, columns: str, visible: tuple[str, list],
                 for r in conn.execute(
                     f"SELECT {columns} FROM {table} WHERE ({kw_sql}) AND ({vis_sql}) "
                     f"ORDER BY {order} LIMIT ?",
-                    (*kw_params, *vis_params, PER_SOURCE_LIMIT),
+                    (*kw_params, *vis_params, *(order_params or []), PER_SOURCE_LIMIT),
                 ).fetchall():
                     rows.append(dict(r)); seen.add(int(r["id"]))
             except Exception as exc:  # noqa: BLE001
                 log.warning("universal-search %s keyword branch failed: %s", source, exc)
+        sem_rows: list[dict[str, Any]] = []
         if qvec and len(rows) < PER_SOURCE_LIMIT:
             from . import search_index
             limit = search_index.max_distance()
@@ -145,11 +160,17 @@ def _hybrid(*, source: str, table: str, columns: str, visible: tuple[str, list],
                         break
                     if int(r["id"]) in seen:
                         continue
-                    rows.append(dict(r)); seen.add(int(r["id"]))
-                    if len(rows) >= PER_SOURCE_LIMIT:
-                        break
+                    sem_rows.append(dict(r)); seen.add(int(r["id"]))
             except Exception as exc:  # noqa: BLE001
                 log.warning("universal-search %s semantic branch failed: %s", source, exc)
+    if sem_rows and date_key:
+        # Hits about as close as each other: the newer one first ("was hab
+        # ich für Claude bezahlt" showed May's receipt, not September's).
+        buckets: dict[int, list] = {}
+        for r in sem_rows:
+            buckets.setdefault(round(float(r.get("_distance") or 1) / 0.04), []).append(r)
+        sem_rows = [r for b in sorted(buckets) for r in sorted(buckets[b], key=lambda x: str(x.get(date_key) or ""), reverse=True)]
+    rows.extend(sem_rows[:max(0, PER_SOURCE_LIMIT - len(rows))])
     return rows
 
 
@@ -161,14 +182,21 @@ def _like(q: str, *cols: str) -> tuple[str, list]:
 
 
 def _search_email(q: str, user_id: str, qvec: Optional[str] = None) -> list[dict[str, Any]]:
-    """tsvector over email_messages.search_tsv, then the semantic index."""
-    tsq = _build_tsquery(q)
+    """tsvector over email_messages.search_tsv (any word, ranked), then the semantic index."""
+    tsq = _build_tsquery_any(q)
     rows = _hybrid(
         source="email", table="email_messages",
         columns="email_messages.id, subject, from_name, from_email, snippet, date_received",
         visible=("email_messages.owner_user_id = ?", [user_id]),
         keyword=("email_messages.search_tsv @@ to_tsquery('simple', ?)", [tsq]) if tsq else None,
-        order="date_received DESC NULLS LAST", qvec=qvec,
+        # relevance first: more words, words in sender/subject, no newsletters; then newest
+        order=("(ts_rank(email_messages.search_tsv, to_tsquery('simple', ?::text)) "
+               " + CASE WHEN LOWER(COALESCE(subject,'') || ' ' || COALESCE(from_name,'') || ' ' "
+               "   || COALESCE(from_email,'')) ~ ?::text THEN 1.0 ELSE 0 END "
+               " - CASE WHEN COALESCE(email_messages.category,'') IN ('newsletter','spam') THEN 0.8 ELSE 0 END"
+               ") DESC, date_received DESC NULLS LAST") if tsq else "date_received DESC NULLS LAST",
+        order_params=[tsq, _words_regex(q) or "(?!)"] if tsq else None,
+        qvec=qvec, date_key="date_received",
     )
     return [{
         "source":      "email",
@@ -186,8 +214,8 @@ def _search_email(q: str, user_id: str, qvec: Optional[str] = None) -> list[dict
 # ───────────────────────── WhatsApp ─────────────────────────────────
 
 def _search_whatsapp(q: str, user_id: str, qvec: Optional[str] = None) -> list[dict[str, Any]]:
-    """tsvector over wa_messages.search_tsv, then the semantic index."""
-    tsq = _build_tsquery(q)
+    """tsvector over wa_messages.search_tsv (any word, ranked), then the semantic index."""
+    tsq = _build_tsquery_any(q)
     rows = _hybrid(
         source="whatsapp", table="wa_messages",
         columns="wa_messages.id, wa_messages.chat_jid, wa_messages.text, wa_messages.transcript, "
@@ -195,7 +223,10 @@ def _search_whatsapp(q: str, user_id: str, qvec: Optional[str] = None) -> list[d
                 "(SELECT c.name FROM wa_chats c WHERE c.jid = wa_messages.chat_jid LIMIT 1) AS chat_name",
         visible=("wa_messages.owner_user_id = ?", [user_id]),
         keyword=("wa_messages.search_tsv @@ to_tsquery('simple', ?)", [tsq]) if tsq else None,
-        order="wa_messages.timestamp DESC", qvec=qvec,
+        order=("ts_rank(wa_messages.search_tsv, to_tsquery('simple', ?::text)) DESC, wa_messages.timestamp DESC"
+               if tsq else "wa_messages.timestamp DESC"),
+        order_params=[tsq] if tsq else None,
+        qvec=qvec, date_key="timestamp",
     )
     out = []
     for r in rows:
@@ -239,13 +270,32 @@ def _search_paperless(q: str, user_id: str) -> list[dict[str, Any]]:
         from . import paperless_ingest
         from .external_users import get_user_paperless_creds
         creds = get_user_paperless_creds(user_id)
-        hits = paperless_ingest.search(q, k=PER_SOURCE_LIMIT, creds_override=creds)
+        sem = paperless_ingest.search(q, k=PER_SOURCE_LIMIT, creds_override=creds)
     except Exception:
-        return []
-    relevant = [
-        h for h in (hits or [])
-        if h.get("distance") is not None and h["distance"] <= _PAPERLESS_MAX_DISTANCE
-    ]
+        sem = []
+    sem = [h for h in (sem or [])
+           if h.get("distance") is not None and h["distance"] <= _PAPERLESS_MAX_DISTANCE]
+    # Keyword leg: Paperless' own full-text search, as the person (their
+    # token, so their permissions). Any word may match — "github" found
+    # nothing by meaning at 0.55 and the chat concluded "no GitHub
+    # payments" (chat test 2026-09-27).
+    fts: list[dict[str, Any]] = []
+    words = [w for w in re.findall(r"\w+", q) if len(w) > 2][:6]
+    if words and creds:
+        try:
+            fts = paperless_ingest.search_fts(" OR ".join(words), k=PER_SOURCE_LIMIT, creds_override=creds) or []
+        except Exception:  # noqa: BLE001
+            fts = []
+    sem_ids = [h.get("paperless_doc_id") for h in sem]
+    both = [h for h in fts if h.get("paperless_doc_id") in sem_ids]
+    relevant, seen = [], set()
+    for h in both + fts + sem:
+        did = h.get("paperless_doc_id")
+        if did in seen:
+            continue
+        seen.add(did)
+        # prefer the semantic leg's chunk as snippet (a real passage)
+        relevant.append(next((x for x in sem if x.get("paperless_doc_id") == did), h))
     return [{
         "source":      "paperless",
         "id":          h.get("paperless_doc_id"),

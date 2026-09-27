@@ -150,3 +150,48 @@ def test_mail_umlauts_repaired_on_import_and_in_store(house):
     with get_conn() as conn:
         assert conn.execute("SELECT body_text FROM email_messages WHERE id = ?", (mid,)).fetchone()["body_text"] == "können Sie"
     assert ef.repair_stored_mojibake() == 0
+
+
+def _mail_row(conn, acc, uid, n, subject, body, sender, date, category=None):
+    conn.execute("INSERT INTO email_messages (account_id, uid, subject, body_text, snippet, from_email, from_name, "
+                 "date_received, category, owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 (acc, n, subject, body, body[:100], sender, sender.split("@")[0], date, category, uid))
+
+
+def test_mail_relevance_beats_date_and_newsletters_sink(house):
+    from backend.database import get_conn
+    dirk_c, dirk = house["dirk"]
+    with get_conn() as conn:
+        acc = conn.execute("INSERT INTO email_accounts (owner_user_id, email, imap_host, imap_username, smtp_host, "
+                           "smtp_username, credential_key) VALUES (?, 'd@example.local', 'i', 'u', 's', 'u', 'k') "
+                           "RETURNING id", (dirk,)).fetchone()["id"]
+        _mail_row(conn, acc, dirk, 1, "[GitHub] Payment Receipt", "We received payment for your GitHub subscription",
+                  "noreply@github.com", "2026-06-01T10:00:00+00:00")
+        for i in range(6):
+            _mail_row(conn, acc, dirk, 10 + i, f"Daily Digest {i}", "read more on github.com/some/repo",
+                      "digest@medium.com", f"2026-09-2{i}T10:00:00+00:00", "newsletter")
+        conn.commit()
+    hits = _results(dirk_c, "github bezahlt")["email"]
+    assert hits[0]["title"] == "[GitHub] Payment Receipt"
+
+
+def test_paperless_keyword_leg_finds_what_meaning_missed(house, monkeypatch):
+    from backend import paperless_ingest, search_routes, external_users
+    dirk_c, dirk = house["dirk"]
+    monkeypatch.setattr(external_users, "get_user_paperless_creds", lambda uid: {"api_key": "k", "base_url": "http://x"})
+    monkeypatch.setattr(paperless_ingest, "search", lambda q, k, creds_override=None: [])
+    seen = {}
+
+    def fts(q, k, creds_override=None):
+        seen["q"] = q
+        return [{"paperless_doc_id": 2, "doc_title": "[GitHub] Payment Receipt for winidi", "text": "GitHub Developer Plan $4",
+                 "doc_date": "2026-06-01", "distance": None, "match_type": "fts"}]
+    monkeypatch.setattr(paperless_ingest, "search_fts", fts)
+    hits = search_routes._search_paperless("dieses github ding zahlen", dirk)
+    assert [h["title"] for h in hits] == ["[GitHub] Payment Receipt for winidi"]
+    assert seen["q"] == "dieses OR github OR ding OR zahlen"
+
+
+def test_rounded_bold_amount_is_not_checked():
+    from backend.agent.grounding import check
+    assert check("Das sind also rund **75** Euro pro Monat.", [], []).ok

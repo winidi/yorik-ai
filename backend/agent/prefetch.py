@@ -16,7 +16,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 _QUESTION = re.compile(
-    r"\?|^\s*(?:und\s+)?(?:was|wann|wo|woher|wohin|wie|wer|wem|wen|welche[rsnm]?|wieso|warum|weshalb|"
+    r"\?|(?:^|[\s,;:])(?:was|wann|wo|woher|wohin|wie|wer|wem|wen|welche[rsnm]?|wieso|warum|weshalb|"
     r"hat|hast|haben|hatte|gibt\s+es|gab\s+es|kannst\s+du\s+mir\s+sagen|weißt\s+du|zeig|such|find|"
     r"what|when|where|who|which|how|show|find|search|did|does|do)\b", re.I)
 _COMMAND = re.compile(
@@ -86,6 +86,13 @@ async def run(message: str, *, user_id: Any, role: Optional[str]) -> Optional[Di
         return None
     if not raw or not raw.get("total"):
         return None
+    # Photo search has no relevance cut-off — it always returns five
+    # pictures. Only a question about photos gets them.
+    if not re.search(r"\b(foto|fotos|bild|bilder|photo|photos|picture|video|videos|aufnahmen?)\b", message, re.I):
+        raw = {**raw, "results": {k: v for k, v in (raw.get("results") or {}).items() if k != "immich"}}
+        raw["total"] = sum(len(v) for v in raw["results"].values())
+        if not raw["total"]:
+            return None
     from backend.ui_tools import render_skill_result
     body = render_skill_result({**raw, "_llm_hint": HEADER}, skill="universal_search")
     call = {"id": CALL_ID, "type": "function", "function": {
