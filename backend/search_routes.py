@@ -68,6 +68,37 @@ def _words_regex(query: str) -> Optional[str]:
     return "|".join(words) or None
 
 
+def _rare_words_tsquery(query: str, table: str, owner_sql: str, owner_params: list,
+                        max_share: float = 0.03) -> Optional[str]:
+    """OR-tsquery of the query words that are rare in this person's rows:
+    a word in more than 3 % of them ("vorbei", "alles", "bezahlt") pulls
+    in advertising, a rare one ("github", "kobra") finds the thing.
+    Keeps at least the rarest word."""
+    words = []
+    for t in (query or "").split():
+        w = re.sub(r"[^\w\-]", "", t, flags=re.UNICODE)
+        if len(w) > 2 and w.lower() not in (x.lower() for x in words):
+            words.append(w)
+    if not words:
+        return None
+    try:
+        with get_conn() as conn:
+            total = conn.execute(f"SELECT count(*) AS n FROM {table} WHERE {owner_sql}", owner_params).fetchone()["n"] or 1
+            counts = []
+            for w in words[:8]:
+                n = conn.execute(f"SELECT count(*) AS n FROM {table} WHERE {owner_sql} "
+                                 f"AND {table}.search_tsv @@ to_tsquery('simple', ?)", (*owner_params, f"{w}:*")
+                                 ).fetchone()["n"]
+                counts.append((n, w))
+    except Exception:  # noqa: BLE001
+        return _build_tsquery_any(query)
+    present = [(n, w) for n, w in counts if n > 0]
+    if not present:
+        return None
+    rare = [w for n, w in present if n / total <= max_share] or [min(present)[1]]
+    return " | ".join(f"{w}:*" for w in rare)
+
+
 router = APIRouter(prefix="/api", tags=["search"])
 
 PER_SOURCE_LIMIT = 5
@@ -145,7 +176,7 @@ def _hybrid(*, source: str, table: str, columns: str, visible: tuple[str, list],
             except Exception as exc:  # noqa: BLE001
                 log.warning("universal-search %s keyword branch failed: %s", source, exc)
         sem_rows: list[dict[str, Any]] = []
-        if qvec and len(rows) < PER_SOURCE_LIMIT:
+        if qvec:
             from . import search_index
             limit = search_index.max_distance()
             try:
@@ -170,8 +201,14 @@ def _hybrid(*, source: str, table: str, columns: str, visible: tuple[str, list],
         for r in sem_rows:
             buckets.setdefault(round(float(r.get("_distance") or 1) / 0.04), []).append(r)
         sem_rows = [r for b in sorted(buckets) for r in sorted(buckets[b], key=lambda x: str(x.get(date_key) or ""), reverse=True)]
-    rows.extend(sem_rows[:max(0, PER_SOURCE_LIMIT - len(rows))])
-    return rows
+    # Interleave: best keyword hit, best hit by meaning, … — hits by meaning
+    # used to come only after five keyword rows and never showed.
+    merged, seen_ids = [], set()
+    for pair in zip(rows + [None] * len(sem_rows), sem_rows + [None] * len(rows)):
+        for r in pair:
+            if r is not None and int(r["id"]) not in seen_ids:
+                merged.append(r); seen_ids.add(int(r["id"]))
+    return merged[:PER_SOURCE_LIMIT]
 
 
 def _like(q: str, *cols: str) -> tuple[str, list]:
@@ -182,8 +219,8 @@ def _like(q: str, *cols: str) -> tuple[str, list]:
 
 
 def _search_email(q: str, user_id: str, qvec: Optional[str] = None) -> list[dict[str, Any]]:
-    """tsvector over email_messages.search_tsv (any word, ranked), then the semantic index."""
-    tsq = _build_tsquery_any(q)
+    """tsvector over email_messages.search_tsv (rare words, ranked), then the semantic index."""
+    tsq = _rare_words_tsquery(q, "email_messages", "email_messages.owner_user_id = ?", [user_id])
     rows = _hybrid(
         source="email", table="email_messages",
         columns="email_messages.id, subject, from_name, from_email, snippet, date_received",
@@ -214,8 +251,8 @@ def _search_email(q: str, user_id: str, qvec: Optional[str] = None) -> list[dict
 # ───────────────────────── WhatsApp ─────────────────────────────────
 
 def _search_whatsapp(q: str, user_id: str, qvec: Optional[str] = None) -> list[dict[str, Any]]:
-    """tsvector over wa_messages.search_tsv (any word, ranked), then the semantic index."""
-    tsq = _build_tsquery_any(q)
+    """tsvector over wa_messages.search_tsv (rare words, ranked), then the semantic index."""
+    tsq = _rare_words_tsquery(q, "wa_messages", "wa_messages.owner_user_id = ?", [user_id])
     rows = _hybrid(
         source="whatsapp", table="wa_messages",
         columns="wa_messages.id, wa_messages.chat_jid, wa_messages.text, wa_messages.transcript, "

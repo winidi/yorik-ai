@@ -46,6 +46,8 @@ der die das den dem des ein eine einen einem einer und oder aber auch noch nochm
 denn doch ja nee nein schon so da dann halt eben bitte gerade grad letztens neulich immer
 im in am an auf aus bei mit nach von vor zu zum zur für über um bis seit
 nicht nix kein keine is isses zeig such find weißt sagen sag mal man ne nen unserem unseren unser
+alles alle mail mails email e-mail whatsapp chat chats nachricht nachrichten papier papiere dokument dokumente
+sachen sache ding dinge zeug hallo hi dieses diese dieser geschickt geschrieben bekommen also hab
 what when where who which how is are was were the a an of to for in on at my your did does do show find
 """.split())
 
