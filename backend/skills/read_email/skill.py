@@ -32,7 +32,7 @@ async def execute(
             "SELECT id, from_email, from_name, to_addrs, cc_addrs, "
             "       subject, date_received, date_sent, "
             "       body_text, body_html, is_starred, is_unread, "
-            "       is_sent, has_attachments "
+            "       is_sent, has_attachments, thread_id "
             "FROM email_messages "
             "WHERE id = ? AND owner_user_id = ?",
             (message_id, user_id),
@@ -44,6 +44,14 @@ async def execute(
             "FROM email_attachments WHERE message_id = ?",
             (message_id,),
         ).fetchall()
+        # The whole conversation: Yorik read Oliver's answer and still
+        # said "he has not written back" (chat rerun 2026-09-27).
+        thread = conn.execute(
+            "SELECT id, message_id, from_email, from_name, date_received, is_sent, snippet "
+            "FROM email_messages WHERE owner_user_id = ? AND thread_id = ? AND COALESCE(is_draft, 0) = 0 "
+            "ORDER BY date_received, id LIMIT 50",
+            (user_id, row["thread_id"]),
+        ).fetchall() if row["thread_id"] else []
 
     d = dict(row)
     for col in ("to_addrs", "cc_addrs"):
@@ -58,7 +66,25 @@ async def execute(
         d.pop("body_html", None)
 
     d["attachments"] = [dict(a) for a in atts]
+    d.pop("thread_id", None)
+    from backend.search_routes import _local       # household time with offset, not UTC
+    conversation, seen = [], set()
+    for t in thread:
+        key = t["message_id"] or f"id:{t['id']}"
+        if key in seen:                      # the same mail in two folders
+            continue
+        seen.add(key)
+        conversation.append({"message_id": t["id"],
+                             "who": "Du" if t["is_sent"] else (t["from_name"] or t["from_email"]),
+                             "date": _local(t["date_received"]), "first_line": (t["snippet"] or "")[:120],
+                             **({"this_mail": True} if t["id"] == message_id else {})})
+    out: dict[str, Any] = {"message": d, "_full_output": True}
+    if len(conversation) > 1:
+        out["conversation"] = conversation
+        # Wording approved by Dirk 2026-09-28.
+        out["_llm_hint"] = ("conversation is this mail's whole thread, oldest first — say who wrote last "
+                            "and when before you say anyone has not answered.")
     # _full_output tells the invoke_skill wrapper in ui_tools.py to
     # skip its default 800-char cap on the LLM-facing preview; the
     # whole point of this skill is to surface the full body.
-    return {"message": d, "_full_output": True}
+    return out

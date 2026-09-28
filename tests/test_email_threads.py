@@ -83,3 +83,29 @@ def test_thread_endpoint_lists_the_conversation_for_its_owner_only(fresh_app):
     got = client.get("/api/email/thread", params={"thread_id": "o1@x"}).json()["messages"]
     assert [(m["snippet"], m["is_sent"]) for m in got] == [("text 0", False), ("text 1", True), ("text 3", False)]
     assert other_c.get("/api/email/thread", params={"thread_id": "o1@x"}).json()["messages"] == []
+
+
+def test_read_email_brings_the_conversation(fresh_app):
+    """Yorik read Oliver's answer and still said "no answer" (2026-09-27)."""
+    import asyncio
+    from backend.database import get_conn
+    from backend.skills.read_email.skill import execute
+    from backend.skills.registry import Registry, SkillContext
+    uid = seed_user(name="Dirk", role="admin", email="d@example.com")
+    with get_conn() as conn:
+        acc = conn.execute("INSERT INTO email_accounts (owner_user_id, email, imap_host, imap_username, smtp_host, "
+                           "smtp_username, credential_key) VALUES (?, 'd@example.local', 'i', 'u', 's', 'u', 'k') "
+                           "RETURNING id", (uid,)).fetchone()["id"]
+        ids = [conn.execute("INSERT INTO email_messages (account_id, uid, owner_user_id, message_id, thread_id, from_email, "
+                            "from_name, subject, body_text, snippet, date_received, is_sent) VALUES (?, ?, ?, ?, 'o1@x', "
+                            "'o@example.org', 'Oliver', 's', 'b', ?, ?, ?) RETURNING id",
+                            (acc, n, uid, mid, snip, when, sent)).fetchone()["id"]
+               for n, (mid, snip, when, sent) in enumerate((("o1@x", "first", "2026-09-20T00:54:00+00:00", 0),
+                                                            ("q@x", "question", "2026-09-21T14:22:00+00:00", 1),
+                                                            ("o2@x", "answer", "2026-09-21T22:00:04+00:00", 0)))]
+        conn.commit()
+    out = asyncio.run(execute(SkillContext(Registry(), role="admin", user_id=uid), ids[1]))
+    conv = out["conversation"]
+    assert [(c["who"], c["first_line"]) for c in conv] == [("Oliver", "first"), ("Du", "question"), ("Oliver", "answer")]
+    assert conv[1].get("this_mail") and conv[2]["date"].startswith("2026-09-22T00:00")    # local time, not UTC
+    assert "say who wrote last" in out["_llm_hint"]
