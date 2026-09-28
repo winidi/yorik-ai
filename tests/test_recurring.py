@@ -43,3 +43,22 @@ def test_payee_key():
     from backend.recurring import payee_key
     assert payee_key("VISA HETZNER ONLINE GMBH   ") == "HETZNER ONLINE GMBH"
     assert payee_key("SEPA Vodafone GmbH 1234567") == "VODAFONE GMBH"
+
+
+def test_the_skill_says_since_when(fresh_app):
+    import asyncio
+    from backend.skills.recurring_payments.skill import execute
+    from backend.skills.registry import Registry, SkillContext
+    uid = seed_user(name="Beate", role="member", email="b@example.com")
+    out = asyncio.run(execute(SkillContext(Registry(), role="member", user_id=uid)))
+    assert out["recurring"] == [] and "no bank bookings for this person" in out["_llm_hint"]
+
+
+def test_new_descriptions_fit_in_95_characters():
+    """The description is shown on every turn (Dirk 2026-09-28: max 95)."""
+    import re
+    from pathlib import Path
+    for name in ("payments_to", "recurring_payments"):
+        text = Path(f"backend/skills/{name}/skill.md").read_text()
+        desc = re.search(r"^description: (.*)$", text, re.M).group(1).strip().strip('"')
+        assert len(desc) <= 95, (name, len(desc))

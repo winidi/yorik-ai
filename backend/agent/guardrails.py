@@ -72,7 +72,7 @@ IDEMPOTENT_TOOL_NAMES: frozenset[str] = frozenset({
 READ_ONLY_SKILLS: frozenset[str] = frozenset({
     "check_calendar", "check_tasks", "search_documents", "read_document",
     "read_document_vision", "universal_search", "show_transactions",
-    "spending_summary", "payments_to", "list_bank_accounts", "find_person", "find_contact",
+    "spending_summary", "payments_to", "recurring_payments", "list_bank_accounts", "find_person", "find_contact",
     "find_user", "find_email_by_subject", "read_email", "find_event_by_title",
     "find_task_by_title", "list_subtasks", "email_briefing", "whatsapp_briefing",
     "find_photo", "calculate_travel_time", "find_known_provider",

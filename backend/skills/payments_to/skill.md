@@ -1,6 +1,6 @@
 ---
 name: payments_to
-description: Everything paid to one payee ("Was hab ich für X bezahlt?", "Ist die Rechnung von X bezahlt?", "Welche Rechnungen sind offen?") — bank bookings and receipts matched into single payments, totals computed by the app.
+description: Everything paid to one payee, or all unpaid bills — bank and receipts matched, totals computed.
 when_to_use: |
   - "Was hab ich für Claude bezahlt?", "Was kostet uns netcup?", "Ist die Rechnung von Riverty bezahlt?"
   - "Welche Rechnungen von X sind noch offen?"
