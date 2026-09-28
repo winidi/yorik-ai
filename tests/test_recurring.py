@@ -62,3 +62,11 @@ def test_new_descriptions_fit_in_95_characters():
         text = Path(f"backend/skills/{name}/skill.md").read_text()
         desc = re.search(r"^description: (.*)$", text, re.M).group(1).strip().strip('"')
         assert len(desc) <= 95, (name, len(desc))
+
+
+def test_every_list_skill_has_room_for_its_list():
+    """Cut at the default 1500 characters, 'narrow the request' sent the
+    model into a loop of ever shorter periods (2026-09-28)."""
+    from backend.ui_tools import SKILL_MAX_CHARS
+    for name in ("payments_to", "recurring_payments", "show_transactions", "universal_search"):
+        assert SKILL_MAX_CHARS[name] >= 6000
