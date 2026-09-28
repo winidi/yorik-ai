@@ -249,13 +249,40 @@ def test_paperless_documents_are_in_the_shared_index_and_seen_as_the_person(hous
     seen = []
     def get(url, params=None, **kw):
         seen.append(kw["headers"]["Authorization"])
+        if "fields=id" in url:                                   # what she may see
+            return _Resp([{"id": 1}])
         ids = [int(i) for i in (params or {}).get("id__in", "").split(",") if i]
         return _Resp([{"id": i, "title": f"doc {i}", "tags": []} for i in ids if i != 2])   # 2 is not hers
     monkeypatch.setattr(PI.requests, "get", get)
+    PI._VISIBLE.clear()
     hits = PI.search("was kostet der server", k=5, creds_override={"base_url": "http://p", "api_key": "beate"})
-    assert [h["paperless_doc_id"] for h in hits][0] == 1
-    assert 2 not in [h["paperless_doc_id"] for h in hits]
-    assert seen == ["Token beate"]
+    assert [h["paperless_doc_id"] for h in hits] == [1]
+    assert set(seen) == {"Token beate"}
+
+
+def test_a_member_finds_her_one_document_among_many_of_the_admin(house, monkeypatch):
+    """Ranking the household first and filtering afterwards lost a
+    member's document once the admin's filled the top (2026-09-28)."""
+    from backend import paperless_ingest as PI, search_index
+    from backend.database import get_conn
+    with get_conn() as conn:
+        for i in range(1, 41):                                    # forty server invoices of the admin
+            conn.execute("INSERT INTO docs.paperless_documents (id, title, content) VALUES (?, ?, ?)",
+                         (i, f"Server invoice {i}", "server invoice hosting"))
+        conn.execute("INSERT INTO docs.paperless_documents (id, title, content) VALUES "
+                     "(99, 'Mein Vertrag', 'server Vertrag von Beate')")
+        conn.commit()
+    search_index.sweep()
+
+    def get(url, params=None, **kw):
+        if "fields=id" in url:
+            return _Resp([{"id": 99}])                            # hers only
+        ids = [int(i) for i in (params or {}).get("id__in", "").split(",") if i]
+        return _Resp([{"id": i, "title": f"doc {i}", "tags": []} for i in ids if i == 99])
+    monkeypatch.setattr(PI.requests, "get", get)
+    PI._VISIBLE.clear()
+    hits = PI.search("server", k=5, creds_override={"base_url": "http://p", "api_key": "beate2"})
+    assert [h["paperless_doc_id"] for h in hits] == [99]
 
 
 class _Resp:

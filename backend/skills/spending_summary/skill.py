@@ -17,13 +17,15 @@ async def execute(ctx, days: int = 30, account_id: Optional[int] = None,
     from backend.database import get_conn
 
     days = max(1, min(int(days or 30), 365))
-    from backend.skills.show_transactions.skill import _window
+    from backend.skills.show_transactions.skill import _window, ROUNDUP_SQL
     since, until = _window(days, from_date, to_date)
 
     frag, params = spaces.row_filter(user_id, getattr(ctx, "role", None), "bank_accounts",
                                      table_alias="a")
     q = (
-        "SELECT COALESCE(t.category, 'unkategorisiert') AS category, "
+        # Round-ups go to savings, not to the shop's category (2026-09-28)
+        f"SELECT CASE WHEN {ROUNDUP_SQL} THEN 'Sparen (Aufrundungen)' "
+        "            ELSE COALESCE(t.category, 'unkategorisiert') END AS category, "
         "       SUM(t.amount) AS total, COUNT(*) AS n "
         "FROM bank_transactions t JOIN bank_accounts a ON a.id = t.account_id "
         f"WHERE {frag} AND t.booking_date >= ?"
@@ -35,7 +37,7 @@ async def execute(ctx, days: int = 30, account_id: Optional[int] = None,
     if account_id is not None:
         q += " AND t.account_id = ?"
         params.append(account_id)
-    q += " GROUP BY category ORDER BY total ASC"
+    q += " GROUP BY 1 ORDER BY total ASC"
 
     with get_conn() as conn:
         rows = conn.execute(q, params).fetchall()

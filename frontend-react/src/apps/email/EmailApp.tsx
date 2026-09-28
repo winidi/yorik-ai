@@ -2526,7 +2526,7 @@ function ThreadStrip({ threadId, currentId, onOpen }: {
   return (
     <div className="mt-3 rounded-md border border-border overflow-hidden">
       <div className="px-3 py-1.5 text-2xs font-semibold text-muted-foreground bg-muted/30">
-        Verlauf · {items.length}
+        Conversation · {items.length}
       </div>
       <div className="divide-y divide-border max-h-48 overflow-y-auto">
         {items.map(it => (
@@ -2540,7 +2540,7 @@ function ThreadStrip({ threadId, currentId, onOpen }: {
             )}
           >
             <span className={cn("shrink-0 w-32 truncate", it.is_unread && it.id !== currentId ? "font-semibold" : "font-medium")}>
-              {it.is_sent ? "Du" : (it.from_name || it.from_email)}
+              {it.is_sent ? "You" : (it.from_name || it.from_email)}
             </span>
             <span className="flex-1 min-w-0 truncate text-muted-foreground">{it.snippet}</span>
             <span className="shrink-0 text-muted-foreground tabular-nums">{formatWhen(it.date_received)}</span>

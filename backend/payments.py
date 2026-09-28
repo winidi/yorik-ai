@@ -354,7 +354,10 @@ def match(bookings: List[Dict[str, Any]], receipts: List[Dict[str, Any]],
                              "status": "paid_bank", "what": r.get("payee") or hit.get("counterparty") or "",
                              "sources": [receipt_src, _bank_src(hit)]})
         else:
-            before = bool(records_start and r.get("bill_date") and r["bill_date"] < records_start)
+            # No bank records at all (a member without an account in Yorik)
+            # is the same as a receipt older than them: paid or open cannot
+            # be checked, so "open" is never said (2026-09-28).
+            before = records_start is None or bool(r.get("bill_date") and r["bill_date"] < records_start)
             if before:
                 status = "paid_before_records" if r.get("paid") is True else "unclear"
             else:
@@ -374,10 +377,10 @@ def _bank_src(b: Dict[str, Any]) -> Dict[str, Any]:
             "booking_date": b["booking_date"][:10], "account": b.get("account_name") or ""}
 
 
-STATUS_TEXT = {"paid_bank": "bezahlt, auf dem Konto", "paid_elsewhere": "bezahlt, nicht über dieses Konto",
-               "paid_before_records": "bezahlt laut Beleg, vor Beginn der Kontodaten",
-               "open": "offen laut Beleg, keine Zahlung gefunden", "unclear": "Beleg, Zahlung nicht gefunden",
-               "bank_only": "Kontobuchung ohne Beleg"}
+STATUS_TEXT = {"paid_bank": "paid, booked on the account", "paid_elsewhere": "paid, not over these accounts",
+               "paid_before_records": "paid per receipt; the bank records here do not cover it",
+               "open": "open per receipt, no payment found", "unclear": "receipt without a matching payment",
+               "bank_only": "booking without a receipt"}
 
 
 def totals(payments: List[Dict[str, Any]]) -> Dict[str, Any]:

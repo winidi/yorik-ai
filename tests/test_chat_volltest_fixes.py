@@ -312,6 +312,13 @@ class TestFinanceFilters:
         assert out["transactions"] == []
         assert "Categories that exist: Lebensmittel, Sonstiges, Verträge & Abos." in out["_llm_hint"]
 
+    def test_round_ups_are_savings_in_the_summary(self, person, account):
+        """Round-ups sat in the shop's category (Lebensmittel, Sonstiges)."""
+        from backend.skills.spending_summary.skill import execute
+        out = asyncio.run(execute(ctx=_mk_ctx(role="admin", user_id=person), days=30))
+        cats = {c["category"]: round(float(c["total"]), 2) for c in out["by_category"]}
+        assert cats["Sparen (Aufrundungen)"] == -0.51 and cats["Sonstiges"] == -2550.0
+
     def test_date_range_wins_over_days(self, person, account):
         from datetime import date, timedelta
         from backend.skills.spending_summary.skill import execute

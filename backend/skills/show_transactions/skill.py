@@ -81,13 +81,27 @@ async def execute(ctx, days: int = 30, account_id: Optional[int] = None,
                          f"quote them, don't add up rows yourself."}
 
 
-_ROUNDUP_PURPOSE = re.compile(r"\bAus Kauf\s*[\d.,]+\.?\s*bei", re.I)
+# Round-ups to savings, whatever the bank calls them: ING "Kleingeld
+# Plus" ("Aus Kauf 74,49. bei HETZNER"), "Round-up", "Aufrunden",
+# "Spare change". They carry the shop's name but are no payment to it.
+_ROUNDUP_NAME = re.compile(r"kleingeld|round[- ]?ups?\b|aufrund|spare ?change|sparschwein", re.I)
+_ROUNDUP_PURPOSE = re.compile(r"\bAus Kauf\s*[\d.,]+\.?\s*bei|round[- ]?up|aufrund", re.I)
+
+
+# The same rule for sums in SQL (spending_summary).
+ROUNDUP_SQL = ("(COALESCE(t.counterparty, '') ~* 'kleingeld|round[- ]?ups?\\y|aufrund|spare ?change|sparschwein' "
+               "OR (ABS(t.amount) < 1 AND COALESCE(t.purpose, '') ~* 'Aus Kauf\\s*[0-9.,]+\\.?\\s*bei|round[- ]?up|aufrund'))")
 
 
 def is_roundup(t: dict) -> bool:
-    """A round-up savings transfer: ING's "Kleingeld Plus" names the
-    purchase in its purpose ("Aus Kauf 74,49. bei HETZNER …")."""
-    return "kleingeld" in (t.get("counterparty") or "").lower() or bool(_ROUNDUP_PURPOSE.search(t.get("purpose") or ""))
+    """A round-up savings transfer: named so, or a sub-euro booking whose
+    purpose names the purchase it rounds up."""
+    who, purpose = t.get("counterparty") or "", t.get("purpose") or ""
+    try:
+        small = abs(float(t.get("amount") or 0)) < 1.0
+    except (TypeError, ValueError):
+        small = False
+    return bool(_ROUNDUP_NAME.search(who)) or (small and bool(_ROUNDUP_PURPOSE.search(purpose)))
 
 
 def _window(days: int, from_date: Optional[str], to_date: Optional[str]) -> tuple[str, Optional[str]]:

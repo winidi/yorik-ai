@@ -157,6 +157,40 @@ def _list_all_ids() -> List[int]:
     return ids
 
 
+_VISIBLE: Dict[str, Tuple[float, List[int]]] = {}
+VISIBLE_TTL_S = 60
+
+
+def visible_ids(creds: Dict[str, Any]) -> Optional[List[int]]:
+    """The documents this person may see, as Paperless says with their
+    own token; kept a minute. None when Paperless cannot be asked. The
+    search ranks only among these: ranking the household's documents
+    first and dropping the others afterwards left a member with few
+    documents empty-handed once the admin's many filled the top
+    (2026-09-28)."""
+    import hashlib
+    import time
+    key = hashlib.sha1(str(creds.get("api_key") or "").encode()).hexdigest()
+    hit = _VISIBLE.get(key)
+    if hit and time.monotonic() - hit[0] < VISIBLE_TTL_S:
+        return hit[1]
+    headers = {"Authorization": f"Token {creds['api_key']}", "Accept": "application/json"}
+    ids: List[int] = []
+    next_url: Optional[str] = f"{creds['base_url']}/api/documents/?page_size=1000&fields=id&ordering=id"
+    try:
+        while next_url:
+            r = requests.get(next_url, headers=headers, timeout=PAPERLESS_TIMEOUT)
+            r.raise_for_status()
+            data = r.json() or {}
+            ids.extend(int(d["id"]) for d in (data.get("results") or []))
+            next_url = data.get("next")
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        log.warning("paperless: visible ids failed: %s", exc)
+        return None
+    _VISIBLE[key] = (time.monotonic(), ids)
+    return ids
+
+
 _NAMES: Dict[Tuple[str, int], str] = {}
 
 
@@ -557,7 +591,10 @@ def search(query: str, k: int = 8,
     """
     if not query or not query.strip():
         return []
-    shared = _search_shared_index(query, k)
+    only = visible_ids(creds_override) if creds_override and creds_override.get("api_key") else None
+    if only == []:
+        return []
+    shared = _search_shared_index(query, k, only=only)
     if shared is not None:
         return _hydrate(shared, creds_override) if shared else []
     try:
@@ -619,7 +656,7 @@ def search(query: str, k: int = 8,
     return _hydrate(rows, creds_override)
 
 
-def _search_shared_index(query: str, k: int) -> Optional[List[Dict[str, Any]]]:
+def _search_shared_index(query: str, k: int, only: Optional[List[int]] = None) -> Optional[List[Dict[str, Any]]]:
     """The documents' chunks in the shared search index (search_chunks,
     the multilingual embedder), shaped like the old rows. None when that
     index is off or holds no document yet — the caller then uses the old
@@ -644,8 +681,9 @@ def _search_shared_index(query: str, k: int) -> Optional[List[Dict[str, Any]]]:
             "SELECT sc.id, sc.row_id AS paperless_doc_id, sc.chunk_no AS chunk_index, sc.text, "
             "       (sc.embedding <=> ?::vector) AS distance "
             "FROM search_chunks sc WHERE sc.source = 'paperless' AND sc.embedding IS NOT NULL "
-            "ORDER BY sc.embedding <=> ?::vector LIMIT ?",
-            (qvec, qvec, int(k) * 3),
+            + ("AND sc.row_id = ANY(?) " if only is not None else "")
+            + "ORDER BY sc.embedding <=> ?::vector LIMIT ?",
+            (qvec, *([only] if only is not None else []), qvec, int(k) * 3),
         ).fetchall()
     best: Dict[int, Dict[str, Any]] = {}
     for r in rows:                       # the best chunk of each document

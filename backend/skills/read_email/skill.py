@@ -78,7 +78,7 @@ async def execute(
             continue
         seen.add(key)
         conversation.append({"message_id": t["id"],
-                             "who": "Du" if t["is_sent"] else (t["from_name"] or t["from_email"]),
+                             "who": "you" if t["is_sent"] else (t["from_name"] or t["from_email"]),
                              "date": _local(t["date_received"]), "first_line": (t["snippet"] or "")[:120],
                              **({"this_mail": True} if t["id"] == message_id else {})})
     out: dict[str, Any] = {"message": d, "_full_output": True}

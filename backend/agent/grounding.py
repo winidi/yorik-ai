@@ -534,9 +534,15 @@ _WD_DE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", 
 _MONTHS = {m: i for i, m in enumerate(
     ["januar", "februar", "märz", "april", "mai", "juni", "juli", "august", "september",
      "oktober", "november", "dezember"], 1)}
-_WD_NAMES = r"Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag|Mo|Di|Mi|Do|Fr|Sa|So"
-_DATE_PART = (r"(?P<day>\d{1,2})\.\s*(?:(?P<mname>Januar|Februar|März|April|Mai|Juni|Juli|August|September|"
-              r"Oktober|November|Dezember)|(?P<mnum>\d{1,2})\.)(?:\s*(?P<year>\d{4}))?")
+_WD_EN = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+_MONTHS.update({m: i for i, m in enumerate(
+    ["january", "february", "march", "april", "may", "june", "july", "august", "september",
+     "october", "november", "december"], 1)})
+_WD_NAMES = (r"Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag|Mo|Di|Mi|Do|Fr|Sa|So"
+             r"|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun")
+_DATE_PART = (r"(?P<day>\d{1,2})(?:\.|st|nd|rd|th)?\s*(?:(?P<mname>Januar|Februar|März|April|Mai|Juni|Juli|August|"
+              r"September|Oktober|November|Dezember|January|February|March|May|June|July|October|December)"
+              r"|(?P<mnum>\d{1,2})\.)(?:\s*(?P<year>\d{4}))?")
 # "Samstag, 10. Oktober", "Sa, 10.10." — and the weekday after the date,
 # "22. September (Sa)" (2026-09-28: 22.09. was a Tuesday)
 _WD_DATE = re.compile(r"\b(?P<wd>" + _WD_NAMES + r")\b\.?(?P<mid>,?\s+(?:de[nrm]\s+)?)" + _DATE_PART, re.I)
@@ -561,10 +567,11 @@ def fix_weekdays(text: str, today=None) -> str:
                 d = min(options, key=lambda x: abs((x - today).days))
         except (ValueError, KeyError):
             return m.group(0)
-        right = _WD_DE[d.weekday()]
         wd = m.group("wd")
-        if len(wd) == 2:
-            right = right[:2]                  # "Sa" stays an abbreviation
+        english = wd.lower() in [w.lower() for w in _WD_EN] or wd.lower() in [w[:3].lower() for w in _WD_EN]
+        right = (_WD_EN if english else _WD_DE)[d.weekday()]
+        if len(wd) <= 3 and not wd.lower() == right.lower():
+            right = right[:len(wd)]            # "Sa" / "Sat" stays an abbreviation
         if wd.lower() == right.lower():
             return m.group(0)
         start = m.start("wd") - m.start()

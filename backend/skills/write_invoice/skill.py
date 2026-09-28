@@ -7,6 +7,11 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 
+# The small-business rule by the letterhead's country; elsewhere the
+# question names none (2026-09-28: Yorik is for households anywhere).
+SMALL_BUSINESS_RULE = {"DE": "§ 19 UStG", "AT": "§ 6 Abs. 1 Z 27 UStG"}
+
+
 async def execute(ctx, kind: str, customer: str, lines: List[Dict[str, Any]], subject: Optional[str] = None,
                   intro: Optional[str] = None, service_from: Optional[str] = None, service_to: Optional[str] = None,
                   document_id: Optional[int] = None, small_business: Optional[bool] = None) -> Dict[str, Any]:
@@ -53,8 +58,10 @@ async def execute(ctx, kind: str, customer: str, lines: List[Dict[str, Any]], su
     n_lines = len(doc["content"].get("lines") or [])
     # The breakdown stands on the card, computed here (2026-09-28).
     vat_rate = " / ".join(rates)
+    rule = SMALL_BUSINESS_RULE.get((data.get("country") or "DE").upper(), "")
     preview = (f"{n_lines} Positionen · netto {net} + {vat_rate} MwSt {vat} = {total}" if vat_charged
-               else f"{n_lines} Positionen · {total}" + (" (ohne MwSt, § 19 UStG)" if data["small_business"] else ""))
+               else f"{n_lines} Positionen · {total}" + (f" (ohne MwSt{', ' + rule if rule else ''})"
+                                                         if data["small_business"] else ""))
     from backend.ui_tools import _append
     _append({"type": "writing_draft_created", "document_id": doc["id"], "kind": kind, "recipient": doc["recipient"].get("name") or "",
              "subject": doc["title"] or label, "preview": preview, "missing": missing})
@@ -66,7 +73,7 @@ async def execute(ctx, kind: str, customer: str, lines: List[Dict[str, Any]], su
                          + "No number has been taken; the user finalises it in the app. Answer in one short sentence in the user's language. "
                          # both sentences approved by Dirk 2026-09-28
                          + ("Name net, VAT and total in one sentence when VAT is charged. " if vat_charged else "")
-                         + ("Ask once whether they charge VAT or are a small business (§ 19 UStG, no VAT); "
+                         + (f"Ask once whether they charge VAT or are a small business ({rule + ', ' if rule else ''}no VAT); "
                             "pass the answer as small_business on the next call. " if ask_vat else "")
                          + f"For changes call write_invoice again with document_id={doc['id']} and the complete list of lines.")}
     if ask_vat:

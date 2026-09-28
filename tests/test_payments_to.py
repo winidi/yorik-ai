@@ -196,3 +196,13 @@ def test_without_payee_only_the_unsettled_bills(house):
     out = asyncio.run(execute(_ctx(house["uid"])))
     assert [(p["amount"], p["status"]) for p in out["payments"]] == [("-50,00 €", "open")]
     assert out["totals"]["open"] == "50,00 €" and out["bills_checked"] == 3
+
+
+def test_without_any_bank_account_nothing_is_called_open():
+    """Beate has no bank account in Yorik: her bill is unclear, not open."""
+    from backend.payments import match
+    bill = {"source": "email", "title": "Rechnung", "link": "/m/1", "amount_cents": 2299, "currency": "EUR",
+            "bill_date": "2026-09-10", "paid": False, "payee": "Buhl"}
+    paid = {**bill, "amount_cents": 1000, "paid": True}
+    got = {p["amount_cents"]: p["status"] for p in match([], [bill, paid], records_start=None)}
+    assert got == {-2299: "unclear", -1000: "paid_before_records"}
