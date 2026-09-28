@@ -414,6 +414,11 @@ def check(answer: str, messages: List[Dict[str, Any]], raws: Optional[List[Tuple
             return True
 
         ok = bool(parts) and any(in_order(h) for h in norm_items)
+        if not ok:
+            # "DE32 5001 0517 …" for "DE32500105175422716331": grouping is no
+            # change of words (2026-09-28) — compared without spaces
+            flat = re.sub(r"\s", "", _norm_text(q))
+            ok = len(flat) >= 8 and any(flat in re.sub(r"\s", "", h) for h in norm_items)
         if ok:
             add_source(_find_source(raws, lambda t: in_order(_norm_text(t))))
             continue

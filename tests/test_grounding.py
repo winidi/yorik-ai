@@ -279,3 +279,10 @@ def test_weekday_abbreviations_and_weekday_after_the_date():
     assert fix_weekdays("am 22. September (Sa)", today) == "am 22. September (Di)"
     assert fix_weekdays("So, 10.10.", today) == "Sa, 10.10."
     assert fix_weekdays("So ist das 10.10.", today) == "So ist das 10.10."
+
+
+def test_an_iban_quoted_in_groups_is_the_same_iban():
+    from backend.agent.grounding import check
+    chat = [{"role": "tool", "content": json.dumps({"snippet": "DE32500105175422716331"})}]
+    assert check("> DE32 5001 0517 5422 7163 31", chat).ok
+    assert not check("> DE32 5001 0517 5422 7163 32", chat).ok
