@@ -315,6 +315,9 @@ def _search_whatsapp(q: str, user_id: str, qvec: Optional[str] = None) -> list[d
             "subtitle":    r["push_name"] or "",
             # who wrote it: "DE85 … von Mama" was the person's own message
             "who":         "you" if r.get("from_me") else (r["push_name"] or chat),
+            # checked here, so the model does not guess ("nur 20 Zeichen" for a
+            # correct 22-character IBAN, 2026-09-28)
+            **({"iban_check": "valid IBAN, check digits correct"} if r.get("iban_ok") else {}),
             "snippet":     text[:200],
             "timestamp":   _local(r["timestamp"]),
             "navigate_to": f"/r/whatsapp?chat={r['chat_jid']}",
@@ -350,7 +353,7 @@ def _wa_values(q: str, user_id: str) -> list[dict[str, Any]]:
             f"       WHERE m.owner_user_id = ? AND m.text ~ ? {('AND (' + who + ')') if names else ''}) k "
             "ORDER BY k.iban, k.timestamp ASC",
             (_IBAN_SQL, params[0], _IBAN_SQL, *params[1:])).fetchall()
-    real = [dict(r) for r in rows if _iban_ok(r["text"] or "")]      # a link's code is no IBAN
+    real = [{**dict(r), "iban_ok": True} for r in rows if _iban_ok(r["text"] or "")]   # a link's code is no IBAN
     return sorted(real, key=lambda r: r["timestamp"] or 0)[:PER_SOURCE_LIMIT]
 
 

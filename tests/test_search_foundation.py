@@ -406,6 +406,7 @@ def test_a_question_for_an_account_number_gets_every_iban_of_the_chat(house):
     hits = _results(dirk_c, "mama kontonummer")["whatsapp"]
     assert [(h["snippet"], h["who"]) for h in hits[:2]] == [("DE32500105175422716331", "Mama"),
                                                             ("DE85500105175438012374", "you")]
+    assert hits[0]["iban_check"] == "valid IBAN, check digits correct"
     from backend.search_routes import _wa_values
     assert [r["text"] for r in _wa_values("mama kontonummer", dirk)] == ["DE32500105175422716331",
                                                                           "DE85500105175438012374"]
