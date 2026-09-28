@@ -190,6 +190,7 @@ def test_vat_is_named_and_asked_once_then_kept(shop):
     first = asyncio.run(execute(ctx, kind="invoice", customer="Nachbar Schmidt", lines=lawn))
     sp = lambda v: v.replace("\xa0", " ")                 # the app writes a non-breaking space
     assert (sp(first["net"]), sp(first["vat"]), sp(first["total"])) == ("45,00 €", "8,55 €", "53,55 €")
+    assert first["vat_rate"] == "19 %"
     assert first["vat_question"] and "Ask once whether they charge VAT" in first["_llm_hint"]
     assert "Name net, VAT and total" in first["_llm_hint"]
     # the answer: small business → no VAT from now on, not asked again

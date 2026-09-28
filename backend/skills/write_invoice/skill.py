@@ -44,19 +44,23 @@ async def execute(ctx, kind: str, customer: str, lines: List[Dict[str, Any]], su
     missing = inv.missing(kind, data, doc["recipient"], doc["content"])
     calc = inv.compute(doc["content"].get("lines"), small_business=data["small_business"],
                        default_vat=doc["content"].get("vat_percent", "19"))["totals"]
+    # "8,55 % MwSt" when only the amount was given (2026-09-28): the rate too
+    rates = sorted({f"{r['rate']:g} %".replace(".", ",") for r in calc.get("vat_rows") or [] if r["vat"]})
     money = lambda v: inv.money(v, data["country"])
     total, net, vat = money(calc["gross"]), money(calc["net"]), money(calc["vat"])
     vat_charged = bool(calc["vat"])
     label = "Rechnung" if kind == "invoice" else "Angebot"
     n_lines = len(doc["content"].get("lines") or [])
     # The breakdown stands on the card, computed here (2026-09-28).
-    preview = (f"{n_lines} Positionen · netto {net} + MwSt {vat} = {total}" if vat_charged
+    vat_rate = " / ".join(rates)
+    preview = (f"{n_lines} Positionen · netto {net} + {vat_rate} MwSt {vat} = {total}" if vat_charged
                else f"{n_lines} Positionen · {total}" + (" (ohne MwSt, § 19 UStG)" if data["small_business"] else ""))
     from backend.ui_tools import _append
     _append({"type": "writing_draft_created", "document_id": doc["id"], "kind": kind, "recipient": doc["recipient"].get("name") or "",
              "subject": doc["title"] or label, "preview": preview, "missing": missing})
     ask_vat = not data.get("vat_confirmed")
-    out = {"document_id": doc["id"], "net": net, "vat": vat, "total": total, "missing": missing,
+    out = {"document_id": doc["id"], "net": net, "vat": vat, **({"vat_rate": vat_rate} if vat_charged else {}),
+           "total": total, "missing": missing,
            "_llm_hint": (f"shown_to_user: the draft {label} (document_id={doc['id']}, total {total}, computed by the app) is on a card the user can open. "
                          + (f"Still marked as missing on the sheet: {', '.join(missing)}; mention it in half a sentence, do not ask for it. " if missing else "")
                          + "No number has been taken; the user finalises it in the app. Answer in one short sentence in the user's language. "
