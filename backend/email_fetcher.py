@@ -1008,6 +1008,10 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
     # (auto-file) vs Tier 2 (suggested, awaiting user click).
     doc_attachment_candidates: list[tuple[int, dict]] = []
     with get_conn() as conn:
+        # The thread of the mail it answers, when we have that (email_threads).
+        from . import email_threads
+        thread_id = email_threads.thread_for(conn, cfg["owner_user_id"], message_id, in_reply_to,
+                                             references_list) or thread_id
         # Tombstone gate: if the user already deleted this message,
         # skip the insert under any folder the tombstone is scoped to.
         # See migrations 043 (the table) + 044 (suppress_folder_id).
@@ -1122,6 +1126,7 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
                      existing_id),
                 )
                 msg_id = existing_id
+                email_threads.adopt_answers(conn, cfg["owner_user_id"], message_id, thread_id)
                 log.debug("dedup: updated existing email_messages row id=%s for message_id=%s",
                           existing_id, (message_id or "")[:60])
                 # A placeholder that now has its server copy: its
@@ -1146,6 +1151,7 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
                      list_unsubscribe, list_unsubscribe_post),
                 )
                 msg_id = cur.lastrowid
+                email_threads.adopt_answers(conn, cfg["owner_user_id"], message_id, thread_id)
             inserted_id = msg_id
             # Attachment metadata only — actual binary lazy-fetched on
             # demand later. Saves disk for the 90% of attachments

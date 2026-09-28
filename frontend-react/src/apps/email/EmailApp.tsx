@@ -885,6 +885,7 @@ export function EmailApp() {
           <Reader
             messageRow={selected}
             accounts={accounts}
+            onOpenMessage={(id) => setSelectedId(id)}
             onReply={(draft) => setComposer(draft)}
             onRefresh={() => { listApi.refetch(); accountsApi.refetch(); }}
             onActionDone={(closeMessage) => {
@@ -2115,10 +2116,12 @@ function AttachmentPreviewModal({
 
 
 function Reader({
-  messageRow, accounts, onReply, onRefresh, onActionDone, onBack,
+  messageRow, accounts, onReply, onRefresh, onActionDone, onBack, onOpenMessage,
 }: {
   messageRow: EmailMessageRow;
   accounts: EmailAccount[];
+  /** Open another mail of the same conversation (thread strip). */
+  onOpenMessage?: (id: number) => void;
   onReply: (draft: ComposeDraft) => void;
   onRefresh: () => void;
   onActionDone: (closeMessage: boolean) => void;
@@ -2353,6 +2356,9 @@ function Reader({
         {m.category === "appointment" && (
           <AppointmentBanner messageId={m.id} />
         )}
+        {m.thread_id && onOpenMessage && (
+          <ThreadStrip threadId={m.thread_id} currentId={m.id} onOpen={onOpenMessage} />
+        )}
       </div>
 
       {/* Body region: flex-1 + min-h-0 so it can shrink AND grow inside
@@ -2501,6 +2507,49 @@ const EMAIL_TONE_TINT_DEFAULT = {
   idle:   "bg-muted/60 text-foreground/85 hover:bg-muted",
   active: "bg-primary/15 text-primary ring-1 ring-primary/40",
 };
+
+interface ThreadItem {
+  id: number; from_email: string; from_name: string; subject: string; snippet: string;
+  date_received?: string | null; is_sent: boolean; is_unread: boolean;
+}
+
+/** The other mails of this conversation, oldest first — like the
+ *  conversation view in Gmail or Thunderbird. Only shown when there is
+ *  more than the open mail. */
+function ThreadStrip({ threadId, currentId, onOpen }: {
+  threadId: string; currentId: number; onOpen: (id: number) => void;
+}) {
+  const t = useApi<{ messages: ThreadItem[] }>(
+    `/api/email/thread?thread_id=${encodeURIComponent(threadId)}`, [threadId, currentId]);
+  const items = t.data?.messages || [];
+  if (items.length < 2) return null;
+  return (
+    <div className="mt-3 rounded-md border border-border overflow-hidden">
+      <div className="px-3 py-1.5 text-2xs font-semibold text-muted-foreground bg-muted/30">
+        Verlauf · {items.length}
+      </div>
+      <div className="divide-y divide-border max-h-48 overflow-y-auto">
+        {items.map(it => (
+          <button
+            key={it.id}
+            type="button"
+            onClick={() => { if (it.id !== currentId) onOpen(it.id); }}
+            className={cn(
+              "w-full text-left px-3 py-2 flex items-start gap-3 text-xs transition",
+              it.id === currentId ? "bg-accent" : "hover:bg-muted/50",
+            )}
+          >
+            <span className={cn("shrink-0 w-32 truncate", it.is_unread && it.id !== currentId ? "font-semibold" : "font-medium")}>
+              {it.is_sent ? "Du" : (it.from_name || it.from_email)}
+            </span>
+            <span className="flex-1 min-w-0 truncate text-muted-foreground">{it.snippet}</span>
+            <span className="shrink-0 text-muted-foreground tabular-nums">{formatWhen(it.date_received)}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function AIDraftPanel({
   messageId, accountId, message, onUseDraft,

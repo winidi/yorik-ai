@@ -683,6 +683,31 @@ def list_messages(
     return [by_id[d["id"]] for d in flat if d["id"] in by_id]
 
 
+@router.get("/thread")
+def get_thread(thread_id: str = Query(..., min_length=1, max_length=998), user: dict = Depends(current_user)):
+    """Every mail of one conversation, oldest first — the reader shows
+    them above the open mail (2026-09-28: Dirk never saw Oliver's
+    answer because it sat alone, and a thread showed only its latest)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, message_id, from_email, from_name, subject, snippet, date_received, is_sent, is_unread "
+            "FROM email_messages WHERE owner_user_id = ? AND thread_id = ? AND COALESCE(is_draft, 0) = 0 "
+            "ORDER BY date_received, id LIMIT 200",
+            (user["id"], thread_id),
+        ).fetchall()
+    out, seen = [], set()
+    for r in rows:
+        key = r["message_id"] or f"id:{r['id']}"
+        if key in seen:                       # the same mail in Sent and in a label
+            continue
+        seen.add(key)
+        out.append({"id": r["id"], "from_email": r["from_email"], "from_name": r["from_name"] or "",
+                    "subject": r["subject"] or "", "snippet": (r["snippet"] or "")[:160],
+                    "date_received": r["date_received"], "is_sent": bool(r["is_sent"]),
+                    "is_unread": bool(r["is_unread"])})
+    return {"thread_id": thread_id, "messages": out}
+
+
 @router.get("/messages/{msg_id}")
 def get_message(msg_id: int, user: dict = Depends(current_user)):
     """Single message with full body + attachment list."""

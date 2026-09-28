@@ -235,6 +235,8 @@ def store_sent_mirror(
             ).fetchone()
             if r:
                 folder_id = int(r["id"])
+        from . import email_threads
+        thread_id = email_threads.thread_for(conn, owner_user_id, mid_clean, in_reply_to, references) or thread_id
         try:
             conn.execute(
                 "INSERT INTO email_messages "
