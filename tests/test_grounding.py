@@ -243,3 +243,30 @@ def test_two_dropped_quote_lines_leave_one_note_and_no_empty_quote_lines():
     out = fallback_text(["„erste Zeile erfunden“", "„zweite Zeile erfunden“"], "de", answer)
     assert out.count("_(Zitat nicht belegt, weggelassen)_") == 1
     assert "> Hey Dirk\n_(Zitat nicht belegt, weggelassen)_\n> Grüße" in out
+
+
+OLIVER = ("Hey Dirk :)\n\n\nwas meinst du konkret mit „monetär\"?\n\n\nDie Akademie ist kostenlos - es gibt lediglich "
+          "weitere Inhalte (wie\nVorlagen für die Datenschutzerklärung, Live Calls, WhatsApp Zugabg zu mir),\n"
+          "die allerdings nur für Leute freigeschaltet sind, die sich über meinen\nAffiliate Link für HighLevel anmelden.")
+
+
+def test_a_quote_written_almost_right_is_copied_from_the_mail():
+    """2026-09-28: the model wrote "Zugang" for Oliver's "Zugabg"; the
+    quote was dropped. Now the mail's own words stand there."""
+    from backend.agent.grounding import check
+    mail = [{"role": "tool", "content": json.dumps({"message": {"body_text": OLIVER}}, ensure_ascii=False)}]
+    answer = ("Er schrieb:\n> „Die Akademie ist kostenlos – es gibt lediglich weitere Inhalte (wie Vorlagen für die "
+              "Datenschutzerklärung, Live Calls, WhatsApp Zugang zu mir)“\nMehr nicht.")
+    v = check(answer, mail)
+    assert v.ok, v.missing
+    assert "WhatsApp Zugabg zu mir)" in v.text and "Zugang" not in v.text
+    assert v.text.startswith("Er schrieb:\n> „Die Akademie ist kostenlos - es gibt lediglich weitere Inhalte (wie Vorlagen")
+
+
+def test_a_changed_number_or_a_different_passage_is_not_copied():
+    from backend.agent.grounding import copy_from_sources
+    src = ["Invoice amount 551,07 EUR. The amount of the invoice will be credited to your customer account."]
+    assert copy_from_sources("Invoice amount 551,08 EUR. The amount of the invoice", src) is None
+    assert copy_from_sources("Die Rechnung ist schon lange bezahlt worden", src) is None
+    assert copy_from_sources("Invoice amount 551,07 EUR. The amount of the invoce", src) == \
+        "Invoice amount 551,07 EUR. The amount of the invoice"

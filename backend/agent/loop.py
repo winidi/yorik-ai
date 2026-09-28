@@ -405,8 +405,12 @@ async def ask(
             if _gate[0] == "fallback":
                 final_text = _gate[1]
                 messages[-1] = {**assistant_msg, "content": final_text}
-            elif _gate[1]:
-                ui_actions.append(_gate[1])
+            else:
+                if _gate[1]:
+                    ui_actions.append(_gate[1])
+                if len(_gate) > 2 and _gate[2]:
+                    final_text = _gate[2]
+                    messages[-1] = {**assistant_msg, "content": final_text}
             if grounding_retried:
                 final_text = _grounding.strip_check_talk(final_text)
                 messages[-1] = {**messages[-1], "content": final_text}
@@ -1141,8 +1145,12 @@ async def ask_stream(
             if _gate[0] == "fallback":
                 final_text = _gate[1]
                 messages[-1] = {**assistant_msg, "content": final_text}
-            elif _gate[1]:
-                ui_actions.append(_gate[1])
+            else:
+                if _gate[1]:
+                    ui_actions.append(_gate[1])
+                if len(_gate) > 2 and _gate[2]:
+                    final_text = _gate[2]
+                    messages[-1] = {**assistant_msg, "content": final_text}
             if grounding_retried:
                 final_text = _grounding.strip_check_talk(final_text)
                 messages[-1] = {**messages[-1], "content": final_text}
@@ -1739,12 +1747,13 @@ def _grounding_gate(text: str, messages: List[Dict[str, Any]], raws: List[Any],
     except Exception:  # noqa: BLE001 — a broken check must not eat the answer
         log.exception("grounding check failed")
         return ("ok", None)
+    fixed = verdict.text or text             # quotes copied from their source
     if verdict.ok:
-        return ("ok", _grounding.sources_action(verdict))
+        return ("ok", _grounding.sources_action(verdict), fixed if verdict.text else None)
     log.info("grounding: unbacked %s (retried=%s)", verdict.missing, retried)
     if not retried:
         return ("retry", _grounding.nudge_message(verdict.missing))
-    return ("fallback", _grounding.fallback_text(verdict.missing, language, text))
+    return ("fallback", _grounding.fallback_text(verdict.missing, language, fixed))
 
 
 def _user_text(key: str, language: Optional[str], **fmt: Any) -> str:

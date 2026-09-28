@@ -97,12 +97,46 @@ def _list(owner: str) -> Dict[str, Any]:
     for p in store.list_for(owner):
         steps = store.steps(p["id"])
         nxt = engine.next_open_step(steps)
-        rows.append({"pipeline_id": p["id"], "title": p["title"], "state": p["state"], "mode": p["mode"],
-                     "attention": p.get("attention"), "next_step": nxt["action"] if nxt else None,
-                     "link": f"/r/pipelines/{p['id']}"})
+        row = {"pipeline_id": p["id"], "title": p["title"], "state": p["state"], "mode": p["mode"],
+               "attention": p.get("attention"), "next_step": nxt["action"] if nxt else None,
+               "link": f"/r/pipelines/{p['id']}"}
+        reply = _reply_received(owner, p.get("origin") or {})
+        if reply:
+            row["reply_received"] = reply
+        rows.append(row)
     return {"pipelines": rows,
             "_llm_hint": ("States: entwurf = draft, not started; laeuft = running; pausiert = paused; "
-                          "erledigt = done; abgebrochen = cancelled. Answer from this list only.")}
+                          "erledigt = done; abgebrochen = cancelled. Answer from this list only. "
+                          # approved by Dirk 2026-09-28
+                          "If reply_received is set, say that an answer came — from whom and when; "
+                          "nothing is left to follow up.")}
+
+
+def _reply_received(owner: str, origin: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The first mail from someone else in the followed mail's conversation
+    after it was sent. GoHighLevel: Oliver had answered, the draft
+    pipeline still read as open (2026-09-27)."""
+    from backend.database import get_conn
+    from backend.search_routes import _local
+    mail_id, message_id = origin.get("mail_id"), origin.get("message_id")
+    if not mail_id and not message_id:
+        return None
+    with get_conn() as conn:
+        own = conn.execute("SELECT thread_id, date_received FROM email_messages WHERE id = ? AND owner_user_id = ?",
+                           (int(mail_id or 0), owner)).fetchone()
+        thread_id = own["thread_id"] if own else None
+        since = origin.get("sent_at") or (own["date_received"] if own else "") or ""
+        r = conn.execute(
+            "SELECT id, from_name, from_email, subject, date_received FROM email_messages "
+            "WHERE owner_user_id = ? AND COALESCE(is_sent, 0) = 0 AND COALESCE(is_draft, 0) = 0 "
+            "AND (in_reply_to = ? OR (? <> '' AND thread_id = ?)) AND date_received > ? "
+            "ORDER BY date_received LIMIT 1",
+            (owner, message_id or "", thread_id or "", thread_id or "", since),
+        ).fetchone()
+    if not r:
+        return None
+    return {"from": r["from_name"] or r["from_email"], "date": _local(r["date_received"]),
+            "subject": r["subject"] or "", "mail_id": int(r["id"])}
 
 
 def _set_running(owner: str, pipeline_id: Optional[int], op: str) -> Dict[str, Any]:

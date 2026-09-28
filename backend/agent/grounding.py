@@ -46,6 +46,9 @@ class Verdict:
     missing: List[str] = field(default_factory=list)
     sources: List[Dict[str, str]] = field(default_factory=list)
     checked: int = 0
+    # quotes the model wrote nearly right, replaced by the source's own
+    # words ("Zugang" → "Zugabg" as Oliver wrote it); the answer to show
+    text: Optional[str] = None
 
 
 def needs_hold(text_so_far: str) -> bool:
@@ -271,6 +274,81 @@ def _find_source(raws: List[Tuple[str, Any]], match) -> Optional[Dict[str, str]]
 
 # ─── the check ───────────────────────────────────────────────────────
 
+# ─── copying a quote from its source ─────────────────────────────────
+
+_JSON_STR = re.compile(r'"((?:[^"\\]|\\.)*)"')
+COPY_MIN_RATIO = 0.9
+COPY_BUDGET_S = 3.0          # slower machines too (Dirk 2026-09-28)
+
+
+def _plain_strings(content: str) -> List[str]:
+    """The text values inside a tool result, unescaped — the result is
+    JSON, sometimes cut short, so the string literals are read one by one."""
+    out = []
+    for lit in _JSON_STR.findall(content or ""):
+        if len(lit) < 12:
+            continue
+        try:
+            out.append(json.loads(f'"{lit}"'))
+        except ValueError:
+            out.append(lit.replace("\\n", "\n"))
+    return out or [content or ""]
+
+
+def _tok(t: str) -> str:
+    return re.sub(r"[^\w]", "", unicodedata.normalize("NFKC", t).lower())
+
+
+def copy_from_sources(quote: str, texts: Iterable[str]) -> Optional[str]:
+    """The source's own words for a quote the model wrote almost right:
+    the most similar run of words (90 % of the words alike, every number
+    exact), copied as it stands there. None when nothing is that close.
+    Dirk 2026-09-28: quotes word for word — the model points at the
+    passage, the words come from the mail."""
+    from difflib import SequenceMatcher
+    q = [t for t in (_tok(x) for x in quote.split()) if t]
+    if len(q) < 3:
+        return None
+    q_set, n, q_text = set(q), len(q), " ".join(q)
+    digits = sorted(t for t in q if any(c.isdigit() for c in t))
+    import time
+    deadline = time.monotonic() + COPY_BUDGET_S
+    best, best_ratio = None, 0.0
+    for text in texts:
+        if time.monotonic() > deadline:
+            return None                 # rather drop the quote than hold up the answer
+        spans = [(m.start(), m.end(), _tok(m.group(0))) for m in re.finditer(r"\S+", text or "")]
+        spans = [sp for sp in spans if sp[2]]
+        toks = [sp[2] for sp in spans]
+        if len(q_set & set(toks)) < 0.6 * len(q_set):
+            continue
+        # A quote starts where the passage starts: windows begin at the
+        # quote's first or second word (one of them may carry the typo).
+        starts = sorted({max(0, i - (1 if t == q[1] else 0)) for i, t in enumerate(toks) if t in (q[0], q[1])})
+        matcher = SequenceMatcher(None, autojunk=False)
+        matcher.set_seq2(q_text)
+        for i in starts:
+            for size in (n - 1, n, n + 1):
+                if size < 2 or i + size > len(toks):
+                    continue
+                window = toks[i:i + size]
+                if len(q_set & set(window)) < 0.6 * len(q_set):
+                    continue
+                matcher.set_seq1(" ".join(window))
+                # letters, not whole words: a typo is a small difference
+                if matcher.real_quick_ratio() <= best_ratio or matcher.quick_ratio() <= best_ratio:
+                    continue
+                ratio = matcher.ratio()
+                if ratio > best_ratio:
+                    best_ratio, best = ratio, (text, spans[i][0], spans[i + size - 1][1], window)
+    if not best or best_ratio < COPY_MIN_RATIO:
+        return None
+    text, start, end, window = best
+    if sorted(t for t in window if any(c.isdigit() for c in t)) != digits:
+        return None                     # a number differs: not the same passage
+    return re.sub(r"\s+", " ", text[start:end]).strip()
+
+
 def check(answer: str, messages: List[Dict[str, Any]], raws: Optional[List[Tuple[str, Any]]] = None) -> Verdict:
     raws = raws or []
     evidence = _texts(messages) + [_dump(r) for _, r in raws]
@@ -315,6 +393,8 @@ def check(answer: str, messages: List[Dict[str, Any]], raws: Optional[List[Tuple
         else:
             missing.append(raw)
 
+    plain: Optional[List[str]] = None
+    corrected = answer
     for q in _quotes(answer):
         checked += 1
         if norm_items is None:
@@ -335,10 +415,20 @@ def check(answer: str, messages: List[Dict[str, Any]], raws: Optional[List[Tuple
         ok = bool(parts) and any(in_order(h) for h in norm_items)
         if ok:
             add_source(_find_source(raws, lambda t: in_order(_norm_text(t))))
+            continue
+        if plain is None:
+            plain = [x for m in messages if m.get("role") == "tool" and not m.get("internal")
+                     for x in _plain_strings(str(m.get("content") or ""))]
+            plain += [t for _, r in raws for t, _chain in _walk(r, []) if isinstance(t, str) and len(t) >= 12]
+        exact = copy_from_sources(q, plain)
+        if exact:
+            corrected = corrected.replace(q, exact, 1)
+            add_source(_find_source(raws, lambda t: _norm_text(exact) in _norm_text(t)))
         else:
             missing.append("„" + q.strip("„“”\"«» ") + "“")
 
-    return Verdict(ok=not missing, missing=missing, sources=sources[:5], checked=checked)
+    return Verdict(ok=not missing, missing=missing, sources=sources[:5], checked=checked,
+                   text=corrected if corrected != answer else None)
 
 
 # ─── loop glue ───────────────────────────────────────────────────────

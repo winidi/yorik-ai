@@ -109,3 +109,27 @@ def test_read_email_brings_the_conversation(fresh_app):
     assert [(c["who"], c["first_line"]) for c in conv] == [("Oliver", "first"), ("Du", "question"), ("Oliver", "answer")]
     assert conv[1].get("this_mail") and conv[2]["date"].startswith("2026-09-22T00:00")    # local time, not UTC
     assert "say who wrote last" in out["_llm_hint"]
+
+
+def test_pipeline_list_sees_the_answer(fresh_app):
+    """GoHighLevel: Oliver had answered, the draft pipeline read as open."""
+    from backend.database import get_conn
+    from backend.skills.pipeline.skill import _reply_received
+    uid = seed_user(name="Dirk", role="admin", email="d@example.com")
+    with get_conn() as conn:
+        acc = conn.execute("INSERT INTO email_accounts (owner_user_id, email, imap_host, imap_username, smtp_host, "
+                           "smtp_username, credential_key) VALUES (?, 'd@example.local', 'i', 'u', 's', 'u', 'k') "
+                           "RETURNING id", (uid,)).fetchone()["id"]
+        rows = {}
+        for n, (mid, sent, when, irt) in enumerate((("q@x", 1, "2026-09-21T14:22:00+00:00", "o1@x"),
+                                                    ("o2@x", 0, "2026-09-21T22:00:04+00:00", "q@x"))):
+            rows[mid] = conn.execute(
+                "INSERT INTO email_messages (account_id, uid, owner_user_id, message_id, in_reply_to, thread_id, "
+                "from_email, from_name, subject, body_text, snippet, date_received, is_sent) VALUES (?, ?, ?, ?, ?, 'o1@x', "
+                "'o@example.org', 'Oliver', 'Re: GoHighLevel', '', '', ?, ?) RETURNING id",
+                (acc, n, uid, mid, irt, when, sent)).fetchone()["id"]
+        conn.commit()
+    got = _reply_received(uid, {"mail_id": rows["q@x"], "message_id": "q@x", "sent_at": "2026-09-21T14:22:00+00:00"})
+    assert got["from"] == "Oliver" and got["date"].startswith("2026-09-22T00:00") and got["mail_id"] == rows["o2@x"]
+    assert _reply_received(uid, {"mail_id": rows["q@x"], "message_id": "q@x",
+                                 "sent_at": "2026-09-23T00:00:00+00:00"}) is None      # nothing after it was sent
