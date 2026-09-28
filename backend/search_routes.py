@@ -314,7 +314,8 @@ def _search_whatsapp(q: str, user_id: str, qvec: Optional[str] = None) -> list[d
             "title":       chat,
             "subtitle":    r["push_name"] or "",
             # who wrote it: "DE85 … von Mama" was the person's own message
-            "who":         "you" if r.get("from_me") else (r["push_name"] or chat),
+            # "you" read as Yorik; "the user" is the person asking (2026-09-28)
+            "who":         "the user" if r.get("from_me") else (r["push_name"] or chat),
             # checked here, so the model does not guess ("nur 20 Zeichen" for a
             # correct 22-character IBAN, 2026-09-28)
             **({"iban_check": "valid IBAN, check digits correct"} if r.get("iban_ok") else {}),

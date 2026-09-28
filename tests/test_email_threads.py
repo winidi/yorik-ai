@@ -106,7 +106,7 @@ def test_read_email_brings_the_conversation(fresh_app):
         conn.commit()
     out = asyncio.run(execute(SkillContext(Registry(), role="admin", user_id=uid), ids[1]))
     conv = out["conversation"]
-    assert [(c["who"], c["first_line"]) for c in conv] == [("Oliver", "first"), ("you", "question"), ("Oliver", "answer")]
+    assert [(c["who"], c["first_line"]) for c in conv] == [("Oliver", "first"), ("the user", "question"), ("Oliver", "answer")]
     assert conv[1].get("this_mail") and conv[2]["date"].startswith("2026-09-22T00:00")    # local time, not UTC
     assert "say who wrote last" in out["_llm_hint"]
 
