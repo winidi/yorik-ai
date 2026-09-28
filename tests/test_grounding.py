@@ -270,3 +270,12 @@ def test_a_changed_number_or_a_different_passage_is_not_copied():
     assert copy_from_sources("Die Rechnung ist schon lange bezahlt worden", src) is None
     assert copy_from_sources("Invoice amount 551,07 EUR. The amount of the invoce", src) == \
         "Invoice amount 551,07 EUR. The amount of the invoice"
+
+
+def test_weekday_abbreviations_and_weekday_after_the_date():
+    from datetime import date
+    from backend.agent.grounding import fix_weekdays
+    today = date(2026, 9, 28)
+    assert fix_weekdays("am 22. September (Sa)", today) == "am 22. September (Di)"
+    assert fix_weekdays("So, 10.10.", today) == "Sa, 10.10."
+    assert fix_weekdays("So ist das 10.10.", today) == "So ist das 10.10."

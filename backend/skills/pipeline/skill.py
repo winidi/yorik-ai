@@ -103,6 +103,9 @@ def _list(owner: str) -> Dict[str, Any]:
         reply = _reply_received(owner, p.get("origin") or {})
         if reply:
             row["reply_received"] = reply
+            # "next step: send mail" read as "your answer is still unsent"
+            # (2026-09-28); with an answer in, nothing is next.
+            row["next_step"] = None
         rows.append(row)
     return {"pipelines": rows,
             "_llm_hint": ("States: entwurf = draft, not started; laeuft = running; pausiert = paused; "

@@ -534,10 +534,13 @@ _WD_DE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", 
 _MONTHS = {m: i for i, m in enumerate(
     ["januar", "februar", "märz", "april", "mai", "juni", "juli", "august", "september",
      "oktober", "november", "dezember"], 1)}
-_WD_DATE = re.compile(
-    r"\b(?P<wd>Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag)(?P<mid>,?\s+(?:de[nrm]\s+)?)"
-    r"(?P<day>\d{1,2})\.\s*(?:(?P<mname>Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|"
-    r"November|Dezember)|(?P<mnum>\d{1,2})\.)(?:\s*(?P<year>\d{4}))?", re.I)
+_WD_NAMES = r"Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag|Mo|Di|Mi|Do|Fr|Sa|So"
+_DATE_PART = (r"(?P<day>\d{1,2})\.\s*(?:(?P<mname>Januar|Februar|März|April|Mai|Juni|Juli|August|September|"
+              r"Oktober|November|Dezember)|(?P<mnum>\d{1,2})\.)(?:\s*(?P<year>\d{4}))?")
+# "Samstag, 10. Oktober", "Sa, 10.10." — and the weekday after the date,
+# "22. September (Sa)" (2026-09-28: 22.09. was a Tuesday)
+_WD_DATE = re.compile(r"\b(?P<wd>" + _WD_NAMES + r")\b\.?(?P<mid>,?\s+(?:de[nrm]\s+)?)" + _DATE_PART, re.I)
+_DATE_WD = re.compile(_DATE_PART + r"\s*\((?P<wd>" + _WD_NAMES + r")\.?\)", re.I)
 
 
 def fix_weekdays(text: str, today=None) -> str:
@@ -559,7 +562,11 @@ def fix_weekdays(text: str, today=None) -> str:
         except (ValueError, KeyError):
             return m.group(0)
         right = _WD_DE[d.weekday()]
-        if m.group("wd").lower() == right.lower():
+        wd = m.group("wd")
+        if len(wd) == 2:
+            right = right[:2]                  # "Sa" stays an abbreviation
+        if wd.lower() == right.lower():
             return m.group(0)
-        return right + m.group(0)[len(m.group("wd")):]
-    return _WD_DATE.sub(repl, text or "")
+        start = m.start("wd") - m.start()
+        return m.group(0)[:start] + right + m.group(0)[start + len(wd):]
+    return _DATE_WD.sub(repl, _WD_DATE.sub(repl, text or ""))
