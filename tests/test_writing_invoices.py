@@ -177,6 +177,39 @@ def test_the_chat_hands_over_data_and_the_app_computes(shop):
         asyncio.run(execute(kid, kind="invoice", customer="x", lines=[]))
 
 
+def test_vat_is_named_and_asked_once_then_kept(shop):
+    """2026-09-28: the neighbour's lawn invoice came with 19 % VAT that
+    was never chosen, and the answer did not mention it."""
+    import asyncio
+    from backend.skills.registry import Registry, SkillContext
+    from backend.skills.write_invoice.skill import execute
+    from backend.writing import letterhead as H
+    client, uid, asked, lid = shop
+    ctx = SkillContext(Registry(), role="member", user_id=uid, conversation_id="c1")
+    lawn = [{"text": "Rasenmähen", "qty": 3, "unit": "Std.", "unit_price": 15}]
+    first = asyncio.run(execute(ctx, kind="invoice", customer="Nachbar Schmidt", lines=lawn))
+    sp = lambda v: v.replace("\xa0", " ")                 # the app writes a non-breaking space
+    assert (sp(first["net"]), sp(first["vat"]), sp(first["total"])) == ("45,00 €", "8,55 €", "53,55 €")
+    assert first["vat_question"] and "Ask once whether they charge VAT" in first["_llm_hint"]
+    assert "Name net, VAT and total" in first["_llm_hint"]
+    # the answer: small business → no VAT from now on, not asked again
+    second = asyncio.run(execute(ctx, kind="invoice", customer="Nachbar Schmidt", lines=lawn,
+                                 document_id=first["document_id"], small_business=True))
+    assert sp(second["total"]) == "45,00 €" and "vat_question" not in second and "Ask once" not in second["_llm_hint"]
+    assert H.default_for(uid)["data"]["small_business"] is True
+    third = asyncio.run(execute(ctx, kind="invoice", customer="Nachbar Schmidt", lines=lawn))
+    assert "vat_question" not in third and sp(third["total"]) == "45,00 €"
+
+
+def test_saving_the_letterhead_form_answers_the_vat_question(shop):
+    from backend.writing import letterhead as H
+    client, uid, asked, lid = shop
+    lh = H.default_for(uid)
+    assert not lh["data"].get("vat_confirmed")
+    r = client.patch(f"/api/letterheads/{lh['id']}", json={"data": {**lh["data"], "small_business": False}})
+    assert r.status_code == 200 and H.default_for(uid)["data"]["vat_confirmed"] is True
+
+
 def test_an_invoice_over_nothing_asks_for_no_payment_and_a_single_day_is_a_date():
     from backend.writing import layouts as L, letterhead as H
     lh = H.clean(SELLER)

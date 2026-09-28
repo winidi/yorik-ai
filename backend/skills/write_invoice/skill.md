@@ -41,9 +41,17 @@ inputs:
     type: integer
     required: false
     description: Id of a draft from earlier in this conversation to replace instead of starting a new one.
+  small_business:
+    type: boolean
+    required: false
+    description: The user's answer to the VAT question; stored in the letterhead.
 outputs:
   document_id:
     type: integer
+  net:
+    type: string
+  vat:
+    type: string
   total:
     type: string
   missing:

@@ -50,7 +50,10 @@ FIELDS: Dict[str, tuple] = {
     "payment_text": ("Bitte überweisen Sie den Betrag bis zum {faellig} auf das unten genannte Konto.", 300),
     "small_business_text": ("Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.", 200),
 }
-BOOL_FIELDS = {"small_business": False}
+# vat_confirmed: the person answered whether they charge VAT, in the
+# settings or once in the chat (2026-09-28: an invoice to the neighbour
+# came with 19 % the person had never chosen).
+BOOL_FIELDS = {"small_business": False, "vat_confirmed": False}
 INT_FIELDS = {"payment_days": (14, 0, 365)}
 
 

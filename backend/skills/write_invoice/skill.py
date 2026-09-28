@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 async def execute(ctx, kind: str, customer: str, lines: List[Dict[str, Any]], subject: Optional[str] = None,
                   intro: Optional[str] = None, service_from: Optional[str] = None, service_to: Optional[str] = None,
-                  document_id: Optional[int] = None) -> Dict[str, Any]:
+                  document_id: Optional[int] = None, small_business: Optional[bool] = None) -> Dict[str, Any]:
     from backend.writing import invoice as inv, letterhead as lh_mod, recipient as rcp_mod, routes, store
     user_id = getattr(ctx, "user_id", None)
     if not user_id:
@@ -26,6 +26,10 @@ async def execute(ctx, kind: str, customer: str, lines: List[Dict[str, Any]], su
                                            "service_from": service_from, "service_to": service_to})
 
     lh = lh_mod.default_for(uid)
+    if isinstance(small_business, bool):
+        # the answer to the VAT question, kept for every later invoice
+        lh = lh_mod.update(lh["id"], uid, data={**lh["data"], "small_business": small_business,
+                                                "vat_confirmed": True}) or lh
     doc = store.get(int(document_id), uid) if document_id else None
     if doc and doc["status"] == "draft" and doc["kind"] == kind:
         same = (customer or "").strip().lower() == (doc["recipient"].get("name") or "").lower()
@@ -38,13 +42,29 @@ async def execute(ctx, kind: str, customer: str, lines: List[Dict[str, Any]], su
 
     data = lh["data"]
     missing = inv.missing(kind, data, doc["recipient"], doc["content"])
-    total = inv.money(inv.compute(doc["content"].get("lines"), small_business=data["small_business"])["totals"]["gross"], data["country"])
+    calc = inv.compute(doc["content"].get("lines"), small_business=data["small_business"],
+                       default_vat=doc["content"].get("vat_percent", "19"))["totals"]
+    money = lambda v: inv.money(v, data["country"])
+    total, net, vat = money(calc["gross"]), money(calc["net"]), money(calc["vat"])
+    vat_charged = bool(calc["vat"])
     label = "Rechnung" if kind == "invoice" else "Angebot"
+    n_lines = len(doc["content"].get("lines") or [])
+    # The breakdown stands on the card, computed here (2026-09-28).
+    preview = (f"{n_lines} Positionen · netto {net} + MwSt {vat} = {total}" if vat_charged
+               else f"{n_lines} Positionen · {total}" + (" (ohne MwSt, § 19 UStG)" if data["small_business"] else ""))
     from backend.ui_tools import _append
     _append({"type": "writing_draft_created", "document_id": doc["id"], "kind": kind, "recipient": doc["recipient"].get("name") or "",
-             "subject": doc["title"] or label, "preview": f"{len(doc['content'].get('lines') or [])} Positionen · {total}", "missing": missing})
-    return {"document_id": doc["id"], "total": total, "missing": missing,
-            "_llm_hint": (f"shown_to_user: the draft {label} (document_id={doc['id']}, total {total}, computed by the app) is on a card the user can open. "
-                          + (f"Still marked as missing on the sheet: {', '.join(missing)}; mention it in half a sentence, do not ask for it. " if missing else "")
-                          + "No number has been taken; the user finalises it in the app. Answer in one short sentence in the user's language. "
-                          + f"For changes call write_invoice again with document_id={doc['id']} and the complete list of lines.")}
+             "subject": doc["title"] or label, "preview": preview, "missing": missing})
+    ask_vat = not data.get("vat_confirmed")
+    out = {"document_id": doc["id"], "net": net, "vat": vat, "total": total, "missing": missing,
+           "_llm_hint": (f"shown_to_user: the draft {label} (document_id={doc['id']}, total {total}, computed by the app) is on a card the user can open. "
+                         + (f"Still marked as missing on the sheet: {', '.join(missing)}; mention it in half a sentence, do not ask for it. " if missing else "")
+                         + "No number has been taken; the user finalises it in the app. Answer in one short sentence in the user's language. "
+                         # both sentences approved by Dirk 2026-09-28
+                         + ("Name net, VAT and total in one sentence when VAT is charged. " if vat_charged else "")
+                         + ("Ask once whether they charge VAT or are a small business (§ 19 UStG, no VAT); "
+                            "pass the answer as small_business on the next call. " if ask_vat else "")
+                         + f"For changes call write_invoice again with document_id={doc['id']} and the complete list of lines.")}
+    if ask_vat:
+        out["vat_question"] = True
+    return out

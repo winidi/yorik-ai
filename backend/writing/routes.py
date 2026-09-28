@@ -48,7 +48,10 @@ def list_letterheads(user: Dict[str, Any] = Depends(_user())) -> Dict[str, Any]:
 
 @router.patch("/api/letterheads/{letterhead_id}")
 def patch_letterhead(letterhead_id: int, body: LetterheadPatch, user: Dict[str, Any] = Depends(_user())) -> Dict[str, Any]:
-    out = lh_mod.update(letterhead_id, _signed_in(user), data=body.data, name=body.name, make_default=body.make_default)
+    data = body.data
+    if isinstance(data, dict) and "small_business" in data:
+        data = {**data, "vat_confirmed": True}     # saved with the VAT box in view: answered
+    out = lh_mod.update(letterhead_id, _signed_in(user), data=data, name=body.name, make_default=body.make_default)
     if not out:
         raise HTTPException(status_code=404, detail="no such letterhead")
     return out
