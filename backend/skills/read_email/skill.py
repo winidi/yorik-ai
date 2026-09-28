@@ -68,6 +68,9 @@ async def execute(
     d["attachments"] = [dict(a) for a in atts]
     d.pop("thread_id", None)
     from backend.search_routes import _local       # household time with offset, not UTC
+    for col in ("date_received", "date_sent"):     # "am 21.09." for a mail of 22.09., 0:00 (2026-09-28)
+        if d.get(col):
+            d[col] = _local(d[col])
     conversation, seen = [], set()
     for t in thread:
         key = t["message_id"] or f"id:{t['id']}"

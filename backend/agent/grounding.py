@@ -401,9 +401,17 @@ def fallback_text(missing: List[str], language: Optional[str], answer: str = "")
         for line in text.splitlines():
             body = line.strip().lstrip("> ").strip().strip("„“”\"«» ")
             if line.strip().startswith(">") and body in quotes:
-                # a note instead of nothing — "… steht:" must not end in the void
+                # a note instead of nothing — "… steht:" must not end in the void;
+                # empty quote lines between two dropped ones go too (2026-09-28)
+                while kept and kept[-1].strip() in (">", ""):
+                    blank = kept.pop()
+                    if kept and kept[-1] != gone and not kept[-1].strip().startswith(">"):
+                        kept.append(blank)
+                        break
                 if not kept or kept[-1] != gone:
                     kept.append(gone)
+                continue
+            if line.strip() == ">" and kept and kept[-1] == gone:
                 continue
             kept.append(line)
         text = "\n".join(kept)

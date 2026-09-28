@@ -235,3 +235,11 @@ def test_the_answer_does_not_talk_about_the_check(uid):
     out = _run(fake, user_id=uid)
     assert "Tool-Ergebnis" not in out["response"]
     assert out["response"].startswith("Das sind drei Zahlungen. Soll ich genauer schauen?")
+
+
+def test_two_dropped_quote_lines_leave_one_note_and_no_empty_quote_lines():
+    from backend.agent.grounding import fallback_text
+    answer = "Er schrieb:\n\n> Hey Dirk\n> \n> erste Zeile erfunden\n> \n> zweite Zeile erfunden\n> \n> Grüße\n\nNoch was?"
+    out = fallback_text(["„erste Zeile erfunden“", "„zweite Zeile erfunden“"], "de", answer)
+    assert out.count("_(Zitat nicht belegt, weggelassen)_") == 1
+    assert "> Hey Dirk\n_(Zitat nicht belegt, weggelassen)_\n> Grüße" in out
