@@ -312,7 +312,8 @@ def copy_from_sources(quote: str, texts: Iterable[str]) -> Optional[str]:
     q_set, n, q_text = set(q), len(q), " ".join(q)
     digits = sorted(t for t in q if any(c.isdigit() for c in t))
     import time
-    deadline = time.monotonic() + COPY_BUDGET_S
+    from backend import speed
+    deadline = time.monotonic() + speed.budget(COPY_BUDGET_S, "cpu")   # slower CPUs get longer
     best, best_ratio = None, 0.0
     for text in texts:
         if time.monotonic() > deadline:

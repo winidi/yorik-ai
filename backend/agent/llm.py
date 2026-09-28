@@ -120,6 +120,13 @@ class LlmClient:
         self.request_timeout = request_timeout
         self._sdk_client: Any = None  # lazily built
 
+    def _timeout(self) -> float:
+        """The request deadline for this machine: the configured one on
+        the reference workstation, longer where short model answers are
+        measured slower (backend/speed.py, 2026-09-28)."""
+        from backend import speed
+        return speed.budget(self.request_timeout, "llm")
+
     # ------------------------------------------------------------------
     # Lazy SDK client
     # ------------------------------------------------------------------
@@ -210,7 +217,7 @@ class LlmClient:
         call_started = time.monotonic()
         for attempt in range(1, self.max_retries + 2):  # max_retries=3 → 4 attempts
             try:
-                resp = client.chat.completions.create(**payload, stream=False)
+                resp = client.chat.completions.create(**payload, stream=False, timeout=self._timeout())
                 break
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
@@ -334,7 +341,7 @@ class LlmClient:
         stream = None
         for attempt in range(1, self.max_retries + 2):
             try:
-                stream = client.chat.completions.create(**payload)
+                stream = client.chat.completions.create(**payload, timeout=self._timeout())
                 break
             except Exception as exc:  # noqa: BLE001
                 if not _is_retryable(exc) or attempt > self.max_retries:

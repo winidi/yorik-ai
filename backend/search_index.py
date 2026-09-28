@@ -28,6 +28,7 @@ import hashlib
 import json
 import logging
 import math
+import time
 import os
 import re
 from dataclasses import dataclass
@@ -342,11 +343,19 @@ def embed_query(text: str) -> Optional[str]:
     (the search then stays keyword-only)."""
     if not enabled():
         return None
+    from . import speed
+    limit = speed.budget(QUERY_TIMEOUT_S, "embed")      # slower machines get longer (speed.py)
+    t0 = time.perf_counter()
     try:
         if use_service():
-            return vec_literal(_post_embeddings([QUERY_PREFIX + text], timeout=QUERY_TIMEOUT_S)[0])
-        return vec_literal(embed_many([text])[0])
+            vec = vec_literal(_post_embeddings([QUERY_PREFIX + text], timeout=limit)[0])
+        else:
+            vec = vec_literal(embed_many([text])[0])
+        speed.record("embed", time.perf_counter() - t0)
+        return vec
     except Exception as exc:  # noqa: BLE001
+        if "timed out" in str(exc).lower() or "timeout" in type(exc).__name__.lower():
+            speed.record("embed", limit)                # a timeout is a measurement too
         log.debug("query embed failed: %s", exc)
         return None
 

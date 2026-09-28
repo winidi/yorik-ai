@@ -86,7 +86,8 @@ async def _chat_json(prompt: str, max_tokens: int = 200) -> Optional[Dict[str, A
         body["reasoning_effort"] = "none"
     base = os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1")
     try:
-        async with httpx.AsyncClient(timeout=EXTRACT_TIMEOUT_S) as client:
+        from . import speed
+        async with httpx.AsyncClient(timeout=speed.budget(EXTRACT_TIMEOUT_S, "llm")) as client:
             r = await client.post(f"{base}/chat/completions", json=body,
                                   headers={"Authorization": "Bearer not-used"})
         r.raise_for_status()

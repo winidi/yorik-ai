@@ -3203,6 +3203,9 @@ def health() -> Dict[str, Any]:
         # then derives a sensible default from the current hostname.
         "immich_public_url": (os.getenv("YORIK_IMMICH_PUBLIC_URL") or "").rstrip("/"),
         "voice_max_seconds": int(os.getenv("HOMEOS_VOICE_MAX_SECONDS", "60")),
+        # How much slower than the reference workstation this machine is,
+        # per kind of work; deadlines stretch by these (backend/speed.py).
+        "speed": __import__("backend.speed", fromlist=["snapshot"]).snapshot(),
         "default_language": DEFAULT_LANGUAGE,
     }
 

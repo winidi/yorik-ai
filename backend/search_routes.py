@@ -154,14 +154,24 @@ async def universal_search(q: str = Query(..., min_length=2),
         "letters":    asyncio.to_thread(_search_letters, q, user_id, qvec),
         "pipelines":  asyncio.to_thread(_search_pipelines, q, user_id),
     }
-    # Apply a hard deadline so the slow sources don't block the UI.
-    try:
-        results = await asyncio.wait_for(
-            asyncio.gather(*tasks.values(), return_exceptions=True),
-            timeout=TOTAL_BUDGET_S,
-        )
-    except asyncio.TimeoutError:
-        results = []  # everything past deadline gets dropped silently
+    # A deadline so a slow source does not block the answer — but only
+    # that source is left out. Until 2026-09-28 one late source (photos)
+    # dropped every result, mail and documents too. The deadline follows
+    # the machine's speed (speed.py).
+    from . import speed
+    limit = TOTAL_BUDGET_S * max(speed.factor("embed"), speed.factor("cpu"))
+    futures = {name: asyncio.ensure_future(coro) for name, coro in tasks.items()}
+    done, pending = await asyncio.wait(futures.values(), timeout=limit)
+    for f in pending:
+        f.cancel()
+    results = []
+    for name, f in futures.items():
+        if f in done:
+            exc = f.exception()
+            results.append(exc if exc else f.result())
+        else:
+            log.info("search source %s missed the %.1f s deadline", name, limit)
+            results.append([])
 
     out: dict[str, list] = {}
     total = 0

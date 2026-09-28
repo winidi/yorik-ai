@@ -115,14 +115,22 @@ async def variants(message: str, query: str) -> List[str]:
         body["chat_template_kwargs"] = {"enable_thinking": False}
         body["reasoning_effort"] = "none"
     base = os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1")
+    import time
+    from backend import speed
+    limit = speed.budget(VARIANTS_TIMEOUT_S, "llm")   # slower machines get longer
+    t0 = time.perf_counter()
     try:
-        async with httpx.AsyncClient(timeout=VARIANTS_TIMEOUT_S) as client:
+        async with httpx.AsyncClient(timeout=limit) as client:
             r = await client.post(f"{base}/chat/completions", json=body,
                                   headers={"Authorization": "Bearer not-used"})
         r.raise_for_status()
+        speed.record("llm", time.perf_counter() - t0)
         raw = (r.json().get("choices") or [{}])[0].get("message", {}).get("content") or ""
         found = re.search(r"\{.*\}", raw, re.S)
         also = json.loads(found.group(0)).get("also") if found else []
+    except httpx.TimeoutException:
+        speed.record("llm", limit)                      # a timeout is a measurement too
+        return []
     except Exception:  # noqa: BLE001
         return []
     seen = {query.strip().lower()}
