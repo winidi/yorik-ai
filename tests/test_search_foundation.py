@@ -383,3 +383,29 @@ def test_variants_parse_the_models_json_and_survive_nonsense(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", _Client)
     assert asyncio.run(prefetch.variants("was hab ich für claude bezahlt", "claude bezahlt")) == ["anthropic invoice", "x", "y"]
     assert asyncio.run(prefetch.variants("q", "q")) == []
+
+
+def test_a_question_for_an_account_number_gets_every_iban_of_the_chat(house):
+    """#18: Mama's own IBAN (January) never came up behind the person's
+    newer forwards; a link's code is no IBAN."""
+    from backend import search_index
+    from backend.database import get_conn
+    dirk_c, dirk = house["dirk"]
+    jid = "491770000000@s.whatsapp.net"
+    with get_conn() as conn:
+        conn.execute("INSERT INTO wa_chats (jid, name, is_group, owner_user_id) VALUES (?, 'Mama Nowa', 0, ?)", (jid, dirk))
+        msgs = [("m1", 0, 1767990000, "DE32500105175422716331"),                      # hers, oldest
+                ("m2", 1, 1790000000, "DE85500105175438012374")]                      # his forward
+        msgs += [(f"n{i}", 1, 1790000100 + i, f"Kontonummer kommt gleich {i}") for i in range(8)]
+        msgs += [("x", 0, 1790000500, "https://shop.example/DE12ABCD1234EFGH5678")]  # no IBAN
+        for mid, me, ts, text in msgs:
+            conn.execute("INSERT INTO wa_messages (msg_id, chat_jid, from_me, push_name, timestamp, text, owner_user_id) "
+                         "VALUES (?, ?, ?, 'Mama', ?, ?, ?)", (mid, jid, me, ts, text, dirk))
+        conn.commit()
+    search_index.sweep()
+    hits = _results(dirk_c, "mama kontonummer")["whatsapp"]
+    assert [(h["snippet"], h["who"]) for h in hits[:2]] == [("DE32500105175422716331", "Mama"),
+                                                            ("DE85500105175438012374", "you")]
+    from backend.search_routes import _wa_values
+    assert [r["text"] for r in _wa_values("mama kontonummer", dirk)] == ["DE32500105175422716331",
+                                                                          "DE85500105175438012374"]

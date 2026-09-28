@@ -291,7 +291,7 @@ def _search_whatsapp(q: str, user_id: str, qvec: Optional[str] = None) -> list[d
     rows = _hybrid(
         source="whatsapp", table="wa_messages",
         columns="wa_messages.id, wa_messages.chat_jid, wa_messages.text, wa_messages.transcript, "
-                "wa_messages.push_name, wa_messages.timestamp, "
+                "wa_messages.push_name, wa_messages.from_me, wa_messages.timestamp, "
                 "(SELECT c.name FROM wa_chats c WHERE c.jid = wa_messages.chat_jid LIMIT 1) AS chat_name",
         visible=("wa_messages.owner_user_id = ?", [user_id]),
         keyword=("wa_messages.search_tsv @@ to_tsquery('simple', ?)", [tsq]) if tsq else None,
@@ -300,8 +300,12 @@ def _search_whatsapp(q: str, user_id: str, qvec: Optional[str] = None) -> list[d
         order_params=[tsq] if tsq else None,
         qvec=qvec, date_key="timestamp",
     )
-    out = []
+    rows = _wa_values(q, user_id) + [r for r in rows]
+    out, seen_ids = [], set()
     for r in rows:
+        if r["id"] in seen_ids:
+            continue
+        seen_ids.add(r["id"])
         text = r["text"] or r["transcript"] or ""
         chat = r["chat_name"] or (r["chat_jid"].split("@")[0] if r["chat_jid"] else "?")
         out.append({
@@ -309,6 +313,8 @@ def _search_whatsapp(q: str, user_id: str, qvec: Optional[str] = None) -> list[d
             "id":          r["id"],
             "title":       chat,
             "subtitle":    r["push_name"] or "",
+            # who wrote it: "DE85 … von Mama" was the person's own message
+            "who":         "you" if r.get("from_me") else (r["push_name"] or chat),
             "snippet":     text[:200],
             "timestamp":   _local(r["timestamp"]),
             "navigate_to": f"/r/whatsapp?chat={r['chat_jid']}",
@@ -316,6 +322,47 @@ def _search_whatsapp(q: str, user_id: str, qvec: Optional[str] = None) -> list[d
             "chat_jid":    r["chat_jid"],
         })
     return out
+
+
+_ASKS_ACCOUNT = re.compile(r"\b(iban|kontonummer|konto(?:daten)?|bankverbindung|bankdaten|account number|bank details)\b", re.I)
+_IBAN_SQL = r"[A-Z]{2}[0-9]{2}( ?[A-Z0-9]{4}){3,7}"
+
+
+def _wa_values(q: str, user_id: str) -> list[dict[str, Any]]:
+    """A question for an account number gets every distinct IBAN of the
+    chats it names, each where it first appeared — the five newest
+    messages were the person's own forwards, and Mama's own IBAN from
+    January never came up (chat test #18, 2026-09-28)."""
+    if not _ASKS_ACCOUNT.search(q or ""):
+        return []
+    names = [w for w in re.findall(r"\w+", q.lower())
+             if len(w) > 2 and not _ASKS_ACCOUNT.fullmatch(w)]
+    who = " OR ".join("(LOWER(COALESCE(c.name, '')) LIKE ? OR LOWER(COALESCE(m.push_name, '')) LIKE ?)" for _ in names)
+    params: list[Any] = [user_id]
+    for w in names:
+        params += [f"%{w}%", f"%{w}%"]
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT ON (k.iban) k.id, k.chat_jid, k.text, k.transcript, k.push_name, k.from_me, k.timestamp, k.chat_name "
+            "FROM (SELECT m.id, m.chat_jid, m.text, m.transcript, m.push_name, m.from_me, m.timestamp, c.name AS chat_name, "
+            "             UPPER(REPLACE(substring(m.text from ?), ' ', '')) AS iban "
+            "        FROM wa_messages m LEFT JOIN wa_chats c ON c.jid = m.chat_jid AND c.owner_user_id = m.owner_user_id "
+            f"       WHERE m.owner_user_id = ? AND m.text ~ ? {('AND (' + who + ')') if names else ''}) k "
+            "ORDER BY k.iban, k.timestamp ASC",
+            (_IBAN_SQL, params[0], _IBAN_SQL, *params[1:])).fetchall()
+    real = [dict(r) for r in rows if _iban_ok(r["text"] or "")]      # a link's code is no IBAN
+    return sorted(real, key=lambda r: r["timestamp"] or 0)[:PER_SOURCE_LIMIT]
+
+
+def _iban_ok(text: str) -> bool:
+    """The text carries an IBAN whose check digits are right (mod 97)."""
+    for m in re.finditer(r"\b[A-Z]{2}[0-9]{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,3})?\b", text):
+        raw = m.group(0).replace(" ", "")
+        moved = raw[4:] + raw[:4]
+        digits = "".join(str(int(ch, 36)) for ch in moved)
+        if 15 <= len(raw) <= 34 and int(digits) % 97 == 1:
+            return True
+    return False
 
 
 # ───────────────────────── Paperless ────────────────────────────────
