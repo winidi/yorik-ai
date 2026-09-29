@@ -212,3 +212,32 @@ def test_a_persons_number_and_lid_are_one_chat(fresh_app, monkeypatch):
     al.forget()
     monkeypatch.setattr(al, "_from_bridge", lambda user_id: None)
     assert [c["jid"] for c in client.get("/api/whatsapp/chats").json()] == [pn, other]
+
+
+def test_what_to_say_is_written_as_the_users_message():
+    from backend.whatsapp import _build_draft_prompt
+    recent = [{"from_me": 0, "push_name": "Beate", "text": "Hast du eine Pumpe?", "transcript": None}]
+    with_intent = _build_draft_prompt("Beate <3", False, recent, [], extra="dass ich heute später nach Hause komme")
+    assert "What the user wants to say" in with_intent and "\"I\" is the user" in with_intent
+    assert with_intent.rstrip().endswith("Message:") and "Hast du eine Pumpe?" in with_intent
+    plain = _build_draft_prompt("Beate <3", False, recent, [])
+    assert plain.rstrip().endswith("Draft reply:") and "What the user wants" not in plain
+
+
+def test_no_draft_while_the_contact_choice_is_open(fresh_app):
+    import asyncio
+    from backend.skills.whatsapp_draft.skill import execute
+    from backend.skills.registry import Registry, SkillContext
+    from backend.ui_tools import _append, reset_ui_actions
+    from tests.conftest import seed_user
+    uid = seed_user(name="Dirk", role="admin", email="d9@example.com")
+
+    async def run(**kw):
+        reset_ui_actions()
+        _append({"type": "contact_picker", "query": "Dirk Winiecki",
+                 "contacts": [{"id": 11, "display_name": "Dirk Winiecki", "whatsapp": "4915128811000@s.whatsapp.net"},
+                              {"id": 12, "display_name": "Dirk Winiecki", "whatsapp": None}]})
+        return await execute(ctx=SkillContext(Registry(), role="admin", user_id=uid), intent="test", **kw)
+    for kw in ({"contact_id": 11}, {"chat_jid": "4915128811000@s.whatsapp.net"}):
+        out = asyncio.run(run(**kw))
+        assert out["ok"] is False and out["_llm_hint"].startswith("STOP") and out["drafts"] == []

@@ -64,6 +64,21 @@ async def execute(
     from backend.skills.registry import require_user_id
     user_id = require_user_id(ctx)
 
+    # A contact card with several candidates went up in this turn and
+    # the draft is for one of them: the person has not picked yet. Ask
+    # first, draft after ("Welcher Dirk Winiecki?" and a finished draft
+    # in the same breath, 2026-09-29; wording approved by Dirk).
+    from backend.ui_tools import get_ui_actions
+    _open = [c for a in get_ui_actions() if a.get("type") == "contact_picker"
+             for c in (a.get("contacts") or [])]
+    if _open and (
+        (contact_id is not None and int(contact_id) in {int(c["id"]) for c in _open if c.get("id") is not None})
+        or (chat_jid and chat_jid.lower() in {(c.get("whatsapp") or "").lower() for c in _open})
+    ):
+        return {"ok": False, "drafts": [],
+                "_llm_hint": ("STOP — the user has not chosen the recipient yet; a card with the candidates "
+                              "is on screen. Ask which one in one short question and wait. Do not draft.")}
+
     # Resolve chat_jid from contact_id when caller didn't pass one.
     # The contact's whatsapp channel value is normalized E.164 (plus
     # sign + digits); WhatsApp JIDs drop the plus and append

@@ -1994,8 +1994,20 @@ def _build_draft_prompt(
         for h in cross_hits:
             lines.append(f"- {h['snippet']}")
     if extra:
+        # The person said what to write ("tell Beate I'm late"). Without
+        # this framing it came out as a reply to the last message, in
+        # the wrong voice: "Komm heute etwas später nach Hause." for
+        # "that I'm coming home later" (2026-09-29, wording approved by
+        # Dirk). The thread above stays as context.
         lines.append("")
-        lines.append(f"── Extra instructions from user ──\n{extra}")
+        lines.append(f"── What the user wants to say ──\n{extra}")
+        lines.append("")
+        lines.append("Write exactly this message, from the user's point of view (\"I\" is the user). "
+                     "It does not have to answer the last message above — use the conversation only as "
+                     "context. Keep who does what as the user said it.")
+        lines.append("")
+        lines.append("Message:")
+        return "\n".join(lines)
     lines.append("")
     lines.append("Draft reply:")
     return "\n".join(lines)

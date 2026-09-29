@@ -1,6 +1,6 @@
 ---
 name: yorik_help
-description: "Return Yorik's setup/how-to docs for a topic (compose, immich, paperless, voice, tailscale, etc.)."
+description: "Return Yorik's setup/how-to docs for a topic (write, immich, paperless, voice, tailscale, etc.)."
 when_to_use: |
   Call this whenever the user asks how Yorik works, how to set something up, or what a feature does — instead of guessing or describing what you'd build. The corpus is curated, current, and honest about what's bundled vs BYO vs roadmap. Trigger phrases:
   - "how do I set up X", "how does X work", "how can I X", "where do I find"
@@ -18,7 +18,7 @@ when_to_use: |
   - Voice button, dictation, Whisper, voice profile → topic="voice"
   - WhatsApp, messages, pairing phone → topic="whatsapp"
   - IMAP, SMTP, email sending, mail account → topic="email"
-  - Letter, invoice, template → topic="compose"
+  - Letter, invoice, template → topic="write"
   - Address book, vCard import, contact fields → topic="contacts"
   - Events, appointments, sharing calendars → topic="calendar"
   - To-do, recurring tasks, task list → topic="tasks"
@@ -46,7 +46,7 @@ inputs:
     required: false
     description: |
       One of the topic ids: first-run | llm-setup | paperless | immich
-      | tailscale | voice | whatsapp | email | compose | contacts
+      | tailscale | voice | whatsapp | email | contacts
       | calendar | tasks | briefing | themes | extensions | troubleshooting
       | next-steps | recordings | family-board | write | finance | pipelines.
       Pick the closest one to the user's question.
