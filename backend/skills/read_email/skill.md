@@ -3,7 +3,7 @@ name: read_email
 description: Fetch the full body and metadata of a single email by message_id.
 when_to_use: |
   - User asks what an email actually says: "what did Hans write?",
-    "lies mir die E-Mail vor", "summarise the support thread".
+    "read me the email", "summarise the support thread".
   - You have a message_id from find_email_by_subject and need the
     full text to answer, summarise, or extract a fact.
   - NOT for replying — email_draft already pulls the thread internally

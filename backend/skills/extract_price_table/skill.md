@@ -2,8 +2,8 @@
 name: extract_price_table
 description: Parse web page text into a structured price table; feeds compute_group_price + save_venue.
 when_to_use: |
-  Right after web_extract returned a page with pricing prose ("Eintritt
-  5,90 €", "Kinder ab 3 Jahre: 11,90 €", "10er-Karte 89 €"), call this
+  Right after web_extract returned a page with pricing prose ("Admission
+  5.90 €", "Children from 3 years: 11.90 €", "10-visit card 89 €"), call this
   skill to convert the prose into a structured list of priced tickets.
 
   Typical chain:

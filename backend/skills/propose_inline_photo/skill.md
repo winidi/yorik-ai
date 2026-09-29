@@ -4,20 +4,20 @@ description: "Find candidate photos and show a visual picker so the user can inc
 when_to_use: |
   When the user wants to include a photo INSIDE a letter (not as a
   separate attachment to an email — that's just file-upload UX).
-  Typical phrasings: "schreib einen Brief an Hans mit dem Foto vom
-  Urlaub", "hänge ein Bild vom letzten Wochenende an", "send Anna a
+  Typical phrasings: "write a letter to Hans with the holiday
+  photo", "attach a picture from last weekend", "send Anna a
   letter and include a vacation photo".
 
   Flow:
-    user: "schreib Hans einen Brief mit einem Foto vom Italien-Urlaub"
+    user: "write Hans a letter with a photo from the Italy holiday"
     you:  find_person("Hans") → resolved
-    you:  propose_inline_photo(query="Italien Urlaub", contact_id=42,
+    you:  propose_inline_photo(query="Italy vacation", contact_id=42,
                                 template_id="generic-letter")
           → emits photo_picker ui_action with thumbnails
     user: clicks the photo they want
     you:  compose_draft(contact_id=42, template_id="generic-letter",
                         args={inline_image_url: "<picked url>",
-                              inline_image_caption: "Urlaub Sizilien 2024"})
+                              inline_image_caption: "Sicily holiday 2024"})
 
   The skill auto-derives a sensible query if you don't pass one (e.g.
   the contact's name, recent photos). The picker resumes the playbook
@@ -31,8 +31,8 @@ inputs:
     type: string
     required: false
     description: |
-      CLIP search query — what the photo should be of. "Italien
-      Urlaub", "vacation Sicily", "Anna's birthday". Omit to get
+      CLIP search query — what the photo should be of. "Italy
+      vacation", "vacation Sicily", "Anna's birthday". Omit to get
       recent photos.
   contact_id:
     type: integer

@@ -2,18 +2,18 @@
 name: find_known_provider
 description: Find a provider the user already uses (contacts + invoices + events) before searching nearby.
 when_to_use: |
-  Whenever the user mentions a service provider category ("Zahnarzt",
-  "Hausarzt", "Werkstatt", "Friseur", "Steuerberater") without naming
+  Whenever the user mentions a service provider category ("dentist",
+  "GP", "garage", "hairdresser", "tax advisor") without naming
   one specifically. Yorik should check what the user already has on
   file before suggesting new ones.
 
   Examples:
-    "Zahnarzttermin am Dienstag" → find_known_provider(category="dentist")
-    "ich muss zum Optiker"       → find_known_provider(category="optician")
-    "Termin beim Friseur"        → find_known_provider(category="hairdresser")
+    "dentist appointment on Tuesday" → find_known_provider(category="dentist")
+    "I need to see the optician"     → find_known_provider(category="optician")
+    "appointment at the hairdresser" → find_known_provider(category="hairdresser")
 
   Three places get checked, in order of trust:
-    1. Contacts — anyone with relation matching ("mein Zahnarzt", "Frau
+    1. Contacts — anyone with relation matching ("my dentist", "Mrs
        Dr. Schmidt"), kind='business' + a relevant keyword in the name
        ("Zahnarztpraxis Müller"), or a category tag.
     2. Paperless — past invoices/letters with correspondents matching
@@ -30,11 +30,11 @@ inputs:
     type: string
     required: true
     description: |
-      Service category. Yorik recognises (case-insensitive, EN+DE):
-      dentist/zahnarzt, doctor/hausarzt/arzt, pharmacy/apotheke,
-      hospital/krankenhaus, veterinary/tierarzt, optician/optiker,
-      hairdresser/friseur, garage/werkstatt, lawyer/anwalt,
-      tax_advisor/steuerberater, accountant/buchhalter.
+      Service category, in English (case-insensitive; German words are matched too):
+      dentist, doctor, pharmacy,
+      hospital, veterinary, optician,
+      hairdresser, garage, lawyer,
+      tax_advisor, accountant.
 outputs:
   candidates:
     type: array

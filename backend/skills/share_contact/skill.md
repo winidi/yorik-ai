@@ -2,7 +2,7 @@
 name: share_contact
 description: Give another household user edit access to a contact you own (per-user share).
 when_to_use: |
-  - User says "teile den kontakt von Hans mit Anna" / "share Hans with Anna" / "lass Anna auch Hans bearbeiten".
+  - User says "share Hans with Anna" / "let Anna edit Hans too".
   - User wants finer control than the contact's space (Household / Customers / etc.). `share_contact` is per-user — share with Anna specifically, not "all members".
   - Call `find_person(query=<user-name>, source='household')` first to resolve the recipient's user_id. Then call this skill with the contact_id and that user_id.
 

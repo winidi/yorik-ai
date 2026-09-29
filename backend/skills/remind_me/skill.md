@@ -2,7 +2,7 @@
 name: remind_me
 description: Remind the user at a later moment — a bell entry with a push to their phone at that time.
 when_to_use: |
-  The user wants to be reminded later: "erinner mich in einer Stunde an …", "sag mir morgen um 7 Bescheid, dass …", "remind me at 5 to …".
+  The user wants to be reminded later: "remind me in an hour about …", "tell me tomorrow at 7 that …", "remind me at 5 to …".
   Pass in_minutes for "in X minutes/hours", or at (household local time, YYYY-MM-DDTHH:MM) for a clock time.
   If they gave no time at all, ask for one instead of guessing.
 when_not_to_use: |
@@ -13,7 +13,7 @@ inputs:
   title:
     type: string
     required: true
-    description: What the reminder says, one short line (e.g. "Wäsche aufhängen").
+    description: What the reminder says, one short line (e.g. "Hang up the laundry").
   at:
     type: string
     required: false
@@ -21,7 +21,7 @@ inputs:
   in_minutes:
     type: integer
     required: false
-    description: Minutes from now (e.g. 60 for "in einer Stunde"). Use instead of at.
+    description: Minutes from now (e.g. 60 for "in an hour"). Use instead of at.
   body:
     type: string
     required: false

@@ -5,7 +5,7 @@ when_not_to_use: |
   Tasks → `check_tasks` (tasks have an optional due_date, events have date+time). Never use `run_sql` on the `events` table — gated runner blocks it.
 when_to_use: |
   - User asks "what's on Thursday?" / "am I free at 3pm?" → default scope (their own appointments)
-  - "Was hat Beate am Freitag?" / "was steht bei der Familie an?" → everyone=true; say whose each one is from `who`
+  - "What does Beate have on Friday?" / "what's on for the family?" → everyone=true; say whose each one is from `who`
   - Another skill (whatsapp_draft) needs availability before proposing meeting times
   - Briefing skill wants today's schedule for the morning summary
 inputs:
@@ -27,7 +27,7 @@ inputs:
     required: false
     description: |
       Case-insensitive substring filter on event title. USE THIS whenever
-      the user is asking about a SPECIFIC event ("the Zahnarzttermin",
+      the user is asking about a SPECIFIC event ("the dentist appointment",
       "when's the haircut", "find the Müller meeting"). Pass the key word
       (e.g. "Zahnarzt", "haircut", "Müller"). The skill auto-widens to
       ±2 days if your window has 0 hits — handy when your weekday math
@@ -42,7 +42,7 @@ inputs:
     type: boolean
     required: false
     default: false
-    description: Default is the asker's own appointments — their calendars, the household calendar, invitations. Set true only for "was hat die Familie / was hat Beate" — then every calendar the asker may see, someone else's events labelled with their first name (`who`). Never for "passt mir / bin ich frei".
+    description: Default is the asker's own appointments — their calendars, the household calendar, invitations. Set true only for "what does the family have / what does Beate have" — then every calendar the asker may see, someone else's events labelled with their first name (`who`). Never for "does that suit me / am I free".
 outputs:
   events:
     type: array

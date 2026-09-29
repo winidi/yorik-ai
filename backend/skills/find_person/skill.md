@@ -2,7 +2,7 @@
 name: find_person
 description: "Look up a person by name; pick source='household' for user_id, 'contacts' for chat/email/postal."
 when_to_use: |
-  Use this for ANY "find X" / "wer ist X?" / "termin mit X" / "schreib X" intent.
+  Use this for ANY "find X" / "who is X?" / "appointment with X" / "write to X" intent.
   Choose `source` by what you'll DO with the result, not by who you think the
   person is. The model used to flip between find_user and find_contact and
   get it wrong; one tool with an enum removes the choice.
@@ -17,7 +17,7 @@ when_to_use: |
   │ compose_draft (letters)       │                    │   contact_id (NOT a user_id)    │
   │                               │                    │                                 │
   │ Don't know yet / user just    │ "auto" (default)   │ both household + contacts;      │
-  │ asked "wer ist X?"            │                    │   each row tagged with          │
+  │ asked "who is X?"             │                    │   each row tagged with          │
   │                               │                    │   `source` so you pick at       │
   │                               │                    │   quote-time                    │
   └───────────────────────────────┴────────────────────┴─────────────────────────────────┘
@@ -26,7 +26,7 @@ when_to_use: |
 
   If multiple candidates matched, STOP and ask the user. Don't pick the first one. Contact results auto-render a picker card; household results — list them with role + name and ask.
 
-  AMBIGUOUS RELATIONAL DESCRIPTOR ("my friend", "der Klempner", "Oma"): do NOT ask for a name in prose.
+  AMBIGUOUS RELATIONAL DESCRIPTOR ("my friend", "the plumber", "Grandma"): do NOT ask for a name in prose.
     1. Try find_person(query="<descriptor>", source="contacts") — matches the relation field.
     2. If 0 hits, run list_contacts_for_picking's two-call ranking flow (defer_card=true → ranked_picks=[…]).
     3. Aim for 10 picks; shorter lists pad with neutral recent contacts.
@@ -113,10 +113,10 @@ registry). The whole reason for the merge was to dissolve the model's
 
 ## Common cases
 
-  - "termin mit anna" → `source='household'`, get `user_id`, pass as
+  - "appointment with anna" → `source='household'`, get `user_id`, pass as
     `attendee_user_ids` to add_calendar_event so Anna gets a real
     RSVP notification.
-  - "schreib oma einen brief" → `source='contacts'`, get the postal
+  - "write grandma a letter" → `source='contacts'`, get the postal
     address, hand off to compose_check_recipient → compose_draft.
-  - "wer ist anna?" → `source='auto'`, see if she's a household user
+  - "who is anna?" → `source='auto'`, see if she's a household user
     AND/OR a contact, answer the user based on what's there.

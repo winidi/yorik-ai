@@ -5,9 +5,9 @@ when_not_to_use: |
   Don't auto-call from an `add_calendar_event` result unless the user explicitly asked for a travel block in their message. Don't use to create a standalone event without a main event already on the calendar (this skill needs `event_id`). Exception: when the user requests forward AND return in the same message, call both back-to-back without re-asking.
 when_to_use: |
   - User confirms a drive-time block after add_calendar_event offered one. Example:
-      assistant: "Termin eingetragen. Anfahrt ca. 34 Min — soll ich die blockieren?"
-      user: "ja" → `block_travel_time(event_id=<id>)`
-  - User asks in hindsight ("blockier die Anfahrt zum Hannover-Termin morgen") — find the event_id via `check_calendar`, then call this skill.
+      assistant: "Added to your calendar. Drive there about 34 min — shall I block it?"
+      user: "yes" → `block_travel_time(event_id=<id>)`
+  - User asks in hindsight ("block the drive to the Hannover appointment tomorrow") — find the event_id via `check_calendar`, then call this skill.
   - User wants more buffer than the routed time → pass `minutes=<bigger>`.
 
   Never auto-call — always confirm verbally first. Quote `verified_state.starts_at`/`ends_at` verbatim; never recompute departure time.
@@ -25,7 +25,7 @@ inputs:
     required: false
     default: forward
     description: |
-      'forward' = Anfahrt before the event; 'return' = Rückfahrt after. They coexist on the same event with different markers. Re-running with the same minutes is a no-op; re-running with different minutes slides the existing block in place — use this when the user corrects the drive time after a block is already placed.
+      'forward' = drive there, before the event; 'return' = drive back, after it. They coexist on the same event with different markers. Re-running with the same minutes is a no-op; re-running with different minutes slides the existing block in place — use this when the user corrects the drive time after a block is already placed.
 outputs:
   block_event_id:
     type: integer
@@ -92,22 +92,22 @@ return_trip: {
 
 After the forward block lands, decide based on what the user already said:
 
-  - User's CURRENT message already requested BOTH directions ("anfahrt und
-    rückfahrt", "hin- und rückweg", "drive there and back", "auch die
-    rückfahrt mit X minuten") → DO NOT ask. Immediately call this skill
+  - User's CURRENT message already requested BOTH directions ("there and
+    back", "both ways", "drive there and back", "the drive back
+    too, X minutes") → DO NOT ask. Immediately call this skill
     again with `direction='return'` in the same turn, using the user's
     stated minutes (or `return_trip.minutes` if they didn't give one).
     Asking again would be redundant — they consented upfront.
 
-  - User asked for forward only → ask one short sentence and wait for "ja":
-    - `next_event` is null → "Soll ich die Heimfahrt (~N Min) auch blocken?"
-    - `next_event` set, `feasible=true`  → "Danach geht's direkt zu
-      „<next.title>" um <HH:MM> — soll ich die Weiterfahrt (~N Min) blocken?"
+  - User asked for forward only → ask one short sentence and wait for "yes":
+    - `next_event` is null → "Shall I block the drive home (~N min) too?"
+    - `next_event` set, `feasible=true`  → "After that you go straight to
+      "<next.title>" at <HH:MM> — shall I block that drive (~N min)?"
     - `feasible=false` → SURFACE the `warning` text verbatim before asking,
       so the user can decide whether to move the next event or skip the
       return block.
 
-On the user's "ja" / "yes" (in the ask-then-call flow) → call this skill
+On the user's "yes" (in the ask-then-call flow) → call this skill
 again with `direction='return'` (same `minutes` from `return_trip.minutes`
 unless the user gave a different number).
-On "nein" → drop it silently, no further mention.
+On "no" → drop it silently, no further mention.

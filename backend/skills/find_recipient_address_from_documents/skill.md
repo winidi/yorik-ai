@@ -64,7 +64,7 @@ finds.
 The user almost always *has* the address — it's on a past invoice, on
 the rental contract, on a letter they scanned. The LLM looking it up
 once and remembering it (via the `contact_address_suggestions` cache)
-is dramatically better UX than asking "wie ist die Adresse von Hans"
+is dramatically better UX than asking "what is Hans's address"
 every time.
 
 ## How it works
@@ -89,8 +89,8 @@ The `_llm_hint` field gives concrete next-turn guidance:
   - `candidates=[]` → "No documents found mentioning <name>. Ask the
     user for the address (one short question)."
   - `candidates=[…]` → "Found <N> addresses. Top match: <line1, postcode
-    city> (source: <doc_title>). Ask: 'Soll ich an diese Adresse
-    schicken?' If yes → add_contact_address + compose_draft."
+    city> (source: <doc_title>). Ask: 'Shall I send it to this address?'
+    If yes → add_contact_address + compose_draft."
 
 The skill never picks for the user — confirmation is always required
 before an address gets saved to the contact or used in a letter.

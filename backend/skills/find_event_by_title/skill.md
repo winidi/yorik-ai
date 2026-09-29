@@ -3,7 +3,7 @@ name: find_event_by_title
 description: Look up event IDs by title — helper for the next update_calendar_event / delete step.
 when_to_use: |
   When the user names a SPECIFIC event ("move the gym one to 7pm",
-  "delete the dentist appointment", "wann ist der Steuer-Termin?")
+  "delete the dentist appointment", "when is the tax appointment?")
   and you need the `event_id` for update_calendar_event /
   delete_calendar_event.
 

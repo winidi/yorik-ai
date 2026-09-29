@@ -2,9 +2,9 @@
 name: propose_meeting_times
 description: Find N free calendar slots and draft an email reply proposing them
 when_to_use: |
-  - User says "antworte Müller, dass nächste Woche Zeit habe — schlag drei Termine vor"
+  - User says "reply to Müller that I have time next week — suggest three slots"
   - "reply to this email with 3 meeting times next week"
-  - "schick ihm drei Vorschläge, wann wir telefonieren können"
+  - "send him three suggestions for when we can talk on the phone"
   - Any combination of: "reply to an email" + "with meeting times" + "from my calendar"
 inputs:
   message_id:
@@ -67,8 +67,8 @@ Workflow:
    that lets the user open the draft to edit + send.
 
 Speaks naturally in the user's language — German if their profile says
-de, English otherwise. Times rendered conversationally ("Dienstag um
-14 Uhr", "Friday at 3 PM") not as ISO.
+de, English otherwise. Times rendered conversationally ("Tuesday at
+2 pm", "Friday at 3 PM") not as ISO.
 
 Pattern: this is the canonical "skill composition" example — one skill
 calls two others. See docs/SKILLS.md.

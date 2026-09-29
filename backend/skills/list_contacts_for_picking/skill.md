@@ -2,9 +2,9 @@
 name: list_contacts_for_picking
 description: "List contacts for the user to pick from."
 when_to_use: |
-  Trigger A — BROWSE: user says "zeig mir / show me / list / alle Kontakte" with or without filter; emits the alphabetical contacts_found card.
+  Trigger A — BROWSE: user says "show me / list / all contacts" with or without filter; emits the alphabetical contacts_found card.
 
-  Trigger B — RELATIONAL DESCRIPTOR: user used a relational descriptor ("Oma", "der Klempner", "mein Steuerberater"); run the two-call ranking flow regardless of any prior find_person result.
+  Trigger B — RELATIONAL DESCRIPTOR: user used a relational descriptor ("Grandma", "the plumber", "my tax advisor"); run the two-call ranking flow regardless of any prior find_person result.
 
   Two-call ranking flow:
     1. list_contacts_for_picking(defer_card=true) — full address book, no card.
@@ -14,7 +14,7 @@ when_to_use: |
 
   Aim for 10 picks; shorter lists auto-pad to 5 rows with neutral recent contacts that have no relevance signal.
 
-  Do NOT use for a specific known name ("schreibe an Lilian Wende") — that's find_person.
+  Do NOT use for a specific known name ("write to Lilian Wende") — that's find_person.
 
   Do NOT enumerate names in your chat reply after a card emits — the card carries them.
 
@@ -23,7 +23,7 @@ inputs:
     type: boolean
     required: false
     default: true
-    description: "Default true (write/draft intent → click routes back to chat). Set false only for explicit browse ('zeig mir alle Kontakte') so a click navigates to /contacts."
+    description: "Default true (write/draft intent → click routes back to chat). Set false only for explicit browse ('show me all contacts') so a click navigates to /contacts."
   status:
     type: string
     required: false
@@ -70,4 +70,4 @@ Compact full-address-book dump AND the renderer for LLM-ranked picks. One skill,
 
 Browse path: ~30 chars/row × N contacts. At household scale (≤1000) this is ~30kb, fits qwen3's context window.
 
-Fallback ranking path: the user phrase "Oma" can't be resolved by SQL because relation='Großmutter' isn't a name match. Call 1 returns the whole list; you score with NL knowledge (Oma↔Großmutter↔grandma, Klempner↔plumber, nicknames, trade tags); call 2 renders the curated top 10 with confidence pills + reason subtitles. Be honest with confidence — the user trusts the ordering.
+Fallback ranking path: the user phrase "Grandma" can't be resolved by SQL when the stored relation is 'Großmutter' — not a name match, and often in another language. Call 1 returns the whole list; you score with NL knowledge (grandma↔Oma↔Großmutter, plumber↔Klempner, nicknames, trade tags); call 2 renders the curated top 10 with confidence pills + reason subtitles. Be honest with confidence — the user trusts the ordering.

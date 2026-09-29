@@ -2,7 +2,7 @@
 name: mark_contact_spam
 description: Move a contact to status='spam' — future inbound from its channels gets quietly dropped.
 when_to_use: |
-  - User explicitly rejects a pending row ("nein, das ist Werbung", "block").
+  - User explicitly rejects a pending row ("no, that's advertising", "block").
   - User flags an active contact that turned out to be a marketing/scam source.
   - The contact's channels stay indexed so future emails from the same address get auto-suppressed instead of recreating the pending row.
 inputs:

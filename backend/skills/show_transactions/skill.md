@@ -3,11 +3,11 @@ name: show_transactions
 description: List recent bank transactions from the synced local copy, filterable by account and category.
 when_to_use: |
   The user asks to see recent transactions, a specific account's
-  activity, or spending in one category ("zeig mir meine
-  Kontoumsätze", "was ging vom gemeinsamen Konto ab").
+  activity, or spending in one category ("show me my
+  account transactions", "what went out of the joint account").
   Call list_bank_accounts first if you need an account_id.
 when_not_to_use: |
-  A totals/breakdown question ("wie viel für X diesen Monat") — use
+  A totals/breakdown question ("how much on X this month") — use
   spending_summary, it aggregates instead of listing rows.
 inputs:
   days:
@@ -30,7 +30,7 @@ inputs:
   from_date:
     type: string
     required: false
-    description: First booking day to include, YYYY-MM-DD. For a calendar month ("im September") pass the 1st here and the last day as to_date; overrides days.
+    description: First booking day to include, YYYY-MM-DD. For a calendar month ("in September") pass the 1st here and the last day as to_date; overrides days.
   to_date:
     type: string
     required: false

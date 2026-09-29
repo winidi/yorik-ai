@@ -2,7 +2,7 @@
 name: plan_my_day
 description: "Gather what a day plan needs (appointments, open tasks, carry-over) before plan_day writes it."
 when_to_use: |
-  Trigger: "plan meinen Tag", "wie sieht mein Tag aus", "lass uns den Tag strukturieren", "plan my day".
+  Trigger: "plan my day", "what does my day look like", "let's structure the day".
   Call it first; it returns the material, never a finished plan.
   Draft with fixed sections: fixed events, at most 4 time blocks, today's full task list without times, suggestions from conversations, suggestions from the person's agent, one backlog line.
   Follow the person's `rules` (who does what at home, working hours, how many items).

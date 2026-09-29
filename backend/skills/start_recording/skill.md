@@ -2,9 +2,9 @@
 name: start_recording
 description: "Start recording a conversation at the table so Yorik writes the transcript with speakers."
 when_to_use: |
-  Use it when the user asks to record the dinner, a meeting or a conversation ("nimm das Abendessen auf", "record this").
+  Use it when the user asks to record the dinner, a meeting or a conversation ("record dinner", "record this").
   Pass the names of the people at the table as `participants`; they will be able to see the transcript, nobody else.
-  The device the user is talking to captures the audio after this call; tell the user the recording has started and that "das Abendessen ist fertig" ends it.
+  The device the user is talking to captures the audio after this call; tell the user the recording has started and that saying "dinner is over" ends it.
   If the result has `unknown`, ask which household members those names meant.
 when_not_to_use: |
   A single voice question to Yorik (that is the normal voice flow, not a recording). Anything the user did not explicitly ask to record.
@@ -12,7 +12,7 @@ inputs:
   title:
     type: string
     required: false
-    description: Short name for the recording, e.g. "Abendessen 10.9." (optional, defaults by kind and date).
+    description: Short name for the recording, e.g. "Dinner 10.9." (optional, defaults by kind and date).
   kind:
     type: string
     required: false

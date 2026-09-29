@@ -8,28 +8,28 @@ when_to_use: |
   1. **Translate to ENGLISH before calling.** Immich's CLIP model (ViT-B-32 OpenAI) was trained on English captions only. German / French / Spanish queries return semantically-random results because the model never saw those tokens. The user types "in einem Anzug" → you call with query='suit'. "am Strand" → query='beach'. "im Schnee" → query='snow'. ALWAYS English, even when the user's prompt is in another language.
   2. **Never include person names.** CLIP cannot match faces. A name in `query` either matches nothing or accidentally matches based on filename text. Names ALWAYS go in `person` or `people` — those use Immich's face-recognition index. "Dirk in einem Anzug" → query='suit', person='Dirk' (NOT query='Dirk Anzug', NOT query='Dirk suit').
 
-  - User asks for a photo of a specific person ("show me a picture of Sara", "zeig mir Fotos von Oma", "find pictures of Anna from last summer") → call with op='of_person', person='<the name>'. Immich's face recognition handles the matching. DON'T put the name in `query` and use op='search' — that's CLIP text search which won't filter by face.
-  - Generic content search ("photos from the beach", "Bilder vom Sonnenuntergang") → op='search' with query=<content>.
-  - **A specific date** ("photos from 23. März 2007", "Bilder vom Sonntag", "Fotos vom 12. Juni") → pass `date='YYYY-MM-DD'`. The skill expands to a 00:00–23:59 window and auto-routes to op='taken_on' which uses Immich's EXIF taken-date filter. NEVER use op='search' with a date in `query` — that's text content search and returns random matches.
-  - **A date range** ("photos from last March", "Fotos aus dem Sommer 2020") → pass `start_iso='YYYY-MM-DDT00:00:00'` and `end_iso='YYYY-MM-DDT23:59:59'`. Auto-routes to op='taken_on'.
+  - User asks for a photo of a specific person ("show me a picture of Sara", "show me photos of Grandma", "find pictures of Anna from last summer") → call with op='of_person', person='<the name>'. Immich's face recognition handles the matching. DON'T put the name in `query` and use op='search' — that's CLIP text search which won't filter by face.
+  - Generic content search ("photos from the beach", "pictures of the sunset") → op='search' with query=<content>.
+  - **A specific date** ("photos from 23 March 2007", "pictures from Sunday", "photos from 12 June") → pass `date='YYYY-MM-DD'`. The skill expands to a 00:00–23:59 window and auto-routes to op='taken_on' which uses Immich's EXIF taken-date filter. NEVER use op='search' with a date in `query` — that's text content search and returns random matches.
+  - **A date range** ("photos from last March", "photos from summer 2020") → pass `start_iso='YYYY-MM-DDT00:00:00'` and `end_iso='YYYY-MM-DDT23:59:59'`. Auto-routes to op='taken_on'.
   - "Any photos from this week?" / "recent photos" → op='recent'.
-  - **"How many photos do I have"** / "wie viele Fotos habe ich" — call with op='stats' (or just op='recent', which also returns counts). The result includes total_photos, total_videos, total_assets library-wide. NEVER answer "I don't have access to the count" — this skill provides it.
+  - **"How many photos do I have"** / "how many photos are there" — call with op='stats' (or just op='recent', which also returns counts). The result includes total_photos, total_videos, total_assets library-wide. NEVER answer "I don't have access to the count" — this skill provides it.
   - Another skill (whatsapp_send_with_photo) needs to attach a relevant image
 
   When results.length >= 1 the skill emits `photos_found` automatically — do
   NOT enumerate filenames or describe the photos in text. Reply ONE short
-  sentence ("Drei Fotos aus Italien, siehe Karten unten"). When results.length
-  == 0, the skill stays silent; say so briefly in text ("Keine Fotos gefunden").
+  sentence ("Three photos from Italy, see the cards below"). When results.length
+  == 0, the skill stays silent; say so briefly in text ("No photos found").
 
   ═══ METADATA FILTERS (combine freely) ═══
 
   Any combination of these auto-routes to op='filter' and runs as ONE Immich query — no need to call the skill multiple times or pick the "right" op. Combine with `person`, `start_iso`/`end_iso`/`date` freely:
 
-  - **Location** ("aus Berlin", "vom Urlaub in Italien", "Fotos aus München") → `location='Berlin'`. Tries Immich's city → state → country fields in order. Place names only — for descriptive places like "am Strand" use op='search' with CLIP instead.
-  - **Favorites** ("meine Lieblingsfotos", "die mit Herz") → `favorites_only=true`.
-  - **Album** ("aus dem Album Hochzeit", "vom Roadtrip-Album") → `album='Hochzeit'`. Case-insensitive substring match.
-  - **Photos vs videos** ("nur Fotos", "nur Videos") → `media_type='image'` | `'video'`. Default returns both.
-  - **Camera** ("vom iPhone", "von der Canon") → `camera_make='Apple'` or `camera_model='iPhone 14 Pro'`.
+  - **Location** ("from Berlin", "from the holiday in Italy", "photos from Munich") → `location='Berlin'`. Tries Immich's city → state → country fields in order. Place names only — for descriptive places like "on the beach" use op='search' with CLIP instead.
+  - **Favorites** ("my favourite photos", "the ones with a heart") → `favorites_only=true`.
+  - **Album** ("from the Wedding album", "from the road-trip album") → `album='Wedding'`. Case-insensitive substring match.
+  - **Photos vs videos** ("only photos", "only videos") → `media_type='image'` | `'video'`. Default returns both.
+  - **Camera** ("from the iPhone", "from the Canon") → `camera_make='Apple'` or `camera_model='iPhone 14 Pro'`.
 
   Examples (combine any subset):
     "Fotos von Dirk in einem Anzug" / "photos of Dirk in a suit"
@@ -42,18 +42,18 @@ when_to_use: |
     "Bilder vom Sonnenuntergang am Strand" → op='search', query='sunset at the beach'
           (German prompt → English query. Always.)
     "Foto im Anzug vor dem Spiegel" → op='search', query='suit in front of a mirror'
-    "Lieblingsfoto von Sara aus Italien"
-        → favorites_only=true, person='Sara', location='Italien'
-    "Fotos vom Roadtrip 2023 in Spanien"
-        → start_iso='2023-01-01T00:00:00', end_iso='2023-12-31T23:59:59', location='Spanien'
-    "Videos vom Geburtstag aus dem Album 2024"
-        → media_type='video', album='Geburtstag 2024'
-    "drei iPhone-Fotos von Sara aus Hannover"
+    "favourite photo of Sara from Italy"
+        → favorites_only=true, person='Sara', location='Italy'
+    "photos from the 2023 road trip in Spain"
+        → start_iso='2023-01-01T00:00:00', end_iso='2023-12-31T23:59:59', location='Spain'
+    "videos from the birthday in the album 2024"
+        → media_type='video', album='Birthday 2024'
+    "three iPhone photos of Sara from Hannover"
         → person='Sara', location='Hannover', camera_make='Apple', take_count=3
-    "Bilder von mir und Sara" (user is Tom)
+    "pictures of me and Sara" (user is Tom)
         → people='Tom, Sara'   (Immich AND's them — BOTH faces required)
-    "Foto von uns dreien letzten Sommer in Italien" (user is Tom; +Sara, Anna)
-        → people='Tom, Sara, Anna', location='Italien',
+    "photo of the three of us last summer in Italy" (user is Tom; +Sara, Anna)
+        → people='Tom, Sara, Anna', location='Italy',
           start_iso='2024-06-01...', end_iso='2024-08-31...'
 inputs:
   query:
@@ -91,12 +91,12 @@ inputs:
       Multiple people the photo must contain — pass either a list ["Sara", "Tom"]
       or a comma-separated string ("Sara, Tom"). Auto-routes to op='filter'.
       Immich AND's them — "Sara, Tom" returns photos with BOTH faces. Use this
-      for "Fotos von mir und Sara" / "photos of me and X". Substitute "me / ich"
+      for "photos of me and Sara" / "photos of me and X". Substitute "me"
       with the logged-in user's first name (see WHO 'ME' IS in the system prompt).
   date:
     type: string
     required: false
-    description: A single calendar day, format YYYY-MM-DD. The skill expands to a 00:00–23:59 window and auto-routes to op='taken_on'. Easiest way to filter by date — "photos from 23. März 2007" → date='2007-03-23'.
+    description: A single calendar day, format YYYY-MM-DD. The skill expands to a 00:00–23:59 window and auto-routes to op='taken_on'. Easiest way to filter by date — "photos from 23 March 2007" → date='2007-03-23'.
   start_iso:
     type: string
     required: false
@@ -118,7 +118,7 @@ inputs:
   location:
     type: string
     required: false
-    description: Place name — city / state / country (e.g. "Berlin", "Italy", "Bayern"). Auto-routes to op='filter'. Combine with date/person/etc. For descriptive places ("am Strand") use op='search' with CLIP instead.
+    description: Place name — city / state / country (e.g. "Berlin", "Italy", "Bayern"). Auto-routes to op='filter'. Combine with date/person/etc. For descriptive places ("on the beach") use op='search' with CLIP instead.
   favorites_only:
     type: boolean
     required: false

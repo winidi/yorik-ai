@@ -2,9 +2,9 @@
 name: date_info
 description: "Weekday of a date and date arithmetic (\"in 3 Wochen\", days until …), never done in your head."
 when_to_use: |
-  - You are about to name a weekday for a date ("der 2. Oktober ist ein …"): look it up here.
-  - "in 3 Wochen", "nächsten Monat am 5.", "4 Wochen vor dem 31.12.": add_days / add_weeks / add_months (negative to go back).
-  - "wie viele Tage bis …": until.
+  - You are about to name a weekday for a date ("2 October is a …"): look it up here.
+  - "in 3 weeks", "next month on the 5th", "4 weeks before 31.12.": add_days / add_weeks / add_months (negative to go back).
+  - "how many days until …": until.
 when_not_to_use: |
   - Looking up appointments — that's check_calendar.
 inputs:

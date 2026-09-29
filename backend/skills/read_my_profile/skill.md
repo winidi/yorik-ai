@@ -4,9 +4,9 @@ description: "Read the calling user's own profile — name, address, phone, emai
 when_to_use: |
   When the user asks about themselves and you need fields the system
   prompt doesn't already carry. Triggers:
-    "what's my address" / "wie ist meine adresse"
-    "what's my IBAN"    / "wie ist meine kontonummer"
-    "what's my phone"   / "wie ist meine nummer"
+    "what's my address"
+    "what's my IBAN" / "what's my account number"
+    "what's my phone" / "what's my number"
     "do I have a signature on file"
     "what's my business name"
 

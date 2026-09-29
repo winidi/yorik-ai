@@ -2,20 +2,20 @@
 name: navigate_to
 description: "Open / switch the browser to a Yorik app (calendar, chat, documents, etc.)."
 when_not_to_use: |
-  Reads ("how many tasks?", "wie viele / welche / was …") → call the matching `check_*` / `find_*` skill first and answer; navigate only after you've answered, never as a substitute for answering. Mutations ("add a task") → the matching domain skill. Help text — answer in chat. Most mutation skills already auto-navigate via `show_calendar` / `refresh_data` UI actions — only call this skill when nothing else is firing and the user explicitly asked to see something.
+  Reads ("how many tasks?", "how many / which / what …") → call the matching `check_*` / `find_*` skill first and answer; navigate only after you've answered, never as a substitute for answering. Mutations ("add a task") → the matching domain skill. Help text — answer in chat. Most mutation skills already auto-navigate via `show_calendar` / `refresh_data` UI actions — only call this skill when nothing else is firing and the user explicitly asked to see something.
 when_to_use: |
-  Use this whenever the user wants to SEE or OPEN something, not do something with it. Trigger phrases (DE + EN):
-  - "zeig mir X", "öffne X", "geh zu X", "ich will X sehen", "auf X"
+  Use this whenever the user wants to SEE or OPEN something, not do something with it. Trigger phrases:
+  - "show me X", "open X", "go to X", "I want to see X", "to X"
   - "show me X", "open X", "go to X", "switch to X", "take me to X"
 
   Examples mapping intent → app:
-  - "zeig mir die Kontakte" / "show me contacts" → app="contacts"
-  - "öffne WhatsApp" / "open whatsapp"           → app="whatsapp"
-  - "geh zum Kalender" / "go to calendar"        → app="calendar"
-  - "ich will die Dokumente sehen" / "show docs" → app="documents"
-  - "Brief schreiben" / "open compose"           → app="compose"
-  - "Einstellungen" / "settings"                  → app="settings"
-  - "zurück zur Startseite" / "go home"          → app="home"
+  - "show me the contacts"                       → app="contacts"
+  - "open WhatsApp"                              → app="whatsapp"
+  - "go to the calendar"                         → app="calendar"
+  - "I want to see the documents" / "show docs"  → app="documents"
+  - "write a letter" / "open compose"            → app="compose"
+  - "settings"                                    → app="settings"
+  - "back to the start page" / "go home"         → app="home"
 
 
 inputs:
@@ -52,7 +52,7 @@ The "show me / open" routing primitive. The chat reply that accompanies
 this skill must be ONE short sentence in the user's language that names
 the destination YOU JUST navigated to (the `app` argument). Don't copy
 a fixed phrase — write a fresh acknowledgement that mentions the actual
-screen ('Kalender' / 'calendar' / 'Kontakte' / 'contacts' / etc).
+screen (in the user's language: 'calendar', 'contacts', etc).
 
 NEVER mention a different screen than the one you navigated to — a
 mismatched reply ("Opening contacts" after navigate_to(app='calendar'))

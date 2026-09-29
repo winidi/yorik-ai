@@ -11,7 +11,7 @@ when_to_use: |
     facts from the body (landlord name, contract dates, IBAN, amounts).
   - The user dropped several documents into the chat's document bucket
     and asked for something that needs the actual contract text — e.g.
-    "create a Mietkündigung from these docs" needs the Mietvertrag's
+    "create a rent cancellation from these docs" needs the lease's
     landlord + start date.
 
   Do NOT use:

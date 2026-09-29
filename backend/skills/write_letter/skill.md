@@ -16,7 +16,7 @@ inputs:
   subject:
     type: string
     required: true
-    description: The subject line, short, without the word Betreff.
+    description: The subject line, short, without a label in front (no "Subject" / "Betreff").
   text:
     type: string
     required: true
@@ -33,7 +33,7 @@ outputs:
 cost: instant
 permissions: [admin, member, restricted]
 side_effects: Creates or updates a draft letter of the calling user. Nothing is sent or filed.
-tags: [write, letter, brief, kuendigung, schreiben, app:write]
+tags: [write, letter, cancellation, app:write]
 category: productivity
 ---
 

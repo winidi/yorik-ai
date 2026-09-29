@@ -4,9 +4,9 @@ description: "Stage a new email (recipient, subject, body, one optional attachme
 when_to_use: |
   The user wants to send something from the chat by email — a filled
   form, a document, a result — as a brand-new outgoing email (not a
-  reply within an existing thread). Triggers: "kannst du das schicken",
-  "können wir das absenden", "schick das per Mail an X", "bereite eine
-  Mail vor".
+  reply within an existing thread). Triggers: "can you send that",
+  "can we send this off", "email that to X", "prepare an
+  email".
   Write `subject` and `body` yourself from the conversation — a short,
   plain cover message is enough. Pass `from_email` only if the user
   named which of their own accounts to send from.

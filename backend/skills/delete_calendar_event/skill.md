@@ -2,8 +2,8 @@
 name: delete_calendar_event
 description: Delete ONE calendar event by id
 when_to_use: |
-  - User cancels a meeting: "der Termin am Dienstag fällt aus"
-  - User asks to clean up: "lösch den Test-Termin"
+  - User cancels a meeting: "Tuesday's appointment is off"
+  - User asks to clean up: "delete the test appointment"
   Always call check_calendar first to get the event_id — never guess.
   IMPORTANT: this skill deletes exactly ONE event per call. If the user
   asks to delete multiple events, call this skill multiple times — once

@@ -2,7 +2,7 @@
 name: add_contact
 description: Create a new contact (person or business) with ALL its channels and address in one call.
 when_to_use: |
-  - User asks to save someone — "Speicher Anna mit der Adresse X", "Save Müller GmbH as a vendor", "Trag Oma ein mit Adresse …".
+  - User asks to save someone — "save Anna with address X", "Save Müller GmbH as a vendor", "add Grandma with her address …".
   - YOU asked the user for missing contact info (after find_person returned nothing) and they answered — call this to persist it before continuing the original task.
   - Always check find_person first to avoid duplicates. If a likely match exists, ask the user "is this the one you mean?" instead of creating a new row.
   - If a pending contact already matches the name/email/phone, call `promote_pending_contact` instead of add_contact — never create a duplicate that shadows the pending row.
@@ -24,7 +24,7 @@ inputs:
       Pick 'business' ONLY when the name clearly identifies an
       organisation: legal-entity suffix (GmbH, AG, UG, Ltd, Inc,
       LLC, e.V., e.K., Co., etc.), known company branding, or the
-      user explicitly says "Firma", "company", "business". A
+      user explicitly says "firm", "company", "business". A
       first-name-last-name pair is ALWAYS 'person'. When unsure,
       'person' is the correct fallback — businesses are the
       exception, not the default.
@@ -40,8 +40,8 @@ inputs:
     type: string
     required: false
     description: |
-      Person's JOB TITLE at their employer ("Senior Service-Monteur",
-      "CEO", "Sachbearbeiterin"). For kind='person' only. Distinct
+      Person's JOB TITLE at their employer ("Senior Service Technician",
+      "CEO", "Clerk"). For kind='person' only. Distinct
       from `relation` — `role` is what they do at work, `relation`
       is how they relate to the user.
   employer_contact_id:
@@ -55,7 +55,7 @@ inputs:
   aliases:
     type: array
     required: false
-    description: Additional names the user calls them. Picked up by find_person's fuzzy search. Example for Oma Schmidt → ['Oma', 'Grossmutter'].
+    description: Additional names the user calls them. Picked up by find_person's fuzzy search. Example for Grandma Schmidt → ['Grandma', 'Granny'].
   relation:
     type: string
     required: false
@@ -93,7 +93,7 @@ inputs:
       Free-text notes. Do NOT use this to dump structured data that
       has a real field — emails, phone numbers, and addresses each
       have their own field on this skill. notes is for prose that
-      doesn't fit anywhere else ("met at the Schützenfest", "prefers
+      doesn't fit anywhere else ("met at the village fair", "prefers
       morning calls").
   status:
     type: string

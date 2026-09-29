@@ -2,9 +2,9 @@
 name: update_contact
 description: "Modify an existing contact (name, relation, business fields, status, etc.)."
 when_to_use: |
-  - "Oma heißt eigentlich Lena Hoffmann" → update display_name.
-  - "Sie spricht Englisch" → update language_pref.
-  - "Müller GmbH hat eine neue USt-IdNr DE…" → update tax_id.
+  - "Grandma's real name is Lena Hoffmann" → update display_name.
+  - "She speaks English" → update language_pref.
+  - "Müller GmbH has a new VAT ID DE…" → update tax_id.
   - To toggle status (active ↔ pending ↔ spam ↔ archived) prefer the dedicated promote_pending_contact / mark_contact_spam skills — they're clearer in the trace.
   - For adding/removing channels or addresses use add_contact_channel / add_contact_address — this skill only edits the contact row itself.
   - Always call find_person first to get the id; do NOT guess.

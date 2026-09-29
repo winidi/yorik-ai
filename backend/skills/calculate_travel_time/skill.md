@@ -2,21 +2,21 @@
 name: calculate_travel_time
 description: "How long from A to B? Returns driving/cycling/walking time + distance via the maps connector."
 when_to_use: |
-  Whenever the user asks "wie lange brauche ich nach X", "how long to
-  get to Y", "wie weit ist Z", "kann ich in 30 Minuten in Hannover sein".
+  Whenever the user asks "how long does it take me to get to X", "how long to
+  get to Y", "how far is Z", "can I be in Hannover in 30 minutes".
   Also called internally by add_calendar_event when a location is set —
   you don't need to call it manually for that case (it happens server-side).
 
   Defaults:
     - `from` defaults to the user's home address (read from their profile)
-      when omitted. Useful for "wie lange nach Hamburg" without the user
+      when omitted. Useful for "how long to Hamburg" without the user
       having to specify their start point.
     - `mode` defaults to `driving`. Pass `cycling` / `walking` for those
       modes when the user mentioned bike or foot.
 
   If maps connector isn't reachable or returns no route, the skill
   returns a clear "couldn't compute" hint — surface that to the user
-  honestly ("ich konnte die Fahrzeit gerade nicht berechnen") instead
+  honestly ("I couldn't calculate the travel time just now") instead
   of making up a duration.
 inputs:
   to:
@@ -53,6 +53,6 @@ tags: [maps, routing, travel]
 # calculate_travel_time
 
 Thin wrapper around `maps.directions` that defaults the `from` address
-to the user's home (so "wie lange nach Hamburg" works without the user
+to the user's home (so "how long to Hamburg" works without the user
 specifying a starting point) and returns a flat shape the chat can
 quote naturally.

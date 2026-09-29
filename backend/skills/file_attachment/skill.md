@@ -2,8 +2,8 @@
 name: file_attachment
 description: File a chat attachment in Paperless, the household's document archive.
 when_to_use: |
-  The user agreed to file an attachment ("ja, ablegen", "leg das ab", "ab in Paperless") after read_attachment, or asks for it later in the same conversation.
-  Always pass `visibility` from what the user said; "nur ich" / "privat" is private, "wir beide" / "die Eltern" / "nicht die Kinder" is parents, "für alle" / "die ganze Familie" is shared, "Firma" / "Geschäft" is business.
+  The user agreed to file an attachment ("yes, file it", "put it away", "into Paperless") after read_attachment, or asks for it later in the same conversation.
+  Always pass `visibility` from what the user said; "only me" / "private" is private, "the two of us" / "the parents" / "not the kids" is parents, "for everyone" / "the whole family" is shared, "company" / "the business" is business.
   If the user agreed to file but did not say who should see it, ask that one question first instead of calling this.
   Pass `title` when the file name says nothing ("scan_0042.pdf") and you know what the document is.
 when_not_to_use: |
@@ -20,7 +20,7 @@ inputs:
   title:
     type: string
     required: false
-    description: A speaking title for Paperless, e.g. "Stadtwerke Rechnung September 2026".
+    description: A descriptive title for Paperless, e.g. "Stadtwerke Rechnung September 2026".
 outputs:
   ok:
     type: boolean

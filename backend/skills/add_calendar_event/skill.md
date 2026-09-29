@@ -2,13 +2,13 @@
 name: add_calendar_event
 description: Create a new calendar event in Yorik's local calendar
 when_not_to_use: |
-  Anfahrt / Rückfahrt / drive-time blocks → use `block_travel_time` instead. This skill produces an unlinked plain event that misses [LINKED_TO=...] and won't cascade-delete with the main event.
+  Drive-time blocks (to or from an appointment) → use `block_travel_time` instead. This skill produces an unlinked plain event that misses [LINKED_TO=...] and won't cascade-delete with the main event.
 when_to_use: |
-  Trigger: "trag X ein", "block out", "schedule X", "add X to the calendar". Acknowledge AFTER the skill returns, never before. Reply ONE short line ("Termin eingetragen").
+  Trigger: "put X in the calendar", "block out", "schedule X", "add X to the calendar". Acknowledge AFTER the skill returns, never before. Reply ONE short line ("Added to your calendar").
 
   If date or hour is missing, ask before calling — never default to 10:00 or pick a day yourself.
 
-  DATE-ANCHOR DISCIPLINE: when the user named a relative date (weekday name, "morgen", "in 3 Tagen"), FIRST write the resolved date + weekday inline as a one-liner BEFORE calling the skill — e.g. "User said Friday → looking up table → 2026-06-05 (Freitag)". This catches the off-by-one weekday bug that hit T4. The lookup table in the NOW section is authoritative; do not compute day offsets yourself.
+  DATE-ANCHOR DISCIPLINE: when the user named a relative date (weekday name, "tomorrow", "in 3 days"), FIRST write the resolved date + weekday inline as a one-liner BEFORE calling the skill — e.g. "User said Friday → looking up table → 2026-06-05 (Friday)". This catches the off-by-one weekday bug that hit T4. The lookup table in the NOW section is authoritative; do not compute day offsets yourself.
 
   Then after the skill returns, check that the echoed `verified_weekday` matches. If it doesn't, call update_calendar_event with the correct date BEFORE telling the user the event was created.
 
@@ -16,7 +16,7 @@ when_to_use: |
 
   Pass `location` whenever the user mentions WHERE — the backend geocodes it and the UI renders a travel-time badge ("leave at HH:MM"). Without it, the badge doesn't show.
 
-  Provider categories (Zahnarzt, Hausarzt, Werkstatt, Friseur, Apotheke, Tierarzt, Steuerberater, Anwalt, Optiker): call `find_known_provider(category=...)` first; if 0 matches, `find_provider_nearby(poi=..., near=...)` next. Never skip to web search for these.
+  Provider categories (dentist, GP, garage, hairdresser, pharmacy, vet, tax advisor, lawyer, optician): call `find_known_provider(category=...)` first; if 0 matches, `find_provider_nearby(poi=..., near=...)` next. Never skip to web search for these.
 
   If the user names their own provider not in the picker: `find_person`, then `add_contact` if missing, then this skill.
 
@@ -58,7 +58,7 @@ inputs:
       — multi-attendee events still appear on every invited attendee's
       view via the attendee/RSVP join, so they don't need to live on the
       Household calendar. Pass an explicit calendar_id only when the user
-      named one ("trag das in den Haushaltskalender ein") or when the item
+      named one ("put that in the household calendar") or when the item
       is genuinely person-agnostic (trash day, mortgage, holidays).
   attendee_user_ids:
     type: array
@@ -96,9 +96,9 @@ inputs:
 
       Pass this whenever the appointment is physically somewhere — even
       if the user didn't explicitly say "create event at X", infer from
-      context: "Zahnarzttermin" → location = the dentist's address (call
-      find_known_provider first to resolve "der Zahnarzt"); "treffen mit
-      Anna im Café Goldmund" → location = "Café Goldmund".
+      context: "dentist appointment" → location = the dentist's address (call
+      find_known_provider first to resolve "the dentist"); "meeting
+      Anna at Café Goldmund" → location = "Café Goldmund".
   category:
     type: string
     required: false
@@ -106,19 +106,19 @@ inputs:
       Closed enum — drives the event's colour on the calendar. Pick the
       single best match from the user's phrasing; omit if genuinely
       ambiguous (no colour > wrong colour).
-        - "family"   — Familie, Haushalt, Kinder, Eltern, Geburtstage
-        - "business" — Arbeit, Meetings, Kundentermine, Liefertermine
-        - "drive"    — Anfahrt, Rückfahrt, Reisezeit (you usually don't
+        - "family"   — family, household, kids, parents, birthdays
+        - "business" — work, meetings, client appointments, deliveries
+        - "drive"    — drive there, drive back, travel time (you usually don't
                        set this manually — block_travel_time does it)
-        - "health"   — Arzt, Zahnarzt, Therapie, Untersuchung, Apotheke
-        - "personal" — Sport, Gym, Hobby, „Zeit für mich"
-        - "social"   — Freunde, Essen, Feiern, Party
+        - "health"   — doctor, dentist, therapy, check-up, pharmacy
+        - "personal" — sport, gym, hobby, "time for me"
+        - "social"   — friends, dinner, celebrations, party
       Examples:
-        "Zahnarzttermin"            → category="health"
-        "Kundentermin SAP"          → category="business"
-        "Schule abholen"            → category="family"
-        "Sport im Studio"           → category="personal"
-        "Essen mit Tom"             → category="social"
+        "dentist appointment"       → category="health"
+        "SAP client meeting"        → category="business"
+        "pick up from school"       → category="family"
+        "workout at the gym"        → category="personal"
+        "dinner with Tom"           → category="social"
 outputs:
   event_id:
     type: integer

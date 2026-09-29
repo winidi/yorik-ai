@@ -5,8 +5,8 @@ when_to_use: |
   Any question whose answer is likely in a filed document — contracts,
   invoices, letters, manuals, school papers, warranties, notes. Search
   is semantic, so paraphrase the user's words when the document might
-  use different terminology ("Stromrechnung" finds documents about
-  "Energieabrechnung", etc.).
+  use different terminology ("electricity bill" finds documents about
+  "energy statement", etc.).
 
   USE THIS for the German word "Rechnung" when the user wants the
   scanned document — "find a Rechnung", "show me the Rechnung from
@@ -17,11 +17,11 @@ when_to_use: |
 
   Two modes:
     - With a query → hybrid search across Paperless + native uploads.
-    - With empty query → recent N documents across both sources. Use for "zeig mir ein Dokument" / "irgendein Brief" / open-ended browse.
+    - With empty query → recent N documents across both sources. Use for "show me a document" / "any letter" / open-ended browse.
 
-  After the call, give a ONE-line reply ("3 Treffer, siehe Karten unten" or equivalent). The chat renders each hit as a clickable card — do NOT enumerate titles, correspondents, or dates in prose.
+  After the call, give a ONE-line reply ("3 hits, see the cards below" or equivalent). The chat renders each hit as a clickable card — do NOT enumerate titles, correspondents, or dates in prose.
 
-  Follow-up: if the user asks WHAT is in a hit ("wie hoch ist der Betrag", "was steht drin"), call `read_document(doc_id=<id>)` and answer from the returned text — do NOT navigate to the documents app as a substitute.
+  Follow-up: if the user asks WHAT is in a hit ("how much is the amount", "what does it say"), call `read_document(doc_id=<id>)` and answer from the returned text — do NOT navigate to the documents app as a substitute.
 when_not_to_use: |
   Reads of bills/tasks/events/contacts — those have dedicated skills (`check_bills`, `check_tasks`, `check_calendar`, `find_person`) that emit their own cards. Documents are the PDF surface; bills are the metadata surface; these are different things even when the underlying invoice is the same.
 

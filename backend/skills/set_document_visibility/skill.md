@@ -4,10 +4,10 @@ description: "Change who may see a Paperless document - private, parents, busine
 when_not_to_use: |
   Don't use to change a CONTACT's sharing — that's `share_contact` / `update_contact(space=...)`. Don't use to change a calendar event's visibility — that's `update_calendar_event(visibility=...)` for per-event privacy, or move the calendar to a different space. This skill is documents only.
 when_to_use: |
-  - User wants to share a document with the household ("teile den Mietvertrag mit der Familie") → visibility="shared".
-  - User wants only the adults to see it ("nur wir Eltern", "nicht für die Kinder") → visibility="parents".
-  - User wants to mark a document as business-shared ("die Rechnung ist für alle im Geschäft") → visibility="business".
-  - User wants to lock a document back to private ("nur ich soll das sehen") → visibility="private".
+  - User wants to share a document with the household ("share the lease with the family") → visibility="shared".
+  - User wants only the adults to see it ("only us parents", "not for the kids") → visibility="parents".
+  - User wants to mark a document as business-shared ("the invoice is for everyone in the business") → visibility="business".
+  - User wants to lock a document back to private ("only I should see that") → visibility="private".
 
   ALWAYS call find_document first if you don't know the document_id. Quote the document's title in your reply so the user knows which one you changed.
 

@@ -3,7 +3,7 @@ name: find_task_by_title
 description: Look up task IDs by title — helper for the next update_task / delete / mark_done step.
 when_to_use: |
   When the user names a SPECIFIC task ("delete the milk task", "mark the gym
-  one done", "change the deadline of the Steuer-Erklärung") and you need its
+  one done", "change the deadline of the tax return") and you need its
   `task_id` to call update_task / delete_task / mark_task_done.
 
   check_tasks renders cards to the user but hides titles + IDs from the LLM

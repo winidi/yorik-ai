@@ -6,13 +6,13 @@ when_to_use: |
 
   Trigger B — the question needs layout reasoning the flat OCR text destroys (table rows + columns, form field positions, side-by-side German/English contract clauses).
 
-  Trigger C — read_document returned plausible text but the user asks for a specific value ("was habe ich für X bezahlt?") that you can't find in the OCR; the value might be on a page Paperless OCR'd poorly even if other pages came through clean.
+  Trigger C — read_document returned plausible text but the user asks for a specific value ("what did I pay for X?") that you can't find in the OCR; the value might be on a page Paperless OCR'd poorly even if other pages came through clean.
 
   Pass `question="<focused question>"` whenever you have one — the model answers it directly and returns a short reply instead of a transcription wall.
 
   One doc_id per call — to read multiple docs, call this skill multiple times in parallel; there is no batch form (no doc_ids array).
 
-  Aim for page ranges around the section that likely holds the answer (Vertrag amounts → first few pages; Rechnung totals → last page; Kalkulationsblatt → all pages). The skill caps at 15 pages per call regardless.
+  Aim for page ranges around the section that likely holds the answer (contract amounts → first few pages; invoice totals → last page; calculation sheet → all pages). The skill caps at 15 pages per call regardless.
 inputs:
   doc_id:
     type: integer

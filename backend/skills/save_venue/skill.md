@@ -6,12 +6,12 @@ when_to_use: |
 
   Signals to save:
     - User asked the price/hours AND will probably visit
-    - User said "merk dir das", "speichern", "behalt dir das"
+    - User said "remember that", "save it", "keep that"
     - User asked you to compute a group price (so they ARE going)
     - User asked to add a calendar event with that location
 
   Don't save when:
-    - User was just curious ("was kostet Cube E-Bike?" — no venue)
+    - User was just curious ("what does a Cube e-bike cost?" — no venue)
     - The page was an aggregator (schwimmbadcheck.de, yelp, etc.) — save
       the underlying venue's own page, not the directory.
 
@@ -24,19 +24,19 @@ inputs:
   url:
     type: string
     required: false
-    description: The venue's own website (NOT an aggregator). Used for "Website besuchen" + future structured-info refresh.
+    description: The venue's own website (NOT an aggregator). Used for "Visit website" + future structured-info refresh.
   category:
     type: string
     required: false
     description: |
       Free-text category that find_known_provider's category-keyword
-      matcher recognises. Examples: "indoor-spielplatz", "schwimmbad",
-      "restaurant", "zahnarzt", "werkstatt". Used to find the venue
+      matcher recognises. Examples: "indoor playground", "swimming pool",
+      "restaurant", "dentist", "garage". Used to find the venue
       again next time the user mentions the type.
   address:
     type: string
     required: false
-    description: Single-line postal address ("Straße + Nr., PLZ Ort"). Helps with travel-time calculation later.
+    description: Single-line postal address ("street + no., postcode town"). Helps with travel-time calculation later.
   phone:
     type: string
     required: false
@@ -57,7 +57,7 @@ inputs:
       Optional structured prices captured during this lookup. Same
       shape as compute_group_price's items but persisted on the
       contact's notes for instant follow-up calcs. Example:
-        [{"label": "Erwachsene", "unit_eur": 5.90}, ...]
+        [{"label": "Adult", "unit_eur": 5.90}, ...]
 outputs:
   contact_id:
     type: integer

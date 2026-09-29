@@ -31,7 +31,7 @@ inputs:
   region:
     type: string
     required: false
-    description: State / canton / Bundesland.
+    description: State / canton / federal state.
   country:
     type: string
     required: false
@@ -51,6 +51,6 @@ tags: [contacts, mutation]
 
 # add_contact_address
 
-Multiple addresses per contact are normal — Oma's home, the office she
+Multiple addresses per contact are normal — Grandma's home, the office she
 works at, a billing address for a business. Use the `kind` field so
 Compose knows which one to render for invoices vs. letters.

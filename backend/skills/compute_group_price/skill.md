@@ -2,8 +2,8 @@
 name: compute_group_price
 description: Sum group entry prices deterministically from tickets + per-ticket headcounts.
 when_to_use: |
-  After the user asked for a group total ("was kostet das für 2
-  Erwachsene + 2 Kinder?") and you've identified the right prices
+  After the user asked for a group total ("what does that cost for 2
+  adults + 2 kids?") and you've identified the right prices
   (either from web_extract or the user typed them). DON'T do the
   arithmetic in your head — call this skill. It also emits a nice
   receipt-style card in the chat (price_summary ui_action).
@@ -13,15 +13,15 @@ when_to_use: |
     2. Ideally use the CLARIFY-BEFORE-CALCULATING rule first if the
        price structure is ambiguous (state interpretation + ask).
     3. Call compute_group_price with the matched items.
-    4. Reply with the total + offer a follow-up (e.g. "soll ich euren
-       Besuch eintragen?").
+    4. Reply with the total + offer a follow-up (e.g. "shall I put your
+       visit in the calendar?").
 
   Example call:
     compute_group_price(
       items=[
-        {"label": "Erwachsene (Begleitperson)", "unit_eur": 5.90, "count": 2},
-        {"label": "Kind 7 Jahre",               "unit_eur": 11.90, "count": 1},
-        {"label": "Kleinkind 0 Jahre",          "unit_eur": 7.00, "count": 1}
+        {"label": "Adult (companion)",          "unit_eur": 5.90, "count": 2},
+        {"label": "Child 7 years",              "unit_eur": 11.90, "count": 1},
+        {"label": "Toddler 0 years",            "unit_eur": 7.00, "count": 1}
       ],
       title="Monkeytown Braunschweig",
       source_url="https://monkeytown.eu/de/braunschweig/preise"

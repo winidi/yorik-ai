@@ -2,7 +2,7 @@
 name: write_invoice
 description: Draft an invoice or a quote in the Schreiben app from customer and line items; never asks back.
 when_to_use: |
-  The user wants an invoice (Rechnung) or a quote/offer (Angebot) for a customer.
+  The user wants an invoice or a quote/offer for a customer.
   Pass what the user said as data. Each line item has a text, a quantity, a unit and a net unit price. Do NOT compute sums, VAT or totals and do NOT invent an invoice number or a date; the app computes and numbers.
   If a detail is unknown (address, service date, a price), create the draft anyway and leave it out; the sheet marks what is missing. Never ask the user for missing details first.
   To change a draft from earlier in this conversation, call again with `document_id` and the complete new list of lines.
@@ -59,7 +59,7 @@ outputs:
 cost: instant
 permissions: [admin, member]
 side_effects: Creates or updates a draft invoice or quote of the calling user. No number is taken, nothing is sent.
-tags: [write, invoice, rechnung, quote, angebot, schreiben, app:write]
+tags: [write, invoice, quote, app:write]
 category: productivity
 ---
 

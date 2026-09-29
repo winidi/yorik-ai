@@ -2,11 +2,11 @@
 name: yorik_help
 description: "Return Yorik's setup/how-to docs for a topic (compose, immich, paperless, voice, tailscale, etc.)."
 when_to_use: |
-  Call this whenever the user asks how Yorik works, how to set something up, or what a feature does — instead of guessing or describing what you'd build. The corpus is curated, current, and honest about what's bundled vs BYO vs roadmap. Trigger phrases (DE + EN):
-  - "wie richte ich X ein", "wie funktioniert X", "wie kann ich X", "wo finde ich"
+  Call this whenever the user asks how Yorik works, how to set something up, or what a feature does — instead of guessing or describing what you'd build. The corpus is curated, current, and honest about what's bundled vs BYO vs roadmap. Trigger phrases:
+  - "how do I set up X", "how does X work", "how can I X", "where do I find"
   - "how do I set up X", "how does X work", "where do I", "help with X"
   - "what should I do next", "where do I start", "what now", "getting started"
-  - "wie geht es weiter", "was als nächstes", "wo fange ich an"
+  - "how do I go on", "what comes next", "where do I begin"
 
   Map intent to topic:
   - "What should I do next" / "where do I start" / "I just connected the LLM, now what" → topic="next-steps" (this is the post-LLM-connect onboarding walk-through; covers email, documents, photos)
@@ -18,26 +18,26 @@ when_to_use: |
   - Voice button, dictation, Whisper, voice profile → topic="voice"
   - WhatsApp, messages, pairing phone → topic="whatsapp"
   - IMAP, SMTP, email sending, mail account → topic="email"
-  - Letter, invoice, template, Brief, Rechnung → topic="compose"
+  - Letter, invoice, template → topic="compose"
   - Address book, vCard import, contact fields → topic="contacts"
   - Events, appointments, sharing calendars → topic="calendar"
-  - Todo, recurring tasks, task list → topic="tasks"
-  - Morning summary, daily overview, Tagesplan → topic="briefing"
+  - To-do, recurring tasks, task list → topic="tasks"
+  - Morning summary, daily overview, day plan → topic="briefing"
   - Dark mode, colors, look and feel → topic="themes"
   - ZUGFeRD, regional add-ons, optional modules → topic="extensions"
   - Errors, "not working", debug, logs → topic="troubleshooting"
   - Recording a conversation, transcript, dinner recording → topic="recordings"
   - Family board, wall tablet, kiosk, routines, chores → topic="family-board"
   - Writing letters in the Schreiben app, letterhead → topic="schreiben"
-  - Bank account, spending, Finanzen → topic="finance"
-  - Following up on a sent mail, pipelines, nachfassen → topic="pipelines"
+  - Bank account, spending, finances → topic="finance"
+  - Following up on a sent mail, pipelines → topic="pipelines"
 
   If you don't know which topic, pass `query` with the user's words — the skill ranks topics by keyword match.
 
   The skill returns the doc body verbatim AND emits an "open app" button card. Quote the relevant 2-5 sentences in your reply (translate to the user's language if needed). DO NOT also call `navigate_to` — the user clicks the button when they're ready; auto-navigating yanks them off the chat screen before they finish reading.
 when_not_to_use: |
-  - The user asks about THEIR data ("wie viele Rechnungen habe ich") — that's `check_bills` / `find_*` / etc.
-  - The user wants to DO something now ("schreib mir einen Brief") — call the doing skill directly.
+  - The user asks about THEIR data ("how many invoices do I have") — that's `check_bills` / `find_*` / etc.
+  - The user wants to DO something now ("write me a letter") — call the doing skill directly.
   - General world-knowledge questions unrelated to Yorik — answer from your own knowledge.
   - Asking for source code or implementation details — that's not in this corpus; defer to the repo.
 inputs:

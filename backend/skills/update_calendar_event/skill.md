@@ -2,9 +2,9 @@
 name: update_calendar_event
 description: Modify an existing calendar event (move time, change title, etc.)
 when_to_use: |
-  - User asks to reschedule: "verschieb Müller-Termin auf Freitag 14 Uhr"
-  - User clarifies a title: "der Termin am Dienstag ist eigentlich mit Anna"
-  - User adds notes: "füg hinzu: Geschenk mitbringen"
+  - User asks to reschedule: "move the Müller appointment to Friday 2 pm"
+  - User clarifies a title: "Tuesday's appointment is actually with Anna"
+  - User adds notes: "add: bring a present"
   Always call check_calendar first if you don't already know the event_id —
   never guess.
 inputs:

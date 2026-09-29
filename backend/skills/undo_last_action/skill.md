@@ -7,11 +7,11 @@ when_not_to_use: |
   Only trigger when the user explicitly signals reversal: "rückgängig", "stell wieder her", "wiederherstellen", "doch nicht", "war falsch", "undo", "revert", "restore". If the message ALSO names a new action ("lösche … wieder"), do the new action; do NOT add a free undo_last_action call alongside it.
 when_to_use: |
   Trigger this when the user signals that the previous mutation was wrong
-  and should be reverted. Typical phrasings (German + English):
+  and should be reverted. Typical phrasings:
 
-    - "das war falsch", "mach das rückgängig", "stell das wieder her"
+    - "that was wrong", "undo that", "restore that"
     - "no, undo that", "wait, restore that", "I didn't mean that"
-    - "rückgängig", "undo", "revert"
+    - "undo", "revert"
 
   Looks up the most recent pending_actions row for the current user
   (last 60 minutes), runs its registered rollback (re-inserting deleted

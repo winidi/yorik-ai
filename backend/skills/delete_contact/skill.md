@@ -2,8 +2,8 @@
 name: delete_contact
 description: Permanently delete a contact and its channels + addresses.
 when_to_use: |
-  - User explicitly wants the contact GONE ("vergiss diesen Kontakt", "delete X").
-  - PREFER archiving over deletion: an archived contact disappears from autocomplete but old invoices/emails that reference them stay coherent. Use this skill only when the user is explicit ("permanent löschen", "delete forever").
+  - User explicitly wants the contact GONE ("forget this contact", "delete X").
+  - PREFER archiving over deletion: an archived contact disappears from autocomplete but old invoices/emails that reference them stay coherent. Use this skill only when the user is explicit ("delete permanently", "delete forever").
   - Subject to the per-turn delete throttle: only ONE delete per request. If the user asks for multiple, list them and ask which one(s).
 inputs:
   contact_id:

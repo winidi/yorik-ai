@@ -2,7 +2,7 @@
 name: recording_report
 description: "A recording's report: decisions, tasks with a person, nice moments, friction, open questions."
 when_to_use: |
-  Use it when the user asks what came out of the dinner or meeting, wants the report, or wants the tasks from it ("was ist beim Abendessen rausgekommen", "zeig den Bericht", "welche Aufgaben").
+  Use it when the user asks what came out of the dinner or meeting, wants the report, or wants the tasks from it ("what came out of dinner", "show the report", "which tasks").
   Without `recording_id` it takes the user's latest finished recording; the report is generated on first call and reused afterwards (`refresh: true` writes it anew).
   Present the sections in the user's language in this order: summary, decisions, tasks (numbered, with the person and date), nice moments, what did not go well, open questions, dates.
   Tasks are proposals: offer to add them, and when the user agrees call add_task for each chosen one with title, person and due_date.

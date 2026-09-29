@@ -2,9 +2,9 @@
 name: update_task
 description: Modify an existing task (mark done, change title, set due date, etc.)
 when_to_use: |
-  - User says "ich hab X erledigt" → set done=true on matching task
-  - User says "verschieb die Aufgabe auf Freitag" → change due_date
-  - User says "die Aufgabe heißt eigentlich Y" → change title
+  - User says "I've done X" → set done=true on matching task
+  - User says "move the task to Friday" → change due_date
+  - User says "the task is actually called Y" → change title
   Always call list/SELECT tasks first if you don't already know the task_id — don't guess.
 inputs:
   task_id:

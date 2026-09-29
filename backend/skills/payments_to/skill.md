@@ -2,10 +2,10 @@
 name: payments_to
 description: Everything paid to one payee, or all unpaid bills — bank and receipts matched, totals computed.
 when_to_use: |
-  - "Was hab ich für Claude bezahlt?", "Was kostet uns netcup?", "Ist die Rechnung von Riverty bezahlt?"
-  - "Welche Rechnungen von X sind noch offen?"
+  - "What have I paid Claude?", "What does netcup cost us?", "Has the Riverty invoice been paid?"
+  - "Which invoices from X are still open?"
   One payee per call; for several payees call it once for each.
-  Without payee: all bills and reminders found in mail and documents, matched with the bank — for "Welche Rechnungen sind noch offen?".
+  Without payee: all bills and reminders found in mail and documents, matched with the bank — for "Which invoices are still open?".
 when_not_to_use: |
   - A list of all bookings in a period or a category — show_transactions / spending_summary.
 inputs:

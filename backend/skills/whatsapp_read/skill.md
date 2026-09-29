@@ -3,7 +3,7 @@ name: whatsapp_read
 description: "Read one WhatsApp chat around a search hit, or its latest messages, to see what someone wrote."
 when_to_use: |
   - A search hit lies in WhatsApp (universal_search gives id and chat_jid): read around it with around_message_id before you answer, and check it is the right person and still current.
-  - The user asks what someone wrote ("was hat Jan geschrieben?"): read the latest messages of that chat (chat_jid, or contact_id from find_person).
+  - The user asks what someone wrote ("what did Jan write?"): read the latest messages of that chat (chat_jid, or contact_id from find_person).
   - A calendar file (.ics) in a chat: its title, time and place come with the message when WhatsApp still has the file.
 when_not_to_use: |
   - An overview of all chats of the last hours — that's whatsapp_briefing.

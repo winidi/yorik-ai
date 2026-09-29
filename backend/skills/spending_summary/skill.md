@@ -2,8 +2,8 @@
 name: spending_summary
 description: Totals of incoming and outgoing money by category over a period, from the synced local copy.
 when_to_use: |
-  The user asks for a total or breakdown ("wie viel für Lebensmittel
-  diesen Monat", "was kam an Gehalt rein", "Ausgaben nach Kategorie").
+  The user asks for a total or breakdown ("how much on groceries
+  this month", "how much salary came in", "spending by category").
 when_not_to_use: |
   The user wants to see the actual list of bookings — that's
   show_transactions, this only aggregates.
@@ -20,7 +20,7 @@ inputs:
   from_date:
     type: string
     required: false
-    description: First booking day to include, YYYY-MM-DD. For a calendar month ("im September") pass the 1st here and the last day as to_date; overrides days.
+    description: First booking day to include, YYYY-MM-DD. For a calendar month ("in September") pass the 1st here and the last day as to_date; overrides days.
   to_date:
     type: string
     required: false

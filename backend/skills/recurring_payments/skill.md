@@ -2,7 +2,7 @@
 name: recurring_payments
 description: Payments that come back (subscriptions, servers, contracts) with the monthly amount computed.
 when_to_use: |
-  - "Was geben wir jeden Monat für Computerkram aus?", "Welche Abos laufen?", "Was kostet uns X im Monat?"
+  - "What do we spend on computer stuff every month?", "Which subscriptions are running?", "What does X cost us per month?"
   Pick the payees that fit the question; add their per_month values with calculate.
 when_not_to_use: |
   - One payee's payments with receipts — payments_to. Spending by category — spending_summary.

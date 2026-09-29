@@ -2,8 +2,8 @@
 name: add_contact_channel
 description: "Attach a channel (email, phone, whatsapp, signal, sms, website, social) to a contact."
 when_to_use: |
-  - "Oma hat eine neue Handynummer …" → add_contact_channel(contact_id=N, kind='phone', value='…', label='mobile').
-  - "speicher die Email von Müller GmbH: kontakt@..." → add_contact_channel(contact_id=N, kind='email', value='…').
+  - "Grandma has a new mobile number …" → add_contact_channel(contact_id=N, kind='phone', value='…', label='mobile').
+  - "save the email of Müller GmbH: kontakt@..." → add_contact_channel(contact_id=N, kind='email', value='…').
   - When an unknown inbound channel arrives that the user wants linked to an existing contact instead of a new one.
   - If the (kind, value) is already attached to a DIFFERENT contact you'll get an error — that's a duplicate, fix the contact_id instead of forcing it through.
   - Always call find_person first to get the right contact_id.

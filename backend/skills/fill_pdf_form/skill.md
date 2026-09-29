@@ -3,8 +3,8 @@ name: fill_pdf_form
 description: Fill the fields of a PDF form the user attached in chat, from their profile and what they say.
 when_to_use: |
   The user attached a PDF (referenced as "Anhang #<number>") and asks to
-  fill it out — "füll das Formular aus", "trag meine Daten da ein",
-  "kannst du das für mich ausfüllen".
+  fill it out — "fill in the form", "put my details in there",
+  "can you fill that out for me".
   Pass `notes` with anything the user said that isn't already in their
   profile (a product name, a chosen category, an answer to a yes/no
   question on the form) — in their own words, don't restructure it.

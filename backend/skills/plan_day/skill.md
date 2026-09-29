@@ -2,9 +2,9 @@
 name: plan_day
 description: "Write an agreed day plan as tasks and time blocks in the user's Plan calendar, as one undoable step."
 when_to_use: |
-  Call it only after the user has said the plan is good ("mach's", "passt", "übernehmen"); never on the first draft.
+  Call it only after the user has said the plan is good ("do it", "looks good", "take it"); never on the first draft.
   Pass the full list of items for that day every time; items the previous version had and this one lacks are removed, items with the same key are updated.
-  Give each item a short stable `key` (e.g. "schreiben-video-9") so a later revision updates instead of duplicating.
+  Give each item a short stable `key` (e.g. "write-video-9") so a later revision updates instead of duplicating.
   Only items with fixed times or deliberate focus blocks get `start`/`end` (HH:MM); at most 6 blocks a day, the rest stay tasks.
   Use `task_id` when an item stands for an existing open task so it is scheduled, not recreated.
   Use `report_ref` (from report_candidates) when an item was a suggestion from a recording report, so the report shows it as adopted.

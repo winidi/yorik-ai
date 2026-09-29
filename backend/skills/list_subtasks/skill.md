@@ -3,8 +3,8 @@ name: list_subtasks
 description: List the subtasks of a parent task — helper before update_task / delete_task on children.
 when_to_use: |
   When the user asks about subtasks of a specific parent ("show me
-  the subtasks for X", "what's left in the launch prep task", "wie
-  weit bin ich mit der Steuer-Erklärung").
+  the subtasks for X", "what's left in the launch prep task", "how
+  far am I with the tax return").
 
   check_tasks lists ALL open tasks the user can see and renders cards
   — it has no parent filter, so asking it for "subtasks of X" returns
@@ -16,7 +16,7 @@ when_to_use: |
 
   After this returns:
     - 0 hits → the parent has no subtasks (or the parent id was wrong).
-    - 1+ hits → quote progress to the user (e.g. "2 von 3 erledigt").
+    - 1+ hits → quote progress to the user (e.g. "2 of 3 done").
 inputs:
   parent_task_id:
     type: integer
@@ -26,7 +26,7 @@ inputs:
     type: boolean
     required: false
     default: true
-    description: Include completed subtasks. Default true so "wie weit bin ich" surfaces what's been done already.
+    description: Include completed subtasks. Default true so "how far am I" surfaces what's been done already.
   limit:
     type: integer
     required: false

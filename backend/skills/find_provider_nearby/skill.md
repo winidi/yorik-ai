@@ -3,9 +3,9 @@ name: find_provider_nearby
 description: "Find nearby businesses or POIs (dentist, pharmacy, etc.) via OpenStreetMap."
 when_to_use: |
   When the user wants to find a place they don't already have:
-    "Zahnarzt in Hannover" → poi='dentist', near='Hannover'
-    "Apotheke um die Ecke" → poi='pharmacy', near=<user's home city>
-    "Werkstatt für mein Auto" → poi='garage', near=<user's home city>
+    "dentist in Hannover" → poi='dentist', near='Hannover'
+    "pharmacy around the corner" → poi='pharmacy', near=<user's home city>
+    "garage for my car" → poi='garage', near=<user's home city>
 
   **CALL find_known_provider FIRST.** Yorik already knows about the
   user's existing dentist/doctor/mechanic from their contacts, past
@@ -14,8 +14,8 @@ when_to_use: |
 
   Common POI keywords (use these for `poi`, the connector knows the
   OSM tag mapping):
-    Healthcare: dentist, doctor, hausarzt, pharmacy, hospital,
-                veterinary, tierarzt
+    Healthcare: dentist, doctor, pharmacy, hospital,
+                veterinary
     Shops:      supermarket, bakery, hairdresser, optician
     Services:   bank, atm, post_office, garage, petrol_station
     Food:       restaurant, cafe, bar
@@ -53,5 +53,5 @@ tags: [maps, search, poi, openstreetmap]
 
 Overpass-backed business search. Free, no auth, uses OpenStreetMap data.
 Pairs with `find_known_provider` (which checks the user's own data
-first) so the chat shows "ich kenne Dr. Müller schon" before falling
-back to "hier sind drei Zahnärzte in der Nähe von Hannover".
+first) so the chat shows "I already know Dr. Müller" before falling
+back to "here are three dentists near Hannover".

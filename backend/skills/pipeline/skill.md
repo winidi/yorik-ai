@@ -2,9 +2,9 @@
 name: pipeline
 description: "Follow up a sent mail until the answer comes, and list, pause or resume what Yorik follows."
 when_to_use: |
-  - After a mail went out, the user says "fass da nach, wenn keine Antwort kommt", "bleib dran", "erinner die, falls nichts kommt": op=follow_up with the recipient (to) or subject of that mail.
-  - "Wo warte ich noch auf Antwort?", "was ist mit der Sache, wo ich nachfassen wollte?": op=list.
-  - "Pausier das Nachfassen", "mach da weiter": op=pause / op=resume with pipeline_id from op=list.
+  - After a mail went out, the user says "follow up if there's no answer", "stay on it", "remind them if nothing comes": op=follow_up with the recipient (to) or subject of that mail.
+  - "Where am I still waiting for an answer?", "what about the thing I wanted to follow up on?": op=list.
+  - "Pause the follow-up", "carry on with it": op=pause / op=resume with pipeline_id from op=list.
   A follow-up starts as a draft: Yorik writes the reminders and the person approves each one on the pipeline page before anything is sent.
 when_not_to_use: |
   - A mail that was only prepared and not sent yet — it has to be sent first.

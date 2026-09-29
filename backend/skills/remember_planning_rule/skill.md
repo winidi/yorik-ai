@@ -2,7 +2,7 @@
 name: remember_planning_rule
 description: Remember one sentence about how the person wants their days planned, for every future day plan.
 when_to_use: |
-  Use it after the user confirmed that a correction should stick ("Küche macht Beate", "vormittags keine Anrufe", "höchstens sechs Punkte am Tag").
+  Use it after the user confirmed that a correction should stick ("Beate does the kitchen", "no calls in the morning", "at most six items a day").
   Ask once before calling it; never store a rule the user did not confirm.
   Pass the rule as one plain sentence in the user's words.
 when_not_to_use: |
@@ -11,7 +11,7 @@ inputs:
   rule:
     type: string
     required: true
-    description: One sentence, e.g. "Küche und Einkauf macht Beate."
+    description: One sentence, e.g. "Beate does the kitchen and the shopping."
 outputs:
   rules:
     type: string

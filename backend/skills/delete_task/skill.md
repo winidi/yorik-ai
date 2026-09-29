@@ -2,8 +2,8 @@
 name: delete_task
 description: Delete ONE task by id
 when_to_use: |
-  - User says "lösch die Aufgabe X" / "delete that task"
-  - User says "die Aufgabe ist hinfällig"
+  - User says "delete task X" / "delete that task"
+  - User says "that task isn't needed any more"
 inputs:
   task_id:
     type: integer

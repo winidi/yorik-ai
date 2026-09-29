@@ -2,7 +2,7 @@
 name: recording_status
 description: Show the state of a recording and, once it is done, the transcript with speakers.
 when_to_use: |
-  Use it when the user asks whether the recording is running or finished, or wants to know what was said ("zeig mir das Transkript", "was haben wir beim Abendessen besprochen").
+  Use it when the user asks whether the recording is running or finished, or wants to know what was said ("show me the transcript", "what did we talk about at dinner").
   Without `recording_id` it returns the user's latest recording; the transcript is in `transcript`, one line per turn with time and speaker.
   Answer questions about the content from `transcript`; quote speakers by name and do not invent turns that are not there.
 when_not_to_use: |

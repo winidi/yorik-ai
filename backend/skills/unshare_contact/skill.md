@@ -2,7 +2,7 @@
 name: unshare_contact
 description: Revoke a user's per-user share on a contact you own.
 when_to_use: |
-  - User says "Anna soll Hans nicht mehr bearbeiten können" / "revoke Anna from Hans".
+  - User says "Anna shouldn't be able to edit Hans any more" / "revoke Anna from Hans".
   - Pair with `find_person(source='household')` to resolve the user_id first.
 
   This does NOT remove the contact's space membership — for that, call `update_contact(space="household")`.
