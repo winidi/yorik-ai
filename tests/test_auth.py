@@ -156,9 +156,9 @@ def test_bare_tailnet_name_is_sent_to_https(fresh_app, monkeypatch):
     from backend import main as M
     monkeypatch.setattr(M, "_TS_HTTPS_PORT", "8445")     # config.env on the workstation says 443
     c = TestClient(fresh_app)
-    r = c.get("/r/home?x=1", headers={"host": "workstation.tailf0bde1.ts.net", "x-forwarded-proto": "http"}, follow_redirects=False)
-    assert r.status_code == 308 and r.headers["location"] == "https://workstation.tailf0bde1.ts.net:8445/r/home?x=1"
-    r = c.get("/api/health", headers={"host": "workstation.tailf0bde1.ts.net", "x-forwarded-proto": "https"}, follow_redirects=False)
+    r = c.get("/r/home?x=1", headers={"host": "yorik.tail1234.ts.net", "x-forwarded-proto": "http"}, follow_redirects=False)
+    assert r.status_code == 308 and r.headers["location"] == "https://yorik.tail1234.ts.net:8445/r/home?x=1"
+    r = c.get("/api/health", headers={"host": "yorik.tail1234.ts.net", "x-forwarded-proto": "https"}, follow_redirects=False)
     assert r.status_code == 200
     r = c.get("/api/health", headers={"host": "192.168.0.45:8000"}, follow_redirects=False)
     assert r.status_code == 200

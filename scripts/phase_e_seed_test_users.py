@@ -52,7 +52,7 @@ POSTGRES_PASSWORD = _env["POSTGRES_PASSWORD"]
 
 USERS = [
     # (email, password, name, yorik_role, is_workspace_owner_of)
-    ("dirk@winiecki.ai",      "test1234", "Dirk Winiecki", "platform_admin", "Dirk Winiecki's household"),
+    ("dirk@example.org",      "test1234", "Dirk Mayer", "platform_admin", "Dirk Mayer's household"),
     ("beatemayer1@gmx.net",   "test1234", "Beate",         "member",         None),
     ("ws2_admin@test.local",  "test1234", "Mom (test)",    "admin",          "Test Household B"),
     ("ws2_member@test.local", "test1234", "Lily (test)",   "member",         None),
@@ -123,7 +123,7 @@ def main() -> int:
 
         # ─── Workspaces + spaces (mirrors the Phase C fixture) ────
         print("\n==> Workspaces + spaces + memberships")
-        dirk = auth_ids["dirk@winiecki.ai"]
+        dirk = auth_ids["dirk@example.org"]
         beate = auth_ids["beatemayer1@gmx.net"]
         mom = auth_ids["ws2_admin@test.local"]
         lily = auth_ids["ws2_member@test.local"]
@@ -152,14 +152,14 @@ def main() -> int:
                 (space_id, user_id, level),
             )
 
-        ws1 = workspace("Dirk Winiecki's household", dirk)
+        ws1 = workspace("Dirk Mayer's household", dirk)
         ws2 = workspace("Test Household B", mom)
         ws3 = workspace("Smith Family", jane)
         print(f"  workspaces: WS1={ws1} (Dirk's), WS2={ws2} (Mom's), WS3={ws3} (Jane's)")
 
         ws1_shared    = space(ws1, "Shared",  "shared",   "household", None)
         ws1_finance   = space(ws1, "Finance", "shared",   "finance",   None)
-        ws1_personal_dirk  = space(ws1, "Dirk Winiecki's space", "personal", None, dirk)
+        ws1_personal_dirk  = space(ws1, "Dirk Mayer's space", "personal", None, dirk)
         ws1_personal_beate = space(ws1, "Beate's space",         "personal", None, beate)
         ws2_shared    = space(ws2, "Shared",  "shared",   None,        None)
         ws2_personal_mom  = space(ws2, "Mom (test)'s space",  "personal", None, mom)

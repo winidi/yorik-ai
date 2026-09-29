@@ -202,9 +202,9 @@ def test_signature_scan_over_existing_mail(fresh_app):
 
 def test_quoted_replies_do_not_count_as_signature(fresh_app):
     from backend.contact_autocapture import signature_phones, _own_text
-    body = "Danke!\n\nMobil 0176 12345678\nBea\n\nAm 26.02.2026 um 09:54 schrieb Dirk Winiecki:\n> ruf mich an: 0151 28811000\nVG Dirk"
+    body = "Danke!\n\nMobil 0176 12345678\nBea\n\nAm 26.02.2026 um 09:54 schrieb Dirk Mayer:\n> ruf mich an: 0151 23456789\nVG Dirk"
     assert _own_text(body).strip().endswith("Bea")
     assert signature_phones(body) == ["+4917612345678"]
-    body2 = "Hallo\n\n-----Original Message-----\nFrom: x\nTel 0151 28811000"
+    body2 = "Hallo\n\n-----Original Message-----\nFrom: x\nTel 0151 23456789"
     assert signature_phones(body2) == []
-    assert signature_phones("On Tue, Jan 2 wrote:\n0151 28811000") == []
+    assert signature_phones("On Tue, Jan 2 wrote:\n0151 23456789") == []

@@ -27,7 +27,7 @@ function defaultImmichUrl(): string {
   const proto = window.location.protocol;
   const host = window.location.hostname;
   // HTTP localhost → :2283, HTTPS (Tailscale) → :8443. For HTTPS on
-  // a real domain (e.g. wir.winiecki.ai) the backend supplies
+  // a real domain (e.g. home.example.org) the backend supplies
   // immich_public_url so the iframe gets a properly-served subdomain
   // with the same Let's Encrypt cert; this fallback only matters when
   // the operator hasn't set YORIK_IMMICH_PUBLIC_URL yet.

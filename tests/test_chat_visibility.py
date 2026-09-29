@@ -18,18 +18,18 @@ def _prompt(role, user_id, identified_name=None):
 # ── A1: the typed chat names the person who asks ─────────────────────
 
 def test_typed_chat_knows_who_asks(fresh_app):
-    uid = seed_user(name="Beate Winiecki", role="member", first_name="Beate")
+    uid = seed_user(name="Beate Mayer", role="member", first_name="Beate")
     p = _prompt("member", uid)
-    assert "The logged-in user is **Beate Winiecki**" in p
+    assert "The logged-in user is **Beate Mayer**" in p
     assert "no logged-in user" not in p
     assert "don't greet by name" in p          # typed, not voice
 
 
 def test_voice_greets_the_voice_name(fresh_app):
-    uid = seed_user(name="Dirk Winiecki", role="admin", first_name="Dirk")
+    uid = seed_user(name="Dirk Mayer", role="admin", first_name="Dirk")
     p = _prompt("admin", uid, identified_name="Dirk")
     assert "identified as **Dirk** (matched via voice)" in p
-    assert "The logged-in user is **Dirk Winiecki**" in p
+    assert "The logged-in user is **Dirk Mayer**" in p
 
 
 def test_no_person_no_identity(fresh_app):
@@ -55,9 +55,9 @@ import pytest
 def house(fresh_app):
     from backend import spaces as S
     h = {
-        "dirk":  seed_user(name="Dirk Winiecki", role="platform_admin", first_name="Dirk", email="dirk@example.local"),
-        "beate": seed_user(name="Beate Winiecki", role="member", first_name="Beate", email="beate@example.local"),
-        "kid":   seed_user(name="Clara Winiecki", role="restricted", first_name="Clara", email="clara@example.local"),
+        "dirk":  seed_user(name="Dirk Mayer", role="platform_admin", first_name="Dirk", email="dirk@example.local"),
+        "beate": seed_user(name="Beate Mayer", role="member", first_name="Beate", email="beate@example.local"),
+        "kid":   seed_user(name="Clara Mayer", role="restricted", first_name="Clara", email="clara@example.local"),
     }
     S.ensure_workspace_exists(h["dirk"], "Dirk")
     for k in ("dirk", "beate", "kid"):

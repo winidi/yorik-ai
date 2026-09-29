@@ -183,11 +183,11 @@ class TestWhatsAppDraftCardAndIntent:
         from backend.ui_tools import _pending_ui_actions
 
         jid = "64373087281262@lid"
-        cid = _c.create(display_name="Beate <3", created_by_user_id=person)
+        cid = _c.create(display_name="Anna <3", created_by_user_id=person)
         _c.add_channel(cid, kind="whatsapp", value=jid)
         with get_conn() as conn:
             conn.execute("INSERT INTO wa_chats (jid, name, is_group, owner_user_id) VALUES (?, ?, 0, ?)",
-                         (jid, "Beate <3", person))
+                         (jid, "Anna <3", person))
             conn.execute("INSERT INTO wa_messages (msg_id, chat_jid, from_me, timestamp, text, owner_user_id) "
                          "VALUES ('m1', ?, 0, 1790000000, 'Dann am 01.11 um 14 Uhr', ?)", (jid, person))
             conn.commit()
@@ -210,7 +210,7 @@ class TestWhatsAppDraftCardAndIntent:
         actions = asyncio.run(run())
         assert "Brot" in seen["prompt"]
         cards = [a for a in actions if a["type"] == "whatsapp_draft_created"]
-        assert cards == [{"type": "whatsapp_draft_created", "chat_jid": jid, "recipient": "Beate <3",
+        assert cards == [{"type": "whatsapp_draft_created", "chat_jid": jid, "recipient": "Anna <3",
                           "text": "Ich bring nachher Brot mit!", "is_new_chat": False}]
 
 

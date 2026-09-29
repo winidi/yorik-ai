@@ -2540,7 +2540,7 @@ async def rate_limit_api(request, call_next):
     return await call_next(request)
 
 
-# Typed on a phone, "workstation.tailf0bde1.ts.net" becomes an http request
+# Typed on a phone, "yorik.tail1234.ts.net" becomes an http request
 # (Android Chrome adds http:// to a bare host). Tailscale Serve hands plain
 # http on :80 to us with X-Forwarded-Proto: http; send such visitors to
 # the https port Yorik is served on, so the family never has to type

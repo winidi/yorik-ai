@@ -91,4 +91,4 @@ def test_nobody_is_provisioned_as_superuser_or_immich_admin(fresh_app, monkeypat
 
 def test_the_proxy_browses_as_the_persons_own_account():
     from backend.paperless_proxy import _paperless_username
-    assert _paperless_username({"role": "platform_admin", "email": "dirk@winiecki.ai", "name": "Dirk"}) == "dirk"
+    assert _paperless_username({"role": "platform_admin", "email": "dirk@example.org", "name": "Dirk"}) == "dirk"

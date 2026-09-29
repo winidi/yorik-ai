@@ -61,7 +61,7 @@ def send(
         return {"ok": False, "error": "no SMTP password in credential store"}
 
     # A header is one line. A subject taken over from a received mail can
-    # carry the line breaks of a folded header ("Re: Einladung …\n Alessandro"),
+    # carry the line breaks of a folded header ("Re: Einladung …\n Luca"),
     # and Python refuses such a value outright (that was an HTTP 500 on
     # send); a line break in an address or a name would be header
     # injection. Collapse them everywhere.

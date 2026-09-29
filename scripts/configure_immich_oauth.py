@@ -6,8 +6,8 @@ API. Run from the repo root as the service user, then restart Yorik:
 
     set -a; . ./config.env; set +a
     PYTHONPATH=. venv/bin/python scripts/configure_immich_oauth.py \
-        --issuer https://workstation.tailf0bde1.ts.net:8445 \
-        --immich https://workstation.tailf0bde1.ts.net:8443
+        --issuer https://yorik.tail1234.ts.net:8445 \
+        --immich https://yorik.tail1234.ts.net:8443
 
 `--issuer` is Yorik's URL as the browser AND the Immich container see
 it (checked 2026-09-22: the container reaches the Tailscale URL).
@@ -27,8 +27,8 @@ from backend import credential_store, oidc
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--issuer", help="Yorik's public URL, e.g. https://workstation.tailf0bde1.ts.net:8445")
-    ap.add_argument("--immich", help="Immich's public URL, e.g. https://workstation.tailf0bde1.ts.net:8443")
+    ap.add_argument("--issuer", help="Yorik's public URL, e.g. https://yorik.tail1234.ts.net:8445")
+    ap.add_argument("--immich", help="Immich's public URL, e.g. https://yorik.tail1234.ts.net:8443")
     ap.add_argument("--off", action="store_true", help="disable OAuth in Immich")
     ap.add_argument("--no-autolaunch", action="store_true", help="keep Immich's own login page, add a button instead")
     args = ap.parse_args()

@@ -15,7 +15,7 @@ BEGIN:VEVENT
 UID:single@google.com
 DTSTART:20260925T093000Z
 DTEND:20260925T095000Z
-SUMMARY:Call mit Alessandro
+SUMMARY:Call mit Luca
 LOCATION:Zoom
 END:VEVENT
 BEGIN:VEVENT
@@ -113,19 +113,19 @@ def test_subscription_is_a_read_only_mirror(dirk, monkeypatch):
     assert "url" not in feed and "url_enc" not in feed                       # the address is a secret
 
     # nobody edits a mirror here, the operator included
-    ev = next(e for e in (c.get("/api/events?start=2026-09-01&end=2026-10-31").json()) if e["title"] == "Call mit Alessandro")
+    ev = next(e for e in (c.get("/api/events?start=2026-09-01&end=2026-10-31").json()) if e["title"] == "Call mit Luca")
     assert c.patch(f"/api/events/{ev['id']}?role=platform_admin", json={"title": "x"}).status_code == 403
     assert c.post("/api/events?role=platform_admin", json={"title": "neu", "starts_at": "2026-09-30T10:00:00",
                   "calendar_id": feed["calendar_id"]}).status_code == 403
 
     # the source changes: one event renamed, one gone
-    source["body"] = ICS.replace("Call mit Alessandro", "Call mit Alessandro (neu)").replace("SUMMARY:Weihnachten", "STATUS:CANCELLED\nSUMMARY:Weihnachten").encode()
+    source["body"] = ICS.replace("Call mit Luca", "Call mit Luca (neu)").replace("SUMMARY:Weihnachten", "STATUS:CANCELLED\nSUMMARY:Weihnachten").encode()
     r = c.post(f"/api/calendar-import/feeds/{feed['id']}/sync").json()
     assert r["updated"] == 1 and r["removed"] == 1
     # a broken fetch changes nothing
     source["body"] = b"BEGIN:VCALENDAR\nEND:VCALENDAR"
     assert c.post(f"/api/calendar-import/feeds/{feed['id']}/sync").json()["ok"] is False
-    assert "Call mit Alessandro (neu)" in _titles(c)
+    assert "Call mit Luca (neu)" in _titles(c)
     assert c.get("/api/calendar-import/feeds").json()[0]["last_status"] == "error"
 
     assert c.delete(f"/api/calendar-import/feeds/{feed['id']}").status_code == 204

@@ -10,7 +10,7 @@ METHOD:REQUEST\r
 BEGIN:VEVENT\r
 DTSTART:20260925T093000Z\r
 DTEND:20260925T095000Z\r
-SUMMARY:Dirk Winiecki and Alessandro Leto Barone\r
+SUMMARY:Dirk Mayer and Luca Romano\r
 LOCATION:https://us05web.zoom.us/j/85130841877?pwd=abc\r
 DESCRIPTION:Bring the deck\\, please.\\nSee you\r
   there.\r
@@ -23,7 +23,7 @@ def test_google_invite_ics(monkeypatch):
     import time
     monkeypatch.setenv("TZ", "Europe/Berlin"); time.tzset()
     ev = parse_ics(GOOGLE_ICS)
-    assert ev["title"] == "Dirk Winiecki and Alessandro Leto Barone"
+    assert ev["title"] == "Dirk Mayer and Luca Romano"
     assert ev["starts_at"] == "2026-09-25T11:30:00" and ev["ends_at"] == "2026-09-25T11:50:00"   # UTC → Berlin
     assert ev["all_day"] is False and ev["location"].startswith("https://us05web.zoom.us")
     assert ev["notes"] == "Bring the deck, please.\nSee you there." and ev["cancelled"] is False
@@ -40,8 +40,8 @@ def test_ics_with_tzid_and_all_day(monkeypatch):
 
 
 def test_the_mail_that_failed():
-    subject = ("Einladung von einem unbekannten Absender: Dirk Winiecki and Alessandro Leto Barone - "
-               "Fr 25. Sep. 2026 11:30AM - 11:50AM (MESZ) (winidi89@gmail.com)")
+    subject = ("Einladung von einem unbekannten Absender: Dirk Mayer and Luca Romano - "
+               "Fr 25. Sep. 2026 11:30AM - 11:50AM (MESZ) (max.beispiel@gmail.com)")
     assert extract_appointment(subject) == {"date": "2026-09-25", "time": "11:30", "end_time": "11:50"}
 
 

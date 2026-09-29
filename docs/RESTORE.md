@@ -59,9 +59,9 @@ done
 sudo systemctl reload caddy
 
 # 3. Smoke-test
-curl -sS https://wir.winiecki.ai/api/health
+curl -sS https://home.example.org/api/health
 for t in $(ls data/tenants); do
-  curl -sS https://$t.wir.winiecki.ai/api/health
+  curl -sS https://$t.home.example.org/api/health
 done
 ```
 

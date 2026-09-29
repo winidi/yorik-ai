@@ -2,7 +2,7 @@
 an address they typed.
 
 Chat test 2026-09-27: "schreib Dirk an seine web.de-Adresse" became
-dirk.winiecki@web.de, an address nobody ever used. prepare_email now
+an invented firstname.lastname@ address nobody ever used. prepare_email now
 checks the recipient against what the person knows; an unknown one gets
 a card with the closest known addresses to pick from or correct.
 """

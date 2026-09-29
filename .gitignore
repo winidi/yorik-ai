@@ -83,3 +83,9 @@ models/
 
 # Built install stick (scripts/build-appliance.sh)
 /dist/
+
+# The maintainer's working papers: plans, audits, phase notes. Code
+# comments point at them; they stay on the maintainer's machine.
+docs/audits/
+docs/plans/
+notes/
