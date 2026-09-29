@@ -199,7 +199,7 @@ async def ask(
         hits also ``cache_hits`` (int). Plus ``agent_trace`` when
         ``include_trace=True``.
     """
-    role = (user.role or "admin").lower().strip()
+    role = (user.role or "restricted").lower().strip()
     user_language = (user.language or "en").lower().strip()
     conversation_id = conversation_id or uuid.uuid4().hex
     turn_t0 = time.perf_counter() if include_trace else 0.0
@@ -869,7 +869,7 @@ async def ask_stream(
     """
     from . import streaming as _stream
 
-    role = (user.role or "admin").lower().strip()
+    role = (user.role or "restricted").lower().strip()
     user_language = (user.language or "en").lower().strip()
     conversation_id = conversation_id or uuid.uuid4().hex
 

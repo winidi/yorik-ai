@@ -81,7 +81,9 @@ WRITE_ROLES: set[str] = {"platform_admin", "admin", "member", "restricted"}
 
 
 def normalize_role(role: str | None) -> str:
-    r = (role or "admin").lower().strip()
+    # No role means the least one, never admin (a profile without a role
+    # was treated as admin until 2026-09-29).
+    r = (role or "restricted").lower().strip()
     if r not in ROLES:
         raise HTTPException(status_code=400, detail=f"Unknown role '{role}'. Allowed: {sorted(ROLES)}")
     return r

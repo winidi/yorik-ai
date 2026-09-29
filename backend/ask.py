@@ -1716,7 +1716,7 @@ async def ask_async_stream(
     final replaces the buffer with the canonical response dict.
     """
     from .agent import loop as _new_loop
-    role = (role or "admin").lower().strip()
+    role = (role or "restricted").lower().strip()
     user_language = (user_language or "en").lower().strip()
     await _ensure_agent_singletons()
     user, system_prompt = await _build_user_and_prompt(
@@ -1756,7 +1756,7 @@ async def ask_async(message: str, role: str = "admin", conversation_id: Optional
     in-tree agent loop (`backend.agent.loop.ask`). Defaults to `vanna`
     until Phase 4 of the masterplan flips the default.
     """
-    role = (role or "admin").lower().strip()
+    role = (role or "restricted").lower().strip()
     user_language = (user_language or "en").lower().strip()
 
     # Phase 4 cutover: the new agent loop is the default. Set

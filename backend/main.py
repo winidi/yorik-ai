@@ -241,10 +241,11 @@ app.include_router(_n8n_proxy.router)
 # and for the Vanna agent's `use_skill` tool (wired separately).
 from . import skills as _skills_mod
 from .skills import SkillError, get_registry
+from .auth_sessions import current_role as _current_role_for_skills
 
 
 @app.get("/api/skills", tags=["skills"])
-def list_skills(role: str = "admin"):
+def list_skills(role: str = Depends(_current_role_for_skills)):
     """Manifest list of every loaded skill, filtered to those the
     requesting role is permitted to call. Drives the Settings →
     Skills panel + the agent's skill-picker prompt.
@@ -264,6 +265,7 @@ def list_skills(role: str = "admin"):
     """
     from .skills.registry import derive_ui_category, _get_disabled_skills
     disabled = _get_disabled_skills()
+    role = "admin" if role == "platform_admin" else role
     out = []
     for s in get_registry().all():
         if s.permissions and role not in s.permissions and "*" not in s.permissions:
