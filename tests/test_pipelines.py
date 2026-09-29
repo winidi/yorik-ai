@@ -166,7 +166,7 @@ def test_answer_from_another_address_of_the_same_company_is_found(home):
           subject="Ihre Nachricht", body="Wir haben Ihre Nachricht erhalten.")
     chk = _check(p["id"])
     assert chk["result"] == "vielleicht"
-    assert "von der Domain" in chk["candidates"][0]["why"][0]
+    assert "from the domain" in chk["candidates"][0]["why"][0]
 
 
 def test_answer_from_a_different_domain_carrying_the_name_is_found(home):
@@ -207,7 +207,7 @@ def test_stale_mailbox_cannot_check(home):
                   "'YYYY-MM-DD HH24:MI:SS') WHERE id = ?", (home["acct"],))
     chk = _check(p["id"])
     assert chk["result"] == "kann_nicht_pruefen"
-    assert "zuletzt vor" in chk["problems"][0]
+    assert "last fetched" in chk["problems"][0]
 
 
 def test_unreadable_mail_since_the_start_cannot_check(home):
@@ -218,7 +218,7 @@ def test_unreadable_mail_since_the_start_cannot_check(home):
                   "VALUES (?, 1, 99, 'parse error')", (home["acct"],))
     chk = _check(p["id"])
     assert chk["result"] == "kann_nicht_pruefen"
-    assert "nicht gelesen" in chk["problems"][0]
+    assert "could not be read" in chk["problems"][0]
 
 
 def test_own_mail_to_the_other_side_means_the_person_took_over(home):
@@ -505,7 +505,7 @@ def test_without_the_model_the_template_stays_and_says_so(home):
     d = home["dirk_c"].get(f"/api/pipelines/{p['id']}").json()
     assert d["config"]["drafting"] is False
     assert d["steps"][0]["payload"]["source"] == "vorlage"
-    assert any("nicht erreichbar" in e["text"] for e in d["events"])
+    assert any("wasn't reachable" in e["text"] for e in d["events"])
 
 
 def test_a_due_reminder_is_written_afresh_and_needs_approval_of_that_text(home, monkeypatch):
@@ -551,3 +551,16 @@ def test_steps_cannot_be_changed_or_started_while_yorik_writes(home):
     assert home["dirk_c"].post(f"/api/pipelines/{p['id']}/start").status_code == 409
     assert home["dirk_c"].post(f"/api/pipelines/{p['id']}/steps/{p['steps'][0]['id']}/approve",
                                json={"approved": True}).status_code == 409
+
+
+def test_messages_follow_the_persons_language_and_reminders_the_mails():
+    """English by default; a German profile gets German; the default
+    reminder is written in the language of the mail it follows up."""
+    from backend.messages import text_language, tr
+    assert tr("pipelines.not_found", "en") == "Pipeline not found"
+    assert tr("pipelines.not_found", "de") == "Pipeline nicht gefunden"
+    assert tr("pipelines.not_found", "fr") == "Pipeline not found"          # unknown → English
+    assert tr("pipelines.event.sent_to", "en", to="a@b.de") == "Reminder sent to a@b.de"
+    assert text_language("Sehr geehrte Damen und Herren, hiermit kündige ich meinen Vertrag.", "en") == "de"
+    assert text_language("Dear team, please cancel my subscription and send the invoice.", "de") == "en"
+    assert text_language("OK", "de") == "de"

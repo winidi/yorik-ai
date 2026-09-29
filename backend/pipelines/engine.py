@@ -26,6 +26,8 @@ from typing import Any, Optional
 from . import store
 from .kinds import nachfassen
 
+from ..messages import tr
+
 log = logging.getLogger("yorik.pipelines.engine")
 
 KINDS = {nachfassen.KIND: nachfassen}
@@ -45,14 +47,26 @@ HUMAN_ATTENTION = {"vielleicht", "selbst_geantwortet", "versand_unklar", "ueberg
 _loop: Optional[asyncio.AbstractEventLoop] = None
 _kicked: dict[int, datetime] = {}
 
+# attention code → message key (backend/messages.py); the text goes out
+# in the owner's language.
 ATTENTION_TEXT = {
-    "vielleicht": "Ist das die Antwort?",
-    "kann_nicht_pruefen": "Yorik kann gerade nicht sicher prüfen",
-    "schritt_faellig": "Keine Antwort — Erinnerung senden?",
-    "uebergabe": "Keine Antwort nach allen Erinnerungen — jetzt du",
-    "selbst_geantwortet": "Du hast selbst geschrieben — weiter verfolgen?",
-    "versand_unklar": "Unklar, ob die Erinnerung rausging",
+    "vielleicht": "pipelines.attention.maybe",
+    "kann_nicht_pruefen": "pipelines.attention.cannot_check",
+    "schritt_faellig": "pipelines.attention.step_due",
+    "uebergabe": "pipelines.attention.handover",
+    "selbst_geantwortet": "pipelines.attention.self_replied",
+    "versand_unklar": "pipelines.attention.send_unclear",
 }
+
+
+def _owner_of(pipeline_id: int) -> Optional[str]:
+    try:
+        from ..database import get_conn
+        with get_conn() as c:
+            row = c.execute("SELECT owner_user_id FROM pipelines WHERE id = ?", (int(pipeline_id),)).fetchone()
+        return str(row["owner_user_id"]) if row else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def kind_of(p: dict[str, Any]):
@@ -102,7 +116,8 @@ def _set_attention(p: dict[str, Any], attention: Optional[str], detail: Any = No
         try:
             from .. import notifications
             notifications.create(
-                p["owner_user_id"], "pipeline", ATTENTION_TEXT.get(attention, "Pipeline braucht dich"),
+                p["owner_user_id"], "pipeline",
+                tr(ATTENTION_TEXT.get(attention, "pipelines.attention.other"), user_id=p["owner_user_id"]),
                 body=p["title"], payload={"pipeline_id": p["id"], "attention": attention},
                 navigate_to=f"/r/pipelines/{p['id']}",
             )
@@ -116,9 +131,10 @@ def _log_check(p: dict[str, Any], chk: dict[str, Any], force: bool = False) -> N
     last = next((e for e in store.events(p["id"], limit=30) if e["kind"] == "pruefung"), None)
     if not force and last and (last["data"] or {}).get("result") == chk["result"]:
         return
-    text = {"vielleicht": f"Möglicher Treffer ({len(chk['candidates'])})",
-            "kann_nicht_pruefen": "Kann nicht sicher prüfen",
-            "sicher_nicht": "Noch keine Antwort"}.get(chk["result"], chk["result"])
+    owner = p["owner_user_id"]
+    text = {"vielleicht": tr("pipelines.check.maybe", user_id=owner, n=len(chk["candidates"])),
+            "kann_nicht_pruefen": tr("pipelines.check.cannot_check", user_id=owner),
+            "sicher_nicht": tr("pipelines.check.surely_not", user_id=owner)}.get(chk["result"], chk["result"])
     store.event(p["id"], "pruefung", f"{text} — {chk['summary']}", {
         "result": chk["result"], "summary": chk["summary"], "problems": chk["problems"],
         "candidates": chk["candidates"][:10], "took_over": chk["took_over"][:5],
@@ -175,7 +191,7 @@ def process(pipeline_id: int) -> None:
     # sicher_nicht, and the step is due.
     if step["action"] == "uebergabe":
         store.mark_step_done(step["id"])
-        store.event(p["id"], "status", "Letzter Schritt erreicht, keine Antwort — Übergabe an dich")
+        store.event(p["id"], "status", tr("pipelines.event.last_step", user_id=p["owner_user_id"]))
         _set_attention(p, "uebergabe", {"summary": chk["summary"]}, None)
         return
 
@@ -237,35 +253,37 @@ def send_step(p: dict[str, Any], step_id: int, *, despite_stale: bool = False) -
     """The person pressed "Senden". Check again right now; send only on
     'sicher_nicht' (or 'kann_nicht_pruefen' when the person, having seen
     why, says send anyway). The caller holds the lock."""
+    who = p["owner_user_id"]
     if p["state"] != "laeuft":
-        raise NotNow("Die Pipeline läuft nicht.")
+        raise NotNow(tr("pipelines.not_now.not_running", user_id=who))
     all_steps = store.steps(p["id"])
     step = next_open_step(all_steps)
     if not step or step["id"] != step_id:
-        raise NotNow("Das ist nicht der nächste Schritt.")
+        raise NotNow(tr("pipelines.not_now.not_next", user_id=who))
     if step["action"] != "mail_senden":
-        raise NotNow("Dieser Schritt sendet nichts.")
+        raise NotNow(tr("pipelines.not_now.sends_nothing", user_id=who))
     if not step["approved"]:
-        raise NotNow("Dieser Schritt ist nicht freigegeben.")
+        raise NotNow(tr("pipelines.not_now.not_approved", user_id=who))
 
     chk = kind_of(p).check(p)
     _log_check(p, chk, force=True)
     if chk["result"] == "vielleicht":
         _set_attention(p, "vielleicht", {"candidates": chk["candidates"][:10],
                                           "summary": chk["summary"]}, None, notify=False)
-        raise NotNow("Es gibt eine Mail, die die Antwort sein könnte. Bitte erst ansehen.",
+        raise NotNow(tr("pipelines.not_now.maybe_answer", user_id=who),
                      {"candidates": chk["candidates"][:10]})
     if chk["took_over"]:
         _set_attention(p, "selbst_geantwortet", {"mails": chk["took_over"][:5]}, None, notify=False)
-        raise NotNow("Du hast inzwischen selbst geschrieben.", {"mails": chk["took_over"][:5]})
+        raise NotNow(tr("pipelines.not_now.self_wrote", user_id=who), {"mails": chk["took_over"][:5]})
     if chk["result"] == "kann_nicht_pruefen" and not despite_stale:
-        raise NotNow("Yorik kann gerade nicht sicher prüfen.", {"problems": chk["problems"]})
+        raise NotNow(tr("pipelines.not_now.cannot_check", user_id=who), {"problems": chk["problems"]})
 
     attempt = 1 + sum(1 for a in store.actions(p["id"]) if a["step_id"] == step["id"])
     res = kind_of(p).perform(p, step, attempt)
     if res["ok"]:
         store.mark_step_done(step["id"])
-        store.event(p["id"], "aktion", f"Erinnerung gesendet an {', '.join(step['payload'].get('to') or [])}",
+        store.event(p["id"], "aktion", tr("pipelines.event.sent_to", user_id=who,
+                                          to=", ".join(step["payload"].get("to") or [])),
                     {"message_id": res.get("message_id"), "step_id": step["id"],
                      "despite_stale": despite_stale and chk["result"] == "kann_nicht_pruefen"})
         store.update(p["id"], attention=None, attention_json=None, next_run_at=store.now())
@@ -296,7 +314,7 @@ def recover_stuck_sends() -> int:
             store.action_finish(r["idem_key"], "gesendet")
             if r["step_id"]:
                 store.mark_step_done(int(r["step_id"]))
-            store.event(int(r["pipeline_id"]), "aktion", "Erinnerung war gesendet (nach Neustart bestätigt)")
+            store.event(int(r["pipeline_id"]), "aktion", tr("pipelines.event.sent_confirmed", user_id=owner))
         else:
             store.action_finish(r["idem_key"], "unklar")
             p = store.get(int(r["pipeline_id"]), None)
@@ -344,7 +362,8 @@ def tick() -> dict[str, int]:
             process(pid)
         except Exception as exc:  # noqa: BLE001
             log.exception("pipeline %s: processing failed", pid)
-            store.event(pid, "status", f"Fehler bei der Prüfung: {type(exc).__name__}")
+            store.event(pid, "status", tr("pipelines.event.check_failed", user_id=_owner_of(pid),
+                                          error=type(exc).__name__))
             store.update(pid, next_run_at=store.now() + RECHECK_STALE)
         finally:
             unlock(pid)
@@ -361,7 +380,7 @@ def start_scheduler(loop: asyncio.AbstractEventLoop) -> None:
         while True:
             try:
                 out = await asyncio.get_running_loop().run_in_executor(None, tick)
-                workers.heartbeat("pipelines", "ok", f"{out['processed']} geprüft")
+                workers.heartbeat("pipelines", "ok", tr("pipelines.worker.checked", n=out["processed"]))
             except Exception as exc:  # noqa: BLE001
                 log.warning("pipelines: tick failed: %s", exc)
                 workers.heartbeat("pipelines", "error", str(exc)[:120])

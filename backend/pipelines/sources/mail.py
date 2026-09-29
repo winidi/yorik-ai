@@ -125,6 +125,8 @@ def _owner_accounts(owner: str) -> list[dict[str, Any]]:
 
 def freshness(owner: str, since: datetime) -> dict[str, Any]:
     """{ok, accounts:[{email, ok, problem, sync_age_s}], problems:[...]}."""
+    from ...messages import language_of, tr
+    lang = language_of(owner)
     accounts = []
     problems = []
     for a in _owner_accounts(owner):
@@ -138,13 +140,13 @@ def freshness(owner: str, since: datetime) -> dict[str, Any]:
         except ValueError:
             pass
         if a["error_newer"]:
-            problem = f"Abruf meldet einen Fehler: {(a['last_error'] or '')[:120]}"
+            problem = tr("pipelines.fresh.fetch_error", lang, error=(a["last_error"] or "")[:120])
         elif age is None:
-            problem = "noch nie abgerufen"
+            problem = tr("pipelines.fresh.never", lang)
         elif float(age) > FRESH_MAX_AGE_S:
-            problem = f"zuletzt vor {int(float(age) // 60)} Minuten abgerufen"
+            problem = tr("pipelines.fresh.minutes", lang, n=int(float(age) // 60))
         elif state.get("pending") or a["repair_requested"]:
-            problem = "Abgleich mit dem Server läuft noch"
+            problem = tr("pipelines.fresh.syncing", lang)
         if problem is None:
             with conn_ctx() as c:
                 bad = c.execute(
@@ -154,13 +156,13 @@ def freshness(owner: str, since: datetime) -> dict[str, Any]:
                 ).fetchone()
             # A mail that first failed after the start could be the answer.
             if bad and int(bad["n"]):
-                problem = f"{int(bad['n'])} Mail(s) konnten nicht gelesen werden"
+                problem = tr("pipelines.fresh.unreadable", lang, n=int(bad["n"]))
         accounts.append({"id": int(a["id"]), "email": a["email"], "ok": problem is None,
                          "problem": problem, "sync_age_s": None if age is None else int(float(age))})
         if problem:
             problems.append(f"{a['email']}: {problem}")
     if not accounts:
-        problems.append("kein aktives Mailkonto")
+        problems.append(tr("pipelines.fresh.no_account", lang))
     return {"ok": not problems, "accounts": accounts, "problems": problems}
 
 
@@ -186,6 +188,8 @@ def search(owner: str, since: datetime, features: dict[str, Any], own_ids: list[
            exclude_ids: Optional[list[int]] = None, limit: int = 40) -> list[dict[str, Any]]:
     """Received mails since `since` that might be the answer, newest first,
     each with the reasons it was picked."""
+    from ...messages import language_of, tr
+    lang = language_of(owner)
     own_ids = [i for i in own_ids if i]
     addresses = [a.lower() for a in features.get("addresses") or [] if a]
     domains = [d.lower() for d in features.get("domains") or [] if d]
@@ -239,20 +243,20 @@ def search(owner: str, since: datetime, features: dict[str, Any], own_ids: list[
         refs = r["references_ids"] or ""
         if own_ids and (r["in_reply_to"] in own_ids or r["thread_id"] in own_ids
                         or any(i in refs for i in own_ids)):
-            why.append("Antwort im selben Verlauf"); strong = True
+            why.append(tr("pipelines.why.thread", lang)); strong = True
         if frm in addresses or (r["reply_to"] or "").lower() in addresses:
-            why.append("von der angeschriebenen Adresse"); strong = True
+            why.append(tr("pipelines.why.address", lang)); strong = True
         elif any(dom == d or dom.endswith("." + d) for d in domains):
-            why.append(f"von der Domain {dom}"); strong = True
+            why.append(tr("pipelines.why.domain", lang, d=dom)); strong = True
         elif any(n in dom for n in names):
-            why.append(f"Absender-Domain {dom} passt zum Namen"); strong = True
+            why.append(tr("pipelines.why.domain_name", lang, d=dom)); strong = True
         text = f"{r['subject'] or ''}\n{r['body_text'] or ''}"
         for n in numbers:
             if n.lower() in text.lower():
-                why.append(f"nennt {n}"); strong = True
+                why.append(tr("pipelines.why.number", lang, n=n)); strong = True
         for w in words:
             if w.lower() in text.lower():
-                why.append(f"enthält „{w}“")
+                why.append(tr("pipelines.why.word", lang, w=w))
         out.append({
             "source": "mail",
             "id": int(r["id"]),

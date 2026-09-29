@@ -15,21 +15,23 @@ from datetime import datetime, timedelta
 from email.utils import make_msgid
 from typing import Any, Optional
 
+from ...messages import language_of, text_language, tr
 from .. import store
 from ..sources import mail as mail_src
 
 KIND = "nachfassen"
-LABEL = "Antwort verfolgen"
+LABEL = "Follow up until answered"
 
 DEFAULT_DAYS = (5, 7, 7)   # reminder, second reminder, hand-over
 SEARCH_SLACK = timedelta(minutes=5)
 
 
-def _fmt_date(value: Any) -> str:
+def _fmt_date(value: Any, lang: str = "de") -> str:
     d = store.to_dt(value)
     if not d:
         return ""
-    return d.astimezone().strftime("%d.%m.%Y")
+    local = d.astimezone()
+    return local.strftime("%d.%m.%Y") if lang == "de" else f"{local:%B} {local.day}, {local.year}"
 
 
 def _reply_subject(subject: str) -> str:
@@ -77,21 +79,18 @@ def origin_from_mail(mail: dict[str, Any]) -> dict[str, Any]:
 
 def default_steps(origin: dict[str, Any], owner: str) -> list[dict[str, Any]]:
     name = _sender_name(owner)
-    when = _fmt_date(origin.get("sent_at"))
+    # The reminder goes to the other side: in the language of the mail
+    # being followed up, the owner's own language when that is unclear.
+    lang = text_language(" ".join(str(origin.get(k) or "") for k in ("subject", "body_excerpt")),
+                         language_of(owner))
+    when = _fmt_date(origin.get("sent_at"), lang)
     subject = _reply_subject(origin.get("subject") or "")
     to = list(origin.get("to") or [])
-    sig = f"\n\nFreundliche Grüße\n{name}" if name else "\n\nFreundliche Grüße"
-    first = (
-        "Guten Tag,\n\n"
-        f"ich komme zurück auf meine Nachricht vom {when}. Bisher habe ich keine Antwort erhalten. "
-        "Könnten Sie mir bitte kurz bestätigen, dass sie angekommen ist, und mir sagen, "
-        "wie es weitergeht?" + sig
-    )
-    second = (
-        "Guten Tag,\n\n"
-        f"auf meine Nachricht vom {when} und meine Erinnerung habe ich leider noch keine Antwort. "
-        "Bitte melden Sie sich innerhalb der nächsten sieben Tage." + sig
-    )
+    signoff = tr("pipelines.mail.signoff", lang)
+    sig = f"\n\n{signoff}\n{name}" if name else f"\n\n{signoff}"
+    greeting = tr("pipelines.mail.greeting", lang)
+    first = f"{greeting}\n\n" + tr("pipelines.mail.first", lang, when=when) + sig
+    second = f"{greeting}\n\n" + tr("pipelines.mail.second", lang, when=when) + sig
     return [
         {"action": "mail_senden", "after_days": DEFAULT_DAYS[0],
          "payload": {"to": to, "subject": subject, "body": first, "source": "vorlage"}},
@@ -148,7 +147,7 @@ def refresh_due(p: dict[str, Any], step: dict[str, Any], all_steps: list[dict[st
     payload = dict(step["payload"], subject=fresh["subject"], body=fresh["body"],
                    source="llm_frisch", written_at=store.now().isoformat())
     store.update_step_payload(step["id"], payload)
-    store.event(p["id"], "status", f"Erinnerung {number} für heute neu geschrieben — bitte lesen und freigeben")
+    store.event(p["id"], "status", tr("pipelines.event.rewritten", user_id=p["owner_user_id"], n=number))
     return True
 
 
@@ -218,7 +217,7 @@ def perform(p: dict[str, Any], step: dict[str, Any], attempt: int) -> dict[str, 
     payload = step["payload"]
     to = [a for a in payload.get("to") or [] if a]
     if not to:
-        return {"ok": False, "status": "fehler", "error": "kein Empfänger"}
+        return {"ok": False, "status": "fehler", "error": tr("pipelines.no_recipient", user_id=p["owner_user_id"])}
     account_email = origin.get("account_email") or ""
     domain = account_email.split("@", 1)[1] if "@" in account_email else "yorik.local"
     message_id = make_msgid(domain=domain).strip("<>")

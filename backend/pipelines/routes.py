@@ -18,6 +18,8 @@ from . import engine, store
 from .kinds import nachfassen
 from .sources import mail as mail_src
 
+from ..messages import tr
+
 router = APIRouter(prefix="/api/pipelines", tags=["pipelines"])
 
 ACTIONS = {"mail_senden", "uebergabe"}
@@ -30,13 +32,13 @@ def _uid(user: dict) -> str:
 def _own(pipeline_id: int, user: dict) -> dict[str, Any]:
     p = store.get(pipeline_id, _uid(user))
     if not p:
-        raise HTTPException(404, "Pipeline nicht gefunden")
+        raise HTTPException(404, tr("pipelines.not_found", user=user))
     return p
 
 
 def _require_enabled(user: dict) -> None:
     if not store.person_enabled(_uid(user)):
-        raise HTTPException(403, "Pipelines sind für dich ausgeschaltet.")
+        raise HTTPException(403, tr("pipelines.off_for_you", user=user))
 
 
 def _with_steps(p: dict[str, Any]) -> dict[str, Any]:
@@ -69,7 +71,7 @@ def _detail(p: dict[str, Any]) -> dict[str, Any]:
 
 def _locked(pipeline_id: int):
     if not engine.try_lock(pipeline_id):
-        raise HTTPException(409, "Yorik prüft diese Pipeline gerade. Bitte gleich noch einmal.")
+        raise HTTPException(409, tr("pipelines.busy", user_id=engine._owner_of(pipeline_id)))
 
 
 # ─── me, people ─────────────────────────────────────────────────────
@@ -84,7 +86,7 @@ def me(user: dict = Depends(current_user)) -> dict[str, Any]:
 @router.get("/people")
 def people(user: dict = Depends(current_user)) -> list[dict[str, Any]]:
     if (user.get("role") or "").lower() not in store.ADULT_ROLES:
-        raise HTTPException(403, "Nur Eltern oder Admins")
+        raise HTTPException(403, tr("pipelines.parents_only", user=user))
     return store.people_settings((user.get("role") or "").lower())
 
 
@@ -96,12 +98,12 @@ class PersonSwitch(BaseModel):
 def switch_person(user_id: str, body: PersonSwitch, user: dict = Depends(current_user)) -> dict[str, Any]:
     role = (user.get("role") or "").lower()
     if role not in store.ADULT_ROLES:
-        raise HTTPException(403, "Nur Eltern oder Admins")
+        raise HTTPException(403, tr("pipelines.parents_only", user=user))
     target_role = store.role_of(user_id)
     if not target_role:
-        raise HTTPException(404, "Person nicht gefunden")
+        raise HTTPException(404, tr("pipelines.person_not_found", user=user))
     if target_role in store.ADMIN_ROLES and role not in store.ADMIN_ROLES:
-        raise HTTPException(403, "Für Admins kann das nur ein Admin ändern")
+        raise HTTPException(403, tr("pipelines.admin_only", user=user))
     store.set_person_enabled(user_id, body.enabled, _uid(user))
     return {"ok": True}
 
@@ -137,7 +139,7 @@ def draft_with_llm(pipeline_id: int, owner: str) -> None:
         plan = nachfassen.llm_steps(p["origin"], owner)
     except Exception as exc:  # noqa: BLE001
         plan = None
-        store.event(pipeline_id, "status", f"Schreiben fehlgeschlagen: {type(exc).__name__}")
+        store.event(pipeline_id, "status", tr("pipelines.event.drafting_failed", user_id=owner, error=type(exc).__name__))
     config = dict(p["config"], drafting=False)
     if plan:
         store.replace_steps(pipeline_id, [
@@ -147,10 +149,10 @@ def draft_with_llm(pipeline_id: int, owner: str) -> None:
         if plan["goal"]:
             fields["goal"] = plan["goal"]
         store.update(pipeline_id, **fields)
-        store.event(pipeline_id, "status", "Yorik hat die Erinnerungen geschrieben und die Abstände vorgeschlagen")
+        store.event(pipeline_id, "status", tr("pipelines.event.drafted", user_id=owner))
     else:
         store.update(pipeline_id, config_json=config)
-        store.event(pipeline_id, "status", "Das Sprachmodell war nicht erreichbar — Vorlage bleibt stehen")
+        store.event(pipeline_id, "status", tr("pipelines.event.llm_unreachable", user_id=owner))
 
 
 class CreateError(Exception):
@@ -164,26 +166,26 @@ def create_follow_up(owner: str, mail_id: int) -> int:
     written afterwards by draft_with_llm. Shared by the route and the
     chat's pipeline skill."""
     if not store.person_enabled(owner):
-        raise CreateError(403, "Pipelines sind für dich ausgeschaltet.")
+        raise CreateError(403, tr("pipelines.off_for_you", user_id=owner))
     mail = mail_src.load_sent_mail(owner, mail_id)
     if not mail:
-        raise CreateError(404, "Mail nicht gefunden")
+        raise CreateError(404, tr("pipelines.mail_not_found", user_id=owner))
     if not mail.get("is_sent"):
-        raise CreateError(400, "Nur eine gesendete Mail lässt sich verfolgen.")
+        raise CreateError(400, tr("pipelines.only_sent", user_id=owner))
     origin = nachfassen.origin_from_mail(mail)
     if not origin["to"]:
-        raise CreateError(400, "Die Mail hat keinen Empfänger.")
+        raise CreateError(400, tr("pipelines.no_recipient", user_id=owner))
     since = store.to_dt(origin["sent_at"]) or store.now()
-    subject = origin["subject"] or "(ohne Betreff)"
+    subject = origin["subject"] or tr("pipelines.no_subject", user_id=owner)
     pid = store.create(
         owner, kind=nachfassen.KIND, title=subject,
-        goal=f"Antwort auf „{subject}“", origin=origin,
+        goal=tr("pipelines.goal", user_id=owner, subject=subject), origin=origin,
         features=mail_src.features_from_mail(mail),
         config=dict(nachfassen.default_config(), drafting=True),
         since_at=since,
     )
     store.replace_steps(pid, nachfassen.default_steps(origin, owner))
-    store.event(pid, "status", "Entwurf angelegt aus der gesendeten Mail")
+    store.event(pid, "status", tr("pipelines.event.created", user_id=owner))
     return pid
 
 
@@ -203,9 +205,9 @@ def redraft(pipeline_id: int, background: BackgroundTasks, user: dict = Depends(
     """Let the model write the open reminders again."""
     p = _own(pipeline_id, user)
     if p["state"] not in ("entwurf", "laeuft", "pausiert"):
-        raise HTTPException(409, "Die Pipeline ist beendet.")
+        raise HTTPException(409, tr("pipelines.finished", user=user))
     if p["config"].get("drafting"):
-        raise HTTPException(409, "Yorik schreibt schon.")
+        raise HTTPException(409, tr("pipelines.already_drafting", user=user))
     store.update(pipeline_id, config_json=dict(p["config"], drafting=True))
     background.add_task(draft_with_llm, pipeline_id, _uid(user))
     return _detail(_own(pipeline_id, user))
@@ -270,9 +272,9 @@ def patch(pipeline_id: int, body: PatchBody, user: dict = Depends(current_user))
     if body.config is not None:
         c = body.config
         if c.send_days not in ("alle", "werktags"):
-            raise HTTPException(400, "send_days: alle oder werktags")
+            raise HTTPException(400, tr("pipelines.bad_send_days", user=user))
         if not (0 <= c.send_from_hour < c.send_to_hour <= 24):
-            raise HTTPException(400, "Sendefenster ungültig")
+            raise HTTPException(400, tr("pipelines.bad_window", user=user))
         fields["config_json"] = dict(p["config"], **c.model_dump())
     if fields:
         store.update(pipeline_id, **fields)
@@ -295,21 +297,21 @@ class StepsBody(BaseModel):
 def put_steps(pipeline_id: int, body: StepsBody, user: dict = Depends(current_user)) -> dict[str, Any]:
     p = _own(pipeline_id, user)
     if p["state"] in ("erledigt", "abgebrochen"):
-        raise HTTPException(409, "Die Pipeline ist beendet.")
+        raise HTTPException(409, tr("pipelines.finished", user=user))
     if p["config"].get("drafting"):
-        raise HTTPException(409, "Yorik schreibt die Erinnerungen gerade. Gleich noch einmal.")
+        raise HTTPException(409, tr("pipelines.drafting_retry", user=user))
     done = [s for s in store.steps(pipeline_id) if s["status"] == "erledigt"]
     new = []
     for s in body.steps:
         if s.action not in ACTIONS:
-            raise HTTPException(400, f"Unbekannter Schritt: {s.action}")
+            raise HTTPException(400, tr("pipelines.unknown_step", user=user, action=s.action))
         if not (0 <= s.after_days <= 365):
-            raise HTTPException(400, "Tage: 0 bis 365")
+            raise HTTPException(400, tr("pipelines.bad_days", user=user))
         payload: dict[str, Any] = {}
         if s.action == "mail_senden":
             to = [a.strip() for a in (s.payload.get("to") or []) if isinstance(a, str) and "@" in a]
             if not to:
-                raise HTTPException(400, "Eine Erinnerung braucht einen Empfänger.")
+                raise HTTPException(400, tr("pipelines.reminder_needs_recipient", user=user))
             payload = {"to": to[:10], "subject": str(s.payload.get("subject") or "")[:300],
                        "body": str(s.payload.get("body") or "")[:20000]}
             for k in ("why", "source", "written_at"):
@@ -337,9 +339,9 @@ class ApproveBody(BaseModel):
 def approve(pipeline_id: int, step_id: int, body: ApproveBody,
             user: dict = Depends(current_user)) -> dict[str, Any]:
     if _own(pipeline_id, user)["config"].get("drafting"):
-        raise HTTPException(409, "Yorik schreibt die Erinnerungen gerade.")
+        raise HTTPException(409, tr("pipelines.drafting", user=user))
     if not store.approve_step(pipeline_id, step_id, body.approved):
-        raise HTTPException(404, "Schritt nicht gefunden oder schon erledigt")
+        raise HTTPException(404, tr("pipelines.step_not_found", user=user))
     return _detail(_own(pipeline_id, user))
 
 
@@ -350,14 +352,14 @@ def start(pipeline_id: int, user: dict = Depends(current_user)) -> dict[str, Any
     _require_enabled(user)
     p = _own(pipeline_id, user)
     if p["state"] != "entwurf":
-        raise HTTPException(409, "Schon gestartet")
+        raise HTTPException(409, tr("pipelines.already_started", user=user))
     if p["config"].get("drafting"):
-        raise HTTPException(409, "Yorik schreibt die Erinnerungen gerade.")
+        raise HTTPException(409, tr("pipelines.drafting", user=user))
     open_mail = [s for s in store.steps(pipeline_id) if s["status"] == "offen" and s["action"] == "mail_senden"]
     if any(not s["approved"] for s in open_mail):
-        raise HTTPException(409, "Bitte erst jede Mail freigeben.")
+        raise HTTPException(409, tr("pipelines.approve_all_first", user=user))
     store.update(pipeline_id, state="laeuft", next_run_at=store.now(), attention=None, attention_json=None)
-    store.event(pipeline_id, "mensch", "Gestartet (begleitet: jede Erinnerung fragt vor dem Senden)")
+    store.event(pipeline_id, "mensch", tr("pipelines.event.started", user=user))
     return _detail(_own(pipeline_id, user))
 
 
@@ -365,9 +367,9 @@ def start(pipeline_id: int, user: dict = Depends(current_user)) -> dict[str, Any
 def pause(pipeline_id: int, user: dict = Depends(current_user)) -> dict[str, Any]:
     p = _own(pipeline_id, user)
     if p["state"] != "laeuft":
-        raise HTTPException(409, "Läuft nicht")
+        raise HTTPException(409, tr("pipelines.not_running", user=user))
     store.update(pipeline_id, state="pausiert", next_run_at=None)
-    store.event(pipeline_id, "mensch", "Pausiert")
+    store.event(pipeline_id, "mensch", tr("pipelines.event.paused", user=user))
     return _detail(_own(pipeline_id, user))
 
 
@@ -376,9 +378,9 @@ def resume(pipeline_id: int, user: dict = Depends(current_user)) -> dict[str, An
     _require_enabled(user)
     p = _own(pipeline_id, user)
     if p["state"] != "pausiert":
-        raise HTTPException(409, "Nicht pausiert")
+        raise HTTPException(409, tr("pipelines.not_paused", user=user))
     store.update(pipeline_id, state="laeuft", next_run_at=store.now())
-    store.event(pipeline_id, "mensch", "Fortgesetzt")
+    store.event(pipeline_id, "mensch", tr("pipelines.event.resumed", user=user))
     return _detail(_own(pipeline_id, user))
 
 
@@ -390,10 +392,10 @@ class FinishBody(BaseModel):
 def finish(pipeline_id: int, body: FinishBody, user: dict = Depends(current_user)) -> dict[str, Any]:
     p = _own(pipeline_id, user)
     if p["state"] in ("erledigt", "abgebrochen"):
-        raise HTTPException(409, "Schon beendet")
+        raise HTTPException(409, tr("pipelines.already_ended", user=user))
     store.update(pipeline_id, state="erledigt", attention=None, attention_json=None, next_run_at=None,
                  finished_at=store.now(), result_json={"by": "person", "note": (body.note or "")[:500]})
-    store.event(pipeline_id, "mensch", "Als erledigt markiert")
+    store.event(pipeline_id, "mensch", tr("pipelines.event.marked_done", user=user))
     return _detail(_own(pipeline_id, user))
 
 
@@ -401,10 +403,10 @@ def finish(pipeline_id: int, body: FinishBody, user: dict = Depends(current_user
 def cancel(pipeline_id: int, user: dict = Depends(current_user)) -> dict[str, Any]:
     p = _own(pipeline_id, user)
     if p["state"] in ("erledigt", "abgebrochen"):
-        raise HTTPException(409, "Schon beendet")
+        raise HTTPException(409, tr("pipelines.already_ended", user=user))
     store.update(pipeline_id, state="abgebrochen", attention=None, attention_json=None,
                  next_run_at=None, finished_at=store.now())
-    store.event(pipeline_id, "mensch", "Abgebrochen")
+    store.event(pipeline_id, "mensch", tr("pipelines.event.cancelled", user=user))
     return _detail(_own(pipeline_id, user))
 
 
@@ -412,7 +414,7 @@ def cancel(pipeline_id: int, user: dict = Depends(current_user)) -> dict[str, An
 def delete(pipeline_id: int, user: dict = Depends(current_user)):
     p = _own(pipeline_id, user)
     if p["state"] in ("laeuft", "pausiert"):
-        raise HTTPException(409, "Erst beenden oder abbrechen")
+        raise HTTPException(409, tr("pipelines.end_first", user=user))
     store.delete(pipeline_id)
 
 
@@ -449,7 +451,7 @@ def send(pipeline_id: int, step_id: int, body: SendBody, user: dict = Depends(cu
         if body.approve:
             current = next((s for s in store.steps(pipeline_id) if s["id"] == step_id), None)
             if not current or (current["payload"].get("body") or "") != (body.seen_body or ""):
-                raise engine.NotNow("Der Text hat sich inzwischen geändert. Bitte noch einmal lesen.")
+                raise engine.NotNow(tr("pipelines.not_now.text_changed", user=user))
             store.approve_step(pipeline_id, step_id, True)
         res = engine.send_step(p, step_id, despite_stale=body.despite_stale)
     except engine.NotNow as exc:
@@ -475,7 +477,7 @@ def answer(pipeline_id: int, body: AnswerBody, user: dict = Depends(current_user
             store.update(pipeline_id, state="erledigt", attention=None, attention_json=None,
                          next_run_at=None, finished_at=store.now(),
                          result_json={"by": "person", "answer_mail_id": body.mail_id})
-            store.event(pipeline_id, "mensch", "Antwort bestätigt — erledigt", {"mail_id": body.mail_id})
+            store.event(pipeline_id, "mensch", tr("pipelines.event.answer_confirmed", user=user), {"mail_id": body.mail_id})
         else:
             feats = dict(p["features"])
             dismissed = list(feats.get("dismissed_mail_ids") or [])
@@ -484,7 +486,7 @@ def answer(pipeline_id: int, body: AnswerBody, user: dict = Depends(current_user
             feats["dismissed_mail_ids"] = dismissed
             store.update(pipeline_id, features_json=feats, attention=None, attention_json=None,
                          next_run_at=store.now() if p["state"] == "laeuft" else None)
-            store.event(pipeline_id, "mensch", "Keine Antwort — weiter warten", {"mail_id": body.mail_id})
+            store.event(pipeline_id, "mensch", tr("pipelines.event.not_the_answer", user=user), {"mail_id": body.mail_id})
     finally:
         engine.unlock(pipeline_id)
     return _detail(_own(pipeline_id, user))
@@ -496,7 +498,7 @@ def continue_after_own_reply(pipeline_id: int, user: dict = Depends(current_user
     pipeline to keep following anyway."""
     p = _own(pipeline_id, user)
     if p["attention"] != "selbst_geantwortet":
-        raise HTTPException(409, "Nichts zu bestätigen")
+        raise HTTPException(409, tr("pipelines.nothing_to_confirm", user=user))
     feats = dict(p["features"])
     ids = list(feats.get("dismissed_sent_ids") or [])
     for m in (p["attention_detail"] or {}).get("mails", []):
@@ -505,7 +507,7 @@ def continue_after_own_reply(pipeline_id: int, user: dict = Depends(current_user
     feats["dismissed_sent_ids"] = ids
     store.update(pipeline_id, features_json=feats, attention=None, attention_json=None,
                  next_run_at=store.now())
-    store.event(pipeline_id, "mensch", "Eigene Mail gesehen — weiter verfolgen")
+    store.event(pipeline_id, "mensch", tr("pipelines.event.own_mail_seen", user=user))
     return _detail(_own(pipeline_id, user))
 
 
@@ -517,12 +519,12 @@ class UnclearBody(BaseModel):
 def resolve_unclear(pipeline_id: int, body: UnclearBody, user: dict = Depends(current_user)) -> dict[str, Any]:
     p = _own(pipeline_id, user)
     if p["attention"] != "versand_unklar":
-        raise HTTPException(409, "Nichts zu klären")
+        raise HTTPException(409, tr("pipelines.nothing_to_clarify", user=user))
     step_id = (p["attention_detail"] or {}).get("step_id")
     if body.was_sent and step_id:
         store.mark_step_done(int(step_id))
-        store.event(pipeline_id, "mensch", "Erinnerung war gesendet (bestätigt)")
+        store.event(pipeline_id, "mensch", tr("pipelines.event.was_sent", user=user))
     else:
-        store.event(pipeline_id, "mensch", "Erinnerung war nicht gesendet — Schritt bleibt offen")
+        store.event(pipeline_id, "mensch", tr("pipelines.event.was_not_sent", user=user))
     store.update(pipeline_id, attention=None, attention_json=None, next_run_at=store.now())
     return _detail(_own(pipeline_id, user))
