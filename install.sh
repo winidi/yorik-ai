@@ -1259,8 +1259,7 @@ else
   if [[ "$(_ts_state)" == "Running" ]]; then
     TS_NAME="$(tailscale status --json | jq -r '.Self.DNSName' | sed 's/\.$//')"
     ok "this machine is ${TS_NAME} in your tailnet"
-    # Serve: Yorik on 443, photos (Immich) on 8443, documents (Paperless)
-    # on 8444. HTTPS certificates must be allowed once in the admin
+    # Serve: Yorik on 443, photos (Immich) on 8443. HTTPS certificates must be allowed once in the admin
     # console; serve says so if they aren't.
     _serve() {  # port target label
       local shown="https://${TS_NAME}"
@@ -1289,7 +1288,13 @@ else
       fi
     fi
     _serve 8443 http://localhost:2283 "photos" || true
-    _serve 8444 http://localhost:8010 "documents" || true
+    # Documents are reached through Yorik (/paperless/), never directly:
+    # Paperless trusts a Remote-User header, so a port straight to it
+    # let any tailnet device pose as anyone. Older installs served it
+    # on 8444; take that away.
+    if tailscale serve status --json 2>/dev/null | jq -e --arg hp "${TS_NAME}:8444" '.Web[$hp]' >/dev/null; then
+      sudo tailscale serve --https=8444 off >/dev/null 2>&1 && ok "documents no longer served on :8444 (open them in Yorik)"
+    fi
     # The public join page: one static file, no data. Funnel needs a
     # one-time "funnel" permission for this machine in the access
     # controls; without it invites still work for phones that already

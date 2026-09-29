@@ -83,7 +83,7 @@ Yorik never faces the open internet. The stack includes
 [Tailscale](https://tailscale.com) (free for up to 6 people). Sign in
 once: Yorik → Settings → System → Phones shows a QR code (on the box's
 screen too). Then Yorik is at `https://yorik.<your-tailnet>.ts.net`,
-photos on `:8443`, documents on `:8444`, with real HTTPS, which browsers
+photos on `:8443` (documents open inside Yorik), with real HTTPS, which browsers
 need for the microphone and "Add to Home Screen".
 
 Two switches in the Tailscale admin console:

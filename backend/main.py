@@ -2280,11 +2280,11 @@ def _external_iframe_origins(request) -> str:
         hosts = [hostname]
 
     # Immich on 2283 (host) / 8443 (Tailscale-served).
-    # Paperless on 8010 (host) / 8444 (Tailscale-served).
+    # Paperless on 8010 (host); over the tailnet only through /paperless/.
     parts: list[str] = []
     for h in hosts:
         parts.append(f"http://{h}:2283 https://{h}:8443 "
-                     f"http://{h}:8010 https://{h}:8444")
+                     f"http://{h}:8010")
 
     # Operator-configured subdomain proxies (Caddy install pattern).
     # Without these the Photos / Documents iframes get blocked by CSP

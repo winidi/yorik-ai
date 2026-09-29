@@ -94,7 +94,7 @@ services:
   # ── Access from phones: Tailscale, HTTPS, no open ports ────────────
   # Signs in once (link shown in Yorik → Settings → System → Phones, or
   # TS_AUTHKEY in .env), then publishes Yorik on https://<name>.<tailnet>.ts.net,
-  # photos on :8443 and documents on :8444 (tailscale/serve.json).
+  # photos on :8443 (tailscale/serve.json). Documents go through Yorik.
   tailscale:
     <<: *restart
     image: tailscale/tailscale:stable
