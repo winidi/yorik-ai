@@ -12,7 +12,7 @@ Yorik reads your inbox via IMAP and sends via SMTP. No webmail, no OAuth dance �
 
 ## Adding an account
 
-Settings → Connectors → **Email** → **Add account**.
+Open the **Mail** app and click **+** next to **Accounts** in the list on the left.
 
 Fill in:
 

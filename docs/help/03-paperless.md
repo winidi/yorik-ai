@@ -24,7 +24,7 @@ OCR languages: by default `deu+eng`. Tesseract has German + English language pac
 
 ### B. Email it in
 
-Paperless polls IMAP boxes if configured. Set this up at Settings → Connectors → Paperless → IMAP. Useful for forwarding invoices from your inbox.
+Open the mail in the **Mail** app and, on the attachment, choose **Add to Paperless, visible to …**. Mails from senders you trust can be filed automatically.
 
 ### C. Drop it in `data/paperless/consume/` (BULK IMPORT — fastest path for hundreds of docs)
 
