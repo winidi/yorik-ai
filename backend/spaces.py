@@ -461,7 +461,7 @@ def ensure_workspace_exists(owner_user_id: str, owner_name: str) -> int:
         # explicit members below.
         cur = c.execute(
             "INSERT INTO spaces (workspace_id, name, kind, slug) "
-            "VALUES (?, 'Shared', 'shared', 'household')",
+            "VALUES (?, 'Household', 'shared', 'household')",
             (ws_id,),
         )
         household_id = int(cur.lastrowid)

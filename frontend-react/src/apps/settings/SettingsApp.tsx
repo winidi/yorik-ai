@@ -63,7 +63,7 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
   { id: "system",     label: "System",      icon: Activity, color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, hostOnly: true },
   { id: "llm",        label: "LLM",         icon: Cpu,      color: "text-blue-500 bg-blue-500/10",     adminOnly: true, hostOnly: true },
   { id: "users",      label: "Users",       icon: Users,    color: "text-cyan-500 bg-cyan-500/10" },
-  { id: "households", label: "Households",  icon: Home,     color: "text-orange-500 bg-orange-500/10", adminOnly: true, hostOnly: true },
+  { id: "households", label: "Hosted families", icon: Home,     color: "text-orange-500 bg-orange-500/10", adminOnly: true, hostOnly: true },
   { id: "spaces",     label: "Spaces",      icon: Shield,   color: "text-teal-500 bg-teal-500/10" },
   { id: "apps",       label: "Apps",        icon: Grid3x3,  color: "text-fuchsia-500 bg-fuchsia-500/10" },
   { id: "marketplace",label: "Marketplace", icon: Store,    color: "text-pink-500 bg-pink-500/10",     adminOnly: true, hostOnly: true },
@@ -2358,9 +2358,10 @@ function DevModeToggle({ toast }: {
   );
 }
 
-type DocVisibility = "private" | "business" | "shared";
+type DocVisibility = "private" | "parents" | "business" | "shared";
 const DEFAULT_DOC_VIS_OPTIONS: { value: DocVisibility; label: string; emoji: string; desc: string }[] = [
-  { value: "private",  emoji: "🔒", label: "Private",  desc: "Only you + admin see new uploads." },
+  { value: "private",  emoji: "🔒", label: "Private",  desc: "Only you see new uploads." },
+  { value: "parents",  emoji: "👪", label: "Parents",  desc: "Visible to the adults of the household, not the children." },
   { value: "business", emoji: "💼", label: "Business", desc: "Visible to the business group (employees, partners)." },
   { value: "shared",   emoji: "👥", label: "Shared",   desc: "Visible to the whole household / team." },
 ];
@@ -6167,7 +6168,7 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
       {/* Workspace kind */}
       {workspace && (
         <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="text-xs text-muted-foreground font-semibold mb-2">Workspace</div>
+          <div className="text-xs text-muted-foreground font-semibold mb-2">This household</div>
           <div className="flex items-center gap-3">
             <div className="flex-1 min-w-0">
               <div className="font-medium text-base truncate">{workspace.name}</div>

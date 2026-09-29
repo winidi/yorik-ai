@@ -50,6 +50,18 @@ build for Yorik without breaking the safety story. It's intentionally short.
                         world."               surface."
 ```
 
+## Who sees what: the words
+
+| Word | What it is | Where |
+|---|---|---|
+| **Install** | One Yorik with its own database: one family. | the whole box |
+| **Hosted family** (tenant) | A further, separate Yorik install on the same box, with its own database. Rare; Settings → Hosted families, host only. | `backend/main.py` (tenant detection), `HouseholdsTab.tsx` |
+| **Household** (workspace) | The install's own record: its name and whether it is a family or a business. Always exactly one. | `workspaces`, `spaces.ensure_workspace_exists` |
+| **Space** | Who may see a row. Each person has a personal space; the household space holds what the family shares. Areas of a personal space can be shared per person (Settings → You → Sharing). | `spaces`, `space_members` (`scope` = areas), `backend/spaces.py` |
+| **Role** | What a person may *do*: platform_admin, admin, member, restricted (children). It never widens what they *see*. | `user_profiles.role`, `backend/auth.py` |
+| **Row share** | A one-off exception: this one row for that one person. | `row_shares` |
+| **Document visibility** | Paperless' own rights, set by Yorik per document: private, parents, business, household. | `backend/paperless_visibility.py` |
+
 ## The three contributable layers
 
 | Layer | Where | Sees credentials | Code? | Review bar |
