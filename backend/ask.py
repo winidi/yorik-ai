@@ -1696,8 +1696,10 @@ async def ask_async_stream(
     identified_name: Optional[str] = None,
     user_id: Optional[int] = None,
     voice_mode: bool = False,
+    cancel: Optional[Any] = None,
 ):
     """Async generator that streams typed events from the agent loop.
+    ``cancel``: see agent.loop.ask_stream.
 
     Yields (in order):
       - IterationStart(n)                              — new LLM turn begins
@@ -1737,6 +1739,7 @@ async def ask_async_stream(
         conversation_id=conversation_id,
         identified_name=identified_name,
         voice_mode=voice_mode,
+        cancel=cancel,
     ):
         yield event
 

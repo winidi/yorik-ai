@@ -841,8 +841,14 @@ async def ask_stream(
     identified_name: Optional[str] = None,
     max_iterations: Optional[int] = None,
     voice_mode: bool = False,
+    cancel: Optional[Any] = None,
 ):
     """Streaming variant of :func:`ask`. Async generator that yields events.
+
+    ``cancel`` (a threading.Event) is set when the person left: the model
+    stream is closed (the model server's slot frees up), no new step or
+    tool call starts, and the turn is not saved. A tool that is already
+    running finishes first, so nothing is left half done.
 
     Designed for the voice TTS pipeline (sentence-by-sentence audio
     synthesis as the response forms) and for chat-page SSE. Same dict
@@ -913,7 +919,16 @@ async def ask_stream(
     halted = False
     final_text: Optional[str] = None
 
+    def _cancelled() -> bool:
+        if cancel is not None and cancel.is_set():
+            log.info("ask_stream: the person left, turn %s stopped at iter %d and not saved",
+                     conversation_id, iteration)
+            return True
+        return False
+
     while budget.consume():
+        if _cancelled():
+            return
         iteration += 1
         yield _stream.IterationStart(n=iteration)
 
@@ -931,6 +946,8 @@ async def ask_stream(
                 for chunk in llm.chat_stream(
                     conversation_io.sanitize_for_llm(messages), tools_schema,
                 ):
+                    if cancel is not None and cancel.is_set():
+                        break       # closes the stream: the model stops generating
                     loop_.call_soon_threadsafe(queue.put_nowait, ("chunk", chunk))
             except Exception as exc:  # noqa: BLE001
                 loop_.call_soon_threadsafe(queue.put_nowait, ("error", exc))
@@ -1004,6 +1021,8 @@ async def ask_stream(
 
         if last_err:
             raise last_err
+        if _cancelled():        # the stream was cut short: not an answer
+            return
 
         # Stream finished — finalize tool_calls (repair JSON, emit Ready
         # events) and build the assistant message.
@@ -1171,6 +1190,8 @@ async def ask_stream(
             conversation_so_far=list(messages),
         )
         for ready in ready_calls:
+            if _cancelled():
+                return
             pre = guardrails.before_call(ready.name, ready.arguments)
             if not pre.allows_execution:
                 messages.append(tool_message(ready.id, ready.name, synthetic_tool_result(pre)))

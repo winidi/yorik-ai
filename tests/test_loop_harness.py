@@ -157,3 +157,51 @@ def test_a_long_conversation_keeps_its_beginning_on_disk(admin_id, monkeypatch):
     saved = ci.load_messages("conv-long", admin_id)
     assert saved[0]["content"].startswith("u0 ") and len(saved) == len(old) + 2
     assert saved[-1]["content"] == "ok"
+
+
+class _SlowStreamLlm:
+    """Streams 50 words slowly; notes how many it gave before it was closed."""
+    base_url = "http://fake-llm.local/v1"
+    model = "fake-9b"
+
+    def __init__(self):
+        self.sent, self.closed = 0, False
+
+    def chat_stream(self, messages, tools=None, **_kw):
+        import time
+        from types import SimpleNamespace as NS
+        try:
+            for i in range(50):
+                time.sleep(0.02)
+                self.sent += 1
+                yield NS(choices=[NS(delta=NS(content=f"w{i} ", tool_calls=None), finish_reason=None)])
+            yield NS(choices=[NS(delta=None, finish_reason="stop")])
+        finally:
+            self.closed = True
+
+    def chat(self, messages, tools=None, **_kw):
+        return {"role": "assistant", "content": "", "_usage": None, "_finish_reason": "stop"}
+
+
+def test_a_person_who_leaves_stops_the_model_and_the_turn_is_not_saved(admin_id):
+    import threading, time
+    from backend.agent import conversation_io as ci, loop, streaming
+    from backend.agent.context import User
+    from backend.agent.tools import ToolRegistry
+    fake, left = _SlowStreamLlm(), threading.Event()
+
+    async def run():
+        events = []
+        async for ev in loop.ask_stream("hallo", user=User(id=admin_id, role="admin", language="de"),
+                                        registry=ToolRegistry(), llm=fake, system_prompt="test",
+                                        conversation_id="conv-left", cancel=left):
+            events.append(ev)
+            if isinstance(ev, streaming.TextDelta):
+                left.set()                                   # the browser went away
+        return events
+
+    events = asyncio.run(run())
+    time.sleep(0.2)                                          # the pump thread notices
+    assert fake.closed and fake.sent < 50                    # the model stopped early
+    assert not any(isinstance(e, streaming.FinalResult) for e in events)
+    assert ci.load_messages("conv-left", admin_id) == []     # nothing saved

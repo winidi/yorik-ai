@@ -7131,6 +7131,8 @@ async def ask_stream(
 
     queue: asyncio.Queue = asyncio.Queue()
     DONE_SENTINEL = object()
+    import threading as _threading
+    left = _threading.Event()      # set when the browser goes away
 
     async def _run_agent_and_signal():
         # Stream typed events from the agent loop. Map each to an SSE
@@ -7150,6 +7152,7 @@ async def ask_stream(
                 conversation_id=body.conversation_id,
                 user_language=user.get("language") or "en",
                 user_id=user.get("id"),
+                cancel=left,
             ):
                 if isinstance(ev, _stream.IterationStart):
                     await queue.put({"phase": "iter_start", "iteration": ev.n})
@@ -7197,13 +7200,12 @@ async def ask_stream(
                     break
                 yield "data: " + json.dumps(item, ensure_ascii=False, default=str) + "\n\n"
         finally:
-            # Caller disconnected mid-stream — let the background task
-            # finish (it'll just write to a drained queue, no harm).
+            # Caller disconnected mid-stream. The loop stops at its next
+            # step (a running tool call finishes first, so no half-applied
+            # state) and the model stream closes, which frees the model
+            # for the next question. The unfinished turn is not saved.
             if not task.done():
-                # We don't cancel mid-flight tool calls; that risks
-                # half-applied state (a draft created but not surfaced).
-                # The task will finish on its own.
-                pass
+                left.set()
 
     return StreamingResponse(
         _event_stream(),
