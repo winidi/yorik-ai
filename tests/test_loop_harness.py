@@ -230,3 +230,16 @@ def test_prefetch_asks_the_chats_own_model_server(monkeypatch):
     out = asyncio.run(prefetch._real_variants("wo ist die invoice?", "invoice", llm))
     assert out == ["Rechnung"]
     assert seen == {"url": "https://llm.example/v1/chat/completions", "model": "qwen-x", "auth": "Bearer sk-123"}
+
+
+def test_an_unparsed_tool_call_in_the_text_is_never_the_answer(admin_id):
+    """'<tool_call></function></tool_call>' was shown to a German user as the
+    answer (chat test 2026-09-29): the server had not parsed the model's
+    tool call. Markup only counts as an empty reply and is asked again."""
+    fake = _FakeLlm([
+        {"role": "assistant", "content": "<tool_call>\n</function>\n</tool_call>"},
+        {"role": "assistant", "content": "Open the Mail app and click + next to Accounts."},
+    ])
+    out = _run(fake, _EchoTool(), user_id=admin_id)
+    assert out["response"] == "Open the Mail app and click + next to Accounts."
+    assert "<tool_call" not in out["response"]

@@ -42,6 +42,7 @@ What this loop deliberately doesn't do (yet — see masterplan phases):
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 import logging
 import os
@@ -352,6 +353,7 @@ async def ask(
         # net. force_first_tool_call has its own retry pattern (above);
         # this is the same shape for the empty-stop case after a
         # successful tool call.
+        _without_tool_markup(assistant_msg)
         _is_empty_stop = (
             not has_tool_calls(assistant_msg)
             and not (assistant_msg.get("content") or "").strip()
@@ -369,6 +371,7 @@ async def ask(
                 )
                 retry_usage = retry_msg.pop("_usage", None)
                 retry_finish = retry_msg.pop("_finish_reason", None)
+                _without_tool_markup(retry_msg)
                 retry_has_calls = has_tool_calls(retry_msg)
                 retry_has_text = bool((retry_msg.get("content") or "").strip())
                 if retry_has_calls or retry_has_text:
@@ -990,7 +993,8 @@ async def ask_stream(
                 # Hold back from the first hard value or quote on — it may
                 # be withdrawn by the grounding check (and the wall reads
                 # the stream aloud).
-                if not holding and _grounding.needs_hold("".join(content_parts)):
+                _sofar = "".join(content_parts)
+                if not holding and (_grounding.needs_hold(_sofar) or "<tool_call" in _sofar or "<function" in _sofar):
                     holding = True
                 if not holding:
                     yield _stream.TextDelta(text=text)
@@ -1066,6 +1070,7 @@ async def ask_stream(
 
         # Strip side-channel fields before persisting
         assistant_msg.pop("_finish_reason", None)
+        _without_tool_markup(assistant_msg)
         messages.append(assistant_msg)
 
         # Cloud-LLM defensive retry — mirror of the non-streaming path
@@ -1102,6 +1107,7 @@ async def ask_stream(
                 )
                 retry_msg.pop("_usage", None)
                 retry_finish = retry_msg.pop("_finish_reason", None)
+                _without_tool_markup(retry_msg)
                 retry_has_calls = has_tool_calls(retry_msg)
                 retry_text = (retry_msg.get("content") or "")
                 if retry_has_calls or retry_text.strip():
@@ -1747,6 +1753,21 @@ def _drop_unanswered_tool_calls(messages: List[Dict[str, Any]]) -> List[Dict[str
             m = {**m, "tool_calls": kept} if kept else {k: v for k, v in m.items() if k != "tool_calls"}
         out.append(m)
     return out
+
+
+_TOOL_MARKUP = re.compile(r"<tool_call>.*?(?:</tool_call>|$)|</?tool_call>|<function[^>]*>.*?(?:</function>|$)|</?function[^>]*>|</?parameter[^>]*>",
+                          re.S)
+
+
+def _without_tool_markup(msg: Dict[str, Any]) -> None:
+    """A tool call the server did not parse arrives as text ("<tool_call>
+    </function></tool_call>" was shown to a German user, 2026-09-29).
+    Without real tool calls, that markup is no answer: strip it, so an
+    empty remainder takes the empty-reply retry."""
+    text = msg.get("content") or ""
+    if not has_tool_calls(msg) and ("<tool_call" in text or "<function" in text or "</function>" in text):
+        log.info("assistant text carried unparsed tool markup; treated as empty")
+        msg["content"] = _TOOL_MARKUP.sub("", text).strip() or None
 
 
 async def _wrap_up_answer(llm: Any, messages: List[Dict[str, Any]], language: Optional[str]) -> str:
