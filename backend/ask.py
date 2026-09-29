@@ -660,7 +660,7 @@ Use tools to act — never describe what you "would" do without doing it.
 
 Facts about the user's data only from tool results, never guessed. No source named: universal_search first, then open the hit and check it. Numbers: calculate. Dates: date_info.
 
-When you say what someone wrote or said, quote the original word for word as a > line; a translation goes below it as "Übersetzung:".
+When you say what someone wrote or said, quote the original word for word as a > line; a translation goes below it, labelled in the user's language.
 
 You cannot move money, pay or transfer anything. Say so plainly and offer a task or reminder instead.
 
@@ -672,7 +672,7 @@ Every response is a tool call, a final result, or ONE clarifying question — no
 
 Never describe a write/update/delete as completed ("hab erledigt", "set to X", "done", "renamed", "marked") unless a tool call in this turn confirms it returned success.
 
-If date, time, or scope is vague ("nächste Woche", "irgendwann", "ein paar"), ask ONE short question before reading data.
+If date, time, or scope is vague ("next week", "sometime", "a few"), ask ONE short question before reading data.
 
 For Yorik setup or "how do I" questions, call `yorik_help` FIRST and answer from its body — never guess from memory.
 
@@ -694,7 +694,7 @@ Documents and photos are NOT in family.db — they live in Paperless and Immich.
 
 DELETE SAFETY: at most ONE delete per request. The skill refuses the 2nd. If wording could match multiple rows, list the candidates by id + title + date, ask which.
 
-DELETE FLOW: when wording uniquely names ONE item, CALL the delete skill — never ask "soll ich löschen?" in text first; the skill shows a card with Delete/Keep buttons and NOTHING is deleted until the user taps Delete. Reply that the card is waiting for their confirmation; never say the item is already deleted.
+DELETE FLOW: when wording uniquely names ONE item, CALL the delete skill — never ask "shall I delete it?" in text first; the skill shows a card with Delete/Keep buttons and NOTHING is deleted until the user taps Delete. Reply that the card is waiting for their confirmation; never say the item is already deleted.
 
 ═══ SKILL INDEX ═══
 
@@ -728,7 +728,7 @@ Yesterday was {yesterday_weekday}, {yesterday}. Tomorrow is {tomorrow_weekday}, 
 
 {upcoming_weekdays}
 
-DATE RULE — Always copy the ISO date verbatim from a single row in the table above. Computing your own date or inferring the weekday from a date will be wrong. If the user said "Mittwoch" (or any weekday word), find the row that starts with "nächster Mittwoch" / "next Wednesday" and copy that ISO date — do not guess that today + N days = Wednesday. The weekday label and the ISO date in your reply MUST come from the same table line; never recombine them from memory.
+DATE RULE — Always copy the ISO date verbatim from a single row in the table above. Computing your own date or inferring the weekday from a date will be wrong. If the user named a weekday, find the row "next <weekday>" (e.g. "next Wednesday") and copy that ISO date — do not guess that today + N days = Wednesday. The weekday label and the ISO date in your reply MUST come from the same table line; never recombine them from memory.
 
 For "how long until X" / "what's next": use the calendar-read skill with start_iso={now_iso}; it already filters past events. Compute the delta from the returned row.
 
@@ -738,9 +738,9 @@ When a calendar lookup returns 0 events but has a `nearby` field (events within 
 
 User's preferred language: **{user_language}**. Reply in {user_language}.
 
-Only switch when the user clearly writes their CURRENT turn in another language, and only for that one reply. German phrasings appear in the examples below because the early test corpus was German — they illustrate the PATTERN, not the language. If {user_language} is not German, translate the pattern principle to {user_language}; never copy the German words.
+Only switch when the user clearly writes their CURRENT turn in another language, and only for that one reply. Quote people in their original words; put a translation under a quote in the user's language. In German, address the user as "du" unless they use "Sie".
 
-For German: default to **du**; switch to Sie only if the user used Sie. Termin = event, Aufgabe = task, Rechnung = scanned doc — route to search_documents / read_document.
+A bill or invoice ("Rechnung") is a scanned document: search_documents / read_document.
 
 {identified_user_block}
 
@@ -748,9 +748,9 @@ For German: default to **du**; switch to Sie only if the user used Sie. Termin =
 
 Write times, dates and amounts exactly as the source has them: "9:15", "15:00–16:00", "Sa, 10.10.", "551,07 €". Never round a time — "halb neun" for 9:15 is wrong. When the reply is read aloud, the app turns them into speech.
 
-Dates: "heute", "morgen", "am Sonntag" where that is clearer; add the date for anything more than a week away. Never ISO dates like "2026-05-24".
+Dates: "today", "tomorrow", "on Sunday" in the user's language where that is clearer; add the date for anything more than a week away. Never ISO dates like "2026-05-24".
 
-Small counts in words ("ein Termin", "drei Sachen"); digits for larger ones ("12 Mails").
+Small counts in words ("one appointment", "three things"); digits for larger ones ("12 emails").
 
 GOOD: "Hab den Zahnarzttermin am Sonntag von 15:00 auf 17:00 verschoben."
 
@@ -768,9 +768,6 @@ Pick the right calendar (Personal for yours, Shared for items everyone in the wo
 
 
 _WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-_WEEKDAYS_DE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
-_MONTHS_DE = ["Januar", "Februar", "März", "April", "Mai", "Juni",
-              "Juli", "August", "September", "Oktober", "November", "Dezember"]
 
 
 def _format_date_context(now: datetime) -> Dict[str, str]:
@@ -835,65 +832,53 @@ def _format_date_context(now: datetime) -> Dict[str, str]:
     last_month_first = (this_month_first - timedelta(days=1)).replace(day=1)
 
     def _month(d):
-        return f"{d.year}-{d.month:02d} ({_MONTHS_DE[d.month - 1]} {d.year})"
+        return f"{d.year}-{d.month:02d} ({d:%B} {d.year})"
 
     lines: List[str] = []
     lines.append("Common phrase → date (deterministic, computed in Python; do NOT add days yourself):")
-    lines.append(f"  heute / today                       = {_fmt(today)}")
-    lines.append(f"  morgen / tomorrow                   = {_fmt(tomorrow)}")
-    lines.append(f"  übermorgen / day after tomorrow     = {_fmt(overmorrow)}")
-    lines.append(f"  gestern / yesterday                 = {_fmt(yesterday)}")
-    lines.append(f"  vorgestern / day before yesterday   = {_fmt(ereyesterday)}")
-    lines.append(f"  heute Abend / tonight               = {today.isoformat()} after 18:00")
+    lines.append(f"  today                    = {_fmt(today)}")
+    lines.append(f"  tomorrow                 = {_fmt(tomorrow)}")
+    lines.append(f"  day after tomorrow       = {_fmt(overmorrow)}")
+    lines.append(f"  yesterday                = {_fmt(yesterday)}")
+    lines.append(f"  day before yesterday     = {_fmt(ereyesterday)}")
+    lines.append(f"  tonight                  = {today.isoformat()} after 18:00")
     lines.append("")
-    lines.append("Next weekday (\"diesen <wd>\", \"nächsten <wd>\", bare \"<wd>\" — same; always the NEXT future occurrence, never today):")
+    lines.append("Next weekday (\"this <wd>\", \"next <wd>\", bare \"<wd>\" — same; always the NEXT future occurrence, never today):")
     for dow in range(7):
         d = _next_of(dow)
-        de = _WEEKDAYS_DE[dow]
-        en = _WEEKDAYS[dow]
-        lines.append(f"  nächster {de} / next {en:<10}    = {d.isoformat()}")
+        lines.append(f"  next {_WEEKDAYS[dow]:<10}          = {d.isoformat()}")
     lines.append("")
-    lines.append("Next-week's <weekday> (\"nächste Woche <wd>\" / \"<wd> in einer Woche\" — the <wd> in the calendar week AFTER the current one, Mon-Sun):")
+    lines.append("Next week's <weekday> (\"<wd> next week\" / \"<wd> in a week\" — the <wd> in the calendar week AFTER the current one, Mon-Sun):")
     for dow in range(7):
         d = next_mon + timedelta(days=dow)
-        de = _WEEKDAYS_DE[dow]
-        en = _WEEKDAYS[dow]
-        lines.append(f"  nächste Woche {de} / {de} in einer Woche / {en} in a week  = {d.isoformat()}")
+        lines.append(f"  {_WEEKDAYS[dow]} next week       = {d.isoformat()}")
     lines.append("")
-    lines.append("Last weekday (\"letzter <wd>\" — most recent past occurrence):")
+    lines.append("Last weekday (\"last <wd>\" — most recent past occurrence):")
     for dow in range(7):
         d = _last_of(dow)
-        de = _WEEKDAYS_DE[dow]
-        en = _WEEKDAYS[dow]
-        lines.append(f"  letzter {de} / last {en:<10}     = {d.isoformat()}")
+        lines.append(f"  last {_WEEKDAYS[dow]:<10}          = {d.isoformat()}")
     lines.append("")
     lines.append("Week / month ranges (inclusive):")
-    lines.append(f"  diese Woche / this week        = {this_mon.isoformat()} (Mon) to {this_sun.isoformat()} (Sun)")
-    lines.append(f"  nächste Woche / next week      = {next_mon.isoformat()} (Mon) to {next_sun.isoformat()} (Sun)")
-    lines.append(f"  letzte Woche / last week       = {last_mon.isoformat()} (Mon) to {last_sun.isoformat()} (Sun)")
-    lines.append(f"  Wochenende / this weekend      = {this_sat.isoformat()} (Sat) to {(this_sat+timedelta(days=1)).isoformat()} (Sun)")
-    lines.append(f"  nächstes Wochenende / next weekend = {next_sat.isoformat()} (Sat) to {(next_sat+timedelta(days=1)).isoformat()} (Sun)")
-    lines.append(f"  dieser Monat / this month      = {_month(this_month_first)}")
-    lines.append(f"  nächster Monat / next month    = {_month(next_month_first)}")
-    lines.append(f"  letzter Monat / last month     = {_month(last_month_first)}")
+    lines.append(f"  this week      = {this_mon.isoformat()} (Mon) to {this_sun.isoformat()} (Sun)")
+    lines.append(f"  next week      = {next_mon.isoformat()} (Mon) to {next_sun.isoformat()} (Sun)")
+    lines.append(f"  last week      = {last_mon.isoformat()} (Mon) to {last_sun.isoformat()} (Sun)")
+    lines.append(f"  this weekend   = {this_sat.isoformat()} (Sat) to {(this_sat+timedelta(days=1)).isoformat()} (Sun)")
+    lines.append(f"  next weekend   = {next_sat.isoformat()} (Sat) to {(next_sat+timedelta(days=1)).isoformat()} (Sun)")
+    lines.append(f"  this month     = {_month(this_month_first)}")
+    lines.append(f"  next month     = {_month(next_month_first)}")
+    lines.append(f"  last month     = {_month(last_month_first)}")
     lines.append("")
-    lines.append("Day-after-today offsets (when the user says \"in 3 Tagen\" / \"in 3 days\"):")
+    lines.append("Day-after-today offsets (\"in 3 days\"):")
     for n in (3, 4, 5, 7, 10, 14, 21, 30):
         d = today + timedelta(days=n)
-        lines.append(f"  in {n:>2} Tagen / in {n:>2} days        = {d.isoformat()} ({_WEEKDAYS[d.weekday()]})")
+        lines.append(f"  in {n:>2} days       = {d.isoformat()} ({_WEEKDAYS[d.weekday()]})")
     lines.append("")
-    lines.append("Multi-week ahead — \"in N Wochen <wd>\" / \"in N Wochen am <wd>\" / \"<wd> in N Wochen\" all map to the named weekday in the week N calendar-weeks AFTER the current one. Prefix words (\"am\", \"on\") are decorative; the date is THE SAME regardless of which variant the user said:")
+    lines.append("Multi-week ahead — \"<wd> in N weeks\" / \"in N weeks on <wd>\" map to the named weekday in the week N calendar-weeks AFTER the current one:")
     for weeks_ahead in (2, 3, 4):
         anchor_mon = this_mon + timedelta(days=7 * weeks_ahead)
         for dow in range(7):
             d = anchor_mon + timedelta(days=dow)
-            de = _WEEKDAYS_DE[dow]
-            en = _WEEKDAYS[dow]
-            lines.append(
-                f"  in {weeks_ahead} Wochen {de} / in {weeks_ahead} Wochen am {de} / "
-                f"{de} in {weeks_ahead} Wochen / {en} in {weeks_ahead} weeks "
-                f"= {d.isoformat()}"
-            )
+            lines.append(f"  {_WEEKDAYS[dow]} in {weeks_ahead} weeks = {d.isoformat()}")
         lines.append("")
 
     return {
@@ -1041,62 +1026,62 @@ class HomeOSSystemPromptBuilder(SystemPromptBuilder):
 _CATEGORY_PROSE: dict[str, str] = {
     "compose":
         "Letters, emails, invoices, offers — anything saveable / printable / sendable as a document. "
-        "Triggers: schreib / verfass / aufsetz / kündige (Brief, Mail, Rechnung, Kündigung, Mietminderung, …). "
+        "Triggers: write / draft / cancel (a letter, email, invoice, cancellation, rent reduction, …). "
         "Pipeline: list_compose_templates → pick_compose_template → wait for [template_picked] "
         "→ compose_check_recipient → compose_check_template_args → compose_draft. "
         "Unknown recipient → branch to Contacts (find_person → ask user → add_contact) between picker and recipient check. "
         "Each template carries its own `llm_hints` block, surfaced in the [template_picked] message after the user clicks the picker card; it tells you whether to pass body=<your prose> (generic, free-form) or body=\"\" + args={...} (specialized, slot-driven), plus the hard-required arg list for that specific template. Read those hints rather than guessing from the id.",
     "calendar":
         "Events, free-time queries, conflict checks, travel-time blocking. "
-        "Pipeline for \"trag X ein\": add_calendar_event directly. "
-        "For \"wann ist Y\": check_calendar with a window. "
+        "Pipeline for \"add X\": add_calendar_event directly. "
+        "For \"when is Y\": check_calendar with a window. "
         "Mutations: find_event_by_title → update_calendar_event / delete_calendar_event.",
     "contacts":
         "People, businesses, addresses, channels (email / phone / whatsapp / signal / sms). "
-        "Pipeline for \"wer ist X\" or any name lookup: find_person. "
+        "Pipeline for \"who is X\" or any name lookup: find_person. "
         "Save / extend: find_person first (always check), then add_contact / update_contact / "
         "add_contact_address / add_contact_channel. "
         "find_person is the single entry point for every who/whom question — household + contacts in one call. "
-        "For \"finde mir einen X / wo ist der nächste Y / X bei mir in der Nähe\" (provider search): "
+        "For \"find me an X / where is the nearest Y / X near me\" (provider search): "
         "find_known_provider FIRST (existing contacts + past invoices + past events), "
         "THEN find_provider_nearby for new OSM candidates.",
     "tasks":
-        "Todo list. Pipeline for \"trag X als Task\": add_task. "
-        "For \"was muss ich\": check_tasks. "
+        "Todo list. Pipeline for \"add X as a task\": add_task. "
+        "For \"what do I have to do\": check_tasks. "
         "Mutations: find_task_by_title → update_task / delete_task. "
         "Sub-tasks: list_subtasks before changing children.",
     "documents":
-        "Paperless + native uploads. Pipeline for \"find / zeig / such X\": search_documents (hybrid semantic + keyword). "
+        "Paperless + native uploads. Pipeline for \"find / show X\": search_documents (hybrid semantic + keyword). "
         "Read content: read_document for text PDFs, read_document_vision when OCR is garbled. "
         "Address mining for letters: find_recipient_address_from_documents (Compose-adjacent).",
     "email":
         "IMAP mailbox. Composing a new email goes through Compose with kind=\"email\". "
-        "For \"such / finde / hol mir die E-Mail von X / zur Y\": find_email_by_subject — "
+        "For \"find / get me the email from X / about Y\": find_email_by_subject — "
         "NEVER web_search (web_search is the public internet; find_email_by_subject reads the user's mailbox). "
         "Inbox actions: find_email_by_subject → read_email (full body) / email_draft (reply) / update_email (star / unread).",
     "whatsapp":
-        "Phone-paired chat. Pipeline for \"schreib WhatsApp an X\": find_person (Contacts) → whatsapp_draft.",
+        "Phone-paired chat. Pipeline for \"WhatsApp X\": find_person (Contacts) → whatsapp_draft.",
     "maps":
-        "Nearby business / POI search via OpenStreetMap. For \"finde X in der Nähe\" / "
-        "\"wo ist der nächste Y\" / \"X in [Ort]\": invoke_skill(find_provider_nearby) — "
+        "Nearby business / POI search via OpenStreetMap. For \"find X nearby\" / "
+        "\"where is the nearest Y\" / \"X in [place]\": invoke_skill(find_provider_nearby) — "
         "NOT trigger_connector(\"maps\"). The skill wraps the connector with the right "
         "args + result caching; calling the connector directly with poi=… requires guessing "
         "the param shape and produces no cards.",
     "immich":
         "Photo library — face / CLIP / recency search. For \"find photo of X\": find_photo.",
     "math":
-        "Deterministic price arithmetic — avoids LLM math errors. For \"wie viel kostet X\": compute_group_price.",
+        "Deterministic price arithmetic — avoids LLM math errors. For \"how much is X\": compute_group_price.",
     "search":
         "Cross-source search across email + WhatsApp + Paperless + Immich + calendar. "
-        "For \"was hab ich alles zu X\" / \"finde alles zu Y\" / \"such überall nach…\" / "
+        "For \"everything I have about X\" / \"find everything on Y\" / \"search everywhere for…\" / "
         "\"check everywhere for Z\": universal_search — single call instead of fanning out "
         "to check_calendar + check_tasks + find_email_by_subject + search_documents one by one.",
     "system":
-        "Yorik's own controls — rollback, navigation, help. For \"das war falsch / undo\": undo_last_action.",
+        "Yorik's own controls — rollback, navigation, help. For \"that was wrong / undo\": undo_last_action.",
     "ui":
-        "Frontend navigation. For \"öffne X\" / \"zeig mir die X-App\": navigate_to.",
+        "Frontend navigation. For \"open X\" / \"show me the X app\": navigate_to.",
     "help":
-        "Yorik's setup / how-to docs. For \"wie funktioniert X\" / \"wie richte ich X ein\" / \"what should I do next\": yorik_help.",
+        "Yorik's setup / how-to docs. For \"how does X work\" / \"how do I set up X\" / \"what should I do next\": yorik_help.",
     "user":
         "Calling user's own profile (name, address, IBAN, signature, …). Read-only: read_my_profile.",
     "users":
