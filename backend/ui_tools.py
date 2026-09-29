@@ -923,9 +923,11 @@ class SkillViewTool(Tool[SkillViewArgs]):
                 ),
             )
         # Compact JSON-ish rendering, body included. The LLM reads this
-        # once and then calls invoke_skill with the right args.
+        # once and then calls invoke_skill with the right args. Umlauts
+        # as they are (not \u00e4) and a one-space indent: the same text
+        # in fewer tokens for a small model.
         import json
-        rendered = json.dumps(view, indent=2)
+        rendered = json.dumps(view, ensure_ascii=False, indent=1)
 
         # If this skill_view was preceded by a REJECTED invoke_skill
         # for the same skill in this turn, append a directive echoing
