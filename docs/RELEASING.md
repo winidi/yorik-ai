@@ -79,6 +79,12 @@ bash scripts/test-docker-stack.sh            # the whole stack from this checkou
 bash scripts/test-updater.sh                 # the updater, on a stand-in install
 ```
 
+The photo, document and model services in `deploy/compose.yaml` are
+pinned to exact versions, so "Update now" never pulls a new Immich or
+Paperless by surprise. Raising one is a change like any other: bump the
+tag (Immich server and machine learning always together), run the
+stack test, note it in the changelog.
+
 If the change touches installing: `bash scripts/test-fresh-install.sh`
 (a new Ubuntu VM), and for the stick `bash scripts/build-appliance.sh --test`.
 

@@ -96,7 +96,7 @@ services:
   # ── AI model (CPU; compose.gpu.yaml adds the NVIDIA GPU) ───────────
   ollama:
     <<: *restart
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.35.0
     volumes:
       - ollama_models:/root/.ollama
 
@@ -123,7 +123,7 @@ services:
   # ── Photos (Immich) ────────────────────────────────────────────────
   immich-server:
     <<: *restart
-    image: ghcr.io/immich-app/immich-server:release
+    image: ghcr.io/immich-app/immich-server:v2.7.5
     ports:
       - "${YORIK_PHOTOS_PORT:-2283}:2283"
     environment:
@@ -139,7 +139,7 @@ services:
 
   immich-machine-learning:
     <<: *restart
-    image: ghcr.io/immich-app/immich-machine-learning:release
+    image: ghcr.io/immich-app/immich-machine-learning:v2.7.5
     volumes:
       - immich_model_cache:/cache
 
@@ -162,7 +162,7 @@ services:
   # ── Documents (Paperless-ngx) ──────────────────────────────────────
   paperless-web:
     <<: *restart
-    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    image: ghcr.io/paperless-ngx/paperless-ngx:2.20.15
     depends_on: [paperless-db, paperless-broker, paperless-tika, paperless-gotenberg]
     environment:
       PAPERLESS_REDIS: redis://paperless-broker:6379
@@ -216,7 +216,7 @@ services:
 
   paperless-tika:
     <<: *restart
-    image: docker.io/apache/tika:latest
+    image: docker.io/apache/tika:3.3.1.0
 
   paperless-gotenberg:
     <<: *restart
