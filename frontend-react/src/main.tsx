@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import "./index.css";
+import "./i18n";
 import { EmailApp } from "./apps/email/EmailApp";
 import { BriefingApp } from "./apps/briefing/BriefingApp";
 import { RecordingsApp } from "@/apps/recordings/RecordingsApp";
