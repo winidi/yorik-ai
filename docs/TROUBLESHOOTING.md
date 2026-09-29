@@ -9,7 +9,72 @@ When something breaks. Each entry follows the same shape:
 If your problem isn't here, please [file a bug report](https://github.com/winidi/yorik-ai/issues/new/choose).
 The fixes that go into this file usually come from real bug reports.
 
-## Install / startup
+## The Docker install (Windows, Mac, Linux installers)
+
+Everything below this section describes the classic developer setup
+(`start.sh`, `config.env`). For an install made with the installers,
+start here. Run the commands in the folder with `compose.yaml`
+(Windows `%LOCALAPPDATA%\Yorik`, Mac `~/Library/Application Support/Yorik`,
+Linux the folder the installer printed).
+
+### What is running, and what does it say?
+
+```bash
+docker compose ps                 # every service should be "running" or "healthy"
+docker compose logs --tail 100 yorik
+docker compose logs --tail 100 immich-server    # or paperless-web, ollama, whatsapp-bridge
+```
+
+Attach the `yorik` log tail to a bug report.
+
+### The chat doesn't answer right after installing
+
+> **Symptom**: Home says "The AI model is still downloading (…%)", or the
+> chat answers with "Yorik can't think right now".
+>
+> **Fix**: the first start downloads the AI model (several GB). Wait until
+> Home no longer shows the download. Without a GPU, answers take tens of
+> seconds; that is expected. `docker compose logs ollama` shows the download.
+
+### Photos stay "not connected"
+
+> **Symptom**: the Photos app asks you to sign in to Immich, or Home says
+> photos aren't linked.
+>
+> **Diagnose**: `docker compose logs yorik | grep photos`. The line
+> "an admin exists already and Yorik doesn't know its password" means
+> someone opened the photo page (port 2283) during the first minutes and
+> created the Immich admin by hand.
+>
+> **Fix**: in Immich (`http://<this computer>:2283`) sign in with that
+> admin, then Account settings → API keys → new key (all permissions).
+> Hand it to Yorik and restart it (there is no settings page for this yet):
+> ```bash
+> docker compose exec yorik python -c "from backend import credential_store as c; c.put('immich', {'api_key': 'PASTE-THE-KEY', 'base_url': 'http://immich-server:2283'})"
+> docker compose restart yorik
+> ```
+
+### Everything is slow, or services restart
+
+> **Symptom**: the stack keeps restarting, or the computer is very slow.
+>
+> **Fix**: Docker Desktop on Windows and Mac gets only part of the memory by
+> default. Give it at least 12 GB: Docker Desktop → Settings → Resources
+> (Windows with WSL 2: a `.wslconfig` with `memory=12GB` in your user
+> folder, then `wsl --shutdown`). 16 GB of RAM in the computer is the
+> practical minimum.
+
+### Restart, update, stop
+
+```bash
+docker compose restart yorik      # just Yorik
+docker compose up -d              # everything, after a reboot or a stop
+docker compose stop               # everything off, data stays
+```
+
+Updates: Home shows "A new version is ready"; **Update now** does it.
+
+## Install / startup (classic developer setup)
 
 ### "Port 8000 already in use" on `bash start.sh`
 

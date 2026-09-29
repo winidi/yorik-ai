@@ -103,7 +103,7 @@ Use the [bug report template](https://github.com/winidi/yorik-ai/issues/new?temp
 - Your OS, Python version, Docker version
 - Your LLM (Ollama? llama-swap? cloud?) and model
 - Exact reproduction steps
-- Backend log: `tail -50 /tmp/homeos-api.log`
+- Backend log: `docker compose logs --tail 100 yorik` (Docker install) or `tail -50 /tmp/homeos-api.log` (classic setup)
 - Browser console if it's a UI issue
 
 ## Security issues

@@ -14,11 +14,32 @@ encrypted with the operator's passphrase. They contain:
 - `data/documents/` — locally-uploaded Yorik documents.
 - `briefings/` — generated PDFs + the source tree.
 
-The backup does **not** include Immich's photo library, Paperless's
-database / media, or `/etc/caddy/Caddyfile`. Those are restored
-separately (see "Manual recovery" below).
+With "include photos" / "include documents" switched on it also holds
+the photo originals (`immich_library`) and Paperless's files
+(`paperless_media`, `paperless_data`). It does **not** hold Paperless's
+own database or `/etc/caddy/Caddyfile`; see "Manual recovery" below.
 
-## Automated restore
+## The Docker install (Windows, Mac, Linux installers)
+
+Restoring into the Docker install is **not automated yet** and has not
+been tested end to end. The backups are complete enough to rebuild
+from; until there is a restore button, this is the manual route:
+
+1. Install [age](https://github.com/FiloSottile/age) (`winget install
+   FiloSottile.age`, `brew install age`, `sudo apt install age`) and
+   unpack the snapshot: `age -d snapshot.tar.gz.age | tar -xzf - -C restore/`
+   (age asks for the backup passphrase).
+2. Photos: copy `restore/immich_library/` into the `yorik_photos`
+   volume, e.g. `docker run --rm -v yorik_photos:/dst -v "$PWD/restore/immich_library:/src:ro" alpine cp -a /src/. /dst/`,
+   then in Immich: Administration → Jobs → run "Library scan" if needed.
+3. Documents: the originals are in `restore/paperless_media/documents/originals/`;
+   drop them into Paperless (upload, or the consume folder) and Paperless
+   files them again.
+4. Yorik's own database (`yorik_postgres.sql.gz`) and the key file
+   (`.credential_key`): please open an Issue before doing this by hand;
+   we will walk you through it and use it to build the restore button.
+
+## Automated restore (classic install)
 
 > Pre-requisites: same Yorik install layout as the snapshot was taken
 > from, `supabase-db` container running, and you are logged in as the
