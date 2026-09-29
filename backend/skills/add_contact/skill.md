@@ -128,7 +128,7 @@ inputs:
   whatsapp_jids:
     type: array
     required: false
-    description: WhatsApp JIDs (e.g. "4915128811000@s.whatsapp.net"). Use chat_jid, not bare digits.
+    description: WhatsApp JIDs (e.g. "4915112345678@s.whatsapp.net"). Use chat_jid, not bare digits.
   websites:
     type: array
     required: false

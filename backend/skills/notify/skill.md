@@ -1,6 +1,6 @@
 ---
 name: notify
-description: Leave a message in the user's Yorik notification bell (and push it to their phone) when a result is ready or something needs their attention.
+description: "Leave a message in the user's bell (pushed to the phone) when a result is ready or needs them."
 when_to_use: |
   Use it from an outside agent when a long task finished, a scheduled job produced something, or the user should look at something later; the message reaches their phone even when Yorik is closed.
   Keep `title` to one line and `body` to two or three sentences; put the rest where the user can find it and pass that as `url` (a Yorik route like /r/documents, or an http link).

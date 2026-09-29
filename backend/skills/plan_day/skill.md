@@ -1,6 +1,6 @@
 ---
 name: plan_day
-description: Write an agreed day plan into Yorik as tasks plus time blocks in the user's Plan calendar, as one undoable action.
+description: "Write an agreed day plan as tasks and time blocks in the user's Plan calendar, as one undoable step."
 when_to_use: |
   Call it only after the user has said the plan is good ("mach's", "passt", "übernehmen"); never on the first draft.
   Pass the full list of items for that day every time; items the previous version had and this one lacks are removed, items with the same key are updated.

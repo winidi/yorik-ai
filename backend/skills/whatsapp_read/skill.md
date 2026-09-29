@@ -1,6 +1,6 @@
 ---
 name: whatsapp_read
-description: Read the messages of one WhatsApp chat — around a search hit, or the latest ones — to check a hit or see what someone wrote.
+description: "Read one WhatsApp chat around a search hit, or its latest messages, to see what someone wrote."
 when_to_use: |
   - A search hit lies in WhatsApp (universal_search gives id and chat_jid): read around it with around_message_id before you answer, and check it is the right person and still current.
   - The user asks what someone wrote ("was hat Jan geschrieben?"): read the latest messages of that chat (chat_jid, or contact_id from find_person).
@@ -46,7 +46,7 @@ outputs:
 cost: 1 SELECT; a calendar file costs one fetch from the WhatsApp bridge.
 permissions: [admin, member, restricted]
 side_effects: none — read-only.
-tags: [whatsapp, read]
+tags: [whatsapp, read, app:whatsapp]
 category: communication
 ---
 

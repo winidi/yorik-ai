@@ -1,6 +1,6 @@
 ---
 name: plan_my_day
-description: Gather what a day plan needs (fixed appointments, open tasks, carry-over, yesterday's review, outside context) so you can draft the day with the user and iterate before plan_day writes it.
+description: "Gather what a day plan needs (appointments, open tasks, carry-over) before plan_day writes it."
 when_to_use: |
   Trigger: "plan meinen Tag", "wie sieht mein Tag aus", "lass uns den Tag strukturieren", "plan my day".
   Call it first; it returns the material, never a finished plan.

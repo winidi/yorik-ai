@@ -1,6 +1,6 @@
 ---
 name: pipeline
-description: Follow up a sent mail until an answer comes (Pipelines), and list, pause or resume what Yorik is following.
+description: "Follow up a sent mail until the answer comes, and list, pause or resume what Yorik follows."
 when_to_use: |
   - After a mail went out, the user says "fass da nach, wenn keine Antwort kommt", "bleib dran", "erinner die, falls nichts kommt": op=follow_up with the recipient (to) or subject of that mail.
   - "Wo warte ich noch auf Antwort?", "was ist mit der Sache, wo ich nachfassen wollte?": op=list.
@@ -39,7 +39,7 @@ outputs:
 cost: 1–3 SELECTs; follow_up starts one background LLM call that writes the reminders.
 permissions: [admin, member]
 side_effects: follow_up creates a draft pipeline (nothing is sent before the person approves); pause/resume change its state.
-tags: [pipelines, email, follow-up]
+tags: [pipelines, email, follow-up, app:pipelines]
 category: communication
 ---
 

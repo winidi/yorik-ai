@@ -1,6 +1,6 @@
 ---
 name: prepare_email
-description: Stage a new email with a recipient, subject, body and optionally one attachment (chat file or archive document) for the user to review and send.
+description: "Stage a new email (recipient, subject, body, one optional attachment) for the user to send."
 when_to_use: |
   The user wants to send something from the chat by email — a filled
   form, a document, a result — as a brand-new outgoing email (not a

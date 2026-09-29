@@ -26,7 +26,7 @@ outputs:
 cost: one query over the bank bookings.
 permissions: [admin, member, restricted]
 side_effects: none — read-only
-tags: [finance, bank, subscriptions, read]
+tags: [finance, bank, subscriptions, read, app:finance]
 category: productivity
 ---
 

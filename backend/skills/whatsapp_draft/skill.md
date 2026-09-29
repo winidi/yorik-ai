@@ -41,7 +41,7 @@ permissions: [admin, member]
 side_effects: |
   Writes generated drafts to wa_drafts table with status='pending' so
   the UI can render them and the user can pick one to send.
-tags: [whatsapp, drafting, llm]
+tags: [whatsapp, drafting, llm, app:whatsapp]
 ---
 
 # whatsapp_draft

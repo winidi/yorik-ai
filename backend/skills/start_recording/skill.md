@@ -1,6 +1,6 @@
 ---
 name: start_recording
-description: Start recording a conversation at the table so Yorik can write the transcript with speakers afterwards.
+description: "Start recording a conversation at the table so Yorik writes the transcript with speakers."
 when_to_use: |
   Use it when the user asks to record the dinner, a meeting or a conversation ("nimm das Abendessen auf", "record this").
   Pass the names of the people at the table as `participants`; they will be able to see the transcript, nobody else.

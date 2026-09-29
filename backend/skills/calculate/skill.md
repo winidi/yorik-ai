@@ -1,6 +1,6 @@
 ---
 name: calculate
-description: Do arithmetic exactly — sums, per-month values, VAT, differences. Never calculate in your head; use this.
+description: "Do arithmetic exactly (sums, per month, VAT, differences) instead of in your head."
 when_to_use: |
   Any number you would otherwise compute yourself: "was ist das im Monat" (551.07 / 12), a total of several amounts, net/gross with VAT, a difference between two amounts, a percentage.
   Write the expression with a dot for decimals (551.07 / 12). German cent amounts like 551,07 are understood too.

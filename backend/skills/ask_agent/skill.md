@@ -1,6 +1,6 @@
 ---
 name: ask_agent
-description: Hand a question to the household's strong agent (Hermes on the workstation) and return its finished answer.
+description: "Hand a question to the household's strong agent (Hermes) and return its finished answer."
 when_to_use: |
   Use it for anything Yorik does not hold itself: web research, files and notes on the workstation, coding, long reasoning, "ask Hermes".
   Do not use it for calendar, tasks, contacts, documents, photos, bills, letters or email; those are Yorik's own skills.

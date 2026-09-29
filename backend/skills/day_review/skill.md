@@ -1,6 +1,6 @@
 ---
 name: day_review
-description: Compare the day's plan with what actually got done and give the user a short, honest, encouraging review.
+description: "Compare the day's plan with what got done and give a short, honest, encouraging review."
 when_to_use: |
   Trigger: "wie war mein Tag", "Tagesabschluss", "was habe ich heute geschafft", "day review", or the evening check-in.
   The result is numbers and lists; turn them into three to five sentences in the user's language: what got done, where time was over or under the estimate, what carries over to tomorrow.

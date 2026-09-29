@@ -36,7 +36,7 @@ outputs:
 cost: one search per name; each receipt read once by the model (kept afterwards).
 permissions: [admin, member, restricted]
 side_effects: Stores what each receipt says (receipt_facts).
-tags: [finance, bank, receipts, read]
+tags: [finance, bank, receipts, read, app:finance]
 category: productivity
 ---
 

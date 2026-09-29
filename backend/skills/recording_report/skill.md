@@ -1,6 +1,6 @@
 ---
 name: recording_report
-description: The structured report of a recording with decisions, tasks with a person, nice moments, friction, open questions and dates.
+description: "A recording's report: decisions, tasks with a person, nice moments, friction, open questions."
 when_to_use: |
   Use it when the user asks what came out of the dinner or meeting, wants the report, or wants the tasks from it ("was ist beim Abendessen rausgekommen", "zeig den Bericht", "welche Aufgaben").
   Without `recording_id` it takes the user's latest finished recording; the report is generated on first call and reused afterwards (`refresh: true` writes it anew).

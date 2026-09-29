@@ -27,7 +27,7 @@ outputs:
 cost: 1 LLM call (~3-8s on qwen3, depends on inbox size)
 permissions: [admin, member]
 side_effects: none — read-only
-tags: [whatsapp, summary, llm]
+tags: [whatsapp, summary, llm, app:whatsapp]
 ---
 
 # whatsapp_briefing
