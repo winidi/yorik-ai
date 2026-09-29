@@ -298,6 +298,15 @@ def can_view_row(
     return False
 
 
+def _on_plan_calendar(row: dict[str, Any]) -> bool:
+    cal_id = row.get("calendar_id")
+    if cal_id is None:
+        return False
+    with conn_ctx() as c:
+        r = c.execute("SELECT kind FROM calendars WHERE id=?", (int(cal_id),)).fetchone()
+    return bool(r and r["kind"] == "plan")
+
+
 def can_write_row(
     user_id: Optional[int], role: Optional[str], table: str, row: dict[str, Any],
 ) -> bool:
@@ -311,6 +320,8 @@ def can_write_row(
     # Phase E: user ids are UUID strings — compare as strings.
     if owner is not None and str(owner) == str(user_id):
         return True
+    if table == "events" and _on_plan_calendar(row):
+        return False        # someone's day plan is theirs alone, like for reading
     space_id = _resolve_row_space_id(table, row)
     if space_id is not None:
         level = user_space_level(user_id, space_id, role, area=TABLE_AREA.get(table))

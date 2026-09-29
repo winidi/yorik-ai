@@ -54,11 +54,28 @@ def plan_calendar_id(user_id: str, user_name: Optional[str] = None) -> int:
             "AND archived_at IS NULL ORDER BY id LIMIT 1", (user_id,),
         ).fetchone()
     if row:
+        _keep_private(int(row["id"]), user_id)
         return int(row["id"])
     from .calendars import create_calendar
     cid = create_calendar(name=PLAN_CALENDAR_NAME, owner_user_id=user_id, color="#f59e0b", kind="plan")
     log.info("plan calendar #%d created for user %s", cid, user_id)
     return cid
+
+
+def _keep_private(calendar_id: int, user_id: str) -> None:
+    """An older plan calendar sits in the household space; move it into
+    its owner's personal space (once; nothing changes for anyone's view,
+    plan calendars were already hidden from the others)."""
+    from .spaces import personal_space_id
+    sid = personal_space_id(user_id)
+    if sid is None:
+        return
+    with get_conn() as conn:
+        n = conn.execute("UPDATE calendars SET space_id = ? WHERE id = ? AND kind = 'plan' "
+                         "AND (space_id IS NULL OR space_id <> ?)", (sid, calendar_id, sid)).rowcount
+        conn.commit()
+    if n:
+        log.info("plan calendar #%d moved into its owner's personal space", calendar_id)
 
 
 # ─── items ──────────────────────────────────────────────────────────

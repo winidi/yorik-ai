@@ -103,3 +103,26 @@ def test_new_account_joins_the_default_but_not_an_opt_out(family):
     assert (new, dirk) in added and (dirk, new) in added
     assert (beate, new) not in added                            # her choice stands
     assert (new, beate) in added
+
+
+def test_a_day_plan_is_its_owners_alone(family):
+    """Plan calendars live in their owner's personal space (2026-09-29);
+    nobody else may change a plan block, even with write access to the
+    household; an older plan calendar in the household moves on first use."""
+    from backend import spaces as S
+    from backend.calendars import create_calendar
+    from backend.database import get_conn
+    from backend.day_plans import plan_calendar_id
+    _, dirk, _ = family["dirk"]; _, beate, _ = family["beate"]
+    cid = create_calendar(name="Plan", owner_user_id=beate, kind="plan")
+    with get_conn() as conn:
+        assert conn.execute("SELECT space_id FROM calendars WHERE id = ?", (cid,)).fetchone()["space_id"] == S.personal_space_id(beate)
+        household = conn.execute("SELECT id FROM spaces WHERE slug = 'household'").fetchone()["id"]
+        conn.execute("UPDATE calendars SET space_id = ? WHERE id = ?", (household, cid))    # the old place
+        conn.commit()
+    block = {"id": 1, "calendar_id": cid, "owner_user_id": beate}
+    assert not S.can_write_row(dirk, "platform_admin", "events", block)
+    assert S.can_write_row(beate, "member", "events", block)
+    assert plan_calendar_id(beate) == cid
+    with get_conn() as conn:
+        assert conn.execute("SELECT space_id FROM calendars WHERE id = ?", (cid,)).fetchone()["space_id"] == S.personal_space_id(beate)

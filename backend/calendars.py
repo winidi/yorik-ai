@@ -408,9 +408,11 @@ def create_calendar(
     name = (name or "").strip() or "Untitled"
     # Phase B: every calendar must live in a space. Personal calendars
     # land in the owner's personal space; shared calendars in Household.
+    # A day plan is personal too (until 2026-09-29 it went to Household
+    # and was hidden from the others by a rule alone).
     from . import spaces as _sp
     space_id: Optional[int] = None
-    if kind == "personal":
+    if kind in ("personal", "plan"):
         space_id = _sp.personal_space_id(owner_user_id)
     else:
         with conn_ctx() as _c:
