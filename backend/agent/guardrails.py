@@ -20,9 +20,10 @@ patterns are detected:
 
 For each category there's a *warn* threshold (default ON — adds an
 advisory line to the tool result so the model self-corrects) and a
-*halt/block* threshold (default OFF — explicit opt-in via
-``YORIK_GUARDRAILS_HARD_STOP=1``; refuses execution and surfaces a
-structured error so the loop can decide whether to break).
+*halt/block* threshold (default ON since 2026-09-29 — a small model on
+a CPU otherwise spent minutes on 28 identical steps; switch off with
+``YORIK_GUARDRAILS_HARD_STOP=0``). It refuses execution and surfaces a
+structured error; a halt ends the turn with the wrap-up answer.
 
 Stateless apart from per-turn dicts on the controller. Construct once
 per /api/ask (loop does this), call ``before_call`` + ``after_call``
@@ -102,21 +103,22 @@ MUTATING_TOOL_NAMES: frozenset[str] = frozenset({
 class GuardrailConfig:
     """Thresholds for per-turn tool-call loop detection.
 
-    Warnings ON by default; never prevent tool execution. Hard stops OFF
-    by default — opt-in via env ``YORIK_GUARDRAILS_HARD_STOP=1`` because
-    they will refuse calls and the loop has to surface that to the LLM.
+    Warnings and hard stops ON by default: the model is warned after the
+    second identical call and stopped after the third (a failing tool
+    after its fifth failure). ``YORIK_GUARDRAILS_HARD_STOP=0`` switches
+    the stops off.
     """
     warnings_enabled: bool = True
-    hard_stop_enabled: bool = False
+    hard_stop_enabled: bool = True
 
     exact_failure_warn_after: int = 2
-    exact_failure_block_after: int = 5
+    exact_failure_block_after: int = 3
 
     same_tool_failure_warn_after: int = 3
-    same_tool_failure_halt_after: int = 8
+    same_tool_failure_halt_after: int = 5
 
     no_progress_warn_after: int = 2
-    no_progress_block_after: int = 5
+    no_progress_block_after: int = 3
 
     idempotent_tools: frozenset[str] = field(default_factory=lambda: IDEMPOTENT_TOOL_NAMES)
     mutating_tools:   frozenset[str] = field(default_factory=lambda: MUTATING_TOOL_NAMES)
@@ -139,13 +141,13 @@ class GuardrailConfig:
 
         return cls(
             warnings_enabled=_bool("YORIK_GUARDRAILS_WARN", True),
-            hard_stop_enabled=_bool("YORIK_GUARDRAILS_HARD_STOP", False),
+            hard_stop_enabled=_bool("YORIK_GUARDRAILS_HARD_STOP", True),
             exact_failure_warn_after=_int("YORIK_GUARDRAILS_EXACT_FAIL_WARN", 2),
-            exact_failure_block_after=_int("YORIK_GUARDRAILS_EXACT_FAIL_BLOCK", 5),
+            exact_failure_block_after=_int("YORIK_GUARDRAILS_EXACT_FAIL_BLOCK", 3),
             same_tool_failure_warn_after=_int("YORIK_GUARDRAILS_SAME_TOOL_WARN", 3),
-            same_tool_failure_halt_after=_int("YORIK_GUARDRAILS_SAME_TOOL_HALT", 8),
+            same_tool_failure_halt_after=_int("YORIK_GUARDRAILS_SAME_TOOL_HALT", 5),
             no_progress_warn_after=_int("YORIK_GUARDRAILS_NO_PROGRESS_WARN", 2),
-            no_progress_block_after=_int("YORIK_GUARDRAILS_NO_PROGRESS_BLOCK", 5),
+            no_progress_block_after=_int("YORIK_GUARDRAILS_NO_PROGRESS_BLOCK", 3),
         )
 
 
