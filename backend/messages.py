@@ -139,7 +139,7 @@ MESSAGES: dict[str, dict[str, str]] = {
 
 
 def default_language() -> str:
-    return (os.getenv("YORIK_DEFAULT_LANGUAGE") or "en").split("-")[0].lower()
+    return (os.getenv("HOMEOS_DEFAULT_LANGUAGE") or "en").split("-")[0].lower()
 
 
 def language_of(user_id: Any) -> str:
