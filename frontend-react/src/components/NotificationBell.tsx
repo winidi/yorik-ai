@@ -198,7 +198,7 @@ export function NotificationBell() {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <button
-          className="fixed top-3 right-3 z-[60] w-10 h-10 rounded-full bg-card border border-border shadow-md hover:shadow-lg flex items-center justify-center text-muted-foreground hover:text-foreground transition"
+          className="fixed z-[60] w-10 h-10 top-[calc(env(safe-area-inset-top)+0.25rem)] right-[max(0.75rem,env(safe-area-inset-right))] md:top-3 md:right-3 rounded-full bg-card border border-border shadow-md hover:shadow-lg flex items-center justify-center text-muted-foreground hover:text-foreground transition"
           aria-label="Notifications"
           title={unread > 0 ? `${unread} unread notification${unread === 1 ? "" : "s"}` : "No new notifications"}
         >
@@ -213,7 +213,7 @@ export function NotificationBell() {
       <Popover.Portal>
         <Popover.Content
           side="bottom" align="end" sideOffset={8}
-          className="z-[900] w-[380px] max-h-[70vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col"
+          className="z-[900] w-[min(380px,calc(100vw-1.5rem))] max-h-[70vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col"
         >
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
             <h3 className="font-semibold text-sm">Notifications</h3>

@@ -104,13 +104,15 @@ export function MobileTopBar({
   title, onMenuClick, onContextClick, contextLabel = "Details",
 }: MobileTopBarProps) {
   return (
-    <div className="md:hidden h-12 px-3 border-b border-border bg-background/85 backdrop-blur flex items-center gap-2 shrink-0 sticky top-0 z-30">
+    // The notification bell floats at the right end of this bar on a
+    // phone (NotificationBell), so the bar keeps that corner free.
+    <div className="md:hidden min-h-12 pt-[env(safe-area-inset-top)] pl-[max(0.5rem,env(safe-area-inset-left))] pr-[calc(max(0.75rem,env(safe-area-inset-right))+2.75rem)] border-b border-border bg-background/85 backdrop-blur flex items-center gap-1 shrink-0 sticky top-0 z-30">
       <button
         onClick={onMenuClick}
         aria-label="Open menu"
-        className="w-9 h-9 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition flex items-center justify-center shrink-0"
+        className="w-11 h-11 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition flex items-center justify-center shrink-0"
       >
-        <Menu className="w-4 h-4" />
+        <Menu className="w-5 h-5" />
       </button>
       <div className="flex-1 min-w-0 text-sm font-medium truncate text-center">
         {title}
@@ -119,12 +121,12 @@ export function MobileTopBar({
         <button
           onClick={onContextClick}
           aria-label={contextLabel}
-          className="w-9 h-9 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition flex items-center justify-center shrink-0"
+          className="w-11 h-11 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition flex items-center justify-center shrink-0"
         >
-          <PanelRight className="w-4 h-4" />
+          <PanelRight className="w-5 h-5" />
         </button>
       ) : (
-        <span className="w-9 shrink-0" />
+        <span className="w-11 shrink-0" />
       )}
     </div>
   );

@@ -147,7 +147,7 @@ export function HomeApp() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 shrink-0 max-md:mr-12">
             <button
               onClick={() => {
                 window.dispatchEvent(new KeyboardEvent("keydown", {
@@ -173,8 +173,9 @@ export function HomeApp() {
             </button>
             <button
               onClick={refresh}
-              className="text-muted-foreground hover:text-foreground transition"
+              className="p-2 -m-2 text-muted-foreground hover:text-foreground transition"
               title="Refresh"
+              aria-label="Refresh"
             >
               <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
             </button>

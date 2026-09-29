@@ -25,7 +25,7 @@
      (tiles + its offset). Anything fixed to the bottom edge — the mail
      composer, a minimised pill — sits above this line, so the Dock
      never covers a button. */
-  --dock-clearance: 5rem;
+  --dock-clearance: calc(max(0.875rem, env(safe-area-inset-bottom) + 0.25rem) + 4.25rem);
   color-scheme: light;
   /* Light is soft rather than paper-white: a faintly violet grey ground
      (L 0.955), cards a step lighter, text a deep plum-grey instead of
@@ -215,3 +215,19 @@ html[data-role="restricted"], html[data-role="child"] { font-size: 17px; }
 /* Headings in the rounded face. Page titles and section heads only;
    running text, buttons and lists stay in Nunito Sans. */
 h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.005em; }
+
+/* Phones. iOS zooms into any field under 16px and does not zoom back;
+   one rule here instead of 280 class changes. */
+@media (max-width: 767px) {
+  input, textarea, select { font-size: 16px; }
+}
+
+/* 100vh is taller than the visible screen in mobile browsers (the
+   toolbar is not subtracted), so the chat's input slid behind it. The
+   dynamic unit follows the toolbar; unlayered, so it wins over the
+   utility. */
+@supports (height: 100dvh) {
+  .h-screen { height: 100dvh; }
+  .min-h-screen { min-height: 100dvh; }
+  .max-h-screen { max-height: 100dvh; }
+}

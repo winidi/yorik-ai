@@ -1202,7 +1202,7 @@ function Thread({
         // iPhones with the bar). Desktop keeps its pb-20 (room for
         // the Dock).
         className={cn(
-          "px-3 md:px-6 pt-3 pb-[max(5rem,calc(env(safe-area-inset-bottom)+1rem))] md:pb-20 border-t border-border bg-background/80 backdrop-blur transition",
+          "px-3 md:px-6 pt-3 pb-[calc(var(--dock-clearance)+0.25rem)] md:pb-20 border-t border-border bg-background/80 backdrop-blur transition",
           dragOver && "bg-amber-500/10",
         )}
         onDragOver={e => {

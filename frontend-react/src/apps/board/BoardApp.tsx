@@ -32,7 +32,7 @@ export function BoardApp() {
           <FamilyBoard mode={mode} currentUserId={meId} currentUserRole={(auth.user as any)?.role || null} lockOthers offerJoin onNeedSignIn={() => {}} />
         </div>
       </div>
-      <div className="fixed right-20 md:right-6 bottom-24 md:bottom-6 z-30 flex gap-1 rounded-full bg-white/95 border border-[#e9e6df] shadow-lg p-1">
+      <div className="fixed right-20 md:right-6 bottom-[calc(var(--dock-clearance)+1rem)] md:bottom-6 z-30 flex gap-1 rounded-full bg-white/95 border border-[#e9e6df] shadow-lg p-1">
         {MODES.map(m => (
           <button key={m.id} onClick={() => pick(m.id)} title={m.label}
                   className={cn("flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold",

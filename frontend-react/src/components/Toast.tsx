@@ -44,7 +44,7 @@ export function Toaster() {
   return (
     <div
       aria-live="polite"
-      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-center pointer-events-none px-4 w-full max-w-md"
+      className="fixed bottom-[calc(var(--dock-clearance)+0.5rem)] left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-center pointer-events-none px-4 w-full max-w-md"
     >
       {items.map(t => (
         <div

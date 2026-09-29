@@ -1006,7 +1006,7 @@ export function VoiceFab() {
   // ── render ─────────────────────────────────────────────────────────
 
   const fabBase = "fixed right-4 z-[60] inline-flex items-center gap-2 rounded-full font-medium shadow-lg transition";
-  const fabPos  = "bottom-20";
+  const fabPos  = "bottom-[calc(var(--dock-clearance)+0.25rem)]";
 
   // Recording: red FAB with timer
   if (mode === "recording") {
