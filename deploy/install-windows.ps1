@@ -136,16 +136,56 @@ if ($needBuild) {
   Expand-Archive -Force $zip $Home_
   Remove-Item $zip
 }
+# The computer's time zone as Yorik needs it (IANA). .NET 6+ converts
+# by itself; Windows PowerShell 5.1 has no converter, so a table of the
+# common zones (from CLDR windowsZones), then the plain UTC offset.
+function Get-IanaZone {
+  $z = try { Get-TimeZone } catch { $null }
+  if (-not $z) { return "Europe/Berlin" }
+  $out = $null
+  try { if ([TimeZoneInfo]::TryConvertWindowsIdToIanaId($z.Id, [ref]$out)) { return $out } } catch { }
+  $map = @{
+    "W. Europe Standard Time" = "Europe/Berlin"; "Central Europe Standard Time" = "Europe/Budapest"
+    "Central European Standard Time" = "Europe/Warsaw"; "Romance Standard Time" = "Europe/Paris"
+    "GMT Standard Time" = "Europe/London"; "Greenwich Standard Time" = "Atlantic/Reykjavik"
+    "GTB Standard Time" = "Europe/Bucharest"; "FLE Standard Time" = "Europe/Kiev"
+    "E. Europe Standard Time" = "Europe/Chisinau"; "Turkey Standard Time" = "Europe/Istanbul"
+    "Russian Standard Time" = "Europe/Moscow"; "Israel Standard Time" = "Asia/Jerusalem"
+    "Egypt Standard Time" = "Africa/Cairo"; "South Africa Standard Time" = "Africa/Johannesburg"
+    "W. Central Africa Standard Time" = "Africa/Lagos"; "Arab Standard Time" = "Asia/Riyadh"
+    "Arabian Standard Time" = "Asia/Dubai"; "Iran Standard Time" = "Asia/Tehran"
+    "Pakistan Standard Time" = "Asia/Karachi"; "India Standard Time" = "Asia/Calcutta"
+    "SE Asia Standard Time" = "Asia/Bangkok"; "China Standard Time" = "Asia/Shanghai"
+    "Singapore Standard Time" = "Asia/Singapore"; "Taipei Standard Time" = "Asia/Taipei"
+    "Tokyo Standard Time" = "Asia/Tokyo"; "Korea Standard Time" = "Asia/Seoul"
+    "W. Australia Standard Time" = "Australia/Perth"; "Cen. Australia Standard Time" = "Australia/Adelaide"
+    "E. Australia Standard Time" = "Australia/Brisbane"; "AUS Eastern Standard Time" = "Australia/Sydney"
+    "New Zealand Standard Time" = "Pacific/Auckland"; "Hawaiian Standard Time" = "Pacific/Honolulu"
+    "Alaskan Standard Time" = "America/Anchorage"; "Pacific Standard Time" = "America/Los_Angeles"
+    "US Mountain Standard Time" = "America/Phoenix"; "Mountain Standard Time" = "America/Denver"
+    "Central Standard Time" = "America/Chicago"; "Central Standard Time (Mexico)" = "America/Mexico_City"
+    "Canada Central Standard Time" = "America/Regina"; "Eastern Standard Time" = "America/New_York"
+    "SA Pacific Standard Time" = "America/Bogota"; "Atlantic Standard Time" = "America/Halifax"
+    "Newfoundland Standard Time" = "America/St_Johns"; "Pacific SA Standard Time" = "America/Santiago"
+    "Argentina Standard Time" = "America/Buenos_Aires"; "E. South America Standard Time" = "America/Sao_Paulo"
+    "UTC" = "Etc/UTC"
+  }
+  if ($map.ContainsKey($z.Id)) { return $map[$z.Id] }
+  # Unknown zone: the plain offset (POSIX sign: UTC+2 is Etc/GMT-2), no summer time.
+  $h = [int][Math]::Round($z.BaseUtcOffset.TotalHours)
+  if ($h -eq 0) { return "Etc/UTC" }
+  return $(if ($h -gt 0) { "Etc/GMT-$h" } else { "Etc/GMT+$(-$h)" })
+}
+
 $envFile = Join-Path $Home_ ".env"
 $files = "compose.yaml"
 if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) { $files += ";compose.gpu.yaml"; Ok "the AI model will use the NVIDIA GPU" }
 if ($needBuild) { $files += ";compose.build.yaml" }
 if (-not (Test-Path $envFile)) {
-  $tz = try { (Get-TimeZone).Id } catch { "W. Europe Standard Time" }
-  $iana = @{ "W. Europe Standard Time" = "Europe/Berlin"; "Central Europe Standard Time" = "Europe/Budapest"; "GMT Standard Time" = "Europe/London"; "Romance Standard Time" = "Europe/Paris" }[$tz]
+  $iana = Get-IanaZone
   $t = Get-Content (Join-Path $Home_ "env.template") -Raw
   $vals = @{
-    "YORIK_VERSION" = $Version; "TZ" = $(if ($iana) { $iana } else { "Europe/Berlin" })
+    "YORIK_VERSION" = $Version; "TZ" = $iana
     "YORIK_DB_PASSWORD" = (Hex 24); "YORIK_JWT_SECRET" = (Hex 32); "IMMICH_DB_PASSWORD" = (Hex 24)
     "PAPERLESS_DB_PASSWORD" = (Hex 24); "PAPERLESS_SECRET_KEY" = (Hex 32); "PAPERLESS_ADMIN_PASSWORD" = (Hex 12)
     "PAPERLESS_YORIK_TOKEN" = (Hex 24); "YORIK_WA_BRIDGE_TOKEN" = (Hex 24)
