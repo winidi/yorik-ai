@@ -728,7 +728,7 @@ Yesterday was {yesterday_weekday}, {yesterday}. Tomorrow is {tomorrow_weekday}, 
 
 {upcoming_weekdays}
 
-DATE RULE — Always copy the ISO date verbatim from a single row in the table above. Computing your own date or inferring the weekday from a date will be wrong. If the user named a weekday, find the row "next <weekday>" (e.g. "next Wednesday") and copy that ISO date — do not guess that today + N days = Wednesday. The weekday label and the ISO date in your reply MUST come from the same table line; never recombine them from memory.
+DATE RULE — Always copy the ISO date verbatim from a single row in the table above. Computing your own date or inferring the weekday from a date will be wrong. If the user named a weekday, find the row "coming <weekday>" (e.g. "coming Wednesday") and copy that ISO date — do not guess that today + N days = Wednesday. The weekday label and the ISO date in your reply MUST come from the same table line; never recombine them from memory.
 
 For "how long until X" / "what's next": use the calendar-read skill with start_iso={now_iso}; it already filters past events. Compute the delta from the returned row.
 
@@ -848,10 +848,10 @@ def _format_date_context(now: datetime) -> Dict[str, str]:
     lines.append(f"  day before yesterday     = {_fmt(ereyesterday)}")
     lines.append(f"  tonight                  = {today.isoformat()} after 18:00")
     lines.append("")
-    lines.append("Next weekday (\"this <wd>\", \"next <wd>\", bare \"<wd>\" — same; always the NEXT future occurrence, never today):")
+    lines.append("Coming weekday (\"this <wd>\", \"next <wd>\", bare \"<wd>\" all mean this row; always the next future occurrence, never today — for the <wd> of NEXT WEEK use the block below):")
     for dow in range(7):
         d = _next_of(dow)
-        lines.append(f"  next {_WEEKDAYS[dow]:<10}          = {_fmt(d)}")
+        lines.append(f"  coming {_WEEKDAYS[dow]:<10}        = {_fmt(d)}")
     lines.append("")
     lines.append("Next week's <weekday> (\"<wd> next week\" / \"<wd> in a week\" — the <wd> in the calendar week AFTER the current one, Mon-Sun):")
     for dow in range(7):
@@ -866,6 +866,7 @@ def _format_date_context(now: datetime) -> Dict[str, str]:
     lines.append("Week / month ranges (inclusive):")
     lines.append(f"  this week      = {_fmt(this_mon)} to {_fmt(this_sun)}")
     lines.append(f"  next week      = {_fmt(next_mon)} to {_fmt(next_sun)}")
+    lines.append(f"  end of next week = {_fmt(next_sun)}")
     lines.append(f"  last week      = {_fmt(last_mon)} to {_fmt(last_sun)}")
     lines.append(f"  this weekend   = {_fmt(this_sat)} to {_fmt(this_sat+timedelta(days=1))}")
     lines.append(f"  next weekend   = {_fmt(next_sat)} to {_fmt(next_sat+timedelta(days=1))}")
