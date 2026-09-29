@@ -792,8 +792,13 @@ def _format_date_context(now: datetime) -> Dict[str, str]:
     overmorrow = today + timedelta(days=2)
     ereyesterday = today - timedelta(days=2)
 
+    # ISO plus the date written out: an English reply read "2026-10-11"
+    # as "10 October" (chat test 2026-09-29).
+    _MONTHS_EN = ["January", "February", "March", "April", "May", "June", "July",
+                  "August", "September", "October", "November", "December"]
+
     def _fmt(d):
-        return f"{d.isoformat()} ({_WEEKDAYS[d.weekday()]})"
+        return f"{d.isoformat()} ({_WEEKDAYS[d.weekday()]}, {_MONTHS_EN[d.month - 1]} {d.day})"
 
     # "Next <weekday>" — the next occurrence STRICTLY in the future.
     # If today is Tuesday and user says "Tuesday", they mean next week's
@@ -846,24 +851,24 @@ def _format_date_context(now: datetime) -> Dict[str, str]:
     lines.append("Next weekday (\"this <wd>\", \"next <wd>\", bare \"<wd>\" — same; always the NEXT future occurrence, never today):")
     for dow in range(7):
         d = _next_of(dow)
-        lines.append(f"  next {_WEEKDAYS[dow]:<10}          = {d.isoformat()}")
+        lines.append(f"  next {_WEEKDAYS[dow]:<10}          = {_fmt(d)}")
     lines.append("")
     lines.append("Next week's <weekday> (\"<wd> next week\" / \"<wd> in a week\" — the <wd> in the calendar week AFTER the current one, Mon-Sun):")
     for dow in range(7):
         d = next_mon + timedelta(days=dow)
-        lines.append(f"  {_WEEKDAYS[dow]} next week       = {d.isoformat()}")
+        lines.append(f"  {_WEEKDAYS[dow]} next week       = {_fmt(d)}")
     lines.append("")
     lines.append("Last weekday (\"last <wd>\" — most recent past occurrence):")
     for dow in range(7):
         d = _last_of(dow)
-        lines.append(f"  last {_WEEKDAYS[dow]:<10}          = {d.isoformat()}")
+        lines.append(f"  last {_WEEKDAYS[dow]:<10}          = {_fmt(d)}")
     lines.append("")
     lines.append("Week / month ranges (inclusive):")
-    lines.append(f"  this week      = {this_mon.isoformat()} (Mon) to {this_sun.isoformat()} (Sun)")
-    lines.append(f"  next week      = {next_mon.isoformat()} (Mon) to {next_sun.isoformat()} (Sun)")
-    lines.append(f"  last week      = {last_mon.isoformat()} (Mon) to {last_sun.isoformat()} (Sun)")
-    lines.append(f"  this weekend   = {this_sat.isoformat()} (Sat) to {(this_sat+timedelta(days=1)).isoformat()} (Sun)")
-    lines.append(f"  next weekend   = {next_sat.isoformat()} (Sat) to {(next_sat+timedelta(days=1)).isoformat()} (Sun)")
+    lines.append(f"  this week      = {_fmt(this_mon)} to {_fmt(this_sun)}")
+    lines.append(f"  next week      = {_fmt(next_mon)} to {_fmt(next_sun)}")
+    lines.append(f"  last week      = {_fmt(last_mon)} to {_fmt(last_sun)}")
+    lines.append(f"  this weekend   = {_fmt(this_sat)} to {_fmt(this_sat+timedelta(days=1))}")
+    lines.append(f"  next weekend   = {_fmt(next_sat)} to {_fmt(next_sat+timedelta(days=1))}")
     lines.append(f"  this month     = {_month(this_month_first)}")
     lines.append(f"  next month     = {_month(next_month_first)}")
     lines.append(f"  last month     = {_month(last_month_first)}")
@@ -871,14 +876,14 @@ def _format_date_context(now: datetime) -> Dict[str, str]:
     lines.append("Day-after-today offsets (\"in 3 days\"):")
     for n in (3, 4, 5, 7, 10, 14, 21, 30):
         d = today + timedelta(days=n)
-        lines.append(f"  in {n:>2} days       = {d.isoformat()} ({_WEEKDAYS[d.weekday()]})")
+        lines.append(f"  in {n:>2} days       = {_fmt(d)}")
     lines.append("")
     lines.append("Multi-week ahead — \"<wd> in N weeks\" / \"in N weeks on <wd>\" map to the named weekday in the week N calendar-weeks AFTER the current one:")
     for weeks_ahead in (2, 3, 4):
         anchor_mon = this_mon + timedelta(days=7 * weeks_ahead)
         for dow in range(7):
             d = anchor_mon + timedelta(days=dow)
-            lines.append(f"  {_WEEKDAYS[dow]} in {weeks_ahead} weeks = {d.isoformat()}")
+            lines.append(f"  {_WEEKDAYS[dow]} in {weeks_ahead} weeks = {_fmt(d)}")
         lines.append("")
 
     return {
