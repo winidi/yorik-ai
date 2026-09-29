@@ -12,12 +12,20 @@ left for the next container start.
     Paperless  token via POST /api/token/ with the admin from .env
     Immich     admin sign-up, login, API key "Yorik integration"
     Ollama     pull the configured model if it isn't there yet
+
+The three run side by side: the model download (several GB) starts at
+once instead of after the archive's first start, and Yorik claims the
+Immich admin as soon as Immich answers, before anyone else who opens
+the photo page could. The download's progress is kept in app_settings
+(`ai_model_download`) for the Home screen.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import secrets
+import threading
 import time
 from typing import Callable, Optional
 
@@ -134,21 +142,62 @@ def ollama() -> None:
         _say(f"AI model: {model} ready")
         return
     _say(f"AI model: downloading {model} (several GB, one-time)")
-    last = 0.0
-    with httpx.stream("POST", f"{root}/api/pull", json={"model": model}, timeout=None) as r:
-        for line in r.iter_lines():
-            if time.time() - last > 60 and line:
-                _say(f"AI model: {line[:120]}")
-                last = time.time()
+    _progress(model, "downloading", 0)
+    last_log = last_note = 0.0
+    try:
+        with httpx.stream("POST", f"{root}/api/pull", json={"model": model}, timeout=None) as r:
+            for line in r.iter_lines():
+                if not line:
+                    continue
+                now = time.time()
+                if now - last_note > 5:
+                    pct = _percent(line)
+                    if pct is not None:
+                        _progress(model, "downloading", pct)
+                        last_note = now
+                if now - last_log > 60:
+                    _say(f"AI model: {line[:120]}")
+                    last_log = now
+    except Exception:
+        _progress(model, "failed", None)
+        raise
+    _progress(model, "ready", 100)
     _say(f"AI model: {model} ready")
 
 
+def _percent(line: str) -> Optional[int]:
+    """Ollama's pull stream: {"status": "pulling …", "completed": n, "total": m}."""
+    try:
+        d = json.loads(line)
+        if d.get("total"):
+            return int(100 * (d.get("completed") or 0) / d["total"])
+    except (ValueError, TypeError):
+        pass
+    return None
+
+
+def _progress(model: str, status: str, percent: Optional[int]) -> None:
+    try:
+        _set_setting("ai_model_download", json.dumps(
+            {"model": model, "status": status, "percent": percent, "at": int(time.time())}))
+    except Exception:  # noqa: BLE001 — progress is a courtesy, never a failure
+        pass
+
+
+def _run(step: Callable[[], None]) -> None:
+    try:
+        step()
+    except Exception as exc:  # noqa: BLE001 — one step never blocks the others
+        _say(f"{step.__name__}: {type(exc).__name__}: {exc}")
+
+
 def main() -> None:
-    for step in (paperless, immich, ollama):
-        try:
-            step()
-        except Exception as exc:  # noqa: BLE001 — one step never blocks the others
-            _say(f"{step.__name__}: {type(exc).__name__}: {exc}")
+    threads = [threading.Thread(target=_run, args=(step,), name=f"bootstrap-{step.__name__}")
+               for step in (immich, ollama, paperless)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
 
 
 if __name__ == "__main__":

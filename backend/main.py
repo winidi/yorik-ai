@@ -11320,6 +11320,16 @@ def system_status(
         "base_url": vanna_agent.LLM_BASE_URL,
         "reachable": _llm_reachable(),
     }
+    # First start of the Docker install: the model download's progress
+    # (docker_bootstrap), so Home can say why the chat isn't ready yet.
+    try:
+        with conn_ctx(DB_PATH) as _c:
+            _row = _c.execute("SELECT value FROM app_settings WHERE key = 'ai_model_download'").fetchone()
+        _dl = json.loads(_row["value"]) if _row and _row["value"] else None
+        if isinstance(_dl, dict) and _dl.get("status") in ("downloading", "failed"):
+            llm["download"] = _dl
+    except Exception:  # noqa: BLE001
+        pass
 
     # Connectors that have credentials stored
     try:

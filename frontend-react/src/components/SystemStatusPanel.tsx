@@ -14,7 +14,11 @@ import { PhonesAccessCard } from "@/components/PhonesAccessCard";
 import { UpdateCard } from "@/components/UpdateCard";
 
 export interface SystemStatus {
-  llm: { model: string; base_url: string; reachable: boolean };
+  llm: {
+    model: string; base_url: string; reachable: boolean;
+    /** First start of the Docker install: the model is still downloading. */
+    download?: { model: string; status: "downloading" | "failed"; percent: number | null };
+  };
   email: { configured: boolean; kinds: string[] };
   paperless: { admin_token_set: boolean; url: string | null };
   backup: { last: any; configured: boolean };
@@ -33,7 +37,12 @@ export interface HealthIssue { tone: "warn" | "error"; text: string }
  *  same fact as "backup not set up", so it is folded into that. */
 export function healthIssues(status: SystemStatus | null, workers: WorkerLite[]): HealthIssue[] {
   const out: HealthIssue[] = [];
-  if (status && !status.llm.reachable) {
+  const dl = status?.llm.download;
+  if (dl?.status === "downloading") {
+    out.push({ tone: "warn", text: `The AI model is still downloading${dl.percent != null ? ` (${dl.percent}%)` : ""}; the chat answers once it is done` });
+  } else if (dl?.status === "failed") {
+    out.push({ tone: "error", text: "The AI model download stopped; restarting Yorik tries again" });
+  } else if (status && !status.llm.reachable) {
     out.push({ tone: "error", text: "Yorik can't think right now" });
   }
   for (const w of workers) {
@@ -82,6 +91,13 @@ export function useHouseHealth(isAdmin: boolean) {
   }, [isAdmin]);
 
   useEffect(() => { refresh(); }, [refresh]);
+  // While the model downloads, look again every 15 s so the percentage moves.
+  const downloading = status?.llm.download?.status === "downloading";
+  useEffect(() => {
+    if (!downloading) return;
+    const t = window.setInterval(refresh, 15000);
+    return () => window.clearInterval(t);
+  }, [downloading, refresh]);
 
   return { status, workers, loaded, refresh, issues: healthIssues(status, isAdmin ? workers : []) };
 }
