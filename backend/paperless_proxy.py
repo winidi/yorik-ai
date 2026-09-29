@@ -36,7 +36,7 @@ from typing import Any, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
-from starlette.responses import StreamingResponse
+from starlette.responses import RedirectResponse, StreamingResponse
 from starlette.websockets import WebSocketState
 
 from .auth_sessions import current_user, current_user_optional, get_user_for_session, COOKIE_NAME
@@ -129,6 +129,13 @@ def _is_public_paperless_path(path: str) -> bool:
     if path.endswith(".webmanifest"):
         return True
     return False
+
+
+@router.get("", include_in_schema=False)
+async def paperless_root(request: Request) -> Response:
+    # "/paperless" typed without the slash was a 404 (2026-09-29).
+    target = "/paperless/" + (f"?{request.url.query}" if request.url.query else "")
+    return RedirectResponse(target, status_code=307)
 
 
 @router.api_route(

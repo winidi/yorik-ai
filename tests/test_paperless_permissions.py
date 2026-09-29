@@ -88,3 +88,36 @@ def test_default_owner_workflow_fires_on_consumption_only(monkeypatch):
     monkeypatch.setattr(pv.requests, "get", lambda url, **kw: _Resp(data={"results": [good]}))
     assert pv._ensure_default_owner_workflow("http://p", {}, 3, parents_group_id=4) == 1
     assert len(patched) == 2                                   # a correct workflow is left alone
+
+
+def test_groups_carry_what_the_paperless_ui_needs(monkeypatch):
+    """Without a superuser every account got a 403 on ui_settings and
+    saved_views, so the Paperless UI never loaded (2026-09-29). Every
+    group gets those; only the parents may also create and rename tags,
+    correspondents and document types. Hand-added rights stay."""
+    existing = {"results": [
+        {"id": 2, "name": "household", "permissions": ["view_document", "view_mailaccount"]},
+        {"id": 5, "name": "parents", "permissions": list(pv._BASELINE_GROUP_PERMS[:10])},
+    ]}
+    patched, posted = {}, []
+    monkeypatch.setattr(pv.requests, "get", lambda url, **kw: _Resp(data=existing))
+    monkeypatch.setattr(pv.requests, "patch",
+                        lambda url, **kw: patched.update({int(url.rstrip("/").split("/")[-1]): set(kw["json"]["permissions"])}) or _Resp())
+    monkeypatch.setattr(pv.requests, "post", lambda url, **kw: posted.append(kw["json"]) or _Resp(data={"id": 7}))
+
+    assert pv._ensure_groups("http://p", {}) == {"household": 2, "parents": 5, "business": 7}
+    ui = {"view_uisettings", "add_uisettings", "change_uisettings", "view_savedview", "add_savedview"}
+    tidy = {"add_tag", "change_tag", "add_correspondent", "change_correspondent"}
+    assert ui <= patched[2] and not tidy & patched[2]
+    assert "view_mailaccount" in patched[2]                    # an admin's own addition is kept
+    assert ui <= patched[5] and tidy <= patched[5]
+    assert not {"delete_tag", "delete_correspondent", "delete_documenttype"} & patched[5]
+    assert ui <= set(posted[0]["permissions"]) and not tidy & set(posted[0]["permissions"])   # new "business" group
+
+
+def test_paperless_without_the_slash_leads_to_paperless(fresh_app):
+    from fastapi.testclient import TestClient
+    r = TestClient(fresh_app).get("/paperless", follow_redirects=False)
+    assert r.status_code == 307 and r.headers["location"] == "/paperless/"
+    r = TestClient(fresh_app).get("/paperless?x=1", follow_redirects=False)
+    assert r.headers["location"] == "/paperless/?x=1"

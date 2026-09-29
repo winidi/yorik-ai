@@ -236,8 +236,9 @@ def sync_parents_group(group_id: Optional[int] = None) -> int:
 # Read-only on tag/correspondent/documenttype: members can use existing
 # organisational metadata for their own uploads but can't invent new
 # tags or rename/delete shared ones, which would otherwise let one
-# user's housekeeping clutter or break everyone else's filters. Admin
-# (= Paperless superuser) keeps the full surface for system upkeep.
+# user's housekeeping clutter or break everyone else's filters. The
+# "parents" group may create and rename them (_EXTRA_GROUP_PERMS); the
+# Paperless superuser keeps the full surface for system upkeep.
 #
 # Codename format here is the bare Django codename (no app_label prefix)
 # — Paperless's GroupSerializer accepts strings exactly in this form
@@ -253,18 +254,41 @@ _BASELINE_GROUP_PERMS: tuple[str, ...] = (
     "view_note",
     "view_storagepath",
     "add_note",
+    # The Paperless web UI reads ui_settings and saved_views before it
+    # shows anything; without these every account got a 403 there once
+    # nobody was a superuser any more (2026-09-29). Saved views are
+    # filtered by owner in Paperless, so each person sees only their own.
+    "view_uisettings",
+    "add_uisettings",
+    "change_uisettings",
+    "view_savedview",
+    "add_savedview",
+    "change_savedview",
+    "delete_savedview",
 )
+
+# On top of the baseline, per group: the adults keep the household's
+# tags, correspondents and document types in order (create and rename,
+# no delete — merging or removing stays with the Paperless admin).
+_EXTRA_GROUP_PERMS: Dict[str, tuple[str, ...]] = {
+    GROUPS["parents"]: (
+        "add_tag", "change_tag",
+        "add_correspondent", "change_correspondent",
+        "add_documenttype", "change_documenttype",
+    ),
+}
 
 
 def _patch_group_permissions(
     base: str, headers: Dict[str, str], group_id: int, current: list[str],
+    extra: tuple[str, ...] = (),
 ) -> bool:
-    """Additively reconcile a group's permissions against the baseline.
-    Returns True if a PATCH was made (or wasn't needed); False on error.
-    Never strips permissions an admin added manually — only adds the
-    ones we expect."""
+    """Additively reconcile a group's permissions against the baseline
+    (plus `extra` for that group). Returns True if a PATCH was made (or
+    wasn't needed); False on error. Never strips permissions an admin
+    added manually — only adds the ones we expect."""
     have = set(current or [])
-    want = set(_BASELINE_GROUP_PERMS)
+    want = set(_BASELINE_GROUP_PERMS) | set(extra)
     missing = want - have
     if not missing:
         return True
@@ -299,16 +323,17 @@ def _ensure_groups(base: str, headers: Dict[str, str]) -> Dict[str, int]:
         r = requests.get(f"{base}/api/groups/", headers=headers, timeout=TIMEOUT_S)
         existing = {g["name"]: g for g in (r.json().get("results") or [])} if r.ok else {}
         for group_name in GROUPS.values():
+            extra = _EXTRA_GROUP_PERMS.get(group_name, ())
             if group_name in existing:
                 g = existing[group_name]
                 out[group_name] = int(g["id"])
                 # Self-heal: bring an existing group up to the baseline.
                 _patch_group_permissions(base, headers, int(g["id"]),
-                                          g.get("permissions") or [])
+                                          g.get("permissions") or [], extra)
                 continue
             cr = requests.post(
                 f"{base}/api/groups/", headers=headers,
-                json={"name": group_name, "permissions": list(_BASELINE_GROUP_PERMS)},
+                json={"name": group_name, "permissions": list(_BASELINE_GROUP_PERMS) + list(extra)},
                 timeout=TIMEOUT_S,
             )
             if cr.ok:
