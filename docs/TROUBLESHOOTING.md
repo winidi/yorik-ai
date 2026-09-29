@@ -406,7 +406,7 @@ Updates: Home shows "A new version is ready"; **Update now** does it.
 >
 > **Fix**:
 > - If you get connection refused: `docker compose up -d paperless-web`
-> - If you get 401 but Yorik still says "not reachable": the API token is missing. Settings → Connectors → Paperless → paste your API token. Generate one in Paperless UI: Profile → API Tokens → Create.
+> - If you get 401 but Yorik still says "not reachable": the API token is missing. Generate one in the Paperless UI (Profile → API Tokens → Create) and hand it to Yorik: `venv/bin/python -c "from backend import credential_store as c; c.put('paperless', {'api_key': 'PASTE', 'base_url': 'http://127.0.0.1:8010'})"`, then restart Yorik. There is no settings page for this yet.
 
 ### Documents you added in Paperless don't show up in Yorik
 
