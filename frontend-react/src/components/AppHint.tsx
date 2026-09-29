@@ -50,11 +50,13 @@ export function AppHint() {
   }
 
   return (
-    // In the chat the input sits right above the Dock; the tip goes above it.
-    // On other phone screens the microphone button sits there instead.
+    // In the chat the input sits right above the Dock; the tip goes above
+    // it. Elsewhere it stays low and lies above the microphone button
+    // (z 61 > 60), so "Got it" is never under it; lifting or narrowing
+    // the tip made it cover the last row of a list instead.
     <div className={app === "chat"
-      ? "fixed left-1/2 -translate-x-1/2 z-[55] w-[min(28rem,calc(100vw-2rem))] bottom-[calc(var(--dock-clearance)+5.5rem)]"
-      : "fixed left-1/2 -translate-x-1/2 z-[55] w-[min(28rem,calc(100vw-2rem))] bottom-[calc(var(--dock-clearance)+4.5rem)] md:bottom-[calc(var(--dock-clearance)+0.75rem)]"}>
+      ? "fixed left-1/2 -translate-x-1/2 z-[61] w-[min(28rem,calc(100vw-2rem))] bottom-[calc(var(--dock-clearance)+5.5rem)]"
+      : "fixed left-1/2 -translate-x-1/2 z-[61] w-[min(28rem,calc(100vw-2rem))] bottom-[calc(var(--dock-clearance)+0.75rem)]"}>
       <div className="flex items-start gap-3 p-3 rounded-2xl bg-card border border-border shadow-lg">
         <Lightbulb className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
         <p className="text-sm flex-1">{HINTS[app]}</p>
