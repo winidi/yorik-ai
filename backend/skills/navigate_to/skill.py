@@ -23,7 +23,6 @@ _APP_ROUTES = {
     "contacts":  "/r/contacts",
     "documents": "/r/documents",
     "docs":      "/r/documents",
-    "compose":   "/r/compose",
     "email":     "/r/email",
     "mail":      "/r/email",
     "inbox":     "/r/email",

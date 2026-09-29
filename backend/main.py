@@ -377,10 +377,10 @@ def patch_skill_enabled(
     typo in the URL doesn't silently create a phantom entry in the
     disabled set)."""
     from .skills import get_registry
-    from .skills.registry import _get_disabled_skills, _set_disabled_skills
+    from .skills.registry import get_admin_disabled_skills, _set_disabled_skills
     if get_registry().get(name) is None:
         raise HTTPException(404, f"unknown skill: {name}")
-    disabled = _get_disabled_skills()
+    disabled = get_admin_disabled_skills()
     if body.enabled:
         disabled.discard(name)
     else:
@@ -400,7 +400,7 @@ def patch_category_enabled(
     already in the requested state."""
     from .skills import get_registry
     from .skills.registry import (
-        derive_ui_category, _get_disabled_skills, _set_disabled_skills,
+        derive_ui_category, get_admin_disabled_skills, _set_disabled_skills,
     )
     members = [
         s.name for s in get_registry().all()
@@ -408,7 +408,7 @@ def patch_category_enabled(
     ]
     if not members:
         raise HTTPException(404, f"no skills in category {category!r}")
-    disabled = _get_disabled_skills()
+    disabled = get_admin_disabled_skills()
     flipped: list[str] = []
     if body.enabled:
         for name in members:

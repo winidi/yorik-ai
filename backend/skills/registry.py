@@ -184,13 +184,11 @@ class SkillContext:
 _DISABLED_SKILLS_KEY = "disabled_skills"
 
 
-def _get_disabled_skills() -> set[str]:
-    """Return the set of currently-disabled skill names: the ones an
-    admin switched off in Settings → Skills, plus every skill that
-    belongs to an opt-in app that is off (tag `app:<id>`). Empty set
-    on any error (DB not initialised, table missing in tests, …) —
-    fail-open keeps the LLM working when the disable infra itself
-    breaks."""
+def get_admin_disabled_skills() -> set[str]:
+    """Only the skills an admin switched off in Settings → Skills. This is
+    what the toggles read and write back; the skills of apps that are off
+    and retired ones are added on top by _get_disabled_skills (writing
+    those back too kept an app's skills off after the app came back on)."""
     out: set[str] = set()
     try:
         from ..database import get_conn
@@ -203,11 +201,22 @@ def _get_disabled_skills() -> set[str]:
             out |= {n.strip() for n in str(row["value"]).split(",") if n.strip()}
     except Exception:  # noqa: BLE001
         pass
+    return out
+
+
+def _get_disabled_skills() -> set[str]:
+    """Return the set of currently-disabled skill names: the ones an
+    admin switched off in Settings → Skills, plus every skill that
+    belongs to an opt-in app that is off (tag `app:<id>`). Empty set
+    on any error (DB not initialised, table missing in tests, …) —
+    fail-open keeps the LLM working when the disable infra itself
+    breaks."""
+    out = get_admin_disabled_skills()
     try:
         out |= _skills_of_disabled_apps()
     except Exception:  # noqa: BLE001
         pass
-    return out
+    return out | _RETIRED
 
 
 def app_of(skill: "Skill") -> Optional[str]:
@@ -245,6 +254,10 @@ def _skills_of_disabled_apps() -> set[str]:
 
 _SUPERSEDES = {"write": {"compose_draft", "pick_compose_template", "view_compose_template", "list_compose_templates",
                          "compose_check_recipient", "compose_check_template_args", "compose_extract_args", "delete_compose_draft"}}
+
+# Compose was retired on 2026-09-29 (apps.py): its chat skills stay
+# loadable for the code that still calls them, but no one is offered them.
+_RETIRED = frozenset(_SUPERSEDES["write"])
 
 
 def _set_disabled_skills(skills: set[str]) -> None:

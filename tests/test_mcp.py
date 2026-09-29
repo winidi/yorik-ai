@@ -80,15 +80,16 @@ def test_tools_list_is_role_filtered(token_client, fresh_app):
     client, token, _, _ = token_client
     names = {t["name"] for t in _rpc(client, token, "tools/list").json()["result"]["tools"]}
     assert {"skill_view", "pending_confirm", "pending_cancel", "whoami"} <= names
-    assert {"check_calendar", "compose_draft"} <= names
+    assert {"check_calendar", "email_draft"} <= names
 
-    # compose_draft is [admin, member] in its manifest; restricted must not see it.
+    # email_draft is [admin, member] in its manifest; restricted must not see it.
+    # (Compose, used here until 2026-09-29, is retired.)
     restricted, _ = login_client(fresh_app, role="restricted", email="rst@example.local")
     r_token = restricted.post("/api/tokens", json={"name": "x"}).json()["token"]
     r_names = {t["name"] for t in _rpc(client, r_token, "tools/list").json()["result"]["tools"]}
     assert "check_calendar" in r_names
-    assert "compose_draft" not in r_names
-    r = _rpc(client, r_token, "tools/call", {"name": "compose_draft", "arguments": {}})
+    assert "email_draft" not in r_names
+    r = _rpc(client, r_token, "tools/call", {"name": "email_draft", "arguments": {}})
     assert r.json()["error"]["code"] == -32602
 
     # schemas come from skill.md inputs
@@ -258,7 +259,8 @@ def test_compact_mode_collapses_skills_behind_invoke_skill(token_client):
     assert names == ["skill_view", "pending_confirm", "pending_cancel", "whoami", "notify", "invoke_skill", "list_skills"]
     inv = next(t for t in tools if t["name"] == "invoke_skill")
     assert "- check_calendar:" in inv["description"] and "[calendar]" in inv["description"]
-    assert "compose_draft" in inv["description"]           # member may use it
+    assert "email_draft" in inv["description"]             # member may use it
+    assert "compose_draft" not in inv["description"]        # retired
     assert "- ask_agent:" not in inv["description"]         # no-mcp skill stays hidden
     # compact is much smaller than full
     import json

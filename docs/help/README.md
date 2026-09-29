@@ -4,7 +4,7 @@ User-facing setup + usage guides, read by the `yorik_help` skill so the chat age
 
 One short markdown file per topic. Each starts with YAML frontmatter declaring:
 - `title` — human label
-- `nav_app` (optional) — Yorik app to suggest jumping to (`settings`, `calendar`, `compose`, etc.)
+- `nav_app` (optional) — Yorik app to suggest jumping to (`settings`, `calendar`, `write`, etc.)
 - `nav_query` (optional) — query params for the deep link
 - `summary` — one-sentence what's in here, shown to the LLM in the skill catalog
 
@@ -23,7 +23,6 @@ The skill loads all files at boot, keys them by filename (`01-first-run.md` → 
 | `voice` | Voice profiles, calibration, dictation | Stub |
 | `whatsapp` | Bridge pairing, multi-device | Stub |
 | `email` | IMAP/SMTP setup, sending drafts | Stub |
-| `compose` | Writing letters, invoices, templates | Stub |
 | `contacts` | Importing, editing, sharing | Stub |
 | `calendar` | Events, sharing, attendees | Stub |
 | `tasks` | Recurring tasks, briefing integration | Stub |

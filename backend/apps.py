@@ -251,19 +251,10 @@ register(App(
     aliases=["documents", "files", "papers", "dokumente", "paperless"],
 ))
 
-# Compose — AI-first document composer (TipTap editor + templates +
-# Gotenberg PDF render). Voice creates a draft from a template,
-# user refines, and the result is auto-saved to Paperless so it's
-# immediately voice-searchable next time.
-register(App(
-    id="compose",
-    name="Compose",
-    icon="✍️",
-    description="Draft invoices, quotes, letters by voice. Yorik fills templates from your other apps' data; you refine with highlight-and-ask; one click saves to Paperless or emails it out.",
-    view_kind="native",
-    tags=["bundled", "core"],
-    aliases=["compose", "write", "draft", "invoice", "rechnung", "quote", "angebot", "letter", "brief"],
-))
+# Compose (the template-and-TipTap letter composer) was retired on
+# 2026-09-29: Schreiben ("write") writes letters and invoices now. Its
+# code stays for Schreiben's PDF rendering and number series; its app
+# entry and chat skills are gone (skills/registry.py _RETIRED).
 
 # Schreiben — the small documents app that replaces Compose: letters
 # (invoices and quotes follow) with a letterhead per person. Opt-in

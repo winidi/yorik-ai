@@ -59,3 +59,23 @@ def test_pipelines_is_opt_in_but_stays_on_where_it_is_used(fresh_app):
     opt = {a["id"]: a for a in client.get("/api/apps/opt-in").json()}
     assert all(opt[i]["experimental"] for i in ("pipelines", "finance", "write", "recordings"))
     assert not opt["whatsapp"]["experimental"]
+
+
+def test_compose_is_retired_and_a_skill_toggle_keeps_app_skills_out_of_the_saved_list(fresh_app):
+    """Compose was retired on 2026-09-29: no app entry, no chat skill.
+    Toggling one skill in Settings writes back only the admin's choices,
+    so an app's skills come back when the app is switched on again."""
+    from backend import apps as A
+    from backend.skills import get_registry
+    from backend.skills.registry import get_admin_disabled_skills
+    client, _ = login_client(fresh_app, role="admin", name="Dirk")
+    assert "compose" not in {a["id"] for a in client.get("/api/apps").json()}
+    offered = {r["name"] for r in get_registry().index(role="admin")}
+    assert not {"compose_draft", "list_compose_templates", "pick_compose_template"} & offered
+
+    A.set_opt_in_enabled("recordings", False)
+    assert client.patch("/api/skills/check_tasks", json={"enabled": False}).status_code == 200
+    assert get_admin_disabled_skills() == {"check_tasks"}           # not the recording skills, not Compose
+    A.set_opt_in_enabled("recordings", True)
+    assert "start_recording" in {r["name"] for r in get_registry().index(role="admin")}
+    client.patch("/api/skills/check_tasks", json={"enabled": True})
