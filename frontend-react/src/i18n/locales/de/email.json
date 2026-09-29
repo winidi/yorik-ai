@@ -1,0 +1,36 @@
+{
+  "fileAs": {
+    "private": {
+      "label": "nur mich",
+      "hint": "Nur du siehst das Dokument in Paperless."
+    },
+    "parents": {
+      "label": "die Eltern",
+      "hint": "Die Erwachsenen im Haushalt, nicht die Konten der Kinder."
+    },
+    "shared": {
+      "label": "die Familie",
+      "hint": "Alle im Haushalt, auch die Konten der Kinder."
+    }
+  },
+  "whoSees": {
+    "private": "nur für dich sichtbar",
+    "parents": "für die Eltern sichtbar",
+    "shared": "für die ganze Familie sichtbar",
+    "business": "für die Firma sichtbar"
+  },
+  "paperless": {
+    "filedAuto": "In Paperless abgelegt · automatisch (vertrauter Absender)",
+    "filed": "In Paperless abgelegt",
+    "suggested": "Das sieht nach einem Dokument aus, das sich aufzuheben lohnt. In Paperless ablegen?",
+    "notFiled": "Nicht abgelegt",
+    "lastUploadFailed": "Letzter Upload zu Paperless fehlgeschlagen",
+    "retryVisibleTo": "Nochmal versuchen, sichtbar für",
+    "addVisibleTo": "In Paperless ablegen, sichtbar für"
+  },
+  "unsubscribeFailed": "Abmeldung fehlgeschlagen: {{error}}",
+  "draftReply": {
+    "noDraft": "Yorik konnte keinen Entwurf erstellen — schau dir den AI-Entwurfs-Bereich unter der Mail an.",
+    "failed": "Antwort-Entwurf fehlgeschlagen: {{error}}"
+  }
+}

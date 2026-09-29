@@ -1,0 +1,201 @@
+{
+  "failed": "That didn't work",
+  "saved": "Saved",
+  "done": "Done",
+  "cancel": "Cancel",
+  "handover": "Handed back to you",
+  "reminderSent": "Reminder sent",
+  "noSubject": "(no subject)",
+  "history": "History",
+  "loadFailed": "Couldn't load your pipelines",
+  "createFailed": "Couldn't create it",
+  "trackReply": "Track a reply",
+  "intro": "Yorik keeps at it until the reply arrives, and asks you before every reminder.",
+  "switchedOffForYou": "Pipelines are turned off for you. Your parents or an admin can turn them back on.",
+  "nextHandover": "Handed back to you {{when}}",
+  "nextReminder": "Next reminder {{when}}",
+  "follow": "Track",
+  "toWhen": "to {{to}} · {{when}}",
+  "section": {
+    "needsYou": "Needs you",
+    "running": "Running",
+    "drafts": "Drafts",
+    "ended": "Finished ({{count}})"
+  },
+  "firstSteps": {
+    "step1Title": "Pick an email",
+    "step1Text": "a cancellation, request or demand you sent",
+    "step2Title": "Approve the steps",
+    "step2Text": "Yorik suggests reminders; you adjust the days and texts and approve each one",
+    "step3Title": "Yorik keeps at it",
+    "step3Text": "it looks for the reply in all your mail, even from other addresses, and asks you before every reminder",
+    "recentlySent": "Recently sent — which one should Yorik track?",
+    "noSentMails": "No sent emails in Yorik yet. Write one in Mail and it will show up here."
+  },
+  "picker": {
+    "title": "Which email should Yorik track?",
+    "subtitle": "Your recently sent emails",
+    "none": "No sent emails found."
+  },
+  "people": {
+    "title": "Who can use pipelines",
+    "explain": "On for everyone. Turning it off pauses that person's running pipelines; it doesn't let you see what's in them.",
+    "adminOnly": "only an admin can change this",
+    "changedBy": "last changed by {{name}}",
+    "toggleLabel": "Pipelines for {{name}}",
+    "turnedOn": "Pipelines on for {{name}}",
+    "turnedOff": "Pipelines off for {{name}}"
+  },
+  "attention": {
+    "vielleicht": "Is this the reply?",
+    "kann_nicht_pruefen": "Yorik can't check reliably right now",
+    "schritt_faellig": "No reply — send a reminder?",
+    "uebergabe": "No reply after all the reminders",
+    "selbst_geantwortet": "You wrote to them yourself",
+    "versand_unklar": "Not sure whether the reminder went out",
+    "person_aus": "Pipelines are turned off for you"
+  },
+  "state": {
+    "entwurf": "Draft — not started yet",
+    "laeuft": "Running",
+    "pausiert": "Paused",
+    "erledigt": "Done",
+    "abgebrochen": "Cancelled"
+  },
+  "rel": {
+    "today": "today",
+    "tomorrow": "tomorrow",
+    "yesterday": "yesterday",
+    "inDays_one": "in {{count}} day",
+    "inDays_other": "in {{count}} days",
+    "daysAgo_one": "{{count}} day ago",
+    "daysAgo_other": "{{count}} days ago",
+    "onDate": "on {{date}}"
+  },
+  "detail": {
+    "missing": "This pipeline doesn't exist (anymore).",
+    "goal": "Goal: {{goal}}",
+    "lastChecked": "Last checked {{when}}: {{summary}}",
+    "draftingTitle": "Yorik is writing the reminders…",
+    "draftingText": "It reads your email, works out what reply you're expecting, and suggests timing and texts. This usually takes less than a minute.",
+    "sequence": "Steps",
+    "redraftConfirm": "Yorik will rewrite the open reminders; your changes and approvals on them will be lost. Continue?",
+    "redraft": "Let Yorik rewrite",
+    "openEachFirst": "Open each email once first",
+    "approveAll": "Approve all",
+    "approveAllOpenFirst": "Approve all (open each one first)",
+    "addReminder": "Add a reminder",
+    "saving": "Saving…",
+    "saveChanges": "Save changes",
+    "discard": "Discard",
+    "start": "Start",
+    "startText": "From now on Yorik watches for the reply. When a reminder is due, it asks you first; nothing goes out without your okay.",
+    "started": "Started",
+    "starting": "Starting…",
+    "saveFirst": "Save first.",
+    "approveEachFirst": "Approve each reminder first.",
+    "yourMail": "Your email"
+  },
+  "step": {
+    "after": "after",
+    "daysAria": "Days",
+    "daysUnit_one": "day",
+    "daysUnit_other": "days",
+    "handoverNote": "If no reply has come by then, Yorik will let you know.",
+    "reminder": "Reminder",
+    "reminderN": "Reminder {{n}}",
+    "daysLater_one": "{{count}} day later",
+    "daysLater_other": "{{count}} days later",
+    "approved": "approved",
+    "notApproved": "not approved",
+    "afterPrevious": " from the previous message",
+    "to": "To",
+    "subject": "Subject",
+    "body": "Message",
+    "hideQuote": "Hide quote",
+    "showQuote": "Your first email is quoted underneath",
+    "remove": "Remove",
+    "revokeApproval": "Take back approval",
+    "approve": "Approve",
+    "saveThenApprove": "Save first, then approve"
+  },
+  "source": {
+    "llm": "Written by Yorik. When it's due, Yorik rewrites it once more so it's up to date.",
+    "llm_frisch": "Rewritten by Yorik today, with everything that has happened since.",
+    "vorlage": "Only a template: the language model couldn't be reached. “Let Yorik rewrite” tries again.",
+    "bearbeitet": "Edited by you."
+  },
+  "attn": {
+    "maybeText_one": "This email could be the reply. Until you decide, no reminder goes out.",
+    "maybeText_other": "These emails could be the reply. Until you decide, no reminder goes out.",
+    "from": "from {{from}}",
+    "isAnswer": "Yes, that's the reply",
+    "notAnswer": "No, keep waiting",
+    "openMail": "Open email",
+    "noReplyFound": "No reply found.",
+    "rewrittenToday": "Yorik has rewritten the reminder for today.",
+    "to": "to {{to}}",
+    "sendNow": "Send now",
+    "approveAndSend": "Approve and send",
+    "editBelow": "You can change the text further down in the steps.",
+    "checksBeforeSending": "Yorik checks once more right before sending.",
+    "cantCheckText": "As long as Yorik can't see your mail reliably, it won't send any reminder. It tries again every 15 minutes.",
+    "checkAgain": "Check again",
+    "sendAnywayConfirm": "Yes, send anyway",
+    "sendAnyway": "Send anyway…",
+    "handoverText": "All reminders have gone out and no reply has come. What next?",
+    "oneMoreReminder": "One more reminder",
+    "selfRepliedText": "You wrote to the other side yourself:",
+    "quotedSubject": "“{{subject}}”",
+    "keepFollowing": "Keep tracking",
+    "sendReported": "Sending reported: {{error}}.",
+    "sendInterrupted": "Sending was interrupted.",
+    "checkSentFolder": "Look in your mailbox under “Sent”. Yorik won't send anything again until you tell it.",
+    "wasSent": "It went out",
+    "wasNotSent": "It didn't go out",
+    "personOffText": "Pipelines are turned off for you; this one waits until they're back on."
+  },
+  "features": {
+    "title": "How Yorik recognises the reply",
+    "scope": "Yorik searches all your mailboxes, including spam, since {{date}}. Any email that matches this is shown to you before Yorik sends a reminder.",
+    "removeValue": "Remove {{value}}",
+    "addPlaceholder": "+ add",
+    "addresses": {
+      "label": "Addresses",
+      "hint": "the addresses you wrote to"
+    },
+    "domains": {
+      "label": "Domains",
+      "hint": "any address at this domain counts"
+    },
+    "names": {
+      "label": "Names in the sender's domain",
+      "hint": "e.g. “stadtwerke” also matches service@stadtwerke-energie.com"
+    },
+    "numbers": {
+      "label": "Numbers",
+      "hint": "customer, contract or invoice number"
+    },
+    "words": {
+      "label": "Keywords",
+      "hint": "words the reply should contain"
+    }
+  },
+  "window": {
+    "title": "Sending times · {{days}}, {{from}}:00–{{to}}:00",
+    "weekdays": "weekdays",
+    "everyDay": "every day",
+    "onlyWeekdays": "weekdays only",
+    "from": "from",
+    "to": "to",
+    "hourUnit": "o'clock",
+    "note": "Outside these hours Yorik doesn't ask about sending; it waits."
+  },
+  "controls": {
+    "checked": "Checked",
+    "checkNow": "Check now",
+    "pause": "Pause",
+    "resume": "Resume",
+    "reallyDelete": "Really delete"
+  }
+}

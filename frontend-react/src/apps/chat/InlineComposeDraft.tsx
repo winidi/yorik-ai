@@ -32,6 +32,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -87,12 +88,13 @@ interface SendResult {
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
+/** translation keys, by draft kind */
 const KIND_LABEL: Record<string, string> = {
-  letter:  "Brief",
-  invoice: "Rechnung",
-  offer:   "Angebot",
-  email:   "E-Mail",
-  memo:    "Notiz",
+  letter:  "chat.draftKind.letter",
+  invoice: "chat.draftKind.invoice",
+  offer:   "chat.draftKind.offer",
+  email:   "chat.draftKind.email",
+  memo:    "chat.draftKind.memo",
 };
 
 
@@ -125,6 +127,7 @@ export function InlineComposeDraft({
   subject: initialSubject, preview, templateId, templateName, missingArgs,
 }: Props) {
   const navigate = useNavigate();
+  const { t: tr } = useTranslation();
 
   // ── Draft state ─────────────────────────────────────────────────
   const [draft, setDraft] = useState<DraftFull | null>(null);
@@ -422,7 +425,7 @@ export function InlineComposeDraft({
       <div className="px-3 pt-2.5 pb-2 border-b border-border/60">
         <div className="flex items-center gap-1.5 mb-1.5">
           <DocKindIcon kind={k} />
-          <span className="text-xs font-semibold">{KIND_LABEL[k] || "Dokument"}</span>
+          <span className="text-xs font-semibold">{tr(KIND_LABEL[k] || "chat.draftKind.document")}</span>
           <span className="text-2xs text-muted-foreground font-mono">#{draftId}</span>
           {saveState === "saving" && (
             <span className="ml-auto text-2xs text-muted-foreground inline-flex items-center gap-1">

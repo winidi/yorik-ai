@@ -21,6 +21,7 @@ import {
   AlignJustify,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useApi } from "@/lib/useApi";
 import { api } from "@/lib/api";
@@ -1827,15 +1828,14 @@ function AppointmentBanner({ messageId }: { messageId: number }) {
 // Who may see a filed document in Paperless — the same three answers
 // as the attachment card in the chat (AttachmentCard.tsx).
 type FileAs = "private" | "parents" | "shared";
-const FILE_AS: Array<{ v: FileAs; label: string; hint: string; Icon: typeof Lock }> = [
-  { v: "private", label: "nur mich", hint: "Nur du siehst das Dokument in Paperless.", Icon: Lock },
-  { v: "parents", label: "die Eltern", hint: "Die Erwachsenen im Haushalt, nicht die Konten der Kinder.", Icon: UserCheck },
-  { v: "shared", label: "die Familie", hint: "Alle im Haushalt, auch die Konten der Kinder.", Icon: Users },
+// Label and hint per value: email.fileAs.<v>.label / .hint
+const FILE_AS: Array<{ v: FileAs; Icon: typeof Lock }> = [
+  { v: "private", Icon: Lock },
+  { v: "parents", Icon: UserCheck },
+  { v: "shared", Icon: Users },
 ];
-const WHO_SEES: Record<string, string> = {
-  private: "nur für dich sichtbar", parents: "für die Eltern sichtbar",
-  shared: "für die ganze Familie sichtbar", business: "für die Firma sichtbar",
-};
+// Visibility codes from the backend → email.whoSees.<code>; unknown codes show as is.
+const WHO_SEES_CODES = ["private", "parents", "shared", "business"];
 
 function AttachmentRow({
   att, onActionDone,
@@ -1915,8 +1915,10 @@ function AttachmentPreviewModal({
   onClose: () => void;
   onActionDone: () => void;
 }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const whoSees = (v: string) => (WHO_SEES_CODES.includes(v) ? t(`email.whoSees.${v}`) : v);
   // Optimistic local state so the footer updates immediately after a
   // click without waiting on the parent's refetch. parent still refetches
   // (via onActionDone) so the source-of-truth converges.
@@ -2039,19 +2041,19 @@ function AttachmentPreviewModal({
           {/* Left: status text. */}
           <div className="text-xs flex-1 min-w-0">
             {localState === "auto_filed" && (
-              <span className="text-emerald-600 dark:text-emerald-500">✓ Filed to Paperless · auto (trusted sender){localVis ? ` · ${WHO_SEES[localVis] || localVis}` : ""}</span>
+              <span className="text-emerald-600 dark:text-emerald-500">✓ {t("email.paperless.filedAuto")}{localVis ? ` · ${whoSees(localVis)}` : ""}</span>
             )}
             {localState === "filed" && (
-              <span className="text-emerald-600 dark:text-emerald-500">✓ Filed to Paperless{localVis ? ` · ${WHO_SEES[localVis] || localVis}` : ""}</span>
+              <span className="text-emerald-600 dark:text-emerald-500">✓ {t("email.paperless.filed")}{localVis ? ` · ${whoSees(localVis)}` : ""}</span>
             )}
             {localState === "suggested" && (
-              <span className="text-sky-600 dark:text-sky-500">📎 This looks like a document worth keeping. File it to Paperless?</span>
+              <span className="text-sky-600 dark:text-sky-500">📎 {t("email.paperless.suggested")}</span>
             )}
             {localState === "discarded" && (
-              <span className="text-muted-foreground">Not filed</span>
+              <span className="text-muted-foreground">{t("email.paperless.notFiled")}</span>
             )}
             {localState === "failed" && (
-              <span className="text-destructive">Last Paperless upload failed</span>
+              <span className="text-destructive">{t("email.paperless.lastUploadFailed")}</span>
             )}
             {err && <span className="block text-destructive mt-1">{err}</span>}
           </div>
@@ -2077,16 +2079,16 @@ function AttachmentPreviewModal({
                   Discard
                 </button>
               )}
-              <span className="text-xs text-muted-foreground">{localState === "failed" ? "Retry, visible to" : "Add to Paperless, visible to"}</span>
-              {FILE_AS.map(({ v, label, hint, Icon }) => (
+              <span className="text-xs text-muted-foreground">{localState === "failed" ? t("email.paperless.retryVisibleTo") : t("email.paperless.addVisibleTo")}</span>
+              {FILE_AS.map(({ v, Icon }) => (
                 <button
                   key={v}
                   onClick={() => call("file", v)}
                   disabled={busy}
-                  title={hint}
+                  title={t(`email.fileAs.${v}.hint`)}
                   className="px-3 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 text-sm disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
-                  <Icon className="w-3.5 h-3.5" />{label}
+                  <Icon className="w-3.5 h-3.5" />{t(`email.fileAs.${v}.label`)}
                 </button>
               ))}
             </>
@@ -2131,6 +2133,7 @@ function Reader({
    *  list pane is always visible so this isn't rendered. */
   onBack?: () => void;
 }) {
+  const { t } = useTranslation();
   // Refetch the full message detail when the selected id changes.
   const detail = useApi<EmailMessageDetail>(`/api/email/messages/${messageRow.id}`, []);
   const m = detail.data;
@@ -2318,7 +2321,7 @@ function Reader({
                   if (import.meta.env.DEV) console.log("[unsubscribe]", r);
                   onActionDone(true);
                 } catch (e: any) {
-                  toast("Abmeldung fehlgeschlagen: " + e.message);
+                  toast(t("email.unsubscribeFailed", { error: e.message }));
                 }
               }} />
           )}
@@ -2919,6 +2922,7 @@ function AskYorikButton({ message, detail, onReply }: {
   detail: EmailMessageDetail;
   onReply: (draft: ComposeDraft) => void;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [replyBusy, setReplyBusy] = useState(false);
   const navigate = useNavigate();
@@ -2970,7 +2974,7 @@ function AskYorikButton({ message, detail, onReply }: {
       }>(`/api/email/messages/${message.id}/drafts`);
       const first = r.variants?.[0];
       if (!first) {
-        toast("Yorik konnte keinen Entwurf erstellen — schau dir den AI-Entwurfs-Bereich unter der Mail an.");
+        toast(t("email.draftReply.noDraft"));
         return;
       }
       const to = detail.is_sent
@@ -2989,7 +2993,7 @@ function AskYorikButton({ message, detail, onReply }: {
           : detail.references_ids,
       });
     } catch (e: any) {
-      toast("Antwort-Entwurf fehlgeschlagen: " + (e?.message || e));
+      toast(t("email.draftReply.failed", { error: e?.message || e }));
     } finally {
       setReplyBusy(false);
     }

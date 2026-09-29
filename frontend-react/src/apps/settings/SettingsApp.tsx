@@ -11,6 +11,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
+import { locale } from "@/i18n";
 import {
   Loader2, Settings as Cog, User as UserIcon, Hash, BarChart3,
   Plug, ExternalLink, Save, CheckCircle2, AlertCircle, Sparkles,
@@ -1796,6 +1798,7 @@ interface EmergencyRow {
 function EmergencyAccessCard({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const auth = useAuth();
   const isAdult = String(auth.user?.role || "").toLowerCase() !== "restricted";
   const [mine, setMine] = useState<EmergencyRow | null>(null);
@@ -1816,82 +1819,78 @@ function EmergencyAccessCard({ toast }: {
   useEffect(() => { if (isAdult) void load(); }, [isAdult]);
 
   if (!isAdult) return null;
-  const fmt = (iso: string) => new Date(iso).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const fmt = (iso: string) => new Date(iso).toLocaleString(locale(), { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
   async function start() {
     setBusy(true);
     try {
       await api.post("/api/emergency-access", { reason, hours, password });
       setOpen(false); setReason(""); setPassword("");
-      toast("Notfall-Zugriff ist an. Die anderen Erwachsenen wurden benachrichtigt.", "success");
+      toast(t("settings.emergency.started"), "success");
       await load();
     } catch (e: any) {
-      toast(e.message || "Konnte den Notfall-Zugriff nicht einschalten", "error");
+      toast(e.message || t("settings.emergency.startFailed"), "error");
     } finally { setBusy(false); }
   }
   async function end() {
     if (!mine) return;
     setBusy(true);
-    try { await api.delete(`/api/emergency-access/${mine.id}`); toast("Notfall-Zugriff beendet.", "success"); await load(); }
-    catch (e: any) { toast(e.message || "Konnte nicht beenden", "error"); }
+    try { await api.delete(`/api/emergency-access/${mine.id}`); toast(t("settings.emergency.ended"), "success"); await load(); }
+    catch (e: any) { toast(e.message || t("settings.emergency.endFailed"), "error"); }
     finally { setBusy(false); }
   }
 
   return (
-    <Card title="Notfall-Zugriff">
+    <Card title={t("settings.emergency.title")}>
       <p className="text-xs text-muted-foreground">
-        Yorik zeigt jedem nur das Eigene und das Geteilte, auch Admins. Für den Ernstfall
-        (Krankenhaus, Unfall, Todesfall) kann ein Erwachsener für höchstens {maxHours} Stunden alles im
-        Haushalt sehen: Kalender, Aufgaben, Kontakte, Dokumente, Rechnungen, Aufnahmen. Nicht
-        Mails, WhatsApp und die Gespräche mit Yorik. Es braucht einen Grund und dein Passwort,
-        alle anderen Erwachsenen erfahren es sofort, und es bleibt hier für alle sichtbar.
+        {t("settings.emergency.explain", { maxHours })}
       </p>
       {mine ? (
         <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm">
-          <div className="font-medium text-red-600 dark:text-red-400">Dein Notfall-Zugriff ist an, bis {fmt(mine.expires_at)}</div>
-          <div className="text-xs text-muted-foreground mt-1">Grund: {mine.reason}</div>
+          <div className="font-medium text-red-600 dark:text-red-400">{t("settings.emergency.activeUntil", { until: fmt(mine.expires_at) })}</div>
+          <div className="text-xs text-muted-foreground mt-1">{t("settings.emergency.reason", { reason: mine.reason })}</div>
           <button onClick={end} disabled={busy}
                   className="mt-2 px-3 h-9 rounded-md border border-border hover:bg-muted text-sm disabled:opacity-50">
-            Jetzt beenden
+            {t("settings.emergency.endNow")}
           </button>
         </div>
       ) : open ? (
         <div className="mt-3 space-y-2">
           <textarea value={reason} onChange={e => setReason(e.target.value)} rows={2}
-                    placeholder="Warum? Die anderen lesen das."
+                    placeholder={t("settings.emergency.reasonPlaceholder")}
                     className="w-full rounded-md border border-border bg-background p-2 text-sm" />
           <div className="flex flex-wrap items-center gap-2">
-            <label className="text-xs text-muted-foreground">Dauer</label>
+            <label className="text-xs text-muted-foreground">{t("settings.emergency.duration")}</label>
             <input type="number" min={1} max={maxHours} value={hours} onChange={e => setHours(Number(e.target.value))}
                    className="w-20 rounded-md border border-border bg-background p-1.5 text-sm" />
-            <span className="text-xs text-muted-foreground">Stunden</span>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Dein Passwort"
+            <span className="text-xs text-muted-foreground">{t("settings.emergency.hours", { count: hours })}</span>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={t("settings.emergency.yourPassword")}
                    autoComplete="current-password"
                    className="flex-1 min-w-[10rem] rounded-md border border-border bg-background p-1.5 text-sm" />
           </div>
           <div className="flex gap-2">
             <button onClick={start} disabled={busy || reason.trim().length < 10 || !password}
                     className="px-3 h-9 rounded-md bg-red-600 text-white hover:opacity-90 text-sm disabled:opacity-50">
-              Einschalten
+              {t("settings.emergency.turnOn")}
             </button>
             <button onClick={() => setOpen(false)} disabled={busy}
-                    className="px-3 h-9 rounded-md border border-border hover:bg-muted text-sm">Abbrechen</button>
+                    className="px-3 h-9 rounded-md border border-border hover:bg-muted text-sm">{t("common.cancel")}</button>
           </div>
         </div>
       ) : (
         <button onClick={() => setOpen(true)}
                 className="mt-3 px-3 h-9 rounded-md border border-red-500/50 text-red-600 dark:text-red-400 hover:bg-red-500/10 text-sm">
-          Notfall-Zugriff einschalten …
+          {t("settings.emergency.turnOnEllipsis")}
         </button>
       )}
       {history.length > 0 && (
         <div className="mt-4">
-          <div className="text-xs font-medium mb-1">Verlauf</div>
+          <div className="text-xs font-medium mb-1">{t("settings.emergency.history")}</div>
           <ul className="space-y-1 text-xs text-muted-foreground">
             {history.slice(0, 10).map(h => (
               <li key={h.id}>
                 <span className={cn(h.active && "text-red-600 dark:text-red-400 font-medium")}>{h.user_name || h.user_id}</span>
-                {" · "}{fmt(h.started_at)} bis {fmt(h.ended_at || h.expires_at)}{h.active ? " (läuft)" : ""}
+                {" · "}{t("settings.emergency.range", { from: fmt(h.started_at), to: fmt(h.ended_at || h.expires_at) })}{h.active ? ` ${t("settings.emergency.running")}` : ""}
                 {" · "}{h.reason}
               </li>
             ))}

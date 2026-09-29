@@ -12,7 +12,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, Check, Eye, FileDown, FolderInput, Loader2, Plus, Receipt, Send, ShieldCheck, Stamp, Trash2 } from "lucide-react";
+import { Trans, useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
+import { formatDate } from "@/i18n/format";
 import { cn } from "@/lib/utils";
 import { FileDialog, SendDialog } from "./LetterDialogs";
 import { PagePreview } from "./PagePreview";
@@ -27,9 +29,13 @@ export function InvoiceEditor({ doc, onChanged, onBack, onOpen, say, extra }: {
   doc: WrittenDoc; onChanged: (d: WrittenDoc) => void; onBack: () => void; onOpen: (id: number) => void;
   say: (text: string, bad?: boolean) => void; extra?: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   const final = doc.status === "final";
   const quote = doc.kind === "quote";
-  const word = quote ? "Angebot" : "Rechnung";
+  const kind = quote ? "quote" : "invoice";
+  const word = t(quote ? "write.quote" : "write.invoice");
+  // the mail subject names the document in the document's own language (the PDF is German)
+  const docWord = quote ? "Angebot" : "Rechnung";
   const [to, setTo] = useState<RecipientValue>(() => recipientOf(doc));
   const [subject, setSubject] = useState(doc.content.subject || "");
   const [intro, setIntro] = useState(() => plain(doc.content.intro_html));
@@ -65,8 +71,8 @@ export function InvoiceEditor({ doc, onChanged, onBack, onOpen, say, extra }: {
         content: { subject: v.subject, intro: v.intro, closing: v.closing, lines: v.lines.filter(l => l.text.trim() || l.unit_price.trim()), ...v.dates },
       });
       onChanged(out); setSaving("saved"); void refresh();
-    } catch (e: any) { setSaving("failed"); say(`Speichern hat nicht geklappt: ${e?.message || e}`, true); }
-  }, [doc.id, final, onChanged, refresh, say]);
+    } catch (e: any) { setSaving("failed"); say(t("write.saveFailed", { error: e?.message || e }), true); }
+  }, [doc.id, final, onChanged, refresh, say, t]);
   const saveRef = useRef(save); saveRef.current = save;
   function touch() {
     if (final) return;
@@ -84,16 +90,16 @@ export function InvoiceEditor({ doc, onChanged, onBack, onOpen, say, extra }: {
     try {
       const out = await api.post<{ document: WrittenDoc }>(`/api/writing/${doc.id}/finalise`, { without_e_invoice: withoutE });
       setDialog(null); onChanged(out.document);
-      say(`${word} ${out.document.number} ist fertig.`);
+      say(t(`write.finishedToast_${kind}`, { number: out.document.number }));
     } catch (e: any) {
       const d = e?.body?.detail;
-      setProblem(typeof d === "object" && d ? { message: d.message || "Das hat nicht geklappt.", problems: d.problems || d.missing, canContinue: !!d.can_continue_without } : { message: e?.message || String(e) });
+      setProblem(typeof d === "object" && d ? { message: d.message || t("write.failedGeneric"), problems: d.problems || d.missing, canContinue: !!d.can_continue_without } : { message: e?.message || String(e) });
     } finally { setBusy(false); }
   }
 
   async function toInvoice() {
-    try { const d = await api.post<WrittenDoc>(`/api/writing/${doc.id}/to-invoice`, {}); say("Rechnung als Entwurf angelegt, mit den Positionen aus dem Angebot."); onOpen(d.id); }
-    catch (e: any) { say(`Umwandeln hat nicht geklappt: ${e?.message || e}`, true); }
+    try { const d = await api.post<WrittenDoc>(`/api/writing/${doc.id}/to-invoice`, {}); say(t("write.toInvoiceDone")); onOpen(d.id); }
+    catch (e: any) { say(t("write.toInvoiceFailed", { error: e?.message || e }), true); }
   }
 
   // the server's line totals are for the lines that were saved (empty ones are left out)
@@ -102,37 +108,37 @@ export function InvoiceEditor({ doc, onChanged, onBack, onOpen, say, extra }: {
   const e = state?.e_invoice;
   const input = "rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary disabled:opacity-70";
   const cell = "w-full bg-transparent px-2 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:bg-violet-50 disabled:text-zinc-700";
-  const leaveNote = "Erst fertigstellen: die Nummer wird dabei vergeben";
+  const leaveNote = t("write.leaveNote");
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       {/* room on the right: the notification bell floats over the top corner */}
       <header className="flex items-center gap-2 flex-wrap pl-4 pr-16 py-3 border-b border-border">
-        <button onClick={onBack} className="md:hidden p-1.5 rounded-md hover:bg-muted" aria-label="Zur Liste"><ArrowLeft className="w-5 h-5" /></button>
+        <button onClick={onBack} className="md:hidden p-1.5 rounded-md hover:bg-muted" aria-label={t("write.backToList")}><ArrowLeft className="w-5 h-5" /></button>
         <div className="min-w-0 mr-auto">
           <div className="font-semibold truncate flex items-center gap-2"><Receipt className="w-4 h-4 text-primary shrink-0" /> {word} {doc.number || ""} {subject && <span className="font-normal text-muted-foreground truncate">· {subject}</span>}</div>
           <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
-            {final ? <><Check className="w-3 h-3 text-emerald-500" /> Fertig seit {(doc.finalised_at || "").slice(0, 10).split("-").reverse().join(".")} · wird nicht mehr geändert</>
-              : saving === "saving" ? <><Loader2 className="w-3 h-3 animate-spin" /> speichert …</>
-              : saving === "dirty" ? "ungespeichert …" : saving === "failed" ? <span className="text-red-400">nicht gespeichert</span>
-              : <>Entwurf · gespeichert{state?.next_number ? ` · bekommt die Nummer ${state.next_number}` : ""}</>}
+            {final ? <><Check className="w-3 h-3 text-emerald-500" /> {t("write.finalSince", { date: doc.finalised_at ? formatDate(new Date(`${doc.finalised_at.slice(0, 10)}T00:00:00`), { day: "2-digit", month: "2-digit", year: "numeric" }) : "" })}</>
+              : saving === "saving" ? <><Loader2 className="w-3 h-3 animate-spin" /> {t("write.savingNow")}</>
+              : saving === "dirty" ? t("write.unsaved") : saving === "failed" ? <span className="text-red-400">{t("write.notSaved")}</span>
+              : state?.next_number ? t("write.draftSavedNumber", { number: state.next_number }) : t("write.draftSaved")}
             {final && !quote && (doc.content.e_invoice?.checked
-              ? <span className="rounded-full bg-emerald-500/15 text-emerald-300 px-2 py-0.5 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> E-Rechnung, geprüft</span>
-              : <span className="rounded-full bg-amber-500/15 text-amber-300 px-2 py-0.5">einfaches PDF, keine E-Rechnung</span>)}
+              ? <span className="rounded-full bg-emerald-500/15 text-emerald-300 px-2 py-0.5 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> {t("write.eInvoiceChecked")}</span>
+              : <span className="rounded-full bg-amber-500/15 text-amber-300 px-2 py-0.5">{t("write.plainPdf")}</span>)}
           </div>
         </div>
-        <button onClick={() => setShowPreview(v => !v)} className={cn("xl:hidden flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted", showPreview && "bg-muted")}><Eye className="w-4 h-4" /> Vorschau</button>
+        <button onClick={() => setShowPreview(v => !v)} className={cn("xl:hidden flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted", showPreview && "bg-muted")}><Eye className="w-4 h-4" /> {t("write.preview")}</button>
         <a href={`/api/writing/${doc.id}/pdf`} target="_blank" rel="noreferrer" onClick={() => { void flush(); }}
-           className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted"><FileDown className="w-4 h-4" /> {final ? "PDF" : "PDF-Entwurf"}</a>
+           className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted"><FileDown className="w-4 h-4" /> {final ? t("write.pdf") : t("write.pdfDraft")}</a>
         {final ? (
           <>
-            <button onClick={() => setDialog("file")} className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted"><FolderInput className="w-4 h-4" /> Ablegen</button>
-            <button onClick={() => setDialog("send")} className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium"><Send className="w-4 h-4" /> Senden</button>
-            {quote && <button onClick={toInvoice} className="flex items-center gap-1.5 rounded-lg border border-primary/50 text-primary px-3 py-1.5 text-sm hover:bg-primary/10"><Receipt className="w-4 h-4" /> In Rechnung umwandeln</button>}
+            <button onClick={() => setDialog("file")} className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted"><FolderInput className="w-4 h-4" /> {t("write.file")}</button>
+            <button onClick={() => setDialog("send")} className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium"><Send className="w-4 h-4" /> {t("write.send")}</button>
+            {quote && <button onClick={toInvoice} className="flex items-center gap-1.5 rounded-lg border border-primary/50 text-primary px-3 py-1.5 text-sm hover:bg-primary/10"><Receipt className="w-4 h-4" /> {t("write.toInvoice")}</button>}
           </>
         ) : (
-          <button onClick={async () => { await flush(); setProblem(null); setDialog("finalise"); }} disabled={missing.length > 0 || !state} title={missing.length ? `Fehlt noch: ${missing.join(", ")}` : leaveNote}
-                  className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium disabled:opacity-50"><Stamp className="w-4 h-4" /> Fertigstellen</button>
+          <button onClick={async () => { await flush(); setProblem(null); setDialog("finalise"); }} disabled={missing.length > 0 || !state} title={missing.length ? t("write.stillMissing", { list: missing.join(", ") }) : leaveNote}
+                  className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium disabled:opacity-50"><Stamp className="w-4 h-4" /> {t("write.finalise")}</button>
         )}
         {extra}
       </header>
@@ -142,80 +148,79 @@ export function InvoiceEditor({ doc, onChanged, onBack, onOpen, say, extra }: {
           <div className="mx-auto max-w-[760px] grid gap-4">
             {!final && missing.length > 0 && (
               <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-                <div className="font-medium text-amber-200 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Fehlt noch, bevor die {word} fertig werden kann</div>
+                <div className="font-medium text-amber-200 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> {t(`write.missingBefore_${kind}`)}</div>
                 <ul className="mt-1 list-disc pl-6 text-amber-100/90">{missing.map(m => <li key={m}>{m}</li>)}</ul>
               </div>
             )}
-            <RecipientFields docId={doc.id} value={to} disabled={final} label="Kunde" say={say} onChange={v => { setTo(v); touch(); }}
+            <RecipientFields docId={doc.id} value={to} disabled={final} label={t("write.customer")} say={say} onChange={v => { setTo(v); touch(); }}
                              onPicked={d => { setTo(recipientOf(d)); onChanged(d); void refresh(); }} />
 
             <section className="grid gap-2 sm:grid-cols-4">
-              <label className="grid gap-1 text-xs text-muted-foreground sm:col-span-2">Betreff
-                <input disabled={final} value={subject} onChange={ev => { setSubject(ev.target.value); touch(); }} placeholder="Worum geht es?" className={input} /></label>
-              <label className="grid gap-1 text-xs text-muted-foreground">Kundennummer
-                <input disabled={final} value={dates.customer_no} onChange={ev => { setDates(d => ({ ...d, customer_no: ev.target.value })); touch(); }} placeholder="optional" className={input} /></label>
+              <label className="grid gap-1 text-xs text-muted-foreground sm:col-span-2">{t("write.subject")}
+                <input disabled={final} value={subject} onChange={ev => { setSubject(ev.target.value); touch(); }} placeholder={t("write.subjectPlaceholder")} className={input} /></label>
+              <label className="grid gap-1 text-xs text-muted-foreground">{t("write.customerNo")}
+                <input disabled={final} value={dates.customer_no} onChange={ev => { setDates(d => ({ ...d, customer_no: ev.target.value })); touch(); }} placeholder={t("write.optional")} className={input} /></label>
               {quote ? (
-                <label className="grid gap-1 text-xs text-muted-foreground">Gültig bis
+                <label className="grid gap-1 text-xs text-muted-foreground">{t("write.validUntil")}
                   <input type="date" disabled={final} value={dates.valid_until} onChange={ev => { setDates(d => ({ ...d, valid_until: ev.target.value })); touch(); }} className={input} /></label>
               ) : <span />}
               {!quote && (
                 <>
-                  <label className="grid gap-1 text-xs text-muted-foreground sm:col-span-2">Leistung vom
+                  <label className="grid gap-1 text-xs text-muted-foreground sm:col-span-2">{t("write.serviceFrom")}
                     <input type="date" disabled={final} value={dates.service_from} onChange={ev => { setDates(d => ({ ...d, service_from: ev.target.value })); touch(); }}
                            className={cn(input, !final && !dates.service_from && !dates.service_to && "border-amber-500/50")} /></label>
-                  <label className="grid gap-1 text-xs text-muted-foreground sm:col-span-2">bis (leer = ein Tag)
+                  <label className="grid gap-1 text-xs text-muted-foreground sm:col-span-2">{t("write.serviceTo")}
                     <input type="date" disabled={final} value={dates.service_to} onChange={ev => { setDates(d => ({ ...d, service_to: ev.target.value })); touch(); }} className={input} /></label>
                 </>
               )}
             </section>
 
             <div className="rounded-xl bg-white shadow-lg ring-1 ring-black/10 p-4 md:p-6 text-zinc-900">
-              <textarea disabled={final} value={intro} onChange={ev => { setIntro(ev.target.value); touch(); }} rows={2} placeholder={quote ? "Einleitung, z. B. „gern bieten wir Ihnen an:“" : "Einleitung, z. B. „vielen Dank für Ihren Auftrag. Wir berechnen:“"}
+              <textarea disabled={final} value={intro} onChange={ev => { setIntro(ev.target.value); touch(); }} rows={2} placeholder={t(`write.introPlaceholder_${kind}`)}
                         className="w-full resize-y bg-transparent text-[15px] placeholder:text-zinc-400 outline-none mb-3" />
               <div className="overflow-x-auto -mx-1 px-1">
                 <table className="w-full min-w-[560px] border-collapse">
                   <thead><tr className="text-xs text-zinc-500 text-left">
-                    <th className="py-1.5 px-2 w-8">Pos.</th><th className="py-1.5 px-2">Beschreibung</th><th className="py-1.5 px-2 w-20 text-right">Menge</th>
-                    <th className="py-1.5 px-2 w-24">Einheit</th><th className="py-1.5 px-2 w-28 text-right">Einzelpreis €</th>
-                    {!state?.totals?.small_business && <th className="py-1.5 px-2 w-16 text-right">USt %</th>}<th className="py-1.5 px-2 w-28 text-right">Gesamt</th><th className="w-8" />
+                    <th className="py-1.5 px-2 w-8">{t("write.colPos")}</th><th className="py-1.5 px-2">{t("write.colDescription")}</th><th className="py-1.5 px-2 w-20 text-right">{t("write.colQty")}</th>
+                    <th className="py-1.5 px-2 w-24">{t("write.colUnit")}</th><th className="py-1.5 px-2 w-28 text-right">{t("write.colUnitPrice")}</th>
+                    {!state?.totals?.small_business && <th className="py-1.5 px-2 w-16 text-right">{t("write.colVat")}</th>}<th className="py-1.5 px-2 w-28 text-right">{t("write.colTotal")}</th><th className="w-8" />
                   </tr></thead>
                   <tbody>
                     {lines.map((l, i) => (
                       <tr key={i} className="border-t border-zinc-200 align-top">
                         <td className="py-2 px-2 text-sm text-zinc-500">{i + 1}</td>
-                        <td><textarea disabled={final} value={l.text} onChange={ev => setLine(i, { text: ev.target.value })} rows={Math.max(1, l.text.split("\n").length)} placeholder="Was wurde geleistet?" aria-label={`Position ${i + 1}, Beschreibung`} className={cn(cell, "resize-none")} /></td>
-                        <td><input disabled={final} value={l.qty} onChange={ev => setLine(i, { qty: ev.target.value })} inputMode="decimal" aria-label={`Position ${i + 1}, Menge`} className={cn(cell, "text-right tabular-nums")} /></td>
-                        <td><input disabled={final} value={l.unit} onChange={ev => setLine(i, { unit: ev.target.value })} list="w-units" placeholder="Std." aria-label={`Position ${i + 1}, Einheit`} className={cell} /></td>
-                        <td><input disabled={final} value={l.unit_price} onChange={ev => setLine(i, { unit_price: ev.target.value })} inputMode="decimal" placeholder="0,00" aria-label={`Position ${i + 1}, Einzelpreis`} className={cn(cell, "text-right tabular-nums")} /></td>
-                        {!state?.totals?.small_business && <td><input disabled={final} value={l.vat_percent || ""} onChange={ev => setLine(i, { vat_percent: ev.target.value })} inputMode="decimal" placeholder="19" aria-label={`Position ${i + 1}, Umsatzsteuer`} className={cn(cell, "text-right tabular-nums")} /></td>}
+                        <td><textarea disabled={final} value={l.text} onChange={ev => setLine(i, { text: ev.target.value })} rows={Math.max(1, l.text.split("\n").length)} placeholder={t("write.linePlaceholder")} aria-label={t("write.lineDescription", { n: i + 1 })} className={cn(cell, "resize-none")} /></td>
+                        <td><input disabled={final} value={l.qty} onChange={ev => setLine(i, { qty: ev.target.value })} inputMode="decimal" aria-label={t("write.lineQty", { n: i + 1 })} className={cn(cell, "text-right tabular-nums")} /></td>
+                        <td><input disabled={final} value={l.unit} onChange={ev => setLine(i, { unit: ev.target.value })} list="w-units" placeholder="Std." aria-label={t("write.lineUnit", { n: i + 1 })} className={cell} /></td>
+                        <td><input disabled={final} value={l.unit_price} onChange={ev => setLine(i, { unit_price: ev.target.value })} inputMode="decimal" placeholder={t("write.pricePlaceholder")} aria-label={t("write.lineUnitPrice", { n: i + 1 })} className={cn(cell, "text-right tabular-nums")} /></td>
+                        {!state?.totals?.small_business && <td><input disabled={final} value={l.vat_percent || ""} onChange={ev => setLine(i, { vat_percent: ev.target.value })} inputMode="decimal" placeholder="19" aria-label={t("write.lineVat", { n: i + 1 })} className={cn(cell, "text-right tabular-nums")} /></td>}
                         <td className="py-2 px-2 text-sm text-right tabular-nums whitespace-nowrap">{saving === "dirty" || saving === "saving" ? "…" : totalOf(i)}</td>
-                        <td>{!final && lines.length > 1 && <button onClick={() => { setLines(ls => ls.filter((_, j) => j !== i)); touch(); }} aria-label={`Position ${i + 1} entfernen`} className="p-1.5 text-zinc-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>}</td>
+                        <td>{!final && lines.length > 1 && <button onClick={() => { setLines(ls => ls.filter((_, j) => j !== i)); touch(); }} aria-label={t("write.lineRemove", { n: i + 1 })} className="p-1.5 text-zinc-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 <datalist id="w-units"><option value="Std." /><option value="Stk." /><option value="pauschal" /><option value="Tag" /><option value="km" /><option value="m²" /></datalist>
               </div>
-              {!final && <button onClick={() => { setLines(ls => [...ls, { ...EMPTY }]); }} className="mt-2 flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-violet-700 hover:bg-violet-50"><Plus className="w-4 h-4" /> Position</button>}
+              {!final && <button onClick={() => { setLines(ls => [...ls, { ...EMPTY }]); }} className="mt-2 flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-violet-700 hover:bg-violet-50"><Plus className="w-4 h-4" /> {t("write.addLine")}</button>}
               {state?.totals && (
                 <table className="ml-auto mt-3 text-sm tabular-nums">
                   <tbody>
-                    <tr><td className="pr-6 py-0.5 text-zinc-600">Nettobetrag</td><td className="text-right">{state.totals.net}</td></tr>
-                    {state.totals.vat_rows.map(v => <tr key={v.rate}><td className="pr-6 py-0.5 text-zinc-600">zzgl. {v.rate} % USt.</td><td className="text-right">{v.vat}</td></tr>)}
-                    <tr className="font-bold text-[15px]"><td className="pr-6 pt-1.5 border-t border-zinc-300">{quote ? "Angebotssumme" : "Rechnungsbetrag"}</td><td className="text-right pt-1.5 border-t border-zinc-300">{state.totals.gross}</td></tr>
+                    <tr><td className="pr-6 py-0.5 text-zinc-600">{t("write.net")}</td><td className="text-right">{state.totals.net}</td></tr>
+                    {state.totals.vat_rows.map(v => <tr key={v.rate}><td className="pr-6 py-0.5 text-zinc-600">{t("write.plusVat", { rate: v.rate })}</td><td className="text-right">{v.vat}</td></tr>)}
+                    <tr className="font-bold text-[15px]"><td className="pr-6 pt-1.5 border-t border-zinc-300">{t(`write.total_${kind}`)}</td><td className="text-right pt-1.5 border-t border-zinc-300">{state.totals.gross}</td></tr>
                   </tbody>
                 </table>
               )}
-              {state?.totals?.small_business && <p className="mt-2 text-xs text-zinc-500">Kleinunternehmer (§ 19 UStG): keine Umsatzsteuer. Einstellbar im Briefpapier.</p>}
-              <textarea disabled={final} value={closing} onChange={ev => { setClosing(ev.target.value); touch(); }} rows={2} placeholder="Schlusstext (optional). Der Zahlungssatz mit Fälligkeit kommt aus dem Briefpapier."
+              {state?.totals?.small_business && <p className="mt-2 text-xs text-zinc-500">{t("write.smallBusiness")}</p>}
+              <textarea disabled={final} value={closing} onChange={ev => { setClosing(ev.target.value); touch(); }} rows={2} placeholder={t("write.closingPlaceholder")}
                         className="w-full resize-y bg-transparent text-[15px] placeholder:text-zinc-400 outline-none mt-4" />
             </div>
 
             {!final && !quote && e?.wanted && (
               <p className={cn("text-xs flex items-start gap-2", e.available ? "text-muted-foreground" : "text-amber-300")}>
                 <ShieldCheck className="w-4 h-4 shrink-0 mt-px" />
-                {e.available ? "Wird beim Fertigstellen eine E-Rechnung (ZUGFeRD / Factur-X): das PDF trägt die Rechnungsdaten maschinenlesbar in sich und wird vorher geprüft."
-                  : "E-Rechnung ist hier noch nicht möglich: die Erweiterung „ZUGFeRD“ ist nicht installiert (Settings → Extensions → ZUGFeRD → Install). Ohne sie entsteht ein einfaches PDF; du wirst beim Fertigstellen gefragt."}
+                {e.available ? t("write.eInvoiceWill") : t("write.eInvoiceUnavailable")}
               </p>
             )}
           </div>
@@ -227,28 +232,28 @@ export function InvoiceEditor({ doc, onChanged, onBack, onOpen, say, extra }: {
 
       {dialog === "finalise" && (
         <div className="fixed inset-0 z-50 grid place-items-center p-4 bg-black/60" onClick={() => !busy && setDialog(null)}>
-          <div role="dialog" aria-modal="true" aria-label={`${word} fertigstellen`} onClick={ev => ev.stopPropagation()} className="w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl p-5 grid gap-3">
-            <h2 className="font-semibold flex items-center gap-2"><Stamp className="w-4 h-4 text-primary" /> {word} fertigstellen</h2>
+          <div role="dialog" aria-modal="true" aria-label={t(`write.finaliseTitle_${kind}`)} onClick={ev => ev.stopPropagation()} className="w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl p-5 grid gap-3">
+            <h2 className="font-semibold flex items-center gap-2"><Stamp className="w-4 h-4 text-primary" /> {t(`write.finaliseTitle_${kind}`)}</h2>
             {!problem ? (
-              <p className="text-sm text-muted-foreground">Die {word} bekommt die Nummer <b className="text-foreground">{state?.next_number || "…"}</b> und das heutige Datum, wird als PDF festgehalten und danach nicht mehr geändert.
-                {!quote && e?.wanted && e.available ? " Sie wird als geprüfte E-Rechnung erzeugt." : ""} Eine Nummer wird nur vergeben, wenn alles geklappt hat.</p>
+              <p className="text-sm text-muted-foreground"><Trans i18nKey={`write.finaliseBody_${kind}`} values={{ number: state?.next_number || "…" }} components={{ b: <b className="text-foreground" /> }} />
+                {!quote && e?.wanted && e.available ? ` ${t("write.finaliseEInvoice")}` : ""} {t("write.finaliseOnlyIfOk")}</p>
             ) : (
               <div className="text-sm grid gap-2">
                 <p className="text-amber-200">{problem.message}</p>
                 {problem.problems && problem.problems.length > 0 && <ul className="list-disc pl-5 text-xs text-muted-foreground">{problem.problems.map(p => <li key={p}>{p}</li>)}</ul>}
-                {problem.canContinue && <p className="text-xs text-muted-foreground">Du kannst sie als einfaches PDF fertigstellen. Für Geschäftskunden in Deutschland ist die E-Rechnung ab 2027/2028 Pflicht; Privatkunden brauchen sie nicht.</p>}
+                {problem.canContinue && <p className="text-xs text-muted-foreground">{t("write.canContinuePlain")}</p>}
               </div>
             )}
             <div className="flex justify-end gap-2 flex-wrap">
-              <button onClick={() => setDialog(null)} disabled={busy} className="rounded-lg px-3 py-1.5 text-sm hover:bg-muted">Abbrechen</button>
-              {problem?.canContinue && <button onClick={() => finalise(true)} disabled={busy} className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted flex items-center gap-1.5">{busy && <Loader2 className="w-4 h-4 animate-spin" />} Als einfaches PDF fertigstellen</button>}
-              {!problem && <button onClick={() => finalise(false)} disabled={busy} className="rounded-lg bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium disabled:opacity-50 flex items-center gap-1.5">{busy && <Loader2 className="w-4 h-4 animate-spin" />} Fertigstellen</button>}
+              <button onClick={() => setDialog(null)} disabled={busy} className="rounded-lg px-3 py-1.5 text-sm hover:bg-muted">{t("common.cancel")}</button>
+              {problem?.canContinue && <button onClick={() => finalise(true)} disabled={busy} className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted flex items-center gap-1.5">{busy && <Loader2 className="w-4 h-4 animate-spin" />} {t("write.finalisePlain")}</button>}
+              {!problem && <button onClick={() => finalise(false)} disabled={busy} className="rounded-lg bg-primary text-primary-foreground px-4 py-1.5 text-sm font-medium disabled:opacity-50 flex items-center gap-1.5">{busy && <Loader2 className="w-4 h-4 animate-spin" />} {t("write.finalise")}</button>}
             </div>
           </div>
         </div>
       )}
-      {dialog === "send" && <SendDialog doc={doc} to={to.email} subject={`${word} ${doc.number || ""}${subject ? ` · ${subject}` : ""}`} onClose={() => setDialog(null)} onDone={d => { setDialog(null); onChanged(d); say("Verschickt."); }} />}
-      {dialog === "file" && <FileDialog doc={doc} onClose={() => setDialog(null)} onDone={d => { setDialog(null); onChanged(d); say("In Paperless abgelegt."); }} />}
+      {dialog === "send" && <SendDialog doc={doc} to={to.email} subject={`${docWord} ${doc.number || ""}${subject ? ` · ${subject}` : ""}`} onClose={() => setDialog(null)} onDone={d => { setDialog(null); onChanged(d); say(t("write.sent")); }} />}
+      {dialog === "file" && <FileDialog doc={doc} onClose={() => setDialog(null)} onDone={d => { setDialog(null); onChanged(d); say(t("write.filedInPaperless")); }} />}
     </div>
   );
 }

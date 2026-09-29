@@ -1,0 +1,23 @@
+{
+  "emergency": {
+    "title": "Notfall-Zugriff",
+    "started": "Notfall-Zugriff ist an. Die anderen Erwachsenen wurden benachrichtigt.",
+    "startFailed": "Konnte den Notfall-Zugriff nicht einschalten",
+    "ended": "Notfall-Zugriff beendet.",
+    "endFailed": "Konnte nicht beenden",
+    "explain": "Yorik zeigt jedem nur das Eigene und das Geteilte, auch Admins. Für den Ernstfall (Krankenhaus, Unfall, Todesfall) kann ein Erwachsener für höchstens {{maxHours}} Stunden alles im Haushalt sehen: Kalender, Aufgaben, Kontakte, Dokumente, Rechnungen, Aufnahmen. Nicht Mails, WhatsApp und die Gespräche mit Yorik. Es braucht einen Grund und dein Passwort, alle anderen Erwachsenen erfahren es sofort, und es bleibt hier für alle sichtbar.",
+    "activeUntil": "Dein Notfall-Zugriff ist an, bis {{until}}",
+    "reason": "Grund: {{reason}}",
+    "endNow": "Jetzt beenden",
+    "reasonPlaceholder": "Warum? Die anderen lesen das.",
+    "duration": "Dauer",
+    "hours_one": "Stunde",
+    "hours_other": "Stunden",
+    "yourPassword": "Dein Passwort",
+    "turnOn": "Einschalten",
+    "turnOnEllipsis": "Notfall-Zugriff einschalten …",
+    "history": "Verlauf",
+    "range": "{{from}} bis {{to}}",
+    "running": "(läuft)"
+  }
+}

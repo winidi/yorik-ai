@@ -15,6 +15,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Loader2, Settings as SettingsIcon } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,7 @@ interface MeSession {
 export function AmbientApp() {
   const auth = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const [photos, setPhotos]   = useState<SlideshowPhoto[]>([]);
   const [configured, setConfigured] = useState<boolean | null>(null);
@@ -86,11 +88,11 @@ export function AmbientApp() {
   type WallMode = "photos" | BoardMode;
   const [mode, setMode] = useState<WallMode>("photos");
   const MODES: Array<{ id: WallMode; label: string; Icon: typeof Images }> = [
-    { id: "photos", label: "Fotos", Icon: Images },
-    { id: "board", label: "Tafel", Icon: LayoutGrid },
-    { id: "calendar", label: "Kalender", Icon: CalendarDays },
-    { id: "tasks", label: "Aufgaben", Icon: ListChecks },
-    { id: "timetable", label: "Stundenplan", Icon: GraduationCap },
+    { id: "photos", label: t("board.wall.photos"), Icon: Images },
+    { id: "board", label: t("board.wall.board"), Icon: LayoutGrid },
+    { id: "calendar", label: t("board.wall.calendar"), Icon: CalendarDays },
+    { id: "tasks", label: t("board.wall.tasks"), Icon: ListChecks },
+    { id: "timetable", label: t("board.wall.timetable"), Icon: GraduationCap },
   ];
   useEffect(() => {
     api.get<{ mode: WallMode }>("/api/ambient/mode").then(r => setMode(r.mode)).catch(() => {});
@@ -441,11 +443,9 @@ export function AmbientApp() {
   if (configured === false && mode === "photos") {
     return (
       <FullscreenMessage>
-        <div className="text-2xl font-light mb-2">Keine Fotos eingerichtet</div>
+        <div className="text-2xl font-light mb-2">{t("board.wall.noPhotos")}</div>
         <div className="text-white/70 mb-6 max-w-md text-center">
-          Einstellungen → Geräte → {kiosk.device_label || "dieses Gerät"}:
-          ein Immich-Album wählen oder „Fotos von heute“ einschalten.
-          Der Kalender läuft auch ohne.
+          {t("board.wall.noPhotosHint", { device: kiosk.device_label || t("board.wall.thisDevice") })}
         </div>
         {(auth.user?.role === "admin" || auth.user?.role === "platform_admin") && (
           <button
@@ -522,10 +522,10 @@ export function AmbientApp() {
                         mode === "photos"
                           ? "bg-black/55 hover:bg-black/70 text-white/90 border-white/15"
                           : "bg-white/90 hover:bg-white text-[#1f2430] border-[#e9e6df] shadow")}
-          title="Die Wand ist danach wieder nur die Wand"
+          title={t("board.wall.doneTitle")}
         >
           <LogOut className="w-4 h-4" />
-          Fertig{auth.user?.first_name ? `, ${auth.user.first_name}` : ""}
+          {auth.user?.first_name ? t("board.wall.doneName", { name: auth.user.first_name }) : t("board.wall.done")}
         </button>
       )}
       {recordingsOn && active && !recorderLive && (
@@ -538,7 +538,7 @@ export function AmbientApp() {
                           ? "bg-black/55 hover:bg-black/70 text-white/90 border-white/15"
                           : "bg-white/90 hover:bg-white text-[#1f2430] border-[#e9e6df] shadow")}
         >
-          <Mic className="w-4 h-4 text-red-500" /> Essen aufnehmen
+          <Mic className="w-4 h-4 text-red-500" /> {t("board.wall.recordDinner")}
         </button>
       )}
       {recordOpen && (

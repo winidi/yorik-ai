@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, ArrowRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 
@@ -17,6 +18,7 @@ export function EmailRecipientCheckCard({ typed, suggestions, subject }: {
   typed: string; suggestions: string[]; subject?: string;
 }) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [value, setValue] = useState(typed);
   const [busy, setBusy] = useState(false);
   const options = [typed, ...suggestions.filter(s => s !== typed)];
@@ -29,7 +31,7 @@ export function EmailRecipientCheckCard({ typed, suggestions, subject }: {
       await api.post("/api/email/pending-draft/confirm", { to });
       navigate("/email");
     } catch (e: any) {
-      toast(`Das ging nicht: ${e?.message || e}`, "error");
+      toast(t("chat.email.failed", { error: e?.message || e }), "error");
     } finally {
       setBusy(false);
     }
@@ -42,9 +44,9 @@ export function EmailRecipientCheckCard({ typed, suggestions, subject }: {
           <Mail className="w-5 h-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="font-semibold">Stimmt die Adresse?</div>
+          <div className="font-semibold">{t("chat.email.checkAddress")}</div>
           <div className="text-xs text-muted-foreground">
-            An diese Adresse hast du noch nie geschrieben{subject ? ` · „${subject}“` : ""}.
+            {subject ? t("chat.email.neverWrittenSubject", { subject }) : t("chat.email.neverWritten")}
           </div>
         </div>
       </div>
@@ -53,7 +55,7 @@ export function EmailRecipientCheckCard({ typed, suggestions, subject }: {
           <label key={o} className="flex items-center gap-2 text-sm cursor-pointer">
             <input type="radio" name={`rcpt-${typed}`} checked={value === o} onChange={() => setValue(o)} />
             <span className="truncate">{o}</span>
-            {o === typed && <span className="text-xs text-muted-foreground">(so geschrieben)</span>}
+            {o === typed && <span className="text-xs text-muted-foreground">{t("chat.email.asTyped")}</span>}
           </label>
         ))}
       </div>
@@ -61,12 +63,12 @@ export function EmailRecipientCheckCard({ typed, suggestions, subject }: {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-        aria-label="Empfänger-Adresse"
+        aria-label={t("chat.email.recipientAddress")}
       />
       <div className="mt-3 flex justify-end">
         <button onClick={go} disabled={busy || !value.trim()}
                 className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium disabled:opacity-50">
-          Diese Adresse nehmen und öffnen <ArrowRight className="w-4 h-4" />
+          {t("chat.email.useAndOpen")} <ArrowRight className="w-4 h-4" />
         </button>
       </div>
     </div>

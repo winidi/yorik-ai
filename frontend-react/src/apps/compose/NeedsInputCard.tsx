@@ -18,6 +18,7 @@ import {
   Loader2, Sparkles, FileText, Save, ClipboardPaste, ChevronDown,
   ChevronUp, RotateCcw,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 
@@ -82,6 +83,7 @@ interface Props {
 }
 
 export function NeedsInputCard({ action, onSubmit, toast }: Props) {
+  const { t } = useTranslation();
   const [values, setValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const f of action.fields) init[f.key] = f.value || "";
@@ -143,12 +145,12 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
         setPolishOpen(s => ({ ...s, [fieldKey]: false }));
         setPolishIntent(s => ({ ...s, [fieldKey]: "" }));
       } else {
-        setPolishError(s => ({ ...s, [fieldKey]: "Yorik konnte nichts polieren — bitte umformulieren." }));
+        setPolishError(s => ({ ...s, [fieldKey]: t("compose.polishNothing") }));
       }
     } catch (err: any) {
       const msg = err instanceof ApiError
-        ? (err.message || "Polish-Fehler")
-        : (err?.message || "Polish-Fehler");
+        ? (err.message || t("compose.polishError"))
+        : (err?.message || t("compose.polishError"));
       setPolishError(s => ({ ...s, [fieldKey]: msg }));
     } finally {
       setPolishBusy(s => ({ ...s, [fieldKey]: false }));
@@ -211,7 +213,7 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
       if (filledThisRun.length > 0) setExtractOpen(false);
     } catch (err: any) {
       const msg = err instanceof ApiError ? err.message : String(err);
-      setExtractError(`Konnte den Text nicht auswerten: ${msg}`);
+      setExtractError(t("compose.extractFailed", { error: msg }));
     } finally {
       setExtracting(false);
     }
@@ -249,7 +251,7 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
       } catch (err: any) {
         // Don't block resume — surface and continue. User can re-save
         // later via the contacts UI.
-        toast(`Konnte Adresse nicht speichern: ${err?.message || err}`, "error");
+        toast(t("compose.saveAddressFailed", { error: err?.message || err }), "error");
       }
     }
 
@@ -302,7 +304,7 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
     return (
       <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm">
         <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
-          <Save className="w-4 h-4" /> Data saved — Yorik is writing now.
+          <Save className="w-4 h-4" /> {t("compose.submitted")}
         </div>
       </div>
     );
@@ -353,8 +355,8 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
           className="w-full px-2.5 py-1.5 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition"
         >
           <ClipboardPaste className="w-3 h-3" />
-          <span className="font-medium">Fill from text</span>
-          <span className="text-muted-foreground/80">— paste an email or note, Yorik maps the fields</span>
+          <span className="font-medium">{t("compose.fillFromText")}</span>
+          <span className="text-muted-foreground/80">{t("compose.fillFromTextHint")}</span>
           <span className="ml-auto">
             {extractOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </span>
@@ -364,7 +366,7 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
             <textarea
               value={extractText}
               onChange={(e) => setExtractText(e.target.value)}
-              placeholder="e.g. an email or note with name, address, date, amount…"
+              placeholder={t("compose.extractPlaceholder")}
               rows={4}
               className="w-full text-xs bg-background border border-border rounded-md px-2 py-1.5 resize-y focus:outline-none focus:ring-1 focus:ring-ring/40"
             />
@@ -378,7 +380,7 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
                 {extracting
                   ? <Loader2 className="w-3 h-3 animate-spin" />
                   : <Sparkles className="w-3 h-3" />}
-                Fill fields
+                {t("compose.fillFields")}
               </button>
               {extractedOnce && (
                 <button
@@ -386,19 +388,19 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
                   onClick={() => runExtract(true)}
                   disabled={extracting || !extractText.trim()}
                   className="h-7 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 flex items-center gap-1"
-                  title="Also overwrite already-filled fields"
+                  title={t("compose.overwriteTitle")}
                 >
-                  <RotateCcw className="w-3 h-3" /> Overwrite
+                  <RotateCcw className="w-3 h-3" /> {t("compose.overwrite")}
                 </button>
               )}
               {lastFilledKeys.length > 0 && !extracting && (
                 <span className="text-2xs text-emerald-600 dark:text-emerald-400">
-                  {lastFilledKeys.length} field{lastFilledKeys.length === 1 ? "" : "s"} filled
+                  {t("compose.fieldsFilled", { count: lastFilledKeys.length })}
                 </span>
               )}
               {extractedOnce && lastFilledKeys.length === 0 && !extracting && (
                 <span className="text-2xs text-muted-foreground">
-                  Nichts Passendes gefunden.
+                  {t("compose.nothingFound")}
                 </span>
               )}
             </div>
@@ -452,10 +454,10 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
                     type="button"
                     onClick={() => setPolishOpen(s => ({ ...s, [f.key]: !panelOpen }))}
                     className="ml-auto inline-flex items-center gap-1 text-2xs text-violet-500 hover:text-violet-600 transition"
-                    title="Yorik formuliert für mich aus Stichworten"
+                    title={t("compose.polishTitle")}
                   >
                     <Sparkles className="w-3 h-3" />
-                    <span>{panelOpen ? "Schließen" : "Yorik formuliert für mich"}</span>
+                    <span>{panelOpen ? t("common.close") : t("compose.polishOpen")}</span>
                   </button>
                 )}
               </div>
@@ -465,13 +467,13 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
               {isIntent && panelOpen && (
                 <div className="rounded-md border border-violet-500/30 bg-violet-500/[0.04] p-2 space-y-2">
                   <div className="text-xs text-muted-foreground">
-                    Was möchtest du schreiben? Stichworte reichen — Yorik macht den Rest.
+                    {t("compose.polishPrompt")}
                   </div>
                   <textarea
                     value={intentText}
                     onChange={(e) => setPolishIntent(s => ({ ...s, [f.key]: e.target.value }))}
                     rows={3}
-                    placeholder="z.B. 'schöne grüße aus paris, wetter top, kommen sonntag zurück'"
+                    placeholder={t("compose.polishPlaceholder")}
                     className="w-full text-xs bg-background border border-border rounded-md px-2 py-1.5 resize-y focus:outline-none focus:ring-1 focus:ring-ring/40"
                   />
                   <div className="flex items-center gap-2">
@@ -484,11 +486,11 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
                       {busyP
                         ? <Loader2 className="w-3 h-3 animate-spin" />
                         : <Sparkles className="w-3 h-3" />}
-                      Yorik formuliert
+                      {t("compose.polishRun")}
                     </button>
                     {!intentText.trim() && (values[f.key] || "").trim() && (
                       <span className="text-2xs text-muted-foreground">
-                        (verwendet was du schon getippt hast)
+                        {t("compose.polishUsesTyped")}
                       </span>
                     )}
                   </div>
@@ -541,11 +543,11 @@ export function NeedsInputCard({ action, onSubmit, toast }: Props) {
           className="h-8 px-3 rounded-md bg-violet-500 text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
         >
           {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-          {action.save_to_contact && saveChecked ? "Save & continue" : "Submit"}
+          {action.save_to_contact && saveChecked ? t("compose.saveContinue") : t("compose.submit")}
         </button>
         {!allValid && (
           <span className="text-xs text-muted-foreground">
-            Required fields are missing or the format is invalid.
+            {t("compose.invalid")}
           </span>
         )}
       </div>

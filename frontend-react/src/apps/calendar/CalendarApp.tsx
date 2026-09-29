@@ -11,6 +11,9 @@
 
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n, { locale } from "@/i18n";
+import { formatWeekdayDate } from "@/i18n/format";
 import {
   ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon,
   Loader2, Check, Trash2, X, Clock, MapPin, Car,
@@ -67,6 +70,7 @@ const DAYS_SHORT = WEEK_STARTS_MONDAY
 type ViewMode = "month" | "week" | "day";
 
 export function CalendarApp() {
+  const { t } = useTranslation();
   const today = useMemo(() => new Date(), []);
   const [view, setView] = useState<ViewMode>(() => {
     const saved = localStorage.getItem("yorik_cal_view") as ViewMode | null;
@@ -527,7 +531,7 @@ export function CalendarApp() {
                 onClick={goToToday}
                 className="px-3 h-8 text-xs rounded-md hover:bg-muted text-foreground font-medium"
               >
-                Today
+                {t("common.today")}
               </button>
               <NavBtn icon={ChevronRight} onClick={nextMonth} title="Next" />
             </div>
@@ -601,7 +605,7 @@ export function CalendarApp() {
                 to open the drawer just to read event titles). */}
             <div className="md:hidden mt-4">
               <div className="text-xs text-muted-foreground font-semibold mb-2">
-                {selected.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}
+                {selected.toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" })}
               </div>
               <MobileDayEventList
                 events={eventsByDay.get(isoDate(selected)) || []}
@@ -853,7 +857,7 @@ function MiniCalendar({
     <div className="px-4 py-2">
       <div className="flex items-center justify-between mb-2">
         <div className="text-sm font-medium">
-          {anchor.toLocaleDateString([], { month: "short", year: "numeric" })}
+          {anchor.toLocaleDateString(locale(), { month: "short", year: "numeric" })}
         </div>
         <div className="flex items-center gap-0.5">
           <button
@@ -1188,8 +1192,8 @@ function DayPane({
   onEditTask: (t: Task) => void;
   onTaskToggle: (t: Task) => void;
 }) {
-  const dayLabel = date.toLocaleDateString([], { weekday: "long" });
-  const fullLabel = date.toLocaleDateString([], { day: "numeric", month: "long", year: "numeric" });
+  const dayLabel = date.toLocaleDateString(locale(), { weekday: "long" });
+  const fullLabel = date.toLocaleDateString(locale(), { day: "numeric", month: "long", year: "numeric" });
   const visualOf = useEventVisualFn();
 
   // Selected-day vs today comparison drives two extras only shown on
@@ -1652,7 +1656,7 @@ function EventDialog({
           <div>
             <h2 className="font-semibold text-base">{isNew ? "New event" : "Edit event"}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {date && new Date(date + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}
+              {date && new Date(date + "T12:00:00").toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" })}
             </p>
           </div>
           <button
@@ -2374,7 +2378,7 @@ function TaskDialog({
             <h2 className="font-semibold text-base">{isNew ? "New task" : "Edit task"}</h2>
             {hasDueDate && (
               <p className="text-xs text-muted-foreground mt-0.5">
-                Due {new Date(dueDate.slice(0, 10) + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}
+                Due {new Date(dueDate.slice(0, 10) + "T12:00:00").toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" })}
               </p>
             )}
           </div>
@@ -3081,7 +3085,7 @@ function TimeGridView({
                 "text-2xs font-medium",
                 isToday ? "text-primary" : "text-muted-foreground",
               )}>
-                {d.toLocaleDateString([], { weekday: "short" })}
+                {d.toLocaleDateString(locale(), { weekday: "short" })}
               </span>
               <span className={cn(
                 "text-lg tabular-nums font-medium mt-0.5 w-9 h-9 flex items-center justify-center rounded-full",
@@ -3589,22 +3593,20 @@ function minsToTime(mins: number): string {
 
 function viewTitle(view: ViewMode, anchor: Date, gridStart: Date): string {
   if (view === "month") {
-    return anchor.toLocaleDateString([], { month: "long", year: "numeric" });
+    return anchor.toLocaleDateString(locale(), { month: "long", year: "numeric" });
   }
   if (view === "week") {
     const end = addDays(gridStart, 6);
     const sameMonth = gridStart.getMonth() === end.getMonth();
-    const sameYear = gridStart.getFullYear() === end.getFullYear();
-    if (sameMonth) {
-      return `${gridStart.toLocaleDateString([], { month: "long", day: "numeric" })} – ${end.getDate()}, ${end.getFullYear()}`;
-    }
-    if (sameYear) {
-      return `${gridStart.toLocaleDateString([], { month: "short", day: "numeric" })} – ${end.toLocaleDateString([], { month: "short", day: "numeric" })}, ${end.getFullYear()}`;
-    }
-    return `${gridStart.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })} – ${end.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
+    // formatRange writes the range the way the language does it:
+    // "September 21 – 27, 2026" / "21.–27. September 2026".
+    const opts: Intl.DateTimeFormatOptions = sameMonth
+      ? { month: "long", day: "numeric", year: "numeric" }
+      : { month: "short", day: "numeric", year: "numeric" };
+    return new Intl.DateTimeFormat(locale(), opts).formatRange(gridStart, end);
   }
   // day
-  return anchor.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  return formatWeekdayDate(anchor);
 }
 
 function addDays(d: Date, n: number): Date {
@@ -3647,10 +3649,10 @@ function shortDay(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   const now = new Date();
-  if (sameDay(d, now)) return "Today";
+  if (sameDay(d, now)) return i18n.t("common.today");
   const y = new Date(now); y.setDate(y.getDate() - 1);
-  if (sameDay(d, y)) return "Yesterday";
-  return d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+  if (sameDay(d, y)) return i18n.t("common.yesterday");
+  return d.toLocaleDateString(locale(), { weekday: "short", day: "numeric", month: "short" });
 }
 // Pick visual colours for an event: category palette wins (LLM- or
 // user-assigned), per-event hex is the override, accent is the default.
@@ -3734,6 +3736,7 @@ function CalendarsSidebar({
   onRefresh: () => void;
   onSetHidden: (next: Set<number>) => void;
 }) {
+  const { t } = useTranslation();
   // Look up user names so the "People" section can show "Wife's
   // calendar" with the owner's real name in a chip.
   const usersApi = useApi<AssignableUser[]>("/api/users/assignable", []);
@@ -3846,9 +3849,9 @@ function CalendarsSidebar({
       <button
         onClick={() => setImportOpen(true)}
         className="w-full h-7 rounded-md text-xs font-medium border border-border bg-card text-muted-foreground hover:text-foreground transition flex items-center justify-center gap-1.5"
-        title="Import an .ics file or subscribe to a Google / iCloud / Outlook calendar"
+        title={t("calendar.importButtonTitle")}
       >
-        <Download className="w-3 h-3" /> Google &amp; Co. übernehmen
+        <Download className="w-3 h-3" /> {t("calendar.importButton")}
       </button>
 
       <MoveLegacyEventsButton onMoved={onRefresh} />
@@ -4075,7 +4078,7 @@ function FreebusyPreview({
   return (
     <div className="rounded-md border border-border bg-muted/30 p-2.5">
       <div className="text-2xs text-muted-foreground font-semibold mb-1.5 flex items-center justify-between">
-        <span>Free / busy on {new Date(date + "T12:00:00").toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })}</span>
+        <span>Free / busy on {new Date(date + "T12:00:00").toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "short" })}</span>
         {loading && <Loader2 className="w-3 h-3 animate-spin" />}
       </div>
       <div className="space-y-1">

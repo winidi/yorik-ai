@@ -1,0 +1,23 @@
+{
+  "emergency": {
+    "title": "Emergency access",
+    "started": "Emergency access is on. The other adults have been notified.",
+    "startFailed": "Couldn't turn on emergency access",
+    "ended": "Emergency access ended.",
+    "endFailed": "Couldn't end it",
+    "explain": "Yorik shows everyone only their own things and what's shared with them, admins included. For an emergency (hospital, accident, a death), an adult can see everything in the household for at most {{maxHours}} hours: calendar, tasks, contacts, documents, bills, recordings. Not emails, WhatsApp or the conversations with Yorik. It needs a reason and your password, all other adults are told right away, and it stays visible here for everyone.",
+    "activeUntil": "Your emergency access is on until {{until}}",
+    "reason": "Reason: {{reason}}",
+    "endNow": "End now",
+    "reasonPlaceholder": "Why? The others will read this.",
+    "duration": "Duration",
+    "hours_one": "hour",
+    "hours_other": "hours",
+    "yourPassword": "Your password",
+    "turnOn": "Turn on",
+    "turnOnEllipsis": "Turn on emergency access …",
+    "history": "History",
+    "range": "{{from}} to {{to}}",
+    "running": "(active)"
+  }
+}

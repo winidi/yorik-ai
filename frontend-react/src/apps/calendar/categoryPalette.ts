@@ -11,6 +11,8 @@
  * To re-skin: change only this file.
  */
 
+import i18n from "@/i18n";
+
 export type EventCategory =
   | "family"
   | "business"
@@ -20,8 +22,8 @@ export type EventCategory =
   | "social";
 
 export interface CategorySwatch {
-  /** Display label for picker chips */
-  label: string;
+  /** Display label for picker chips (in the person's language) */
+  readonly label: string;
   /** Stripe + text colour (Tailwind 500-ish) */
   accent: string;
   /** Background fill (CSS rgba string, kept subtle) */
@@ -29,12 +31,12 @@ export interface CategorySwatch {
 }
 
 export const CATEGORY_PALETTE: Record<EventCategory, CategorySwatch> = {
-  family:   { label: "Familie",  accent: "#10b981", fill: "rgba(16,185,129,0.12)" },  // emerald-500
-  business: { label: "Arbeit",   accent: "#64748b", fill: "rgba(100,116,139,0.12)" }, // slate-500
-  drive:    { label: "Anfahrt",  accent: "#f59e0b", fill: "rgba(245,158,11,0.16)" },  // amber-500 (slightly stronger so it pops as a transit-warning hue)
-  health:   { label: "Gesundheit", accent: "#f43f5e", fill: "rgba(244,63,94,0.12)" }, // rose-500
-  personal: { label: "Persönlich", accent: "#8b5cf6", fill: "rgba(139,92,246,0.12)" },// violet-500
-  social:   { label: "Sozial",   accent: "#0ea5e9", fill: "rgba(14,165,233,0.12)" },  // sky-500
+  family:   { get label() { return i18n.t("calendar.category.family"); },  accent: "#10b981", fill: "rgba(16,185,129,0.12)" },  // emerald-500
+  business: { get label() { return i18n.t("calendar.category.business"); },   accent: "#64748b", fill: "rgba(100,116,139,0.12)" }, // slate-500
+  drive:    { get label() { return i18n.t("calendar.category.drive"); },  accent: "#f59e0b", fill: "rgba(245,158,11,0.16)" },  // amber-500 (slightly stronger so it pops as a transit-warning hue)
+  health:   { get label() { return i18n.t("calendar.category.health"); }, accent: "#f43f5e", fill: "rgba(244,63,94,0.12)" }, // rose-500
+  personal: { get label() { return i18n.t("calendar.category.personal"); }, accent: "#8b5cf6", fill: "rgba(139,92,246,0.12)" },// violet-500
+  social:   { get label() { return i18n.t("calendar.category.social"); },   accent: "#0ea5e9", fill: "rgba(14,165,233,0.12)" },  // sky-500
 };
 
 /** Render order for category-picker UIs. */

@@ -5,10 +5,12 @@
  * allows none.
  */
 import { useLayoutEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 const SHEET_PX = 794 + 60;      // 210 mm at 96 dpi plus the preview's grey edge
 
 export function PagePreview({ html, note }: { html: string; note?: string }) {
+  const { t } = useTranslation();
   const boxRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
   useLayoutEffect(() => {
@@ -24,10 +26,10 @@ export function PagePreview({ html, note }: { html: string; note?: string }) {
   return (
     <>
       <div ref={boxRef} className="mx-auto max-w-[620px] rounded-lg overflow-hidden bg-[#d9d9de]" style={{ height: Math.round(1190 * scale) }}>
-        <iframe title="Vorschau" sandbox="" srcDoc={html} tabIndex={-1}
+        <iframe title={t("write.preview")} sandbox="" srcDoc={html} tabIndex={-1}
                 style={{ width: SHEET_PX, height: 1190, border: 0, transform: `scale(${scale})`, transformOrigin: "top left", pointerEvents: "none" }} />
       </div>
-      <p className="mt-2 text-center text-xs text-muted-foreground">{note || "So wird die erste Seite gedruckt. Das Aussehen kommt aus deinem Briefpapier."}</p>
+      <p className="mt-2 text-center text-xs text-muted-foreground">{note || t("write.previewNote")}</p>
     </>
   );
 }

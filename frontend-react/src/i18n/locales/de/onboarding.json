@@ -1,0 +1,23 @@
+{
+  "saveFailed": "Speichern fehlgeschlagen",
+  "region": {
+    "title": "Wo wohnst du?",
+    "subtitle": "Yorik passt Datum, Währung und Dokumentnummern an dein Land an.",
+    "country": "Land",
+    "language": "Sprache, in der Yorik antwortet",
+    "bonus": "Bonus:",
+    "bonusText": "Wenn du die Einrichtung als Firma abschließt, richtet Yorik automatisch eine rechtssichere Rechnungsnummerierung für dein Land ein — du kannst später alles ändern."
+  },
+  "stepOf": "Schritt {{step}} von {{total}}",
+  "skipForNow": "Erst mal überspringen",
+  "finish": "Einrichtung abschließen",
+  "continue": "Weiter",
+  "welcome": {
+    "title": "Hallo {{name}}, willkommen bei Yorik",
+    "body": "Eine Einrichtung von 2 Minuten, damit Yorik weiß, wer du bist. Wir passen Briefe, Rechnungen und Antworten im Chat an dich an — und alles, was du gerade nicht teilen möchtest, kannst du überspringen.",
+    "chipRegion": "Region & Sprache",
+    "chipAddress": "Deine Adresse",
+    "chipBusiness": "Privat oder Firma",
+    "letsGo": "Los geht's"
+  }
+}

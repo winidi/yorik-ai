@@ -24,6 +24,9 @@ import {
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { emitUiAction } from "@/lib/uiActions";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
+import { formatDate, formatTime } from "@/i18n/format";
 
 interface PendingAction {
   pending_id: string;
@@ -43,6 +46,7 @@ const UNDO_WINDOW_MS = 30_000;
 
 
 export function PendingActionChip({ action }: Props) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [undone, setUndone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -68,11 +72,11 @@ export function PendingActionChip({ action }: Props) {
       for (const a of r.ui_actions || []) emitUiAction(a);
       setUndone(true);
     } catch (e: any) {
-      setErr(e?.message || "Couldn't undo.");
+      setErr(e?.message || t("planning.chip.undoFailed"));
     } finally {
       setBusy(false);
     }
-  }, [busy, undone, expired, action.pending_id]);
+  }, [busy, undone, expired, action.pending_id, t]);
 
   const summary = summarizeSkill(action.skill, action.preview);
   const href = undone ? null : navTargetFor(action.skill, action.preview);
@@ -88,7 +92,7 @@ export function PendingActionChip({ action }: Props) {
       {undone ? (
         <>
           <Undo2 className="w-3 h-3" />
-          <span>{summary.undoneLabel} — undone</span>
+          <span>{t("planning.chip.undone", { what: summary.undoneLabel })}</span>
         </>
       ) : (
         <>
@@ -97,7 +101,7 @@ export function PendingActionChip({ action }: Props) {
             <a
               href={href}
               className="font-medium hover:underline"
-              title="Open"
+              title={t("planning.chip.open")}
             >
               {summary.doneLabel}
             </a>
@@ -117,13 +121,13 @@ export function PendingActionChip({ action }: Props) {
               busy && "opacity-60 cursor-wait",
             )}
             title={expired
-              ? "Undo window expired — delete the row manually if needed"
-              : "Undo (rolls the action back)"}
+              ? t("planning.chip.undoExpiredHint")
+              : t("planning.chip.undoHint")}
           >
             {busy
               ? <Loader2 className="w-2.5 h-2.5 animate-spin" />
               : <Undo2 className="w-2.5 h-2.5" />}
-            {expired ? "saved" : "Undo"}
+            {expired ? t("planning.chip.saved") : t("planning.chip.undo")}
           </button>
         </>
       )}
@@ -147,38 +151,42 @@ interface Summary { doneLabel: string; undoneLabel: string }
 
 function summarizeSkill(skill: string, preview: any): Summary {
   const p = preview || {};
+  const t = (key: string, opts?: Record<string, unknown>) => i18n.t(`planning.chip.${key}`, opts);
+  const cut = (title: string) => ({ title: truncate(title, 36) });
   switch (skill) {
     case "add_calendar_event":
       return mk(
-        `Event added: ${truncate(p.title || "(no title)", 36)}`
+        t("eventAdded", cut(p.title || t("noTitle")))
           + (p.starts_at ? ` · ${fmtWhen(p.starts_at)}` : ""),
-        "Event",
+        t("nounEvent"),
       );
     case "update_calendar_event":
-      return mk(`Event updated: ${truncate(p.title || p.event?.title || "Event", 36)}`, "Update");
+      return mk(t("eventUpdated", cut(p.title || p.event?.title || t("nounEvent"))), t("nounUpdate"));
     case "delete_calendar_event":
-      return mk(`Event deleted: ${truncate(p.event?.title || "Event", 36)}`, "Deletion");
+      return mk(t("eventDeleted", cut(p.event?.title || t("nounEvent"))), t("nounDeletion"));
     case "add_task":
-      return mk(`Task added: ${truncate(p.title || "Task", 36)}`, "Task");
+      return mk(t("taskAdded", cut(p.title || t("nounTask"))), t("nounTask"));
     case "update_task":
-      return mk(`Task updated: ${truncate(p.title || "Task", 36)}`, "Update");
+      return mk(t("taskUpdated", cut(p.title || t("nounTask"))), t("nounUpdate"));
     case "delete_task":
-      return mk(`Task deleted: ${truncate(p.title || "Task", 36)}`, "Deletion");
+      return mk(t("taskDeleted", cut(p.title || t("nounTask"))), t("nounDeletion"));
     case "add_contact":
-      return mk(`Contact added: ${truncate(p.display_name || "Contact", 36)}`, "Contact");
+      return mk(t("contactAdded", cut(p.display_name || t("nounContact"))), t("nounContact"));
     case "update_contact":
-      return mk(`Contact updated: ${truncate(p.display_name || "Contact", 36)}`, "Update");
+      return mk(t("contactUpdated", cut(p.display_name || t("nounContact"))), t("nounUpdate"));
     case "delete_contact":
-      return mk(`Contact deleted: ${truncate(p.display_name || "Contact", 36)}`, "Deletion");
+      return mk(t("contactDeleted", cut(p.display_name || t("nounContact"))), t("nounDeletion"));
     case "block_travel_time": {
       const isReturn = p.direction === "return";
-      const noun = isReturn ? "Return trip" : "Travel";
-      return mk(`${noun} blocked (${p.minutes || "?"} min)`, `${noun} block`);
+      const minutes = p.minutes || "?";
+      return isReturn
+        ? mk(t("returnBlocked", { minutes }), t("nounReturnBlock"))
+        : mk(t("travelBlocked", { minutes }), t("nounTravelBlock"));
     }
     case "add_bill":
-      return mk(`Bill added: ${truncate(p.title || "Bill", 36)}`, "Bill");
+      return mk(t("billAdded", cut(p.title || t("nounBill"))), t("nounBill"));
     default:
-      return mk(`${skill} done`, skill);
+      return mk(t("skillDone", { skill }), skill);
   }
 }
 
@@ -265,8 +273,8 @@ function fmtWhen(iso: string): string {
   const sameDay = d.toDateString() === now.toDateString();
   const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
   const sameTomorrow = d.toDateString() === tomorrow.toDateString();
-  const hhmm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  if (sameDay)      return `heute ${hhmm}`;
-  if (sameTomorrow) return `morgen ${hhmm}`;
-  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}. ${hhmm}`;
+  const time = formatTime(d);
+  if (sameDay)      return i18n.t("planning.chip.whenToday", { time });
+  if (sameTomorrow) return i18n.t("planning.chip.whenTomorrow", { time });
+  return i18n.t("planning.chip.whenDate", { date: formatDate(d, { day: "2-digit", month: "2-digit" }), time });
 }

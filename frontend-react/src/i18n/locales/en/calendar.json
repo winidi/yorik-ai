@@ -1,0 +1,62 @@
+{
+  "category": {
+    "family": "Family",
+    "business": "Work",
+    "drive": "Travel",
+    "health": "Health",
+    "personal": "Personal",
+    "social": "Social"
+  },
+  "import": {
+    "source": {
+      "other": {
+        "label": "Other",
+        "step1": "In your calendar, look for “Subscribe”, “Share” or “iCal address” and copy the address"
+      },
+      "google": {
+        "open": "Open Google Calendar settings",
+        "step1": "On the left under “Settings for my calendars”, tap your calendar",
+        "step2": "Scroll down to “Integrate calendar” → copy the secret address in iCal format"
+      },
+      "icloud": {
+        "step1": "iPhone: Calendar app → “Calendars” at the bottom → tap ⓘ next to the calendar",
+        "step2": "Turn on “Public Calendar” → “Share Link” → Copy"
+      },
+      "outlook": {
+        "open": "Open Outlook shared calendars",
+        "step1": "Under “Publish a calendar”, pick your calendar and “Can view all details” → Publish",
+        "step2": "Copy the ICS link"
+      }
+    },
+    "subscribedDone_one": "Subscribed: {{count}} event brought over. The calendar follows its source every 15 minutes.",
+    "subscribedDone_other": "Subscribed: {{count}} events brought over. The calendar follows its source every 15 minutes.",
+    "failed": "That didn't work.",
+    "syncFailed": "Sync failed.",
+    "confirmUnsubscribe": "End the subscription? The mirrored calendar and its events disappear from Yorik; nothing changes at the source.",
+    "importedDone": "Imported: {{added}} new, {{updated}} updated, {{unchanged}} unchanged.",
+    "importFailed": "Import failed.",
+    "calendarFallback": "Calendar",
+    "title": "Bring over a calendar (Google, iCloud, Outlook …)",
+    "tabSubscribe": "Subscribe (stays up to date)",
+    "tabFile": "Import a file (one time)",
+    "subscribeIntro": "Yorik mirrors the calendar and syncs it every 15 minutes. It is read-only here: you keep adding events in Google, and they then show up in Yorik, on the family board and in search. Nothing goes from Yorik to Google.",
+    "pasteHere": "Paste it here. The address is secret; Yorik stores it encrypted.",
+    "namePlaceholder": "Name in Yorik",
+    "subscribe": "Subscribe",
+    "subscribed": "Subscribed",
+    "eventCount_one": "{{count}} event",
+    "eventCount_other": "{{count}} events",
+    "syncNow": "Sync now",
+    "unsubscribe": "End subscription",
+    "fileIntro": "For moving over: the events land in one of your calendars and belong to you afterwards (edit, move, delete). Importing the same file again doesn't create duplicates. In Google: Settings → “Import & export” → Export; the ZIP file contains one .ics per calendar.",
+    "chooseFile": "Choose .ics file …",
+    "intoCalendar": "into “{{name}}”",
+    "ofWhichSeries_one": ", {{count}} of them a series",
+    "ofWhichSeries_other": ", {{count}} of them series",
+    "range": "{{from}} to {{to}}",
+    "preview": "Preview",
+    "import": "Import"
+  },
+  "importButton": "Bring over Google & co.",
+  "importButtonTitle": "Import an .ics file or subscribe to a Google / iCloud / Outlook calendar"
+}

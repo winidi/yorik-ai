@@ -22,6 +22,8 @@
  */
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { locale } from "@/i18n";
 import {
   Loader2, Sparkles, MapPin, Building2, ArrowRight, ArrowLeft,
   CheckCircle2, X, Globe, User as UserIcon, ChevronRight,
@@ -74,6 +76,7 @@ const NUMBERING_PRESETS: Record<string, "de" | "us" | "pl"> = {
 };
 
 export function OnboardingWizard({ user, isTenant, onComplete, onSkip }: Props) {
+  const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -128,7 +131,7 @@ export function OnboardingWizard({ user, isTenant, onComplete, onSkip }: Props) 
         onSkip();
       }
     } catch (e: any) {
-      setErr(e.message || "Save failed");
+      setErr(e.message || t("onboarding.saveFailed"));
       throw e;
     } finally {
       setBusy(false);
@@ -163,7 +166,7 @@ export function OnboardingWizard({ user, isTenant, onComplete, onSkip }: Props) 
       await api.post("/api/onboarding/complete");
       onComplete();
     } catch (e: any) {
-      setErr(e.message || "Save failed");
+      setErr(e.message || t("onboarding.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -196,8 +199,8 @@ export function OnboardingWizard({ user, isTenant, onComplete, onSkip }: Props) 
     },
     {
       key: "region",
-      title: "Where are you based?",
-      subtitle: "Yorik adapts dates, currency and document numbering to your country.",
+      title: t("onboarding.region.title"),
+      subtitle: t("onboarding.region.subtitle"),
       render: () => <RegionStep profile={profile} patch={patch} />,
     },
     // Address, business details, storage and backups used to follow
@@ -217,7 +220,7 @@ export function OnboardingWizard({ user, isTenant, onComplete, onSkip }: Props) 
         {!isFirst && (
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Step {step} of {steps.length - 1}</span>
+              <span>{t("onboarding.stepOf", { step, total: steps.length - 1 })}</span>
               <div className="w-32 h-1 rounded-full bg-muted overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all"
@@ -230,7 +233,7 @@ export function OnboardingWizard({ user, isTenant, onComplete, onSkip }: Props) 
               disabled={busy}
               className="text-xs text-muted-foreground hover:text-foreground transition disabled:opacity-50"
             >
-              Skip for now
+              {t("onboarding.skipForNow")}
             </button>
           </div>
         )}
@@ -259,7 +262,7 @@ export function OnboardingWizard({ user, isTenant, onComplete, onSkip }: Props) 
                   disabled={busy || step === 1}
                   className="px-3 py-1.5 text-xs rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition disabled:opacity-50 inline-flex items-center gap-1"
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" /> Back
+                  <ArrowLeft className="w-3.5 h-3.5" /> {t("common.back")}
                 </button>
                 {isLast ? (
                   <button
@@ -272,7 +275,7 @@ export function OnboardingWizard({ user, isTenant, onComplete, onSkip }: Props) 
                     )}
                   >
                     {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                    Finish setup
+                    {t("onboarding.finish")}
                   </button>
                 ) : (
                   <button
@@ -283,7 +286,7 @@ export function OnboardingWizard({ user, isTenant, onComplete, onSkip }: Props) 
                       "bg-gradient-to-r from-violet-500 to-blue-500 hover:from-violet-600 hover:to-blue-600 text-white shadow-sm",
                     )}
                   >
-                    Continue <ArrowRight className="w-3.5 h-3.5" />
+                    {t("onboarding.continue")} <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
@@ -306,34 +309,33 @@ export function OnboardingWizard({ user, isTenant, onComplete, onSkip }: Props) 
 
 function WelcomeStep({ user, onNext, onSkip }:
   { user: YorikUser; onNext: () => void; onSkip: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="text-center py-6">
       <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-violet-500/30 to-blue-500/30 flex items-center justify-center mb-4 shadow-lg">
         <Sparkles className="w-7 h-7 text-violet-500" />
       </div>
-      <div className="text-2xl font-semibold">Hi {user.name.split(" ")[0]}, welcome to Yorik</div>
+      <div className="text-2xl font-semibold">{t("onboarding.welcome.title", { name: user.name.split(" ")[0] })}</div>
       <div className="text-sm text-muted-foreground mt-2 max-w-md mx-auto leading-relaxed">
-        A 2-minute setup so Yorik knows who you are. We'll personalize letters,
-        invoices, and chat replies — and you can skip anything you don't want
-        to share right now.
+        {t("onboarding.welcome.body")}
       </div>
       <div className="grid grid-cols-3 gap-3 max-w-md mx-auto mt-7 text-left">
-        <FeatureChip icon={Globe}     label="Region & language" />
-        <FeatureChip icon={MapPin}    label="Your address" />
-        <FeatureChip icon={Building2} label="Personal or business" />
+        <FeatureChip icon={Globe}     label={t("onboarding.welcome.chipRegion")} />
+        <FeatureChip icon={MapPin}    label={t("onboarding.welcome.chipAddress")} />
+        <FeatureChip icon={Building2} label={t("onboarding.welcome.chipBusiness")} />
       </div>
       <div className="flex items-center justify-center gap-3 mt-7">
         <button
           onClick={onSkip}
           className="text-xs text-muted-foreground hover:text-foreground transition"
         >
-          Skip for now
+          {t("onboarding.skipForNow")}
         </button>
         <button
           onClick={onNext}
           className="px-5 py-2 rounded-md font-medium text-sm inline-flex items-center gap-2 bg-gradient-to-r from-violet-500 to-blue-500 hover:from-violet-600 hover:to-blue-600 text-white shadow-md transition"
         >
-          Let's go <ArrowRight className="w-3.5 h-3.5" />
+          {t("onboarding.welcome.letsGo")} <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
     </div>
@@ -351,9 +353,10 @@ function FeatureChip({ icon: Icon, label }: { icon: React.ComponentType<{ classN
 
 function RegionStep({ profile, patch }:
   { profile: Profile; patch: <K extends keyof Profile>(k: K, v: Profile[K]) => void }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-4">
-      <Field label="Country">
+      <Field label={t("onboarding.region.country")}>
         <div className="grid grid-cols-3 gap-2">
           {COUNTRIES.map(c => (
             <button
@@ -370,12 +373,12 @@ function RegionStep({ profile, patch }:
               )}
             >
               <div className="text-lg">{c.flag}</div>
-              <div className="text-xs font-medium mt-0.5">{c.label}</div>
+              <div className="text-xs font-medium mt-0.5">{countryName(c.code, c.label)}</div>
             </button>
           ))}
         </div>
       </Field>
-      <Field label="Language Yorik replies in">
+      <Field label={t("onboarding.region.language")}>
         <select
           value={profile.language}
           onChange={e => patch("language", e.target.value)}
@@ -391,9 +394,7 @@ function RegionStep({ profile, patch }:
       </Field>
       {NUMBERING_PRESETS[profile.country] && (
         <div className="text-xs text-muted-foreground bg-emerald-500/5 border border-emerald-500/20 rounded-md px-3 py-2 leading-relaxed">
-          <strong className="text-emerald-600">Bonus:</strong> if you finish setup as a business,
-          Yorik will set up legally-compliant invoice numbering for your country
-          automatically — you can change everything later.
+          <strong className="text-emerald-600">{t("onboarding.region.bonus")}</strong> {t("onboarding.region.bonusText")}
         </div>
       )}
     </div>
@@ -554,6 +555,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────
+
+/** Country name in the person's language ("Germany" / "Deutschland"). */
+function countryName(code: string, fallback: string): string {
+  try {
+    return new Intl.DisplayNames([locale()], { type: "region" }).of(code) || fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 function guessCountryFromBrowser(): string {
   if (typeof navigator === "undefined") return "DE";

@@ -1,0 +1,23 @@
+{
+  "saveFailed": "Save failed",
+  "region": {
+    "title": "Where are you based?",
+    "subtitle": "Yorik adapts dates, currency and document numbering to your country.",
+    "country": "Country",
+    "language": "Language Yorik replies in",
+    "bonus": "Bonus:",
+    "bonusText": "if you finish setup as a business, Yorik will set up legally-compliant invoice numbering for your country automatically — you can change everything later."
+  },
+  "stepOf": "Step {{step}} of {{total}}",
+  "skipForNow": "Skip for now",
+  "finish": "Finish setup",
+  "continue": "Continue",
+  "welcome": {
+    "title": "Hi {{name}}, welcome to Yorik",
+    "body": "A 2-minute setup so Yorik knows who you are. We'll personalize letters, invoices, and chat replies — and you can skip anything you don't want to share right now.",
+    "chipRegion": "Region & language",
+    "chipAddress": "Your address",
+    "chipBusiness": "Personal or business",
+    "letsGo": "Let's go"
+  }
+}

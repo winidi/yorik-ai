@@ -17,6 +17,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { X, Loader2, Save, ChevronLeft, ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import * as pdfjsLib from "pdfjs-dist";
 // @ts-ignore -- no bundled types for the ?url import form
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -50,6 +51,7 @@ export function PdfFormEditModal({ filename, contentB64, onSave, onClose }: {
   onSave: (newContentB64: string, newSize: number) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +87,7 @@ export function PdfFormEditModal({ filename, contentB64, onSave, onClose }: {
         setLoading(false);
       } catch (exc) {
         if (!cancelled) {
-          setError(exc instanceof Error ? exc.message : "Konnte PDF nicht laden.");
+          setError(exc instanceof Error ? exc.message : t("compose.pdfLoadFailed"));
           setLoading(false);
         }
       }
@@ -196,7 +198,7 @@ export function PdfFormEditModal({ filename, contentB64, onSave, onClose }: {
       const newBytes = await out.save();
       onSave(bytesToB64(newBytes), newBytes.length);
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Speichern fehlgeschlagen.");
+      setError(exc instanceof Error ? exc.message : t("compose.pdfSaveFailed"));
       setSaving(false);
     }
   }
@@ -254,7 +256,7 @@ export function PdfFormEditModal({ filename, contentB64, onSave, onClose }: {
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="text-xs text-muted-foreground">Seite {page} / {numPages || "…"}</span>
+            <span className="text-xs text-muted-foreground">{t("compose.page", { page, total: numPages || "…" })}</span>
             <button
               disabled={page >= numPages}
               onClick={() => setPage(p => Math.min(numPages, p + 1))}
@@ -269,7 +271,7 @@ export function PdfFormEditModal({ filename, contentB64, onSave, onClose }: {
             className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium disabled:opacity-50"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Speichern
+            {t("common.save")}
           </button>
         </div>
       </div>

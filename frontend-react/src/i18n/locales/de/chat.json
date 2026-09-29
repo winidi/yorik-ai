@@ -1,0 +1,116 @@
+{
+  "attachment": {
+    "who": {
+      "private": "nur für dich sichtbar",
+      "parents": "für die Eltern sichtbar",
+      "shared": "für die ganze Familie sichtbar",
+      "business": "für die Firma sichtbar"
+    },
+    "fileAs": {
+      "private": "nur mich",
+      "privateHint": "Nur du siehst das Dokument unter Dokumente.",
+      "parents": "die Eltern",
+      "parentsHint": "Die Erwachsenen im Haushalt, nicht die Konten der Kinder.",
+      "shared": "die Familie",
+      "sharedHint": "Alle im Haushalt, auch die Konten der Kinder."
+    },
+    "fileFailed": "Die Datei konnte nicht abgelegt werden.",
+    "confirmDelete": "Diesen Anhang löschen? Er ist nicht unter Dokumente abgelegt.",
+    "gone": "Anhang #{{id}} ist nicht mehr da (gelöscht oder abgelaufen).",
+    "filed": "In Dokumente abgelegt",
+    "openDocuments": "Dokumente öffnen",
+    "onlyHere": "Nur in diesem Gespräch · wird am {{date}} gelöscht",
+    "fileVisibleFor": "In Dokumente ablegen, sichtbar für",
+    "deleteNow": "Anhang jetzt löschen"
+  },
+  "email": {
+    "failed": "Das ging nicht: {{error}}",
+    "checkAddress": "Stimmt die Adresse?",
+    "neverWritten": "An diese Adresse hast du noch nie geschrieben.",
+    "neverWrittenSubject": "An diese Adresse hast du noch nie geschrieben · „{{subject}}“.",
+    "asTyped": "(so geschrieben)",
+    "recipientAddress": "Empfänger-Adresse",
+    "useAndOpen": "Diese Adresse nehmen und öffnen",
+    "noSubject": "(kein Betreff)",
+    "to": "an {{to}}",
+    "openAndSend": "Öffnen und senden"
+  },
+  "draftKind": {
+    "letter": "Brief",
+    "invoice": "Rechnung",
+    "offer": "Angebot",
+    "email": "E-Mail",
+    "memo": "Notiz",
+    "document": "Dokument"
+  },
+  "voice": {
+    "tooShort": "Zu kurz — bitte noch mal aufnehmen.",
+    "emptyTranscript": "Leeres Transkript — bitte noch mal aufnehmen.",
+    "transcriptionFailed": "Transkription fehlgeschlagen.",
+    "noMicrophone": "Kein Zugriff aufs Mikrofon."
+  },
+  "upload": {
+    "uploading": "{{name}} wird hochgeladen…",
+    "failed": "Upload fehlgeschlagen: {{error}}"
+  },
+  "pipeline": {
+    "followUp": "Nachfassen: {{title}}",
+    "mail": "Mail",
+    "hint": "Yorik schreibt die Erinnerungen. Jede wird dir vor dem Senden gezeigt.",
+    "review": "Ansehen und freigeben"
+  },
+  "status": {
+    "askAgent": "Fragt Hermes… (kann eine Minute dauern)",
+    "planMyDay": "Sammelt Termine, Aufgaben und Briefing…",
+    "planDay": "Trägt den Plan ein…",
+    "dayReview": "Schaut auf den Tag zurück…",
+    "startRecording": "Startet die Aufnahme…",
+    "finishRecording": "Beendet die Aufnahme…",
+    "recordingStatus": "Liest das Transkript…",
+    "recordingReport": "Holt den Bericht… (beim ersten Mal bis zu einer Minute)"
+  },
+  "web": {
+    "getDetails": "Details holen"
+  },
+  "venue": {
+    "saved": "{{name}} gespeichert"
+  },
+  "price": {
+    "people_one": "{{count}} Person",
+    "people_other": "{{count}} Personen",
+    "total": "Gesamt"
+  },
+  "draft": {
+    "prepared": "{{kind}} vorbereitet",
+    "toLabel": "An:",
+    "subjectLabel": "Betreff:",
+    "edit": "Bearbeiten"
+  },
+  "quotedQuery": "(„{{query}}\")",
+  "template": {
+    "which": "Welche Vorlage?",
+    "findOther": "Andere Vorlage suchen…"
+  },
+  "poi": {
+    "noneAddOwn": "Keiner davon — eigenen Kontakt eintragen"
+  },
+  "contact": {
+    "doYouMean": "Meinst du",
+    "which": "Welcher Kontakt?",
+    "llmConfidence": "LLM-Konfidenz",
+    "noneBrowse": "Keiner davon — aus Kontaktliste wählen",
+    "pick": "Kontakt wählen",
+    "searchPlaceholder": "Name, Beziehung oder Alias…",
+    "clearSearch": "Suche leeren",
+    "noMatches": "Keine Treffer für „{{query}}\"",
+    "none": "Keine Kontakte",
+    "business": "Unternehmen",
+    "person": "Person",
+    "filterPlaceholder": "Filter (Name oder Beziehung)…"
+  },
+  "tasks": {
+    "markOpen": "Als offen markieren",
+    "markDone": "Als erledigt markieren",
+    "header": "Aufgaben ({{total}})"
+  }
+}

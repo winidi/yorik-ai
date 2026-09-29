@@ -12,11 +12,13 @@
  */
 import { useNavigate } from "react-router-dom";
 import { Mail, ArrowRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export function EmailDraftReadyCard({ to, subject, preview, attachmentFilename }: {
   to: string; subject: string; preview?: string; attachmentFilename?: string;
 }) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   return (
     <div className="mt-2 max-w-xl rounded-xl border border-border bg-card p-4">
       <div className="flex items-start gap-3">
@@ -24,8 +26,8 @@ export function EmailDraftReadyCard({ to, subject, preview, attachmentFilename }
           <Mail className="w-5 h-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="font-semibold truncate">{subject || "(kein Betreff)"}</div>
-          <div className="text-xs text-muted-foreground truncate">an {to}</div>
+          <div className="font-semibold truncate">{subject || t("chat.email.noSubject")}</div>
+          <div className="text-xs text-muted-foreground truncate">{t("chat.email.to", { to })}</div>
           {preview && <p className="mt-2 text-sm text-muted-foreground line-clamp-3">{preview}</p>}
           {attachmentFilename && (
             <div className="mt-2 text-xs text-muted-foreground truncate">📎 {attachmentFilename}</div>
@@ -37,7 +39,7 @@ export function EmailDraftReadyCard({ to, subject, preview, attachmentFilename }
           onClick={() => navigate("/email")}
           className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium"
         >
-          Öffnen und senden <ArrowRight className="w-4 h-4" />
+          {t("chat.email.openAndSend")} <ArrowRight className="w-4 h-4" />
         </button>
       </div>
     </div>

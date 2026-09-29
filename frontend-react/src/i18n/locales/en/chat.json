@@ -1,0 +1,116 @@
+{
+  "attachment": {
+    "who": {
+      "private": "visible only to you",
+      "parents": "visible to the parents",
+      "shared": "visible to the whole family",
+      "business": "visible to the business"
+    },
+    "fileAs": {
+      "private": "just me",
+      "privateHint": "Only you see the document under Documents.",
+      "parents": "the parents",
+      "parentsHint": "The adults in the household, not the children's accounts.",
+      "shared": "the family",
+      "sharedHint": "Everyone in the household, including the children's accounts."
+    },
+    "fileFailed": "The file couldn't be filed.",
+    "confirmDelete": "Delete this attachment? It isn't filed under Documents.",
+    "gone": "Attachment #{{id}} is no longer here (deleted or expired).",
+    "filed": "Filed in Documents",
+    "openDocuments": "Open Documents",
+    "onlyHere": "Only in this conversation · will be deleted on {{date}}",
+    "fileVisibleFor": "File in Documents, visible to",
+    "deleteNow": "Delete attachment now"
+  },
+  "email": {
+    "failed": "That didn't work: {{error}}",
+    "checkAddress": "Is the address right?",
+    "neverWritten": "You've never written to this address.",
+    "neverWrittenSubject": "You've never written to this address · “{{subject}}”.",
+    "asTyped": "(as typed)",
+    "recipientAddress": "Recipient address",
+    "useAndOpen": "Use this address and open",
+    "noSubject": "(no subject)",
+    "to": "to {{to}}",
+    "openAndSend": "Open and send"
+  },
+  "draftKind": {
+    "letter": "Letter",
+    "invoice": "Invoice",
+    "offer": "Quote",
+    "email": "Email",
+    "memo": "Note",
+    "document": "Document"
+  },
+  "voice": {
+    "tooShort": "Too short — please record again.",
+    "emptyTranscript": "Empty transcript — please record again.",
+    "transcriptionFailed": "Transcription failed.",
+    "noMicrophone": "No access to the microphone."
+  },
+  "upload": {
+    "uploading": "Uploading {{name}}…",
+    "failed": "Upload failed: {{error}}"
+  },
+  "pipeline": {
+    "followUp": "Follow up: {{title}}",
+    "mail": "Mail",
+    "hint": "Yorik writes the reminders. You'll see each one before it's sent.",
+    "review": "Review and approve"
+  },
+  "status": {
+    "askAgent": "Asking Hermes… (may take a minute)",
+    "planMyDay": "Gathering appointments, tasks and briefing…",
+    "planDay": "Adding the plan…",
+    "dayReview": "Looking back on the day…",
+    "startRecording": "Starting the recording…",
+    "finishRecording": "Ending the recording…",
+    "recordingStatus": "Reading the transcript…",
+    "recordingReport": "Fetching the report… (up to a minute the first time)"
+  },
+  "web": {
+    "getDetails": "Get details"
+  },
+  "venue": {
+    "saved": "{{name}} saved"
+  },
+  "price": {
+    "people_one": "{{count}} person",
+    "people_other": "{{count}} people",
+    "total": "Total"
+  },
+  "draft": {
+    "prepared": "{{kind}} ready",
+    "toLabel": "To:",
+    "subjectLabel": "Subject:",
+    "edit": "Edit"
+  },
+  "quotedQuery": "(“{{query}}”)",
+  "template": {
+    "which": "Which template?",
+    "findOther": "Find another template…"
+  },
+  "poi": {
+    "noneAddOwn": "None of these — add my own contact"
+  },
+  "contact": {
+    "doYouMean": "Do you mean",
+    "which": "Which contact?",
+    "llmConfidence": "LLM confidence",
+    "noneBrowse": "None of these — choose from the contact list",
+    "pick": "Choose contact",
+    "searchPlaceholder": "Name, relationship or alias…",
+    "clearSearch": "Clear search",
+    "noMatches": "No matches for “{{query}}”",
+    "none": "No contacts",
+    "business": "Business",
+    "person": "Person",
+    "filterPlaceholder": "Filter (name or relationship)…"
+  },
+  "tasks": {
+    "markOpen": "Mark as open",
+    "markDone": "Mark as done",
+    "header": "Tasks ({{total}})"
+  }
+}

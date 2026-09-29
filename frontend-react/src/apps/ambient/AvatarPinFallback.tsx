@@ -20,6 +20,7 @@
  */
 import { useState, useEffect } from "react";
 import { Loader2, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { PinPad } from "@/components/PinPad";
@@ -55,6 +56,7 @@ interface Props {
 }
 
 export function AvatarPinFallback({ users, transcript, retryMessage, onClose, onSwitched, onSignInWithPassword, preselectId, loadError }: Props) {
+  const { t } = useTranslation();
   const [picked, setPicked]   = useState<PickableUser | null>(null);
   useEffect(() => {
     if (!picked && preselectId) {
@@ -140,13 +142,9 @@ export function AvatarPinFallback({ users, transcript, retryMessage, onClose, on
             {users.length === 0 && (
               <div className="col-span-full text-sm text-white/60 text-center max-w-md mx-auto">
                 {loadError
-                  ? <>Diese Wand darf die Namen gerade nicht laden — sie ist
-                      noch kein Kiosk-Gerät. Einstellungen → Geräte → dieses
-                      Gerät → Kiosk einschalten.
+                  ? <>{t("board.pin.notKiosk")}
                       <div className="mt-2 text-xs text-white/40">{loadError}</div></>
-                  : <>Niemand im Haushalt hat bisher eine Kiosk-PIN gesetzt.
-                      Einstellungen → Profil auf einem beliebigen Gerät, PIN
-                      setzen, dann noch einmal tippen.</>}
+                  : <>{t("board.pin.noPins")}</>}
               </div>
             )}
             {users.map(u => (

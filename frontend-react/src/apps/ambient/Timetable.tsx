@@ -14,7 +14,9 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, Minus, Pencil, Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
+import { formatDate } from "@/i18n/format";
 import { PersonAvatar } from "@/components/PersonAvatar";
 import { cn } from "@/lib/utils";
 import type { DialogTokens } from "./BoardDialogs";
@@ -24,7 +26,8 @@ interface Cell { subject: string; room: string }
 interface Plan { periods: Period[]; cells: Record<string, Cell> }
 interface Child { id: string; name: string; first_name: string; color: string; avatar_url: string | null; timetable: Plan; filled: boolean }
 
-const DAYS = ["Mo", "Di", "Mi", "Do", "Fr"];
+/** Monday to Friday, short, in the person's language ("Mon" / "Mo") */
+const schoolDays = () => [0, 1, 2, 3, 4].map(i => formatDate(new Date(2024, 0, 1 + i), { weekday: "short" }).replace(/\.$/, ""));
 const DISPLAY = '"Nunito", "Segoe UI", system-ui, sans-serif';
 const TINTS = ["#e0486b", "#e8833a", "#d4a514", "#2f9e64", "#1c9aa0", "#3b82c4", "#6b5fd3", "#b455c0", "#8a6d4f", "#5d7285"];
 const MAX_PERIODS = 12;
@@ -45,6 +48,8 @@ export function Timetable({ tokens, dim, narrow, today, now, currentUserId, isPa
   /** tells the board who has a timetable, for its legend */
   onFilled: (ids: string[]) => void;
 }) {
+  const { t: tr } = useTranslation();
+  const DAYS = schoolDays();
   const [children, setChildren] = useState<Child[] | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<Plan | null>(null);
@@ -86,7 +91,7 @@ export function Timetable({ tokens, dim, narrow, today, now, currentUserId, isPa
   if (!children) return <div className="grid place-items-center min-h-[12rem]"><Loader2 className="w-7 h-7 animate-spin" style={{ color: tokens.muted }} /></div>;
   if (children.length === 0) return (
     <div className="rounded-[24px] border border-dashed p-6 text-[14px] self-start" style={{ borderColor: tokens.line, color: tokens.muted }}>
-      Noch kein Stundenplan: er ist für die Kinder, die auf der Familientafel stehen (Settings → Profile → „Show me on the household wall“).
+      {tr("board.timetable.noneYet")}
     </div>
   );
 
@@ -100,7 +105,7 @@ export function Timetable({ tokens, dim, narrow, today, now, currentUserId, isPa
     <div className={cn("grid gap-3 min-w-0", narrow ? "" : "min-h-0")} style={{ gridTemplateColumns: "minmax(0, 1fr)", gridTemplateRows: narrow ? undefined : "minmax(0, 1fr) auto" }}>
     {shown.length === 0 && (
       <div className="rounded-[24px] border border-dashed p-6 text-[14px] self-start" style={{ borderColor: tokens.line, color: tokens.muted }}>
-        Noch kein Stundenplan eingetragen.{toStart.length ? " Unten legst du einen an." : " Eltern oder das Schulkind selbst legen ihn nach dem Anmelden an."}
+        {tr("board.timetable.empty")}{" "}{toStart.length ? tr("board.timetable.startBelow") : tr("board.timetable.whoStarts")}
       </div>
     )}
     {shown.length > 0 && (
@@ -118,15 +123,15 @@ export function Timetable({ tokens, dim, narrow, today, now, currentUserId, isPa
               <div className="text-[24px] leading-none font-extrabold truncate mr-auto" style={{ fontFamily: DISPLAY }}>{c.first_name || c.name}</div>
               {edit ? (
                 <>
-                  {failed && <span className="text-[13px] font-bold" style={{ color: "#e0486b" }}>Nicht gespeichert</span>}
-                  <button onClick={() => { setEditing(null); setDraft(null); }} className="rounded-full px-4 py-2 text-[14px] font-bold" style={field}>Abbrechen</button>
+                  {failed && <span className="text-[13px] font-bold" style={{ color: "#e0486b" }}>{tr("board.timetable.notSaved")}</span>}
+                  <button onClick={() => { setEditing(null); setDraft(null); }} className="rounded-full px-4 py-2 text-[14px] font-bold" style={field}>{tr("common.cancel")}</button>
                   <button onClick={() => save(c)} disabled={saving} className="rounded-full px-4 py-2 text-[14px] font-bold text-white flex items-center gap-1.5" style={{ background: c.color }}>
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" strokeWidth={3} />} Speichern
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" strokeWidth={3} />} {tr("common.save")}
                   </button>
                 </>
               ) : mayEdit && !editing && (
                 <button onClick={() => startEdit(c)} className="rounded-full px-4 py-2 text-[14px] font-bold flex items-center gap-1.5" style={{ ...field, color: tokens.muted }}>
-                  <Pencil className="w-3.5 h-3.5" /> {c.filled ? "Bearbeiten" : "Ausfüllen"}
+                  <Pencil className="w-3.5 h-3.5" /> {c.filled ? tr("board.timetable.edit") : tr("board.timetable.fillIn")}
                 </button>
               )}
             </div>
@@ -141,11 +146,11 @@ export function Timetable({ tokens, dim, narrow, today, now, currentUserId, isPa
                   const running = !edit && weekday < 5 && !!p.start && !!p.end && clock >= p.start && clock < p.end;
                   return [
                     <div key={`t${row}`} className="flex flex-col justify-center text-[11.5px] leading-tight tabular-nums" style={{ color: tokens.muted }}>
-                      <b className="text-[15px]" style={{ color: running ? c.color : tokens.ink, fontFamily: DISPLAY }}>{row + 1}.</b>
+                      <b className="text-[15px]" style={{ color: running ? c.color : tokens.ink, fontFamily: DISPLAY }}>{tr("board.timetable.periodNo", { n: row + 1 })}</b>
                       {edit ? (
                         <>
-                          <input type="time" value={p.start} onChange={e => setPeriod(row, { start: e.target.value })} aria-label={`${row + 1}. Stunde Beginn`} className="rounded-md px-1 py-0.5 text-[12px] outline-none select-text" style={field} />
-                          <input type="time" value={p.end} onChange={e => setPeriod(row, { end: e.target.value })} aria-label={`${row + 1}. Stunde Ende`} className="mt-0.5 rounded-md px-1 py-0.5 text-[12px] outline-none select-text" style={field} />
+                          <input type="time" value={p.start} onChange={e => setPeriod(row, { start: e.target.value })} aria-label={tr("board.timetable.periodStart", { n: row + 1 })} className="rounded-md px-1 py-0.5 text-[12px] outline-none select-text" style={field} />
+                          <input type="time" value={p.end} onChange={e => setPeriod(row, { end: e.target.value })} aria-label={tr("board.timetable.periodEnd", { n: row + 1 })} className="mt-0.5 rounded-md px-1 py-0.5 text-[12px] outline-none select-text" style={field} />
                         </>
                       ) : <>{p.start && <span>{p.start}</span>}{p.end && <span>{p.end}</span>}</>}
                     </div>,
@@ -155,10 +160,10 @@ export function Timetable({ tokens, dim, narrow, today, now, currentUserId, isPa
                       if (edit) return (
                         <div key={key} className="grid gap-0.5">
                           <input value={cell?.subject || ""} onChange={e => setCell(key, { subject: e.target.value })} list={`fb-subjects-${c.id}`} maxLength={40}
-                                 placeholder="Fach" aria-label={`${DAYS[day]}, ${row + 1}. Stunde, Fach`} className="min-w-0 rounded-lg px-2 py-1.5 text-[14px] font-bold outline-none select-text"
+                                 placeholder={tr("board.timetable.subject")} aria-label={tr("board.timetable.cellSubject", { day: DAYS[day], n: row + 1 })} className="min-w-0 rounded-lg px-2 py-1.5 text-[14px] font-bold outline-none select-text"
                                  style={{ ...field, boxShadow: `inset 0 0 0 1px ${cell?.subject ? tint(cell.subject) : tokens.line}` }} />
                           <input value={cell?.room || ""} onChange={e => setCell(key, { room: e.target.value })} maxLength={20}
-                                 placeholder="Raum" aria-label={`${DAYS[day]}, ${row + 1}. Stunde, Raum`} className="min-w-0 rounded-lg px-2 py-1 text-[12px] outline-none select-text" style={field} />
+                                 placeholder={tr("board.timetable.room")} aria-label={tr("board.timetable.cellRoom", { day: DAYS[day], n: row + 1 })} className="min-w-0 rounded-lg px-2 py-1 text-[12px] outline-none select-text" style={field} />
                         </div>
                       );
                       const col = cell?.subject ? tint(cell.subject) : tokens.line;
@@ -178,9 +183,9 @@ export function Timetable({ tokens, dim, narrow, today, now, currentUserId, isPa
               {edit && (
                 <div className="mt-3 flex gap-2 flex-wrap text-[13px]">
                   <button onClick={() => setDraft(d => d && d.periods.length < MAX_PERIODS ? { ...d, periods: [...d.periods, { start: "", end: "" }] } : d)} disabled={plan.periods.length >= MAX_PERIODS}
-                          className="rounded-full px-3 py-1.5 font-bold flex items-center gap-1 disabled:opacity-40" style={{ ...field, color: tokens.muted }}><Plus className="w-3.5 h-3.5" /> Stunde</button>
+                          className="rounded-full px-3 py-1.5 font-bold flex items-center gap-1 disabled:opacity-40" style={{ ...field, color: tokens.muted }}><Plus className="w-3.5 h-3.5" /> {tr("board.timetable.addPeriod")}</button>
                   <button onClick={() => setDraft(d => { if (!d || d.periods.length <= 1) return d; const last = d.periods.length - 1; return { periods: d.periods.slice(0, last), cells: Object.fromEntries(Object.entries(d.cells).filter(([k]) => Number(k.split("-")[1]) < last)) }; })}
-                          disabled={plan.periods.length <= 1} className="rounded-full px-3 py-1.5 font-bold flex items-center gap-1 disabled:opacity-40" style={{ ...field, color: tokens.muted }}><Minus className="w-3.5 h-3.5" /> letzte Stunde</button>
+                          disabled={plan.periods.length <= 1} className="rounded-full px-3 py-1.5 font-bold flex items-center gap-1 disabled:opacity-40" style={{ ...field, color: tokens.muted }}><Minus className="w-3.5 h-3.5" /> {tr("board.timetable.lastPeriod")}</button>
                   <datalist id={`fb-subjects-${c.id}`}>{subjects.map(s => <option key={s} value={s} />)}</datalist>
                 </div>
               )}
@@ -194,7 +199,7 @@ export function Timetable({ tokens, dim, narrow, today, now, currentUserId, isPa
       <div className="flex gap-2 flex-wrap">
         {toStart.map(c => (
           <button key={c.id} onClick={() => startEdit(c)} className="rounded-full pl-1 pr-4 py-1 text-[14px] flex items-center gap-2" style={{ color: tokens.muted, boxShadow: `inset 0 0 0 1px ${tokens.line}` }}>
-            <PersonAvatar name={c.name} color={c.color} avatarUrl={c.avatar_url} size={26} /><Plus className="w-4 h-4" /> Stundenplan für {c.first_name || c.name} anlegen
+            <PersonAvatar name={c.name} color={c.color} avatarUrl={c.avatar_url} size={26} /><Plus className="w-4 h-4" /> {tr("board.timetable.startFor", { name: c.first_name || c.name })}
           </button>
         ))}
       </div>

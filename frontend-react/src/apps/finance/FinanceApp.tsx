@@ -8,6 +8,9 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { Landmark, Plus, RefreshCw, Trash2, X, Loader2, Search, Check, Pencil } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
+import { formatDate, formatDateTime, formatMoney } from "@/i18n/format";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -59,22 +62,36 @@ const ALL_CATEGORIES = [
   "Verträge & Abos", "Auto", "Freizeit", "Gesundheit", "Einkommen", "Sonstiges",
 ];
 
+// The stored category values above stay German (they come from the
+// backend); only their display goes through the catalogue.
+const CATEGORY_KEYS: Record<string, string> = {
+  "Lebensmittel": "groceries", "Wohnen": "housing", "Versicherung": "insurance",
+  "Telekommunikation": "telecom", "Verträge & Abos": "contracts", "Auto": "car",
+  "Freizeit": "leisure", "Gesundheit": "health", "Einkommen": "income",
+  "Sonstiges": "other", "unkategorisiert": "uncategorised",
+};
+
+function catLabel(cat: string): string {
+  const key = CATEGORY_KEYS[cat];
+  return key ? i18n.t(`finance.categories.${key}`) : cat;
+}
+
 type Tab = "uebersicht" | "konten" | "umsaetze" | "vertraege";
 
-function eur(n: number): string {
-  return n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+function money(n: number, currency = "EUR"): string {
+  return formatMoney(n, currency);
 }
 
 function fmtDate(iso: string): string {
-  return new Date(iso + "T00:00:00").toLocaleDateString("de-DE", { day: "numeric", month: "short" });
+  return formatDate(iso + "T00:00:00", { day: "numeric", month: "short" });
 }
 
 function dateHeading(iso: string): string {
-  const d = new Date(iso + "T00:00:00");
-  return d.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" });
+  return formatDate(iso + "T00:00:00", { weekday: "short", day: "numeric", month: "short" });
 }
 
 export function FinanceApp() {
+  const { t } = useTranslation();
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [recurring, setRecurring] = useState<Recurring[]>([]);
@@ -170,6 +187,8 @@ export function FinanceApp() {
     else txByDay.push([t.booking_date, [t]]);
   }
 
+  // Totals are shown in the account currency (EUR when nothing is known).
+  const currency = transactions[0]?.currency || "EUR";
   const hasAccounts = accounts.length > 0;
   const showSidebar = hasAccounts && (tab === "uebersicht" || tab === "umsaetze");
 
@@ -179,13 +198,13 @@ export function FinanceApp() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2.5">
           <Landmark className="w-5 h-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">Finance</h1>
+          <h1 className="text-lg font-semibold">{t("finance.title")}</h1>
         </div>
         <button
           onClick={() => setShowForm(true)}
           className="flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium"
         >
-          <Plus className="w-4 h-4" /> Konto verbinden
+          <Plus className="w-4 h-4" /> {t("finance.connectAccount")}
         </button>
       </div>
 
@@ -200,8 +219,8 @@ export function FinanceApp() {
         <>
           <div className="flex border-b border-border mb-6">
             {([
-              ["uebersicht", "Übersicht"], ["konten", "Konten"],
-              ["umsaetze", "Umsätze"], ["vertraege", "Verträge"],
+              ["uebersicht", t("finance.tabs.overview")], ["konten", t("finance.tabs.accounts")],
+              ["umsaetze", t("finance.tabs.transactions")], ["vertraege", t("finance.tabs.contracts")],
             ] as const).map(([id, label]) => (
               <button
                 key={id}
@@ -229,7 +248,7 @@ export function FinanceApp() {
                     : "border-border text-muted-foreground hover:text-foreground",
                 )}
               >
-                Alle Konten
+                {t("finance.allAccounts")}
               </button>
               {accounts.map(a => (
                 <button
@@ -252,7 +271,7 @@ export function FinanceApp() {
 
       {!hasAccounts && !loading && (
         <p className="text-sm text-muted-foreground pt-8">
-          Noch kein Konto verbunden. Nur lesend — Yorik kann nichts überweisen.
+          {t("finance.noAccount")}
         </p>
       )}
 
@@ -264,12 +283,12 @@ export function FinanceApp() {
                 <div className="flex items-end justify-between mb-1">
                   <div className="flex flex-col sm:flex-row sm:items-baseline gap-4 sm:gap-10">
                     <div>
-                      <div className="text-[13px] text-muted-foreground mb-1">Einnahmen</div>
-                      <div className="text-4xl font-semibold tabular-nums text-emerald-600">{eur(totalIn)}</div>
+                      <div className="text-[13px] text-muted-foreground mb-1">{t("finance.income")}</div>
+                      <div className="text-4xl font-semibold tabular-nums text-emerald-600">{money(totalIn, currency)}</div>
                     </div>
                     <div>
-                      <div className="text-[13px] text-muted-foreground mb-1">Ausgaben</div>
-                      <div className="text-4xl font-semibold tabular-nums text-rose-500">{eur(totalOut)}</div>
+                      <div className="text-[13px] text-muted-foreground mb-1">{t("finance.spending")}</div>
+                      <div className="text-4xl font-semibold tabular-nums text-rose-500">{money(totalOut, currency)}</div>
                     </div>
                   </div>
                   <PeriodSelect days={days} onChange={setDays} />
@@ -278,6 +297,7 @@ export function FinanceApp() {
 
               <QuickStats
                 byCategory={byCategory}
+                currency={currency}
                 focusCategories={focusCategories}
                 editing={editingFocus}
                 onEdit={() => setEditingFocus(true)}
@@ -302,10 +322,10 @@ export function FinanceApp() {
             <>
               <section className="mb-9">
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-[13px] font-medium text-muted-foreground">Nach Kategorie</h2>
+                  <h2 className="text-[13px] font-medium text-muted-foreground">{t("finance.byCategory")}</h2>
                   <PeriodSelect days={days} onChange={setDays} />
                 </div>
-                {categoryRows.length === 0 && <p className="text-sm text-muted-foreground">Noch keine Umsätze.</p>}
+                {categoryRows.length === 0 && <p className="text-sm text-muted-foreground">{t("finance.noTransactions")}</p>}
                 <div className="space-y-1">
                   {categoryRows.map(([cat, total]) => (
                     <button
@@ -315,11 +335,11 @@ export function FinanceApp() {
                         "block w-full text-left rounded-md px-2 -mx-2 py-1.5 transition-colors",
                         filterCategory === cat ? "bg-muted" : "hover:bg-muted/50",
                       )}
-                      title="Klicken, um die zugehörigen Umsätze zu sehen"
+                      title={t("finance.clickToSee")}
                     >
                       <div className="flex items-baseline justify-between text-sm mb-1">
-                        <span className={cn(cat === "unkategorisiert" && "text-muted-foreground italic")}>{cat}</span>
-                        <span className="tabular-nums">{eur(total)}</span>
+                        <span className={cn(cat === "unkategorisiert" && "text-muted-foreground italic")}>{catLabel(cat)}</span>
+                        <span className="tabular-nums">{money(total, currency)}</span>
                       </div>
                       <div className="h-1 rounded-full bg-muted overflow-hidden">
                         <div
@@ -334,18 +354,18 @@ export function FinanceApp() {
 
               <section>
                 <div className="flex items-center gap-2 mb-3">
-                  <h2 className="text-[13px] font-medium text-muted-foreground">Umsätze</h2>
+                  <h2 className="text-[13px] font-medium text-muted-foreground">{t("finance.tabs.transactions")}</h2>
                   {filterCategory && (
                     <button
                       onClick={() => setFilterCategory(null)}
                       className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground hover:bg-muted/70"
                     >
-                      {filterCategory} <X className="w-3 h-3" />
+                      {catLabel(filterCategory)} <X className="w-3 h-3" />
                     </button>
                   )}
                 </div>
                 {filteredTransactions.length === 0 && (
-                  <p className="text-sm text-muted-foreground">Keine Umsätze in dieser Kategorie im gewählten Zeitraum.</p>
+                  <p className="text-sm text-muted-foreground">{t("finance.noTransactionsInCategory")}</p>
                 )}
                 {txByDay.map(([day, txs]) => (
                   <div key={day} className="mb-4">
@@ -355,10 +375,10 @@ export function FinanceApp() {
                         <div key={t.id} className="flex items-center justify-between text-sm py-1.5">
                           <div className="min-w-0 flex-1">
                             <div className="truncate">{t.counterparty || t.purpose || "—"}</div>
-                            {t.category && <div className="text-xs text-muted-foreground truncate">{t.category}</div>}
+                            {t.category && <div className="text-xs text-muted-foreground truncate">{catLabel(t.category)}</div>}
                           </div>
                           <span className={cn("tabular-nums shrink-0 ml-3", t.amount < 0 ? "text-rose-500" : "text-emerald-600")}>
-                            {eur(t.amount)}
+                            {money(t.amount, t.currency || currency)}
                           </span>
                         </div>
                       ))}
@@ -371,10 +391,9 @@ export function FinanceApp() {
 
           {tab === "vertraege" && (
             <section className="pt-2">
-              <h2 className="text-[13px] font-medium text-muted-foreground mb-1">Verträge & Abos</h2>
+              <h2 className="text-[13px] font-medium text-muted-foreground mb-1">{t("finance.contractsHeading")}</h2>
               <p className="text-xs text-muted-foreground mb-5">
-                Automatisch erkannt: gleicher Empfänger, ähnlicher Betrag, in mindestens zwei
-                verschiedenen Monaten der letzten 6 Monate.
+                {t("finance.contractsExplain")}
               </p>
               <RecurringSection items={recurring} hideHeading />
             </section>
@@ -384,12 +403,12 @@ export function FinanceApp() {
         {showSidebar && (
           <aside className="hidden lg:block pt-2 space-y-9">
             <div>
-              <h2 className="text-[13px] font-medium text-muted-foreground mb-3">Konten</h2>
+              <h2 className="text-[13px] font-medium text-muted-foreground mb-3">{t("finance.tabs.accounts")}</h2>
               <AccountsList accounts={accounts} syncingId={syncingId} onSync={handleSync} onDelete={handleDelete} compact />
             </div>
             {tab === "umsaetze" && (
               <div>
-                <h2 className="text-[13px] font-medium text-muted-foreground mb-3">Verträge & Abos</h2>
+                <h2 className="text-[13px] font-medium text-muted-foreground mb-3">{t("finance.contractsHeading")}</h2>
                 <RecurringSection items={recurring} limit={4} onShowAll={() => setTab("vertraege")} compact />
               </div>
             )}
@@ -403,15 +422,16 @@ export function FinanceApp() {
 }
 
 function PeriodSelect({ days, onChange }: { days: number; onChange: (n: number) => void }) {
+  const { t } = useTranslation();
   return (
     <select
       value={days}
       onChange={e => onChange(Number(e.target.value))}
       className="text-xs rounded-md border border-border bg-background px-2 py-1 shrink-0"
     >
-      <option value={30}>30 Tage</option>
-      <option value={90}>90 Tage</option>
-      <option value={180}>180 Tage</option>
+      <option value={30}>{t("finance.days", { count: 30 })}</option>
+      <option value={90}>{t("finance.days", { count: 90 })}</option>
+      <option value={180}>{t("finance.days", { count: 180 })}</option>
     </select>
   );
 }
@@ -420,6 +440,7 @@ function AccountsList({ accounts, syncingId, onSync, onDelete, compact }: {
   accounts: BankAccount[]; syncingId: number | null;
   onSync: (id: number) => void; onDelete: (id: number) => void; compact?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="divide-y divide-border">
       {accounts.map(a => (
@@ -434,25 +455,25 @@ function AccountsList({ accounts, syncingId, onSync, onDelete, compact }: {
             <div className="flex items-baseline gap-1.5">
               <span className={cn("font-medium truncate", compact && "text-sm")}>{a.display_name}</span>
               <span className="text-xs text-muted-foreground shrink-0">
-                {a.space_id ? "geteilt" : "privat"}
+                {a.space_id ? t("finance.shared") : t("finance.private")}
               </span>
             </div>
             {!compact && (
               <div className="text-xs text-muted-foreground truncate">
-                {a.iban || "IBAN noch nicht bekannt"}
+                {a.iban || t("finance.ibanUnknown")}
               </div>
             )}
             {a.last_sync_error ? (
-              <div className="text-xs text-rose-500 mt-0.5 truncate">Sync-Fehler: {a.last_sync_error}</div>
+              <div className="text-xs text-rose-500 mt-0.5 truncate">{t("finance.syncError", { error: a.last_sync_error })}</div>
             ) : (!compact && a.last_synced_at) ? (
-              <div className="text-xs text-muted-foreground/80 mt-0.5">Synchronisiert: {a.last_synced_at}</div>
+              <div className="text-xs text-muted-foreground/80 mt-0.5">{t("finance.syncedAt", { when: formatDateTime(a.last_synced_at) })}</div>
             ) : null}
           </div>
           <button
             onClick={() => onSync(a.id)}
             disabled={syncingId === a.id}
             className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50 transition-opacity"
-            title="Jetzt synchronisieren"
+            title={t("finance.syncNow")}
           >
             {syncingId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           </button>
@@ -460,7 +481,7 @@ function AccountsList({ accounts, syncingId, onSync, onDelete, compact }: {
             <button
               onClick={() => onDelete(a.id)}
               className="p-1.5 rounded-md text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-              title="Konto entfernen"
+              title={t("finance.removeAccount")}
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -475,18 +496,19 @@ function AccountsList({ accounts, syncingId, onSync, onDelete, compact }: {
 // categories get pinned here is a per-user preference (GET/PUT
 // /api/bank/focus-categories), not hardcoded, so "Lebensmittel" and
 // "Verträge & Abos" are just the defaults, not the only options.
-function QuickStats({ byCategory, focusCategories, editing, onEdit, onCancel, onSave, onCategoryClick }: {
-  byCategory: Map<string, number>; focusCategories: string[]; editing: boolean;
+function QuickStats({ byCategory, currency, focusCategories, editing, onEdit, onCancel, onSave, onCategoryClick }: {
+  byCategory: Map<string, number>; currency: string; focusCategories: string[]; editing: boolean;
   onEdit: () => void; onCancel: () => void; onSave: (cats: string[]) => void;
   onCategoryClick: (cat: string) => void;
 }) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState(focusCategories);
   useEffect(() => { setDraft(focusCategories); }, [focusCategories, editing]);
 
   if (editing) {
     return (
       <div className="border-y border-border py-4 mb-9 space-y-3">
-        <div className="text-[13px] font-medium text-muted-foreground">Im Blick — auswählen</div>
+        <div className="text-[13px] font-medium text-muted-foreground">{t("finance.focusPick")}</div>
         <div className="flex flex-col sm:flex-row gap-2">
           {[0, 1].map(i => (
             <select
@@ -495,16 +517,16 @@ function QuickStats({ byCategory, focusCategories, editing, onEdit, onCancel, on
               onChange={e => setDraft(d => { const next = [...d]; next[i] = e.target.value; return next; })}
               className="text-sm rounded-md border border-border bg-background px-2 py-1.5 flex-1"
             >
-              {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {ALL_CATEGORIES.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}
             </select>
           ))}
         </div>
         <div className="flex gap-2">
           <button onClick={() => onSave(draft)} className="rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium">
-            Speichern
+            {t("common.save")}
           </button>
           <button onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground">
-            Abbrechen
+            {t("common.cancel")}
           </button>
         </div>
       </div>
@@ -519,17 +541,17 @@ function QuickStats({ byCategory, focusCategories, editing, onEdit, onCancel, on
             key={cat}
             onClick={() => onCategoryClick(cat)}
             className="text-left py-4 first:pr-4 last:pl-4 hover:bg-muted/50 transition-colors rounded-md"
-            title="Klicken, um die zugehörigen Umsätze zu sehen"
+            title={t("finance.clickToSee")}
           >
-            <div className="text-[13px] text-muted-foreground mb-1 truncate">{cat}</div>
-            <div className="text-xl font-semibold tabular-nums">{eur(Math.abs(byCategory.get(cat) || 0))}</div>
+            <div className="text-[13px] text-muted-foreground mb-1 truncate">{catLabel(cat)}</div>
+            <div className="text-xl font-semibold tabular-nums">{money(Math.abs(byCategory.get(cat) || 0), currency)}</div>
           </button>
         ))}
       </div>
       <button
         onClick={onEdit}
         className="absolute -top-3 right-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
-        title="Andere Kategorien auswählen"
+        title={t("finance.pickOtherCategories")}
       >
         <Pencil className="w-3.5 h-3.5" />
       </button>
@@ -540,30 +562,31 @@ function QuickStats({ byCategory, focusCategories, editing, onEdit, onCancel, on
 function RecurringSection({ items, limit, onShowAll, compact, hideHeading }: {
   items: Recurring[]; limit?: number; onShowAll?: () => void; compact?: boolean; hideHeading?: boolean;
 }) {
+  const { t } = useTranslation();
   const shown = limit ? items.slice(0, limit) : items;
   if (shown.length === 0) {
-    return <p className="text-sm text-muted-foreground">Noch keine wiederkehrenden Zahlungen erkannt.</p>;
+    return <p className="text-sm text-muted-foreground">{t("finance.noRecurring")}</p>;
   }
   return (
     <div className={cn(!compact && "mb-9")}>
-      {!compact && !hideHeading && <h2 className="text-[13px] font-medium text-muted-foreground mb-3">Verträge & Abos</h2>}
+      {!compact && !hideHeading && <h2 className="text-[13px] font-medium text-muted-foreground mb-3">{t("finance.contractsHeading")}</h2>}
       <div className="divide-y divide-border">
         {shown.map(r => (
           <div key={`${r.account_id}-${r.counterparty}`} className="flex items-center gap-3 py-2.5 pl-3 border-l-2 border-l-amber-500">
             <div className="min-w-0 flex-1">
               <div className={cn("font-medium truncate", compact && "text-sm")}>{r.counterparty}</div>
               <div className="text-xs text-muted-foreground truncate">
-                {r.category || "unkategorisiert"}
-                {r.next_expected && !compact && ` · ca. ${fmtDate(r.next_expected)}`}
+                {catLabel(r.category || "unkategorisiert")}
+                {r.next_expected && !compact && ` · ${t("finance.nextAround", { date: fmtDate(r.next_expected) })}`}
               </div>
             </div>
-            <span className="tabular-nums shrink-0 text-sm text-rose-500">{eur(r.avg_amount)}</span>
+            <span className="tabular-nums shrink-0 text-sm text-rose-500">{money(r.avg_amount)}</span>
           </div>
         ))}
       </div>
       {limit && items.length > limit && onShowAll && (
         <button onClick={onShowAll} className="text-[13px] text-muted-foreground hover:text-foreground mt-2">
-          Alle {items.length} anzeigen →
+          {t("finance.showAll", { count: items.length })}
         </button>
       )}
     </div>
@@ -571,6 +594,7 @@ function RecurringSection({ items, limit, onShowAll, compact, hideHeading }: {
 }
 
 function ConnectAccountForm({ onClose, onConnected }: { onClose: () => void; onConnected: () => void }) {
+  const { t } = useTranslation();
   const [displayName, setDisplayName] = useState("");
   const [bankUrl, setBankUrl] = useState("");
   const [blz, setBlz] = useState("");
@@ -597,7 +621,7 @@ function ConnectAccountForm({ onClose, onConnected }: { onClose: () => void; onC
       });
       onConnected();
     } catch (err: any) {
-      setError(err?.message || "Verbindung fehlgeschlagen.");
+      setError(err?.message || t("finance.form.connectFailed"));
     } finally {
       setSaving(false);
     }
@@ -611,46 +635,46 @@ function ConnectAccountForm({ onClose, onConnected }: { onClose: () => void; onC
         className="bg-background rounded-xl border border-border shadow-xl w-full max-w-md p-5 space-y-3"
       >
         <div className="flex items-center justify-between mb-1">
-          <div className="font-medium">Konto verbinden</div>
+          <div className="font-medium">{t("finance.connectAccount")}</div>
           <button type="button" onClick={onClose} className="p-1 rounded hover:bg-muted text-muted-foreground">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <Field label="Name (z. B. Sparkasse, Gemeinsames Konto)">
+        <Field label={t("finance.form.name")}>
           <input required value={displayName} onChange={e => setDisplayName(e.target.value)}
                 className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
         </Field>
-        <Field label="Bank suchen" hint="Name oder Ort eingeben — BLZ und FinTS-Adresse werden automatisch ausgefüllt.">
+        <Field label={t("finance.form.searchBank")} hint={t("finance.form.searchBankHint")}>
           <BankSearchField
             onPick={inst => { setBankUrl(inst.url); setBlz(inst.blz); }}
           />
         </Field>
-        <Field label="FinTS-Server-URL" hint="Automatisch ausgefüllt, wenn oben gefunden — sonst selbst eintragen (nachschlagen auf hbci-zka.de).">
+        <Field label={t("finance.form.serverUrl")} hint={t("finance.form.serverUrlHint")}>
           <input required value={bankUrl} onChange={e => setBankUrl(e.target.value)}
                 placeholder="https://..."
                 className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
         </Field>
-        <Field label="Bankleitzahl (BLZ)">
+        <Field label={t("finance.form.blz")}>
           <input required value={blz} onChange={e => setBlz(e.target.value)} maxLength={8}
                 className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
         </Field>
-        <Field label="Online-Banking-Zugangsnummer">
+        <Field label={t("finance.form.login")}>
           <input required value={loginName} onChange={e => setLoginName(e.target.value)}
                 className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
         </Field>
-        <Field label="PIN">
+        <Field label={t("finance.form.pin")}>
           <input required type="password" value={pin} onChange={e => setPin(e.target.value)}
                 className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
         </Field>
-        <Field label="Produkt-ID (optional)"
-              hint="Falls deine FinTS-Registrierung bei der DK noch nicht da ist, leer lassen — Yorik nutzt vorübergehend einen Platzhalter, ohne Garantie, dass jede Bank ihn akzeptiert.">
+        <Field label={t("finance.form.productId")}
+              hint={t("finance.form.productIdHint")}>
           <input value={productId} onChange={e => setProductId(e.target.value)}
                 className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
         </Field>
         <label className="flex items-center gap-2 text-sm pt-1">
           <input type="checkbox" checked={shared} onChange={e => setShared(e.target.checked)} />
-          Gemeinsames Konto — für den ganzen Haushalt sichtbar
+          {t("finance.form.sharedAccount")}
         </label>
 
         {error && <div className="text-sm text-rose-500">{error}</div>}
@@ -659,7 +683,7 @@ function ConnectAccountForm({ onClose, onConnected }: { onClose: () => void; onC
           <button type="submit" disabled={saving}
                   className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            Verbinden
+            {t("finance.form.connect")}
           </button>
         </div>
       </form>
@@ -673,6 +697,7 @@ function ConnectAccountForm({ onClose, onConnected }: { onClose: () => void; onC
 // contact-autocomplete pattern in Composer.tsx's RecipientField:
 // short debounce, a request-id guard against out-of-order responses.
 function BankSearchField({ onPick }: { onPick: (inst: Institute) => void }) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Institute[]>([]);
   const [open, setOpen] = useState(false);
@@ -710,7 +735,7 @@ function BankSearchField({ onPick }: { onPick: (inst: Institute) => void }) {
           value={query}
           onChange={e => { setQuery(e.target.value); setPicked(null); }}
           onFocus={() => results.length > 0 && setOpen(true)}
-          placeholder="z. B. Sparkasse Peine, ING"
+          placeholder={t("finance.form.searchPlaceholder")}
           className="w-full rounded-md border border-border bg-background pl-7 pr-7 py-1.5 text-sm"
         />
         {picked && <Check className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 text-emerald-600" />}
@@ -725,7 +750,7 @@ function BankSearchField({ onPick }: { onPick: (inst: Institute) => void }) {
               className="w-full text-left px-2.5 py-1.5 text-sm hover:bg-muted"
             >
               <div className="font-medium truncate">{inst.name}</div>
-              <div className="text-xs text-muted-foreground truncate">{inst.city} · BLZ {inst.blz}</div>
+              <div className="text-xs text-muted-foreground truncate">{inst.city} · {t("finance.form.blzShort", { blz: inst.blz })}</div>
             </button>
           ))}
         </div>

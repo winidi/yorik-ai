@@ -1,0 +1,36 @@
+{
+  "fileAs": {
+    "private": {
+      "label": "just me",
+      "hint": "Only you can see the document in Paperless."
+    },
+    "parents": {
+      "label": "the parents",
+      "hint": "The adults in the household, not the children's accounts."
+    },
+    "shared": {
+      "label": "the family",
+      "hint": "Everyone in the household, including the children's accounts."
+    }
+  },
+  "whoSees": {
+    "private": "visible only to you",
+    "parents": "visible to the parents",
+    "shared": "visible to the whole family",
+    "business": "visible to the business"
+  },
+  "paperless": {
+    "filedAuto": "Filed to Paperless · auto (trusted sender)",
+    "filed": "Filed to Paperless",
+    "suggested": "This looks like a document worth keeping. File it to Paperless?",
+    "notFiled": "Not filed",
+    "lastUploadFailed": "Last Paperless upload failed",
+    "retryVisibleTo": "Retry, visible to",
+    "addVisibleTo": "Add to Paperless, visible to"
+  },
+  "unsubscribeFailed": "Couldn't unsubscribe: {{error}}",
+  "draftReply": {
+    "noDraft": "Yorik couldn't write a draft — have a look at the AI draft section below the email.",
+    "failed": "Couldn't draft a reply: {{error}}"
+  }
+}

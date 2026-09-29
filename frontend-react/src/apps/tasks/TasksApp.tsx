@@ -25,6 +25,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
+import { formatDate } from "@/i18n/format";
 import {
   Plus, Trash2, Check, X, CalendarDays, Loader2, ChevronRight,
   CheckSquare, Square, ListTodo, Sparkles, Clock, Flag,
@@ -89,6 +92,7 @@ interface AskResponse {
 }
 
 export function TasksApp() {
+  const { t } = useTranslation();
   const tasksApi = useApi<ExtendedTask[]>(`/api/tasks?role=${ROLE}`, []);
   // The list is yours: tasks assigned to you, and unassigned ones you
   // created. What others shared with you, and what you handed to
@@ -663,7 +667,7 @@ export function TasksApp() {
             )}
           >
             {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            <span className="hidden sm:inline">{adding ? "Yorik liest…" : "Add"}</span>
+            <span className="hidden sm:inline">{adding ? t("tasks.reading") : t("tasks.add")}</span>
             {defaultAction === "add" && !adding && (
               <span className="hidden md:inline text-2xs opacity-70" aria-hidden="true">↵</span>
             )}
@@ -2093,9 +2097,9 @@ function formatDue(due: string): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const diff = Math.round((d.getTime() - today.getTime()) / (24 * 3600 * 1000));
-  if (diff === 0) return "Today";
-  if (diff === 1) return "Tomorrow";
-  if (diff === -1) return "Yesterday";
-  if (diff > 1 && diff < 7) return d.toLocaleDateString([], { weekday: "long" });
-  return d.toLocaleDateString([], { day: "numeric", month: "short" });
+  if (diff === 0) return i18n.t("common.today");
+  if (diff === 1) return i18n.t("common.tomorrow");
+  if (diff === -1) return i18n.t("common.yesterday");
+  if (diff > 1 && diff < 7) return formatDate(d, { weekday: "long" });
+  return formatDate(d, { day: "numeric", month: "short" });
 }

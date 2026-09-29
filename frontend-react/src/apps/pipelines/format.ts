@@ -1,27 +1,14 @@
+import i18n, { locale } from "@/i18n";
+import { formatDate } from "@/i18n/format";
 import type { Attention, PipelineState } from "./types";
 
-const ATTENTION: Record<Attention, string> = {
-  vielleicht: "Ist das die Antwort?",
-  kann_nicht_pruefen: "Yorik kann gerade nicht sicher prüfen",
-  schritt_faellig: "Keine Antwort — Erinnerung senden?",
-  uebergabe: "Keine Antwort nach allen Erinnerungen",
-  selbst_geantwortet: "Du hast selbst geschrieben",
-  versand_unklar: "Unklar, ob die Erinnerung rausging",
-  person_aus: "Pipelines sind für dich ausgeschaltet",
-};
-
 export function attentionLabel(a: Attention | null): string {
-  return a ? ATTENTION[a] || a : "";
+  if (!a) return "";
+  return i18n.t(`pipelines.attention.${a}`, { defaultValue: a });
 }
 
 export function stateLabel(s: PipelineState): string {
-  return {
-    entwurf: "Entwurf — noch nicht gestartet",
-    laeuft: "Läuft",
-    pausiert: "Pausiert",
-    erledigt: "Erledigt",
-    abgebrochen: "Abgebrochen",
-  }[s] || s;
+  return i18n.t(`pipelines.state.${s}`, { defaultValue: s });
 }
 
 function startOfDay(d: Date): number {
@@ -34,24 +21,24 @@ export function relDay(iso: string | null | undefined): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
   const days = Math.round((startOfDay(d) - startOfDay(new Date())) / 86400000);
-  if (days === 0) return "heute";
-  if (days === 1) return "morgen";
-  if (days === -1) return "gestern";
-  if (days > 1 && days < 14) return `in ${days} Tagen`;
-  if (days < -1 && days > -14) return `vor ${-days} Tagen`;
-  return "am " + d.toLocaleDateString("de-DE", { day: "numeric", month: "short" });
+  if (days === 0) return i18n.t("pipelines.rel.today");
+  if (days === 1) return i18n.t("pipelines.rel.tomorrow");
+  if (days === -1) return i18n.t("pipelines.rel.yesterday");
+  if (days > 1 && days < 14) return i18n.t("pipelines.rel.inDays", { count: days });
+  if (days < -1 && days > -14) return i18n.t("pipelines.rel.daysAgo", { count: -days });
+  return i18n.t("pipelines.rel.onDate", { date: formatDate(d, { day: "numeric", month: "short" }) });
 }
 
 export function dateShort(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" });
+  return formatDate(d, { weekday: "short", day: "numeric", month: "short" });
 }
 
 export function timeShort(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleString("de-DE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString(locale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }

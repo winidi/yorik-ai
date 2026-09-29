@@ -7,7 +7,9 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { Check, FileText, Image as ImageIcon, Loader2, Lock, Trash2, UserCheck, Users } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
+import { formatDate } from "@/i18n/format";
 import { cn } from "@/lib/utils";
 
 interface Attachment {
@@ -17,15 +19,16 @@ interface Attachment {
   paperless_error?: string | null;
 }
 
+/** translation keys, by visibility code */
 const WHO: Record<string, string> = {
-  private: "nur für dich sichtbar", parents: "für die Eltern sichtbar",
-  shared: "für die ganze Familie sichtbar", business: "für die Firma sichtbar",
+  private: "chat.attachment.who.private", parents: "chat.attachment.who.parents",
+  shared: "chat.attachment.who.shared", business: "chat.attachment.who.business",
 };
 type FileAs = "private" | "parents" | "shared";
 const FILE_AS: Array<{ v: FileAs; label: string; hint: string }> = [
-  { v: "private", label: "nur mich", hint: "Nur du siehst das Dokument unter Dokumente." },
-  { v: "parents", label: "die Eltern", hint: "Die Erwachsenen im Haushalt, nicht die Konten der Kinder." },
-  { v: "shared", label: "die Familie", hint: "Alle im Haushalt, auch die Konten der Kinder." },
+  { v: "private", label: "chat.attachment.fileAs.private", hint: "chat.attachment.fileAs.privateHint" },
+  { v: "parents", label: "chat.attachment.fileAs.parents", hint: "chat.attachment.fileAs.parentsHint" },
+  { v: "shared", label: "chat.attachment.fileAs.shared", hint: "chat.attachment.fileAs.sharedHint" },
 ];
 
 /** Attachment numbers named in a chat message. */
@@ -40,6 +43,7 @@ function size(bytes: number): string {
 }
 
 export function AttachmentCard({ id }: { id: number }) {
+  const { t } = useTranslation();
   const [att, setAtt] = useState<Attachment | null>(null);
   const [gone, setGone] = useState(false);
   const [busy, setBusy] = useState<FileAs | "delete" | null>(null);
@@ -61,20 +65,20 @@ export function AttachmentCard({ id }: { id: number }) {
   async function fileIt(visibility: FileAs) {
     setBusy(visibility); setError(null);
     try { setAtt(await api.post<Attachment>(`/api/chat/attachments/${id}/file?visibility=${visibility}`, {})); }
-    catch (e: any) { setError(e?.message || "Die Datei konnte nicht abgelegt werden."); }
+    catch (e: any) { setError(e?.message || t("chat.attachment.fileFailed")); }
     finally { setBusy(null); }
   }
   async function remove() {
-    if (!confirm("Diesen Anhang löschen? Er ist nicht unter Dokumente abgelegt.")) return;
+    if (!confirm(t("chat.attachment.confirmDelete"))) return;
     setBusy("delete");
     try { await api.delete(`/api/chat/attachments/${id}`); setGone(true); } catch { /* stays */ } finally { setBusy(null); }
   }
 
   if (gone) {
-    return <div className="mt-1.5 text-xs text-muted-foreground italic">Anhang #{id} ist nicht mehr da (gelöscht oder abgelaufen).</div>;
+    return <div className="mt-1.5 text-xs text-muted-foreground italic">{t("chat.attachment.gone", { id })}</div>;
   }
   if (!att) return null;
-  const until = new Date(att.expires_at).toLocaleDateString([], { day: "numeric", month: "long" });
+  const until = formatDate(att.expires_at, { day: "numeric", month: "long" });
 
   return (
     <div className="mt-2 w-full max-w-sm rounded-xl border border-border bg-card text-card-foreground text-left overflow-hidden">
@@ -90,34 +94,34 @@ export function AttachmentCard({ id }: { id: number }) {
       <div className="px-3 pb-3">
         {att.filed ? (
           <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-            <Check className="w-3.5 h-3.5" /> In Dokumente abgelegt{att.visibility ? `, ${WHO[att.visibility] || att.visibility}` : ""} ·{" "}
-            <a href="/r/documents" className="underline">Dokumente öffnen</a>
+            <Check className="w-3.5 h-3.5" /> {t("chat.attachment.filed")}{att.visibility ? `, ${WHO[att.visibility] ? t(WHO[att.visibility]) : att.visibility}` : ""} ·{" "}
+            <a href="/r/documents" className="underline">{t("chat.attachment.openDocuments")}</a>
           </div>
         ) : (
           <>
-            <div className="text-xs text-muted-foreground mb-2">Nur in diesem Gespräch · wird am {until} gelöscht</div>
-            <div className="text-xs font-medium mb-1">In Dokumente ablegen, sichtbar für</div>
+            <div className="text-xs text-muted-foreground mb-2">{t("chat.attachment.onlyHere", { date: until })}</div>
+            <div className="text-xs font-medium mb-1">{t("chat.attachment.fileVisibleFor")}</div>
             <div className="flex flex-wrap gap-2">
               {FILE_AS.map(({ v, label, hint }) => {
                 const primary = att.suggest === "file" && att.default_visibility === v;
                 return (
-                  <button key={v} onClick={() => fileIt(v)} disabled={!!busy} title={hint}
+                  <button key={v} onClick={() => fileIt(v)} disabled={!!busy} title={t(hint)}
                           className={cn("inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-60",
                                         primary ? "bg-primary text-primary-foreground" : "border border-border hover:bg-muted")}>
                     {busy === v ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : v === "private" ? <Lock className="w-3.5 h-3.5" /> : v === "parents" ? <UserCheck className="w-3.5 h-3.5" /> : <Users className="w-3.5 h-3.5" />}
-                    {label}
+                    {t(label)}
                   </button>
                 );
               })}
-              <button onClick={remove} disabled={!!busy} title="Anhang jetzt löschen"
+              <button onClick={remove} disabled={!!busy} title={t("chat.attachment.deleteNow")}
                       className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition disabled:opacity-60 ml-auto">
                 {busy === "delete" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                Löschen
+                {t("common.delete")}
               </button>
             </div>
             {(error || att.paperless_error) && (
               <div className="mt-2 text-xs text-red-500">
-                {error || "Die Datei konnte nicht abgelegt werden."}
+                {error || t("chat.attachment.fileFailed")}
               </div>
             )}
           </>

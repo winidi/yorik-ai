@@ -1,0 +1,62 @@
+{
+  "category": {
+    "family": "Familie",
+    "business": "Arbeit",
+    "drive": "Anfahrt",
+    "health": "Gesundheit",
+    "personal": "Persönlich",
+    "social": "Sozial"
+  },
+  "import": {
+    "source": {
+      "other": {
+        "label": "Andere",
+        "step1": "In deinem Kalender nach „Abonnieren\", „Freigeben\" oder „iCal-Adresse\" suchen und die Adresse kopieren"
+      },
+      "google": {
+        "open": "Google-Kalender-Einstellungen öffnen",
+        "step1": "Links unter „Einstellungen für meine Kalender\" deinen Kalender antippen",
+        "step2": "Runterscrollen zu „Kalender integrieren\" → Privatadresse im iCal-Format kopieren"
+      },
+      "icloud": {
+        "step1": "iPhone: Kalender-App → unten „Kalender\" → beim Kalender auf ⓘ tippen",
+        "step2": "„Öffentlicher Kalender\" einschalten → „Link teilen\" → Kopieren"
+      },
+      "outlook": {
+        "open": "Outlook-Freigaben öffnen",
+        "step1": "Unter „Kalender veröffentlichen\" deinen Kalender und „Alle Details anzeigen\" wählen → Veröffentlichen",
+        "step2": "Den ICS-Link kopieren"
+      }
+    },
+    "subscribedDone_one": "Abonniert: {{count}} Termin übernommen. Der Kalender folgt seiner Quelle alle 15 Minuten.",
+    "subscribedDone_other": "Abonniert: {{count}} Termine übernommen. Der Kalender folgt seiner Quelle alle 15 Minuten.",
+    "failed": "Das hat nicht geklappt.",
+    "syncFailed": "Abgleich fehlgeschlagen.",
+    "confirmUnsubscribe": "Abo beenden? Der gespiegelte Kalender und seine Termine verschwinden aus Yorik; bei der Quelle ändert sich nichts.",
+    "importedDone": "Importiert: {{added}} neu, {{updated}} aktualisiert, {{unchanged}} unverändert.",
+    "importFailed": "Import fehlgeschlagen.",
+    "calendarFallback": "Kalender",
+    "title": "Kalender übernehmen (Google, iCloud, Outlook …)",
+    "tabSubscribe": "Abonnieren (bleibt aktuell)",
+    "tabFile": "Datei importieren (einmalig)",
+    "subscribeIntro": "Yorik spiegelt den Kalender und gleicht ihn alle 15 Minuten ab. Er ist hier nur lesbar: Termine trägst du weiter bei Google ein, sie erscheinen dann in Yorik, auf der Familientafel und in der Suche. Nichts geht von Yorik zu Google.",
+    "pasteHere": "Hier einfügen. Die Adresse ist geheim; Yorik speichert sie verschlüsselt.",
+    "namePlaceholder": "Name in Yorik",
+    "subscribe": "Abonnieren",
+    "subscribed": "Abonniert",
+    "eventCount_one": "{{count}} Termin",
+    "eventCount_other": "{{count}} Termine",
+    "syncNow": "Jetzt abgleichen",
+    "unsubscribe": "Abo beenden",
+    "fileIntro": "Für den Umzug: Die Termine landen in einem deiner Kalender und gehören danach dir (bearbeiten, verschieben, löschen). Dieselbe Datei noch einmal zu importieren verdoppelt nichts. In Google: Einstellungen → „Importieren & Exportieren\" → Exportieren; in der ZIP-Datei liegt eine .ics pro Kalender.",
+    "chooseFile": ".ics-Datei wählen …",
+    "intoCalendar": "in „{{name}}\"",
+    "ofWhichSeries_one": ", davon {{count}} Serie",
+    "ofWhichSeries_other": ", davon {{count}} Serien",
+    "range": "{{from}} bis {{to}}",
+    "preview": "Vorschau",
+    "import": "Importieren"
+  },
+  "importButton": "Google & Co. übernehmen",
+  "importButtonTitle": "Eine .ics-Datei importieren oder einen Google-, iCloud- oder Outlook-Kalender abonnieren"
+}

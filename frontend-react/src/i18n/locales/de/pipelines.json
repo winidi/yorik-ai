@@ -1,0 +1,201 @@
+{
+  "failed": "Ging nicht",
+  "saved": "Gespeichert",
+  "done": "Erledigt",
+  "cancel": "Abbrechen",
+  "handover": "Übergabe an dich",
+  "reminderSent": "Erinnerung gesendet",
+  "noSubject": "(ohne Betreff)",
+  "history": "Verlauf",
+  "loadFailed": "Pipelines konnten nicht geladen werden",
+  "createFailed": "Anlegen fehlgeschlagen",
+  "trackReply": "Antwort verfolgen",
+  "intro": "Yorik bleibt dran, bis die Antwort da ist, und fragt dich vor jeder Erinnerung.",
+  "switchedOffForYou": "Pipelines sind für dich ausgeschaltet. Deine Eltern oder ein Admin können sie wieder einschalten.",
+  "nextHandover": "Übergabe an dich {{when}}",
+  "nextReminder": "Nächste Erinnerung {{when}}",
+  "follow": "Verfolgen",
+  "toWhen": "an {{to}} · {{when}}",
+  "section": {
+    "needsYou": "Braucht dich",
+    "running": "Laufend",
+    "drafts": "Entwürfe",
+    "ended": "Beendet ({{count}})"
+  },
+  "firstSteps": {
+    "step1Title": "Mail wählen",
+    "step1Text": "eine Kündigung, Anfrage oder Forderung, die du geschickt hast",
+    "step2Title": "Ablauf freigeben",
+    "step2Text": "Yorik schlägt Erinnerungen vor; du passt Tage und Texte an und gibst jede frei",
+    "step3Title": "Yorik bleibt dran",
+    "step3Text": "er sucht die Antwort in all deiner Post, auch von anderen Adressen, und fragt dich vor jeder Erinnerung",
+    "recentlySent": "Zuletzt gesendet — welche soll Yorik verfolgen?",
+    "noSentMails": "Noch keine gesendeten Mails in Yorik. Schreib eine in Mail, dann taucht sie hier auf."
+  },
+  "picker": {
+    "title": "Welche Mail verfolgen?",
+    "subtitle": "Deine zuletzt gesendeten Mails",
+    "none": "Keine gesendeten Mails gefunden."
+  },
+  "people": {
+    "title": "Wer darf Pipelines nutzen",
+    "explain": "Für alle an. Ausschalten hält laufende Pipelines der Person an; ihre Inhalte siehst du dadurch nicht.",
+    "adminOnly": "nur ein Admin kann das ändern",
+    "changedBy": "zuletzt geändert von {{name}}",
+    "toggleLabel": "Pipelines für {{name}}",
+    "turnedOn": "Pipelines für {{name}} an",
+    "turnedOff": "Pipelines für {{name}} aus"
+  },
+  "attention": {
+    "vielleicht": "Ist das die Antwort?",
+    "kann_nicht_pruefen": "Yorik kann gerade nicht sicher prüfen",
+    "schritt_faellig": "Keine Antwort — Erinnerung senden?",
+    "uebergabe": "Keine Antwort nach allen Erinnerungen",
+    "selbst_geantwortet": "Du hast selbst geschrieben",
+    "versand_unklar": "Unklar, ob die Erinnerung rausging",
+    "person_aus": "Pipelines sind für dich ausgeschaltet"
+  },
+  "state": {
+    "entwurf": "Entwurf — noch nicht gestartet",
+    "laeuft": "Läuft",
+    "pausiert": "Pausiert",
+    "erledigt": "Erledigt",
+    "abgebrochen": "Abgebrochen"
+  },
+  "rel": {
+    "today": "heute",
+    "tomorrow": "morgen",
+    "yesterday": "gestern",
+    "inDays_one": "in {{count}} Tag",
+    "inDays_other": "in {{count}} Tagen",
+    "daysAgo_one": "vor {{count}} Tag",
+    "daysAgo_other": "vor {{count}} Tagen",
+    "onDate": "am {{date}}"
+  },
+  "detail": {
+    "missing": "Diese Pipeline gibt es nicht (mehr).",
+    "goal": "Ziel: {{goal}}",
+    "lastChecked": "Zuletzt geprüft {{when}}: {{summary}}",
+    "draftingTitle": "Yorik schreibt die Erinnerungen…",
+    "draftingText": "Er liest deine Mail, überlegt, welche Antwort du erwartest, und schlägt Abstände und Texte vor. Das dauert meist unter einer Minute.",
+    "sequence": "Ablauf",
+    "redraftConfirm": "Yorik schreibt die offenen Erinnerungen neu; deine Änderungen und Freigaben daran gehen verloren. Weiter?",
+    "redraft": "Neu schreiben lassen",
+    "openEachFirst": "Öffne erst jede Mail einmal",
+    "approveAll": "Alle freigeben",
+    "approveAllOpenFirst": "Alle freigeben (erst jede öffnen)",
+    "addReminder": "Erinnerung hinzufügen",
+    "saving": "Speichert…",
+    "saveChanges": "Änderungen speichern",
+    "discard": "Verwerfen",
+    "start": "Starten",
+    "startText": "Yorik schaut ab jetzt nach der Antwort. Wird eine Erinnerung fällig, fragt er dich vorher; nichts geht ohne dein Okay raus.",
+    "started": "Gestartet",
+    "starting": "Startet…",
+    "saveFirst": "Erst speichern.",
+    "approveEachFirst": "Erst jede Erinnerung freigeben.",
+    "yourMail": "Deine Mail"
+  },
+  "step": {
+    "after": "nach",
+    "daysAria": "Tage",
+    "daysUnit_one": "Tag",
+    "daysUnit_other": "Tagen",
+    "handoverNote": "Kommt bis dahin keine Antwort, meldet sich Yorik bei dir.",
+    "reminder": "Erinnerung",
+    "reminderN": "{{n}}. Erinnerung",
+    "daysLater_one": "{{count}} Tag danach",
+    "daysLater_other": "{{count}} Tage danach",
+    "approved": "freigegeben",
+    "notApproved": "nicht freigegeben",
+    "afterPrevious": " der vorigen Nachricht",
+    "to": "An",
+    "subject": "Betreff",
+    "body": "Text",
+    "hideQuote": "Zitat ausblenden",
+    "showQuote": "Darunter steht deine erste Mail als Zitat",
+    "remove": "Entfernen",
+    "revokeApproval": "Freigabe zurücknehmen",
+    "approve": "Freigeben",
+    "saveThenApprove": "Erst speichern, dann freigeben"
+  },
+  "source": {
+    "llm": "Von Yorik geschrieben. Wenn sie fällig wird, schreibt er sie mit dem aktuellen Stand noch einmal neu.",
+    "llm_frisch": "Heute von Yorik neu geschrieben, mit allem, was seitdem passiert ist.",
+    "vorlage": "Nur eine Vorlage: das Sprachmodell war nicht erreichbar. „Neu schreiben lassen“ versucht es noch einmal.",
+    "bearbeitet": "Von dir bearbeitet."
+  },
+  "attn": {
+    "maybeText_one": "Diese Mail könnte die Antwort sein. Solange du nicht entschieden hast, geht keine Erinnerung raus.",
+    "maybeText_other": "Diese Mails könnten die Antwort sein. Solange du nicht entschieden hast, geht keine Erinnerung raus.",
+    "from": "von {{from}}",
+    "isAnswer": "Ja, das ist die Antwort",
+    "notAnswer": "Nein, weiter warten",
+    "openMail": "Mail öffnen",
+    "noReplyFound": "Keine Antwort gefunden.",
+    "rewrittenToday": "Yorik hat die Erinnerung für heute neu geschrieben.",
+    "to": "an {{to}}",
+    "sendNow": "Jetzt senden",
+    "approveAndSend": "Freigeben und senden",
+    "editBelow": "Ändern kannst du den Text unten im Ablauf.",
+    "checksBeforeSending": "Yorik prüft direkt vor dem Senden noch einmal.",
+    "cantCheckText": "Solange Yorik deine Post nicht sicher überblickt, schickt er keine Erinnerung. Er versucht es alle 15 Minuten wieder.",
+    "checkAgain": "Nochmal prüfen",
+    "sendAnywayConfirm": "Ja, trotzdem senden",
+    "sendAnyway": "Trotzdem senden…",
+    "handoverText": "Alle Erinnerungen sind raus, eine Antwort ist nicht gekommen. Wie weiter?",
+    "oneMoreReminder": "Noch eine Erinnerung",
+    "selfRepliedText": "Du hast der Gegenseite selbst geschrieben:",
+    "quotedSubject": "„{{subject}}“",
+    "keepFollowing": "Weiter verfolgen",
+    "sendReported": "Der Versand meldete: {{error}}.",
+    "sendInterrupted": "Der Versand wurde unterbrochen.",
+    "checkSentFolder": "Schau in deinem Postfach unter „Gesendet“ nach. Yorik schickt nichts noch einmal, bevor du das sagst.",
+    "wasSent": "Ist rausgegangen",
+    "wasNotSent": "Ist nicht rausgegangen",
+    "personOffText": "Pipelines sind für dich ausgeschaltet; diese hier wartet, bis sie wieder an sind."
+  },
+  "features": {
+    "title": "Woran Yorik die Antwort erkennt",
+    "scope": "Gesucht wird in allen deinen Postfächern samt Spam, seit {{date}}. Jede Mail, die hierzu passt, zeigt Yorik dir, bevor er erinnert.",
+    "removeValue": "{{value}} entfernen",
+    "addPlaceholder": "+ hinzufügen",
+    "addresses": {
+      "label": "Adressen",
+      "hint": "angeschriebene Adressen"
+    },
+    "domains": {
+      "label": "Domains",
+      "hint": "jede Adresse dieser Domain zählt"
+    },
+    "names": {
+      "label": "Namen in der Absender-Domain",
+      "hint": "z. B. „stadtwerke“ passt auch zu service@stadtwerke-energie.com"
+    },
+    "numbers": {
+      "label": "Nummern",
+      "hint": "Kunden-, Vertrags-, Rechnungsnummer"
+    },
+    "words": {
+      "label": "Stichworte",
+      "hint": "Wörter, die in der Antwort stehen müssten"
+    }
+  },
+  "window": {
+    "title": "Sendezeiten · {{days}}, {{from}}–{{to}} Uhr",
+    "weekdays": "werktags",
+    "everyDay": "jeden Tag",
+    "onlyWeekdays": "nur werktags",
+    "from": "von",
+    "to": "bis",
+    "hourUnit": "Uhr",
+    "note": "Außerhalb dieser Zeiten fragt Yorik nicht nach dem Senden, sondern wartet."
+  },
+  "controls": {
+    "checked": "Geprüft",
+    "checkNow": "Jetzt prüfen",
+    "pause": "Pausieren",
+    "resume": "Fortsetzen",
+    "reallyDelete": "Wirklich löschen"
+  }
+}

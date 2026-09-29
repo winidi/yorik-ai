@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Workflow, Plus, ChevronRight, ChevronDown, Loader2, X, Mail, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ export function PipelinesApp() {
 }
 
 function Overview() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [items, setItems] = useState<Pipeline[] | null>(null);
   const [me, setMe] = useState<{ enabled: boolean; can_manage_people: boolean } | null>(null);
@@ -46,9 +48,9 @@ function Overview() {
       setMe(who);
     } catch (e: any) {
       setItems([]);
-      toast(e?.message || "Pipelines konnten nicht geladen werden", "error");
+      toast(e?.message || t("pipelines.loadFailed"), "error");
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -69,17 +71,17 @@ function Overview() {
             onClick={() => setPicking(true)}
             className="flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium"
           >
-            <Plus className="w-4 h-4" /> Antwort verfolgen
+            <Plus className="w-4 h-4" /> {t("pipelines.trackReply")}
           </button>
         )}
       </div>
       <p className="text-sm text-muted-foreground mb-7">
-        Yorik bleibt dran, bis die Antwort da ist, und fragt dich vor jeder Erinnerung.
+        {t("pipelines.intro")}
       </p>
 
       {me?.enabled === false && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm mb-6">
-          Pipelines sind für dich ausgeschaltet. Deine Eltern oder ein Admin können sie wieder einschalten.
+          {t("pipelines.switchedOffForYou")}
         </div>
       )}
 
@@ -90,34 +92,34 @@ function Overview() {
             try {
               const p = await api.post<Pipeline>("/api/pipelines", { mail_id: mailId });
               navigate(`/pipelines/${p.id}`);
-            } catch (e: any) { toast(e?.message || "Anlegen fehlgeschlagen", "error"); }
+            } catch (e: any) { toast(e?.message || t("pipelines.createFailed"), "error"); }
           }}
         />
       )}
 
-      {items === null && <div className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Lädt…</div>}
+      {items === null && <div className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {t("common.loading")}</div>}
 
       {items && items.length === 0 && me?.enabled !== false && (
         <FirstSteps onPicked={async (mailId) => {
           try {
             const p = await api.post<Pipeline>("/api/pipelines", { mail_id: mailId });
             navigate(`/pipelines/${p.id}`);
-          } catch (e: any) { toast(e?.message || "Anlegen fehlgeschlagen", "error"); }
+          } catch (e: any) { toast(e?.message || t("pipelines.createFailed"), "error"); }
         }} />
       )}
 
       {needs.length > 0 && (
-        <Section title="Braucht dich" accent>
+        <Section title={t("pipelines.section.needsYou")} accent>
           {needs.map(p => <Row key={p.id} p={p} />)}
         </Section>
       )}
       {running.length > 0 && (
-        <Section title="Laufend">
+        <Section title={t("pipelines.section.running")}>
           {running.map(p => <Row key={p.id} p={p} />)}
         </Section>
       )}
       {drafts.length > 0 && (
-        <Section title="Entwürfe">
+        <Section title={t("pipelines.section.drafts")}>
           {drafts.map(p => <Row key={p.id} p={p} />)}
         </Section>
       )}
@@ -128,7 +130,7 @@ function Overview() {
             className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground mb-2"
           >
             {showDone ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            Beendet ({done.length})
+            {t("pipelines.section.ended", { count: done.length })}
           </button>
           {showDone && <div className="space-y-2">{done.map(p => <Row key={p.id} p={p} />)}</div>}
         </div>
@@ -149,11 +151,12 @@ function Section({ title, accent, children }: { title: string; accent?: boolean;
 }
 
 function Row({ p }: { p: Pipeline }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const sub = p.state === "laeuft" && p.attention
     ? attentionLabel(p.attention)
     : p.state === "laeuft" && p.next_step
-      ? (p.next_step.action === "uebergabe" ? "Übergabe an dich " : "Nächste Erinnerung ") + relDay(p.next_step.due_at)
+      ? t(p.next_step.action === "uebergabe" ? "pipelines.nextHandover" : "pipelines.nextReminder", { when: relDay(p.next_step.due_at) })
       : stateLabel(p.state);
   const sentCount = p.steps.filter(s => s.action === "mail_senden" && s.status === "erledigt").length;
   const mailSteps = p.steps.filter(s => s.action === "mail_senden").length;
@@ -183,16 +186,13 @@ function Row({ p }: { p: Pipeline }) {
 /** The empty page: how it works in three steps, and the latest sent
  *  mails right here, so the first pipeline is one tap away. */
 function FirstSteps({ onPicked }: { onPicked: (id: number) => void }) {
+  const { t } = useTranslation();
   const [mails, setMails] = useState<SentMail[] | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   useEffect(() => {
     api.get<SentMail[]>("/api/pipelines/sent-mails").then(m => setMails(m.slice(0, 6))).catch(() => setMails([]));
   }, []);
-  const steps = [
-    ["Mail wählen", "eine Kündigung, Anfrage oder Forderung, die du geschickt hast"],
-    ["Ablauf freigeben", "Yorik schlägt Erinnerungen vor; du passt Tage und Texte an und gibst jede frei"],
-    ["Yorik bleibt dran", "er sucht die Antwort in all deiner Post, auch von anderen Adressen, und fragt dich vor jeder Erinnerung"],
-  ];
+  const steps = [1, 2, 3].map(n => [t(`pipelines.firstSteps.step${n}Title`), t(`pipelines.firstSteps.step${n}Text`)]);
   return (
     <div className="space-y-6">
       <ol className="grid gap-2 sm:grid-cols-3">
@@ -207,25 +207,25 @@ function FirstSteps({ onPicked }: { onPicked: (id: number) => void }) {
         ))}
       </ol>
       <div>
-        <div className="text-[13px] font-medium text-muted-foreground mb-2">Zuletzt gesendet — welche soll Yorik verfolgen?</div>
-        {mails === null && <div className="text-sm text-muted-foreground">Lädt…</div>}
+        <div className="text-[13px] font-medium text-muted-foreground mb-2">{t("pipelines.firstSteps.recentlySent")}</div>
+        {mails === null && <div className="text-sm text-muted-foreground">{t("common.loading")}</div>}
         {mails && mails.length === 0 && (
-          <div className="text-sm text-muted-foreground">Noch keine gesendeten Mails in Yorik. Schreib eine in Mail, dann taucht sie hier auf.</div>
+          <div className="text-sm text-muted-foreground">{t("pipelines.firstSteps.noSentMails")}</div>
         )}
         <div className="space-y-2">
           {mails?.map(m => (
             <div key={m.id} className="rounded-xl border border-border bg-card px-4 py-3 flex items-center gap-3">
               <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium truncate">{m.subject || "(ohne Betreff)"}</div>
-                <div className="text-xs text-muted-foreground truncate">an {m.to.join(", ")} · {relDay(m.date)}</div>
+                <div className="text-sm font-medium truncate">{m.subject || t("pipelines.noSubject")}</div>
+                <div className="text-xs text-muted-foreground truncate">{t("pipelines.toWhen", { to: m.to.join(", "), when: relDay(m.date) })}</div>
               </div>
               <button
                 disabled={busy !== null}
                 onClick={() => { setBusy(m.id); onPicked(m.id); }}
                 className="shrink-0 text-[13px] rounded-md border border-primary/40 text-primary px-2.5 py-1 hover:bg-primary/10 disabled:opacity-40 flex items-center gap-1"
               >
-                {busy === m.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null} Verfolgen
+                {busy === m.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null} {t("pipelines.follow")}
               </button>
             </div>
           ))}
@@ -236,6 +236,7 @@ function FirstSteps({ onPicked }: { onPicked: (id: number) => void }) {
 }
 
 function SentMailPicker({ onClose, onPicked }: { onClose: () => void; onPicked: (id: number) => void }) {
+  const { t } = useTranslation();
   const [mails, setMails] = useState<SentMail[] | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   useEffect(() => {
@@ -246,14 +247,14 @@ function SentMailPicker({ onClose, onPicked }: { onClose: () => void; onPicked: 
       <div className="bg-card border border-border rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-border">
           <div>
-            <div className="font-medium">Welche Mail verfolgen?</div>
-            <div className="text-xs text-muted-foreground">Deine zuletzt gesendeten Mails</div>
+            <div className="font-medium">{t("pipelines.picker.title")}</div>
+            <div className="text-xs text-muted-foreground">{t("pipelines.picker.subtitle")}</div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted" aria-label="Schließen"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-muted" aria-label={t("common.close")}><X className="w-4 h-4" /></button>
         </div>
         <div className="overflow-y-auto p-2">
-          {mails === null && <div className="p-4 text-sm text-muted-foreground">Lädt…</div>}
-          {mails && mails.length === 0 && <div className="p-4 text-sm text-muted-foreground">Keine gesendeten Mails gefunden.</div>}
+          {mails === null && <div className="p-4 text-sm text-muted-foreground">{t("common.loading")}</div>}
+          {mails && mails.length === 0 && <div className="p-4 text-sm text-muted-foreground">{t("pipelines.picker.none")}</div>}
           {mails?.map(m => (
             <button
               key={m.id}
@@ -262,8 +263,8 @@ function SentMailPicker({ onClose, onPicked }: { onClose: () => void; onPicked: 
               className="w-full text-left rounded-lg px-3 py-2.5 hover:bg-muted/60 flex gap-3 items-start"
             >
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium truncate">{m.subject || "(ohne Betreff)"}</div>
-                <div className="text-xs text-muted-foreground truncate">an {m.to.join(", ")} · {relDay(m.date)}</div>
+                <div className="text-sm font-medium truncate">{m.subject || t("pipelines.noSubject")}</div>
+                <div className="text-xs text-muted-foreground truncate">{t("pipelines.toWhen", { to: m.to.join(", "), when: relDay(m.date) })}</div>
               </div>
               {busy === m.id && <Loader2 className="w-4 h-4 animate-spin mt-1" />}
             </button>
@@ -275,6 +276,7 @@ function SentMailPicker({ onClose, onPicked }: { onClose: () => void; onPicked: 
 }
 
 function PeopleSwitches() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [people, setPeople] = useState<PersonSwitch[] | null>(null);
   const load = useCallback(() => {
@@ -285,34 +287,34 @@ function PeopleSwitches() {
   async function flip(p: PersonSwitch) {
     try {
       await api.put(`/api/pipelines/people/${p.id}`, { enabled: !p.enabled });
-      toast(`Pipelines für ${p.name} ${p.enabled ? "aus" : "an"}`, "success");
+      toast(t(p.enabled ? "pipelines.people.turnedOff" : "pipelines.people.turnedOn", { name: p.name }), "success");
       load();
-    } catch (e: any) { toast(e?.message || "Ging nicht", "error"); }
+    } catch (e: any) { toast(e?.message || t("pipelines.failed"), "error"); }
   }
 
   return (
     <div className="mt-10 border-t border-border pt-5">
       <button onClick={() => setOpen(v => !v)} className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
-        <Users className="w-4 h-4" /> Wer darf Pipelines nutzen
+        <Users className="w-4 h-4" /> {t("pipelines.people.title")}
         {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
       </button>
       {open && (
         <div className="mt-3 space-y-1.5">
           <p className="text-xs text-muted-foreground mb-2">
-            Für alle an. Ausschalten hält laufende Pipelines der Person an; ihre Inhalte siehst du dadurch nicht.
+            {t("pipelines.people.explain")}
           </p>
-          {people === null && <div className="text-sm text-muted-foreground">Lädt…</div>}
+          {people === null && <div className="text-sm text-muted-foreground">{t("common.loading")}</div>}
           {people?.map(p => (
             <div key={p.id} className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
               <div className="min-w-0">
                 <div className="text-sm">{p.name}</div>
                 {!p.can_change ? (
-                  <div className="text-xs text-muted-foreground">nur ein Admin kann das ändern</div>
+                  <div className="text-xs text-muted-foreground">{t("pipelines.people.adminOnly")}</div>
                 ) : p.changed_by && (
-                  <div className="text-xs text-muted-foreground">zuletzt geändert von {p.changed_by}</div>
+                  <div className="text-xs text-muted-foreground">{t("pipelines.people.changedBy", { name: p.changed_by })}</div>
                 )}
               </div>
-              {p.can_change && <Toggle on={p.enabled} onClick={() => flip(p)} label={`Pipelines für ${p.name}`} />}
+              {p.can_change && <Toggle on={p.enabled} onClick={() => flip(p)} label={t("pipelines.people.toggleLabel", { name: p.name })} />}
             </div>
           ))}
         </div>

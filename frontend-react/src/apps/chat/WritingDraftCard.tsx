@@ -7,11 +7,13 @@
  */
 import { useNavigate } from "react-router-dom";
 import { FileText, PenLine } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export function WritingDraftCard({ documentId, kind = "letter", recipient, subject, preview, missing }: {
   documentId: number; kind?: string; recipient: string; subject: string; preview: string; missing: string[];
 }) {
-  const label = kind === "invoice" ? "Rechnung" : kind === "quote" ? "Angebot" : "Brief";
+  const { t } = useTranslation();
+  const label = t(kind === "invoice" ? "write.invoice" : kind === "quote" ? "write.quote" : "write.letter");
   const navigate = useNavigate();
   return (
     <div className="mt-2 max-w-xl rounded-xl border border-border bg-card p-4">
@@ -19,14 +21,14 @@ export function WritingDraftCard({ documentId, kind = "letter", recipient, subje
         <span className="grid place-items-center w-9 h-9 rounded-lg bg-primary/15 text-primary shrink-0"><FileText className="w-5 h-5" /></span>
         <div className="min-w-0 flex-1">
           <div className="font-semibold truncate">{kind === "letter" ? (subject || label) : `${label}${subject && subject !== label ? ` · ${subject}` : ""}`}</div>
-          <div className="text-xs text-muted-foreground truncate">an {recipient || "— Empfänger fehlt"}</div>
+          <div className="text-xs text-muted-foreground truncate">{t("write.cardTo", { name: recipient || t("write.cardRecipientMissing") })}</div>
           {preview && <p className="mt-2 text-sm text-muted-foreground line-clamp-3">{preview}</p>}
-          {missing.length > 0 && <p className="mt-2 text-xs rounded-md bg-amber-500/15 text-amber-300 px-2 py-1 inline-block">Auf dem Blatt noch markiert: {missing.join(", ")}</p>}
+          {missing.length > 0 && <p className="mt-2 text-xs rounded-md bg-amber-500/15 text-amber-300 px-2 py-1 inline-block">{t("write.cardMarked", { list: missing.join(", ") })}</p>}
         </div>
       </div>
       <div className="mt-3 flex justify-end">
         <button onClick={() => navigate(`/write?id=${documentId}`)} className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium">
-          <PenLine className="w-4 h-4" /> Öffnen und bearbeiten
+          <PenLine className="w-4 h-4" /> {t("write.cardOpen")}
         </button>
       </div>
     </div>

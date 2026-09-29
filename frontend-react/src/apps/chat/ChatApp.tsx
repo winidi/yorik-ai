@@ -11,6 +11,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
+import { formatDate } from "@/i18n/format";
 import {
   Loader2, Send, Plus, Search, Trash2, MessageSquare, Sparkles,
   FileText, Download, Eye, X, ArrowDown, ThumbsUp, ThumbsDown,
@@ -446,6 +449,7 @@ function Thread({
   onConversationCreated: (id: string) => void;
   onTurnAppended: () => void;
 }) {
+  const { t: tr } = useTranslation();
   // Per-conversation attachment stash. Empty array for the draft case
   // (no conversation row yet); becomes live the moment the first turn
   // creates the row. Photo/document cards call `addToStash` and pass
@@ -657,7 +661,7 @@ function Thread({
     const blob = new Blob(voiceChunksRef.current, { type: mimeType || "audio/webm" });
     voiceChunksRef.current = [];
     if (blob.size < 1000) {
-      setVoiceError("Zu kurz — bitte noch mal aufnehmen.");
+      setVoiceError(i18n.t("chat.voice.tooShort"));
       setVoiceState("idle");
       return;
     }
@@ -675,7 +679,7 @@ function Thread({
       const data = await r.json() as { text: string };
       const transcript = (data.text || "").trim();
       if (!transcript) {
-        setVoiceError("Leeres Transkript — bitte noch mal aufnehmen.");
+        setVoiceError(i18n.t("chat.voice.emptyTranscript"));
         setVoiceState("idle");
         return;
       }
@@ -686,7 +690,7 @@ function Thread({
       // Re-focus composer so the user can edit / press Enter immediately.
       window.setTimeout(() => composerRef.current?.focus(), 30);
     } catch (e: any) {
-      setVoiceError(e?.message || "Transkription fehlgeschlagen.");
+      setVoiceError(e?.message || i18n.t("chat.voice.transcriptionFailed"));
       setVoiceState("idle");
     }
   }, []);
@@ -710,7 +714,7 @@ function Thread({
         setVoiceSeconds(Math.floor((Date.now() - startedAt) / 1000));
       }, 250);
     } catch (e: any) {
-      setVoiceError(e?.message || "Kein Zugriff aufs Mikrofon.");
+      setVoiceError(e?.message || i18n.t("chat.voice.noMicrophone"));
       setVoiceState("idle");
     }
   }, [voiceState, handleVoiceStopped]);
@@ -1448,7 +1452,7 @@ function Thread({
   // the assistant reads it, and filed in Paperless only on the user's
   // yes (card under the message, or "ja, leg das ab").
   async function uploadDocument(file: File) {
-    setUploadToast({ kind: "ok", text: `${file.name} wird hochgeladen…` });
+    setUploadToast({ kind: "ok", text: tr("chat.upload.uploading", { name: file.name }) });
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -1465,7 +1469,7 @@ function Thread({
         detail: { seed: `${note ? note + "\n\n" : ""}Ich habe „${att.filename}“ angehängt (Anhang #${att.id}).` },
       }));
     } catch (err: any) {
-      setUploadToast({ kind: "err", text: `Upload fehlgeschlagen: ${err?.message || err}` });
+      setUploadToast({ kind: "err", text: tr("chat.upload.failed", { error: err?.message || err }) });
       window.setTimeout(() => setUploadToast(null), 4500);
     }
   }
@@ -1565,6 +1569,7 @@ function MessageBubble({
   onAttach?: (item: StashItem) => void;
   isAttached?: (url: string, filename: string) => boolean;
 }) {
+  const { t: tr } = useTranslation();
   const me = useAuth().user;
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
@@ -1827,16 +1832,16 @@ function MessageBubble({
           .filter(a => a.type === "pipeline_ready")
           .map((a: any, i: number) => (
             <div key={`pl-${i}`} className="mt-2 max-w-xl rounded-xl border border-border bg-card p-4">
-              <div className="font-semibold truncate">Nachfassen: {a.title || "Mail"}</div>
+              <div className="font-semibold truncate">{tr("chat.pipeline.followUp", { title: a.title || tr("chat.pipeline.mail") })}</div>
               {Array.isArray(a.to) && a.to.length > 0 && (
-                <div className="text-xs text-muted-foreground truncate">an {a.to.join(", ")}</div>
+                <div className="text-xs text-muted-foreground truncate">{tr("chat.email.to", { to: a.to.join(", ") })}</div>
               )}
               <p className="mt-2 text-sm text-muted-foreground">
-                Yorik schreibt die Erinnerungen. Jede wird dir vor dem Senden gezeigt.
+                {tr("chat.pipeline.hint")}
               </p>
               <div className="mt-3 flex justify-end">
                 <a href={a.link} className="rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium">
-                  Ansehen und freigeben →
+                  {tr("chat.pipeline.review")} →
                 </a>
               </div>
             </div>
@@ -2168,14 +2173,14 @@ function formatToolStatus(tool: string, args: Record<string, any> | undefined): 
   // Skills run through invoke_skill; a few deserve their own line.
   if (tool === "invoke_skill" || tool === "use_skill") {
     const name = String(a.name || "");
-    if (name === "ask_agent") return "Fragt Hermes… (kann eine Minute dauern)";
-    if (name === "plan_my_day") return "Sammelt Termine, Aufgaben und Briefing…";
-    if (name === "plan_day") return "Trägt den Plan ein…";
-    if (name === "day_review") return "Schaut auf den Tag zurück…";
-    if (name === "start_recording") return "Startet die Aufnahme…";
-    if (name === "finish_recording") return "Beendet die Aufnahme…";
-    if (name === "recording_status") return "Liest das Transkript…";
-    if (name === "recording_report") return "Holt den Bericht… (beim ersten Mal bis zu einer Minute)";
+    if (name === "ask_agent") return i18n.t("chat.status.askAgent");
+    if (name === "plan_my_day") return i18n.t("chat.status.planMyDay");
+    if (name === "plan_day") return i18n.t("chat.status.planDay");
+    if (name === "day_review") return i18n.t("chat.status.dayReview");
+    if (name === "start_recording") return i18n.t("chat.status.startRecording");
+    if (name === "finish_recording") return i18n.t("chat.status.finishRecording");
+    if (name === "recording_status") return i18n.t("chat.status.recordingStatus");
+    if (name === "recording_report") return i18n.t("chat.status.recordingReport");
   }
   switch (tool) {
     case "web_search":   return `Searching the web for "${head(a.query || "")}"…`;
@@ -2232,6 +2237,7 @@ function WebResultsCard({
   provider: string;
   results: Array<{ title: string; url: string; snippet: string }>;
 }) {
+  const { t: tr } = useTranslation();
   if (!results || results.length === 0) return null;
 
   function shortHost(url: string): string {
@@ -2285,7 +2291,7 @@ function WebResultsCard({
               onClick={() => ask(r.url, r.title)}
               className="mt-1.5 text-xs px-2 py-0.5 rounded bg-blue-500/15 hover:bg-blue-500/25 text-blue-700 dark:text-blue-300 transition"
             >
-              Details holen
+              {tr("chat.web.getDetails")}
             </button>
           </li>
         ))}
@@ -2307,13 +2313,14 @@ function VenueSavedCard({
   url?: string;
   hasPrices?: boolean;
 }) {
+  const { t: tr } = useTranslation();
   return (
     <div className="mt-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.05] px-4 py-2.5 flex items-center gap-3 max-w-md">
       <div className="w-7 h-7 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0">
         <Check className="w-4 h-4 text-emerald-600" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate">{name} gespeichert</div>
+        <div className="text-sm font-medium truncate">{tr("chat.venue.saved", { name })}</div>
         <div className="text-xs text-muted-foreground truncate">
           {category && <>as "{category}" · </>}
           {hasPrices ? "Prices saved · " : ""}
@@ -2380,6 +2387,7 @@ function PriceSummaryCard({
   totalCount: number;
   sourceUrl?: string;
 }) {
+  const { t: tr } = useTranslation();
   if (!lineItems || lineItems.length === 0) return null;
   const symbol = currency === "EUR" ? "€" : currency;
   function fmt(v: number) { return v.toFixed(2).replace(".", ","); }
@@ -2394,7 +2402,7 @@ function PriceSummaryCard({
         <div className="px-4 py-2.5 border-b border-emerald-500/20 flex items-center gap-2 text-xs">
           <span className="font-medium">{title}</span>
           <span className="ml-auto text-2xs text-muted-foreground tabular-nums">
-            {totalCount} {totalCount === 1 ? "Person" : "Personen"}
+            {tr("chat.price.people", { count: totalCount })}
           </span>
         </div>
       )}
@@ -2414,7 +2422,7 @@ function PriceSummaryCard({
         ))}
       </ul>
       <div className="px-4 py-2.5 border-t border-emerald-500/30 bg-emerald-500/10 flex items-center justify-between text-sm font-semibold">
-        <span>Gesamt</span>
+        <span>{tr("chat.price.total")}</span>
         <span className="tabular-nums">{fmt(totalEur)} {symbol}</span>
       </div>
       {sourceUrl && (
@@ -2451,14 +2459,15 @@ function ComposeDraftCard({
   alternates?: Array<{ id: string; name: string; score?: number }>;
   missingArgs?: string[];
 }) {
+  const { t: tr } = useTranslation();
   const navigate = useNavigate();
   const [showAlts, setShowAlts] = useState(false);
   const kindLabel: Record<string, string> = {
-    letter:  "Brief",
-    invoice: "Rechnung",
-    offer:   "Angebot",
-    email:   "E-Mail",
-    memo:    "Notiz",
+    letter:  tr("chat.draftKind.letter"),
+    invoice: tr("chat.draftKind.invoice"),
+    offer:   tr("chat.draftKind.offer"),
+    email:   tr("chat.draftKind.email"),
+    memo:    tr("chat.draftKind.memo"),
   };
   const hasAlts = (alternates?.length ?? 0) > 0;
   return (
@@ -2466,15 +2475,15 @@ function ComposeDraftCard({
       <div className="px-3 pt-2.5 pb-2">
         <div className="flex items-center gap-1.5 mb-1.5">
           <DocKindIcon kind={kind} />
-          <span className="text-xs font-semibold">{kindLabel[kind] || "Dokument"} vorbereitet</span>
+          <span className="text-xs font-semibold">{tr("chat.draft.prepared", { kind: kindLabel[kind] || tr("chat.draftKind.document") })}</span>
           <span className="text-2xs text-muted-foreground font-mono ml-auto">#{draftId}</span>
         </div>
         <div className="space-y-0.5 text-xs">
           {recipient && (
-            <div><span className="text-muted-foreground">An:</span> <span className="font-medium">{recipient}</span></div>
+            <div><span className="text-muted-foreground">{tr("chat.draft.toLabel")}</span> <span className="font-medium">{recipient}</span></div>
           )}
           {subject && (
-            <div><span className="text-muted-foreground">Betreff:</span> <span className="font-medium">{subject}</span></div>
+            <div><span className="text-muted-foreground">{tr("chat.draft.subjectLabel")}</span> <span className="font-medium">{subject}</span></div>
           )}
           {preview && (
             <div className="text-muted-foreground italic mt-1 line-clamp-2">{preview}…</div>
@@ -2525,7 +2534,7 @@ function ComposeDraftCard({
           onClick={() => navigate(`/compose?draft_id=${draftId}`)}
           className="text-xs px-3 py-1.5 rounded-md bg-violet-500 hover:bg-violet-600 text-white font-medium transition inline-flex items-center gap-1 shadow-sm"
         >
-          Bearbeiten <span aria-hidden>→</span>
+          {tr("chat.draft.edit")} <span aria-hidden>→</span>
         </button>
       </div>
     </div>
@@ -2556,6 +2565,7 @@ function TemplatePickerCard({
   query: string;
   templates: TemplateCandidate[];
 }) {
+  const { t: tr } = useTranslation();
   // Click → seed `[template_picked id=X]`. The explicit prefix makes
   // it unambiguous for the LLM that the next step is compose_draft
   // with the chosen template, not "let me re-rank again".
@@ -2582,7 +2592,7 @@ function TemplatePickerCard({
   return (
     <div className="mt-2 border border-blue-500/30 rounded-xl bg-blue-500/[0.04] overflow-hidden max-w-md">
       <div className="px-3 pt-2.5 pb-1.5 text-xs text-blue-500 font-semibold">
-        Welche Vorlage? {query ? `(„${query}")` : ""}
+        {tr("chat.template.which")} {query ? tr("chat.quotedQuery", { query }) : ""}
       </div>
       <div className="divide-y divide-blue-500/10">
         {templates.slice(0, 3).map(t => {
@@ -2617,7 +2627,7 @@ function TemplatePickerCard({
         onClick={findMore}
         className="w-full text-center px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-blue-500/[0.06] transition border-t border-blue-500/10"
       >
-        Andere Vorlage suchen…
+        {tr("chat.template.findOther")}
       </button>
     </div>
   );
@@ -2652,6 +2662,7 @@ function PoiPickerCard({
   near: string;
   pois: Poi[];
 }) {
+  const { t: tr } = useTranslation();
   const [query, setQuery] = useState("");
 
   if (!pois.length) return null;
@@ -2729,7 +2740,7 @@ function PoiPickerCard({
         onClick={pickOwn}
         className="w-full text-left px-3 py-2 border-t border-violet-500/10 text-xs text-violet-500 hover:bg-violet-500/[0.06] transition font-medium"
       >
-        Keiner davon — eigenen Kontakt eintragen
+        {tr("chat.poi.noneAddOwn")}
       </button>
     </div>
   );
@@ -2775,6 +2786,7 @@ function ContactPickerCard({
    *  Header copy + row ordering shift to match. */
   ranked?: boolean;
 }) {
+  const { t: tr } = useTranslation();
   const [browseOpen, setBrowseOpen] = useState(false);
 
   if (!contacts.length) return null;
@@ -2798,14 +2810,14 @@ function ContactPickerCard({
     <>
       <div className="mt-2 border border-violet-500/30 rounded-xl bg-violet-500/[0.04] overflow-hidden max-w-md">
         <div className="px-3 pt-2.5 pb-1.5 text-xs text-violet-500 font-semibold">
-          {ranked ? "Meinst du" : "Welcher Kontakt?"} {query ? `(„${query}")` : ""}
+          {ranked ? tr("chat.contact.doYouMean") : tr("chat.contact.which")} {query ? tr("chat.quotedQuery", { query }) : ""}
         </div>
         <div className="divide-y divide-violet-500/10 max-h-72 overflow-y-auto">
           {ordered.map((c, i) => {
             // Lead with relation/kind, then address on its own line, then
             // a compact contact-channel row (phone · email · whatsapp).
             const header = c.relation
-              || (c.kind === "business" ? "Unternehmen" : "Person");
+              || (c.kind === "business" ? tr("chat.contact.business") : tr("chat.contact.person"));
             const channels = [
               c.phone || "",
               c.email || "",
@@ -2832,7 +2844,7 @@ function ContactPickerCard({
                         "text-2xs px-1.5 py-0.5 rounded-full font-medium tabular-nums shrink-0",
                         confTone,
                       )}
-                      title={c.reason || "LLM-Konfidenz"}
+                      title={c.reason || tr("chat.contact.llmConfidence")}
                     >
                       {conf}%
                     </span>
@@ -2869,7 +2881,7 @@ function ContactPickerCard({
           className="w-full px-3 py-2 text-xs text-violet-500 hover:bg-violet-500/[0.06] border-t border-violet-500/10 text-left flex items-center gap-1.5"
         >
           <Search className="w-3 h-3" />
-          Keiner davon — aus Kontaktliste wählen →
+          {tr("chat.contact.noneBrowse")} →
         </button>
       </div>
       {browseOpen && (
@@ -2897,6 +2909,7 @@ function AllContactsBrowserModal({
   onClose: () => void;
   onPick: (c: ContactCandidate) => void;
 }) {
+  const { t: tr } = useTranslation();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ContactCandidate[]>([]);
   const [loading, setLoading] = useState(false);
@@ -2943,12 +2956,12 @@ function AllContactsBrowserModal({
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <UsersRound className="w-4 h-4 text-violet-500" />
-            <span className="text-sm font-semibold">Kontakt wählen</span>
+            <span className="text-sm font-semibold">{tr("chat.contact.pick")}</span>
           </div>
           <button
             onClick={onClose}
             className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition"
-            title="Schließen"
+            title={tr("common.close")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -2961,14 +2974,14 @@ function AllContactsBrowserModal({
               ref={inputRef}
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Name, Beziehung oder Alias…"
+              placeholder={tr("chat.contact.searchPlaceholder")}
               className="w-full h-9 pl-8 pr-8 bg-muted/60 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-violet-500/40"
             />
             {query && (
               <button
                 onClick={() => setQuery("")}
                 className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground"
-                title="Suche leeren"
+                title={tr("chat.contact.clearSearch")}
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -2984,12 +2997,12 @@ function AllContactsBrowserModal({
           )}
           {!loading && results.length === 0 && (
             <div className="text-center py-6 text-xs text-muted-foreground italic">
-              {query ? `Keine Treffer für „${query}"` : "Keine Kontakte"}
+              {query ? tr("chat.contact.noMatches", { query }) : tr("chat.contact.none")}
             </div>
           )}
           {!loading && results.map((c, i) => {
             const header = c.relation
-              || (c.kind === "business" ? "Unternehmen" : "Person");
+              || (c.kind === "business" ? tr("chat.contact.business") : tr("chat.contact.person"));
             return (
               <button
                 key={c.id}
@@ -3041,6 +3054,7 @@ function TasksFoundCard({
   tasks: TaskCardRow[];
   total: number;
 }) {
+  const { t: tr } = useTranslation();
   const navigate = useNavigate();
   const [localDone, setLocalDone] = useState<Record<number, boolean>>({});
 
@@ -3056,7 +3070,7 @@ function TasksFoundCard({
     // Render YYYY-MM-DD as MMM D for a compact English date
     const dt = new Date(d + "T00:00:00");
     if (Number.isNaN(dt.getTime())) return d;
-    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return formatDate(dt, { month: "short", day: "numeric" });
   }
 
   async function toggleDone(id: number, current: boolean) {
@@ -3075,7 +3089,7 @@ function TasksFoundCard({
     <div className="mt-2 border border-emerald-500/30 rounded-xl bg-emerald-500/[0.04] overflow-hidden max-w-md">
       <div className="px-3 pt-2.5 pb-1.5 text-xs text-emerald-500 font-semibold flex items-center gap-1.5">
         <CheckSquare className="w-3 h-3" />
-        Aufgaben ({total})
+        {tr("chat.tasks.header", { total })}
       </div>
       <div className="divide-y divide-emerald-500/10 max-h-[420px] overflow-y-auto">
         {tasks.map(t => {
@@ -3096,7 +3110,7 @@ function TasksFoundCard({
                     ? "bg-emerald-500 border-emerald-500 text-white"
                     : "border-muted-foreground/40 hover:border-emerald-500"
                 )}
-                title={doneNow ? "Als offen markieren" : "Als erledigt markieren"}
+                title={doneNow ? tr("chat.tasks.markOpen") : tr("chat.tasks.markDone")}
               >
                 {doneNow && <Check className="w-3 h-3" />}
               </button>
@@ -3185,7 +3199,7 @@ function EventsFoundCard({
     if (iso === todayIso) return "today";
     const dt = new Date(iso + "T00:00:00");
     if (Number.isNaN(dt.getTime())) return iso;
-    return dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    return formatDate(dt, { weekday: "short", month: "short", day: "numeric" });
   }
 
   function fmtTime(starts: string, ends: string | null, allDay?: boolean): string {
@@ -3276,6 +3290,7 @@ function ContactsFoundCard({
    *  sets this via the pick_to_chat input. */
   pickToChat?: boolean;
 }) {
+  const { t: tr } = useTranslation();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
 
@@ -3312,7 +3327,7 @@ function ContactsFoundCard({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter (Name oder Beziehung)…"
+            placeholder={tr("chat.contact.filterPlaceholder")}
             className="w-full text-xs px-2 py-1.5 rounded-md bg-background border border-violet-500/20 focus:border-violet-500 focus:outline-none"
           />
         </div>
@@ -4387,7 +4402,7 @@ function splitTitleDate(title: string): { date: string | null; rest: string } {
   if (!title) return { date: null, rest: title };
   const m = title.match(/^(\d{4})-(\d{2})-(\d{2})\s+(.+)$/);
   if (!m) return { date: null, rest: title };
-  return { date: `${m[3]}.${m[2]}.${m[1]}`, rest: m[4] };
+  return { date: formatDate(`${m[1]}-${m[2]}-${m[3]}T00:00:00`, { day: "2-digit", month: "2-digit", year: "numeric" }), rest: m[4] };
 }
 
 function formatRelative(iso: string): string {
@@ -4398,7 +4413,7 @@ function formatRelative(iso: string): string {
   if (diffMin < 60) return `${Math.round(diffMin)}m ago`;
   if (diffMin < 24 * 60) return `${Math.round(diffMin / 60)}h ago`;
   if (diffMin < 7 * 24 * 60) return `${Math.round(diffMin / (24 * 60))}d ago`;
-  return d.toLocaleDateString([], { day: "numeric", month: "short" });
+  return formatDate(d, { day: "numeric", month: "short" });
 }
 
 
