@@ -1104,7 +1104,7 @@ export function ComposeApp() {
                       type="button"
                       onClick={(e) => { e.stopPropagation(); removeTemplate(tpl); }}
                       title={`Remove "${tpl.name}" from this Yorik`}
-                      className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
+                      className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 transition"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -4475,7 +4475,7 @@ function DraftsListPanel({
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(d.id); }}
-              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-600"
+              className="absolute top-2 right-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-600"
               title="Delete draft"
             >
               <X className="w-3.5 h-3.5" />

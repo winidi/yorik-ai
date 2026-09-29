@@ -281,7 +281,7 @@ export function NotificationBell() {
                   <button
                     onClick={(e) => { e.stopPropagation(); void dismiss(n.id); }}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="absolute top-2 right-2 p-1 rounded-full text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-muted"
+                    className="absolute top-2 right-2 p-1 rounded-full text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 hover:bg-muted"
                     title="Remove"
                     aria-label="Remove notification"
                   >

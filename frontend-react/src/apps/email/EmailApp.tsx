@@ -1247,7 +1247,9 @@ function MessageList({
               <Avatar name={m.from_name || m.from_email} />
             </PersonHover>
             <div className="flex-1 min-w-0">
-              <div className="flex items-baseline justify-between gap-2">
+              {/* On a phone the quick actions always show in the row's
+                  top-right corner; the sender and date make room. */}
+              <div className={cn("flex items-baseline justify-between gap-2", onQuickAction && "max-md:pr-32")}>
                 <span className={cn(
                   "text-sm truncate",
                   m.is_unread ? "font-semibold text-foreground" : "text-muted-foreground",

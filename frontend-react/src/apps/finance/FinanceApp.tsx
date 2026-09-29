@@ -451,7 +451,7 @@ function AccountsList({ accounts, syncingId, onSync, onDelete, compact }: {
           <button
             onClick={() => onSync(a.id)}
             disabled={syncingId === a.id}
-            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50 transition-opacity"
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50 transition-opacity"
             title="Jetzt synchronisieren"
           >
             {syncingId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -459,7 +459,7 @@ function AccountsList({ accounts, syncingId, onSync, onDelete, compact }: {
           {!compact && (
             <button
               onClick={() => onDelete(a.id)}
-              className="p-1.5 rounded-md text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+              className="p-1.5 rounded-md text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
               title="Konto entfernen"
             >
               <Trash2 className="w-4 h-4" />

@@ -14,7 +14,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   Loader2, Send, Plus, Search, Trash2, MessageSquare, Sparkles,
   FileText, Download, Eye, X, ArrowDown, ThumbsUp, ThumbsDown,
-  AlertCircle, Globe, Check, Upload, Copy, RefreshCw, Calendar,
+  AlertCircle, Globe, Check, Upload, Paperclip, Copy, RefreshCw, Calendar,
   CheckSquare, UsersRound, Cake, ChevronDown, ChevronLeft, ChevronRight,
   Pin, PinOff, Mic, Pencil, Square, Bug,
 } from "lucide-react";
@@ -1340,7 +1340,7 @@ function Thread({
               aria-label="Attach a file"
               className="w-11 h-11 md:w-9 md:h-9 rounded-full flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition disabled:opacity-50"
             >
-              <Upload className="w-5 h-5 md:w-4 md:h-4" />
+              <Paperclip className="w-5 h-5 md:w-4 md:h-4" />
             </button>
             <button
               type="button"
@@ -4331,7 +4331,7 @@ function TurnFeedback({ conversationId, messageIdx }:
   return (
     <div className={cn(
       "mt-1.5 flex items-center gap-1 transition-opacity",
-      rated ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+      rated ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100",
     )}>
       <button
         onClick={() => rate(1)}
