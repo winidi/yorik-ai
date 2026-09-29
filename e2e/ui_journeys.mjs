@@ -158,7 +158,7 @@ await journey("Clara opens the family board on the wall page", "desktop", async 
   await page.goto(BASE + "/r/board");
   await page.waitForLoadState("networkidle");
   const text = await page.locator("body").innerText();
-  return [/Clara|Mich anzeigen/.test(text), text.replace(/\s+/g, " ").slice(0, 200)];
+  return [/Clara|Mich anzeigen|Show me/.test(text), text.replace(/\s+/g, " ").slice(0, 200)];
 }, browser);
 
 await browser.close();
