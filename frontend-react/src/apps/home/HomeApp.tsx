@@ -25,7 +25,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Sparkles, Calendar, MessageSquare, FolderOpen, FilePlus,
   MessageCircle, Inbox, Newspaper, Settings as Cog,
-  RefreshCw, ArrowRight, Plus, Search, Camera, ListTodo, CircleHelp,
+  RefreshCw, ArrowRight, Plus, Search, Camera, ListTodo, CircleHelp, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -46,7 +46,6 @@ const TILE_COUNT_KEY: Record<string, keyof SystemStatus["counts"] | undefined> =
   tasks:     "tasks",
   chat:      "conversations",
   documents: "documents",
-  compose:   "templates",
 };
 
 interface AppTile {
@@ -69,8 +68,9 @@ const APPS: AppTile[] = [
   { id: "calendar",  label: "Calendar",   route: "/calendar",  icon: Calendar,      color: "from-blue-500/30 to-cyan-500/30 text-blue-500",         blurb: "Events, tasks, drag-to-create blocks." },
   { id: "tasks",     label: "Tasks",      route: "/tasks",     icon: ListTodo,      color: "from-emerald-500/30 to-teal-500/30 text-emerald-500",   blurb: "Add, complete, and triage your to-dos." },
   { id: "documents", label: "Documents",  route: "/documents", icon: FolderOpen,    color: "from-amber-500/30 to-orange-500/30 text-amber-500",     blurb: "Letters, bills and papers, easy to find." },
-  { id: "compose",   label: "Compose",    route: "/compose",   icon: FilePlus,      color: "from-rose-500/30 to-pink-500/30 text-rose-500",         blurb: "Write invoices, quotes, letters with AI." },
-  { id: "whatsapp",  label: "WhatsApp",   route: "/whatsapp",  icon: MessageCircle, color: "from-emerald-500/30 to-green-500/30 text-emerald-500", blurb: "Chat replies drafted while you sleep.", optional: true },
+  { id: "write",     label: "Write",      route: "/write",     icon: FilePlus,      color: "from-rose-500/30 to-pink-500/30 text-rose-500",         blurb: "Letters and invoices on your letterhead.", optional: true },
+  { id: "contacts",  label: "Contacts",   route: "/contacts",  icon: Users,         color: "from-orange-500/30 to-amber-500/30 text-orange-500",    blurb: "Everyone Yorik knows, with numbers and addresses.", optional: true },
+  { id: "whatsapp",  label: "WhatsApp",   route: "/whatsapp",  icon: MessageCircle, color: "from-emerald-500/30 to-green-500/30 text-emerald-500", blurb: "Your chats, with replies Yorik suggests.", optional: true },
   { id: "email",     label: "Email",      route: "/email",     icon: Inbox,         color: "from-sky-500/30 to-blue-500/30 text-sky-500",           blurb: "Your inbox, sorted and summarized." },
   { id: "photos",    label: "Photos",     route: "/photos",    icon: Camera,        color: "from-emerald-500/30 to-teal-500/30 text-emerald-500",   blurb: "The family's photos and videos." },
   { id: "briefing",  label: "Briefing",   route: "/briefing",  icon: Newspaper,     color: "from-fuchsia-500/30 to-purple-500/30 text-fuchsia-500", blurb: "Your morning digest in one screen." },
@@ -198,7 +198,7 @@ export function HomeApp() {
             <div className="flex-1 min-w-0">
               <div className="font-semibold mb-0.5">Ask Yorik anything</div>
               <div className="text-sm text-muted-foreground">
-                "Schedule the dentist Friday at 2pm", "find my insurance policy", "draft a Mietminderung"…
+                "Schedule the dentist Friday at 2pm", "find my insurance policy", "write to the landlord about the heating"…
               </div>
             </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition shrink-0" />
@@ -290,7 +290,7 @@ export function HomeApp() {
             <QuickAction
               icon={FilePlus}
               label="Write a letter or invoice"
-              onClick={() => navigate("/compose")}
+              onClick={() => navigate("/write")}
             />
             <QuickAction
               icon={Plus}

@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  X, Send, Loader2, Minus, AlertCircle, UsersRound,
+  X, Send, Loader2, Minus, AlertCircle, UsersRound, Trash2,
   Bold as BoldIcon, Italic as ItalicIcon, Underline as UnderlineIcon,
   Link as LinkIcon, List as ListIcon, ListOrdered, Quote, Paperclip,
   Sparkles,
@@ -86,6 +86,10 @@ export interface ComposeDraft {
     filename: string;
     mimetype?: string;
   }>;
+  /** Opened from the draft Yorik staged server-side (prepare_email).
+   *  Throwing this draft away must delete that copy too, or the chat
+   *  card would bring it back. */
+  fromYorik?: boolean;
 }
 
 interface Props {
@@ -169,7 +173,10 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export function Composer({ accounts, initial, onClose, onSent }: Props) {
-  const defaultAccount = accounts.find(a => a.is_default) || accounts[0];
+  // Several accounts and none marked as default: pick nothing, so the
+  // person chooses the sender instead of mail silently leaving from the
+  // first one (Dirk 2026-09-29).
+  const defaultAccount = accounts.find(a => a.is_default) || (accounts.length === 1 ? accounts[0] : undefined);
 
   // Restore what was typed last time: the new-mail slot, or the slot of
   // exactly this mail when answering (so a draft never leaks into
@@ -208,6 +215,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [restoredHint, setRestoredHint] = useState<boolean>(!!restored);
+  const [defaultSaved, setDefaultSaved] = useState(false);
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [editingAttachment, setEditingAttachment] = useState<number | null>(null);
@@ -391,6 +399,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
         body_html: html,
         in_reply_to: initial.inReplyTo,
         references: initial.references || [],
+        from_yorik_draft: !!initial.fromYorik,
         attachments: attachments.map(a => ({
           filename:    a.filename,
           mimetype:    a.mimetype,
@@ -412,6 +421,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
   function discardDraft() {
     sentRef.current = true;          // the unmount save must not bring it back
     try { localStorage.removeItem(saveKey); } catch {}
+    if (initial.fromYorik) api.delete("/api/email/pending-draft").catch(() => {});
     onClose();
   }
 
@@ -501,16 +511,34 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground w-12">From</span>
             <select
-              value={accountId}
+              value={accountId || ""}
               onChange={e => setAccountId(+e.target.value)}
-              className="flex-1 h-7 px-2 rounded bg-muted text-sm focus:outline-none"
+              className={cn("flex-1 h-7 px-2 rounded bg-muted text-sm focus:outline-none",
+                            !accountId && "ring-1 ring-amber-500/60")}
             >
+              <option value="" disabled>Choose the account to send from…</option>
               {accounts.map(a => (
                 <option key={a.id} value={a.id}>
                   {a.display_name || a.email} ({a.email})
                 </option>
               ))}
             </select>
+            {!!accountId && !accounts.find(a => a.id === accountId)?.is_default && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await api.patch(`/api/email/accounts/${accountId}`, { is_default: true });
+                    accounts.forEach(a => { a.is_default = a.id === accountId; });
+                    setDefaultSaved(true);
+                  } catch { /* stays as it was; nothing lost */ }
+                }}
+                className="text-2xs text-muted-foreground hover:text-foreground whitespace-nowrap"
+                title="Always pre-select this account"
+              >
+                {defaultSaved ? "✓ default" : "Make default"}
+              </button>
+            )}
           </div>
         )}
         <RecipientField label="To" value={to} onChange={setTo} />
@@ -644,6 +672,15 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
         <span className="text-xs text-muted-foreground ml-auto">
           {sending ? "sending…" : "⌘/Ctrl+Enter to send · drop files anywhere"}
         </span>
+        <button
+          onClick={discardDraft}
+          disabled={sending}
+          className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-muted transition disabled:opacity-50"
+          title="Discard draft"
+          aria-label="Discard draft"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Local styles for the TipTap-rendered body. Keeps the email

@@ -59,26 +59,29 @@ type Tab = "profile" | "system" | "llm" | "users" | "spaces" | "households" | "a
 // registries). Tenant Yoriks hide these because changes there would
 // either clobber other tenants or have no effect inside the tenant's
 // own DB. adminOnly = member/child users hide it; orthogonal axis.
-const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }>; color: string; adminOnly?: boolean; hostOnly?: boolean }[] = [
+// advanced = technical settings a household rarely needs; they sit
+// folded under "Advanced" so the list starts with the everyday ones
+// (19 entries read as "this is not for me" in the 2026-09-29 test).
+const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }>; color: string; adminOnly?: boolean; hostOnly?: boolean; advanced?: boolean }[] = [
   { id: "profile",    label: "Profile",     icon: UserIcon, color: "text-violet-500 bg-violet-500/10" },
   { id: "devices",    label: "Devices",     icon: MonitorSmartphone, color: "text-blue-500 bg-blue-500/10" },
   { id: "system",     label: "System",      icon: Activity, color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, hostOnly: true },
-  { id: "llm",        label: "LLM",         icon: Cpu,      color: "text-blue-500 bg-blue-500/10",     adminOnly: true, hostOnly: true },
+  { id: "llm",        label: "LLM",         icon: Cpu,      color: "text-blue-500 bg-blue-500/10",     adminOnly: true, hostOnly: true, advanced: true },
   { id: "users",      label: "Users",       icon: Users,    color: "text-cyan-500 bg-cyan-500/10" },
-  { id: "households", label: "Hosted families", icon: Home,     color: "text-orange-500 bg-orange-500/10", adminOnly: true, hostOnly: true },
+  { id: "households", label: "Hosted families", icon: Home,     color: "text-orange-500 bg-orange-500/10", adminOnly: true, hostOnly: true, advanced: true },
   { id: "spaces",     label: "Spaces",      icon: Shield,   color: "text-teal-500 bg-teal-500/10" },
   { id: "apps",       label: "Apps",        icon: Grid3x3,  color: "text-fuchsia-500 bg-fuchsia-500/10" },
-  { id: "marketplace",label: "Marketplace", icon: Store,    color: "text-pink-500 bg-pink-500/10",     adminOnly: true, hostOnly: true },
-  { id: "installed",  label: "Installed",   icon: Package,  color: "text-pink-500 bg-pink-500/10",     adminOnly: true, hostOnly: true },
-  { id: "skills",     label: "Skills",      icon: Lightbulb,color: "text-yellow-500 bg-yellow-500/10", adminOnly: true, hostOnly: true },
-  { id: "numbering",  label: "Numbering",   icon: Hash,     color: "text-rose-500 bg-rose-500/10" },
-  { id: "quality",    label: "Quality",     icon: BarChart3,color: "text-emerald-500 bg-emerald-500/10", adminOnly: true },
-  { id: "connectors", label: "Connectors",  icon: Plug,     color: "text-amber-500 bg-amber-500/10",   adminOnly: true, hostOnly: true },
-  { id: "extensions", label: "Extensions",  icon: Puzzle,   color: "text-indigo-500 bg-indigo-500/10", adminOnly: true, hostOnly: true },
-  { id: "storage",    label: "Storage",     icon: HardDrive,color: "text-sky-500 bg-sky-500/10",     adminOnly: true, hostOnly: true },
-  { id: "embeddings", label: "Embeddings",  icon: Sparkles, color: "text-violet-500 bg-violet-500/10", adminOnly: true, hostOnly: true },
+  { id: "marketplace",label: "Marketplace", icon: Store,    color: "text-pink-500 bg-pink-500/10",     adminOnly: true, hostOnly: true, advanced: true },
+  { id: "installed",  label: "Installed",   icon: Package,  color: "text-pink-500 bg-pink-500/10",     adminOnly: true, hostOnly: true, advanced: true },
+  { id: "skills",     label: "Skills",      icon: Lightbulb,color: "text-yellow-500 bg-yellow-500/10", adminOnly: true, hostOnly: true, advanced: true },
+  { id: "numbering",  label: "Numbering",   icon: Hash,     color: "text-rose-500 bg-rose-500/10", advanced: true },
+  { id: "quality",    label: "Quality",     icon: BarChart3,color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, advanced: true },
+  { id: "connectors", label: "Connectors",  icon: Plug,     color: "text-amber-500 bg-amber-500/10",   adminOnly: true, hostOnly: true, advanced: true },
+  { id: "extensions", label: "Extensions",  icon: Puzzle,   color: "text-indigo-500 bg-indigo-500/10", adminOnly: true, hostOnly: true, advanced: true },
+  { id: "storage",    label: "Storage",     icon: HardDrive,color: "text-sky-500 bg-sky-500/10",     adminOnly: true, hostOnly: true, advanced: true },
+  { id: "embeddings", label: "Embeddings",  icon: Sparkles, color: "text-violet-500 bg-violet-500/10", adminOnly: true, hostOnly: true, advanced: true },
   { id: "backup",     label: "Backup",      icon: Shield,   color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, hostOnly: true },
-  { id: "logs",       label: "Logs",        icon: ScrollText,color: "text-orange-500 bg-orange-500/10", adminOnly: true },
+  { id: "logs",       label: "Logs",        icon: ScrollText,color: "text-orange-500 bg-orange-500/10", adminOnly: true, advanced: true },
 ];
 
 export function SettingsApp() {
@@ -102,6 +105,10 @@ export function SettingsApp() {
   // admin (e.g., a role downgrade happened, or stale local state),
   // fall back to Profile rather than rendering an empty pane.
   const activeTab: Tab = visibleTabs.some(t => t.id === tab) ? tab : "profile";
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(() => {
+    if (TABS.find(t => t.id === tab)?.advanced) return true;   // deep-linked into one
+    try { return localStorage.getItem("yorik_settings_advanced") === "1"; } catch { return false; }
+  });
   const [toasts, setToasts] = useState<Array<{ id: number; kind: "info" | "success" | "error"; text: string }>>([]);
 
   // Memoise — every child tab depends on `toast` in its useEffect
@@ -137,13 +144,14 @@ export function SettingsApp() {
           <div>
             <div className="font-semibold leading-none">Settings</div>
             <div className="text-2xs text-muted-foreground mt-0.5">
-              {auth.user.name} · {auth.user.role}
+              {auth.user.name}
             </div>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {visibleTabs.map(t => (
+          {[...visibleTabs.filter(t => !t.advanced),
+            ...(showAdvanced ? visibleTabs.filter(t => t.advanced) : [])].map(t => (
             <button
               key={t.id}
               onClick={() => { setTab(t.id); tri.closeAll(); }}
@@ -159,7 +167,21 @@ export function SettingsApp() {
               </div>
               <span className="text-sm font-medium">{t.label}</span>
             </button>
-          ))}
+          )).flatMap((el, i, all) => {
+            // The "Advanced" switch sits between the everyday tabs and the rest.
+            const everyday = visibleTabs.filter(t => !t.advanced).length;
+            if (i !== everyday - 1 || !visibleTabs.some(t => t.advanced)) return [el];
+            return [el, (
+              <button
+                key="__advanced"
+                onClick={() => setShowAdvanced(v => { try { localStorage.setItem("yorik_settings_advanced", v ? "0" : "1"); } catch {} return !v; })}
+                className="w-full text-left px-3 pt-3 pb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground flex items-center gap-1"
+                aria-expanded={showAdvanced}
+              >
+                <ChevronRight className={cn("w-3 h-3 transition", showAdvanced && "rotate-90")} /> Advanced
+              </button>
+            )];
+          })}
         </div>
 
         <footer className="border-t border-border px-4 py-3 text-xs space-y-2">
@@ -291,8 +313,8 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Profile</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Your address and business info. Used as the sender block on every document
-          Compose generates.
+          Your address and business info. Used as the sender on the letters and
+          invoices you write.
         </p>
       </header>
 

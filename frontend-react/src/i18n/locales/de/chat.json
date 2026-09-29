@@ -33,7 +33,13 @@
     "useAndOpen": "Diese Adresse nehmen und öffnen",
     "noSubject": "(kein Betreff)",
     "to": "an {{to}}",
-    "openAndSend": "Öffnen und senden"
+    "openAndSend": "Öffnen und senden",
+    "from": "Von",
+    "chooseAccount": "Konto wählen…",
+    "pickAccountFirst": "Erst den Absender wählen",
+    "makeDefault": "Immer von diesem Konto senden",
+    "sent": "Gesendet",
+    "discarded": "Verworfen"
   },
   "draftKind": {
     "letter": "Brief",
@@ -106,11 +112,39 @@
     "none": "Keine Kontakte",
     "business": "Unternehmen",
     "person": "Person",
-    "filterPlaceholder": "Filter (Name oder Beziehung)…"
+    "filterPlaceholder": "Filter (Name oder Beziehung)…",
+    "pickArrow": "wählen →",
+    "lastContact": "zuletzt Kontakt: {{when}}"
   },
   "tasks": {
     "markOpen": "Als offen markieren",
     "markDone": "Als erledigt markieren",
     "header": "Aufgaben ({{total}})"
+  },
+  "whatsapp": {
+    "to": "WhatsApp an {{name}}",
+    "thisChat": "diesen Chat",
+    "openChat": "Im WhatsApp-Chat öffnen",
+    "sent": "Gesendet",
+    "sending": "Sende…",
+    "send": "Senden",
+    "sendFailed": "Senden fehlgeschlagen: {{error}}"
+  },
+  "pending": {
+    "deleteThis": "Löschen?",
+    "looksRight": "Passt das so?",
+    "justTesting": "Nur testen",
+    "justTestingTitle": "Ausführen und wieder rückgängig machen. Zählt nicht zur Erfolgsquote des Modells.",
+    "keep": "Behalten",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "looksGood": "Passt",
+    "deleted": "Gelöscht",
+    "confirmed": "Bestätigt",
+    "kept": "Behalten — nichts gelöscht",
+    "cancelled": "Abgebrochen — rückgängig gemacht",
+    "tested": "Getestet — rückgängig gemacht",
+    "gone": "Schon erledigt",
+    "failed": "Das ging nicht. Bitte nochmal versuchen."
   }
 }

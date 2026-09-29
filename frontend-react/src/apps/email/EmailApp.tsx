@@ -268,8 +268,16 @@ export function EmailApp() {
   // (reported 2026-09-25). This survives all of that. Only applies
   // when nothing already opened the composer synchronously, so it
   // never clobbers a fresher ?to=… deep link or an in-tab handoff.
+  // Only on ?draft=pending — the link the chat card uses. Opening Email
+  // any other way never pops the staged draft: before 2026-09-29 it
+  // reopened on every visit until the mail was finally sent.
   useEffect(() => {
     if (composer) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("draft") !== "pending") return;
+    params.delete("draft");
+    const rest = params.toString();
+    window.history.replaceState(window.history.state, "", window.location.pathname + (rest ? `?${rest}` : ""));
     interface PendingDraftResponse {
       draft: {
         to?: string; subject?: string; body?: string;
@@ -288,6 +296,7 @@ export function EmailApp() {
             body: r.draft.body || "",
             accountId: r.draft.account_id,
             pendingAttachments: r.draft.attachments,
+            fromYorik: true,
           });
         }
       } catch {

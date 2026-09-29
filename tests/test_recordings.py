@@ -150,7 +150,8 @@ def test_skills_start_finish_status(fresh_app, rec):
     rid = out["recording_id"]
     assert [p["name"] for p in out["participants"]] == ["Beate"] and out["unknown"] == ["Onkel Karl"]
     assert out["title"].startswith("Dinner ")
-    assert actions[-1] == {"type": "start_recording", "recording_id": rid, "title": out["title"]}
+    assert {k: v for k, v in actions[-1].items() if k != "uid"} == \
+        {"type": "start_recording", "recording_id": rid, "title": out["title"]}
     assert asyncio.run(start(ctx))["already_running"] is True
     assert asyncio.run(status(ctx))["status"] == "recording"
 
@@ -158,7 +159,7 @@ def test_skills_start_finish_status(fresh_app, rec):
     R.add_chunk(rid, 0, b"x")
     out, actions = run(finish(ctx))
     assert out["stop_requested"] is True and R.public(R._row(rid))["stop_requested"] is True
-    assert actions[-1] == {"type": "stop_recording", "recording_id": rid}
+    assert {k: v for k, v in actions[-1].items() if k != "uid"} == {"type": "stop_recording", "recording_id": rid}
     # over MCP (token source) the audio is complete on the server → finish for real
     tctx = SkillContext(Registry(), role="admin", user_id=dirk, conversation_id="c2", source="token:hermes")
     assert asyncio.run(finish(tctx))["status"] == "done"

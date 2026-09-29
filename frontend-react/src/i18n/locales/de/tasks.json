@@ -1,4 +1,10 @@
 {
   "reading": "Yorik liest…",
-  "add": "Hinzufügen"
+  "add": "Hinzufügen",
+  "focus": {
+    "now": "Gerade dran",
+    "open": "Aufgabe öffnen",
+    "pause": "Pause",
+    "done": "Erledigt"
+  }
 }

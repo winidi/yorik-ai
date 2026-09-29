@@ -1486,20 +1486,59 @@ async def list_chats(
         # phantom slipped through ingest (e.g. bridge re-sync before
         # the pushname was captured on `ready`). The cleanup endpoint
         # physically removes them; this just hides them.
+        # Twice the limit: merging a person's two addresses (below) can
+        # fold two rows into one.
         if self_name:
             rows = conn.execute(
                 f"SELECT {cols} FROM wa_chats WHERE {where} "
                 "AND NOT (jid LIKE '%@lid' AND LOWER(TRIM(name)) = LOWER(TRIM(?))) "
                 "ORDER BY last_message_ts DESC LIMIT ?",
-                (uid, self_name, limit),
+                (uid, self_name, limit * 2),
             ).fetchall()
         else:
             rows = conn.execute(
                 f"SELECT {cols} FROM wa_chats WHERE {where} "
                 "ORDER BY last_message_ts DESC LIMIT ?",
-                (uid, limit),
+                (uid, limit * 2),
             ).fetchall()
-    return [dict(r) for r in rows]
+    return _merge_same_person([dict(r) for r in rows], uid)[:limit]
+
+
+def _merge_same_person(rows: list[dict[str, Any]], uid: str) -> list[dict[str, Any]]:
+    """Fold a person's LID chat into their phone-number chat (see
+    whatsapp_aliases). The merged row carries the number as `jid` — the
+    address sends go to — and every address in `aliases`."""
+    from . import whatsapp_aliases as _al
+    merged: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for r in rows:
+        key = _al.canonical(uid, r["jid"]) if not r.get("is_group") else r["jid"]
+        cur = merged.get(key)
+        if cur is None:
+            merged[key] = {**r, "jid": key, "aliases": [r["jid"]]}
+            order.append(key)
+            continue
+        cur["aliases"].append(r["jid"])
+        cur["unread_count"] = (cur.get("unread_count") or 0) + (r.get("unread_count") or 0)
+        if (r.get("last_message_ts") or 0) > (cur.get("last_message_ts") or 0):
+            cur["last_message_ts"] = r["last_message_ts"]
+            cur["last_message_text"] = r.get("last_message_text")
+        if (r.get("name") or "").strip() and (
+                not (cur.get("name") or "").strip()
+                or _name_rank(r.get("name_source")) > _name_rank(cur.get("name_source"))):
+            cur["name"], cur["name_source"] = r["name"], r.get("name_source")
+    out = [merged[k] for k in order]
+    out.sort(key=lambda r: r.get("last_message_ts") or 0, reverse=True)
+    return out
+
+
+def _same_chat(uid: str, jid: str) -> list[str]:
+    from . import whatsapp_aliases as _al
+    return _al.same_chat(uid, jid)
+
+
+def _qmarks(items: list[Any]) -> str:
+    return ",".join("?" * len(items))
 
 
 @router.get("/chats/{jid:path}/messages")
@@ -1511,14 +1550,15 @@ async def list_messages(
     """Messages in one chat, oldest→newest, newest `limit` of them — scoped
     to the logged-in user."""
     uid = user["id"]
+    jids = _same_chat(uid, jid)      # both addresses of one person
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT id, msg_id, chat_jid, from_me, push_name, timestamp, text, "
             "       media_kind, mimetype, filename, transcript, "
             "       media_paperless_id, media_immich_id "
-            "FROM wa_messages WHERE chat_jid=? AND owner_user_id=? "
+            f"FROM wa_messages WHERE chat_jid IN ({_qmarks(jids)}) AND owner_user_id=? "
             "ORDER BY timestamp DESC LIMIT ?",
-            (jid, uid, limit),
+            (*jids, uid, limit),
         ).fetchall()
     # Oldest first for rendering.
     return [dict(r) for r in reversed(rows)]
@@ -1961,9 +2001,11 @@ def _build_draft_prompt(
     return "\n".join(lines)
 
 
-async def _call_llm(prompt: str) -> str:
+async def _call_llm(prompt: str, max_tokens: int = 400) -> str:
     """One-shot completion through the same llama-swap endpoint Vanna uses.
-    Direct OpenAI call (no tool loop) — drafts don't need tools."""
+    Direct OpenAI call (no tool loop) — drafts don't need tools. 400
+    tokens fit a WhatsApp reply; the briefings ask for more — at 400 the
+    email digest stopped mid-sentence (2026-09-29)."""
     base = os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1")
     model = os.getenv("HOMEOS_MODEL", "qwen3.5-9b")
     async with httpx.AsyncClient(timeout=60.0) as c:
@@ -1973,7 +2015,7 @@ async def _call_llm(prompt: str) -> str:
                 "model": model,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.4,
-                "max_tokens": 400,
+                "max_tokens": max_tokens,
                 # Same Qwen3 thinking-mode kill as everywhere else in Yorik.
                 **(
                     {
@@ -2121,7 +2163,7 @@ async def briefing(
         }
 
     prompt = _build_briefing_prompt(chat_blocks, stats, hours)
-    summary = await _call_llm(prompt)
+    summary = await _call_llm(prompt, max_tokens=1200)
 
     return {
         "summary": summary,
@@ -2177,12 +2219,13 @@ async def pending_drafts(
     sources}]} or {group_id: null, variants: []} when there are no
     pending drafts."""
     uid = user["id"]
+    jids = _same_chat(uid, chat_jid)
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT id, draft_text, variant_label, variant_group_id, sources_json "
-            "FROM wa_drafts WHERE chat_jid=? AND owner_user_id=? AND status='pending' "
+            f"FROM wa_drafts WHERE chat_jid IN ({_qmarks(jids)}) AND owner_user_id=? AND status='pending' "
             "ORDER BY id ASC",
-            (chat_jid, uid),
+            (*jids, uid),
         ).fetchall()
     if not rows:
         return {"group_id": None, "variants": []}
@@ -2217,7 +2260,12 @@ async def pending_draft_counts(
             "WHERE owner_user_id=? AND status='pending' GROUP BY chat_jid",
             (uid,),
         ).fetchall()
-    return {r["chat_jid"]: r["n"] for r in rows}
+    from . import whatsapp_aliases as _al
+    out: dict[str, int] = {}
+    for r in rows:
+        key = _al.canonical(uid, r["chat_jid"])
+        out[key] = out.get(key, 0) + r["n"]
+    return out
 
 
 @router.post("/drafts/{chat_jid:path}/discard")
@@ -2229,11 +2277,13 @@ async def discard_pending_drafts(
     sibling routes always filtered on the owner, this one did not
     (audit 2026-09-22, 3.2)."""
     uid = user["id"]
+    jids = _same_chat(uid, chat_jid)
     with get_conn() as conn:
         cur = conn.execute(
             "UPDATE wa_drafts SET status='discarded', discarded_at=datetime('now'), "
-            "discard_reason='user_dismissed' WHERE chat_jid=? AND owner_user_id=? AND status='pending'",
-            (chat_jid, uid),
+            f"discard_reason='user_dismissed' WHERE chat_jid IN ({_qmarks(jids)}) AND owner_user_id=? "
+            "AND status='pending'",
+            (*jids, uid),
         )
         conn.commit()
     await _broadcast_to_browsers({
@@ -2253,15 +2303,16 @@ async def regenerate_drafts(
     from . import whatsapp_autodraft as _ad
     uid = user["id"]
     # Find the most recent inbound message to use as trigger.
+    jids = _same_chat(uid, chat_jid)
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT msg_id FROM wa_messages WHERE chat_jid=? AND owner_user_id=? AND from_me=0 "
-            "ORDER BY timestamp DESC LIMIT 1",
-            (chat_jid, uid),
+            f"SELECT msg_id, chat_jid FROM wa_messages WHERE chat_jid IN ({_qmarks(jids)}) "
+            "AND owner_user_id=? AND from_me=0 ORDER BY timestamp DESC LIMIT 1",
+            (*jids, uid),
         ).fetchone()
     if not row:
         raise HTTPException(400, "no inbound message to draft from")
-    await _ad._generate_and_store(chat_jid, row["msg_id"], owner_user_id=uid)
+    await _ad._generate_and_store(row["chat_jid"], row["msg_id"], owner_user_id=uid)
     return {"ok": True}
 
 
@@ -2272,13 +2323,14 @@ async def recent_drafts(
     user: dict[str, Any] = Depends(_auth.current_user),
 ) -> list[dict[str, Any]]:
     uid = user["id"]
+    jids = _same_chat(uid, chat_jid)
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT id, draft_text, sources_json, sent_msg_id, sent_text, "
             "       status, variant_label, variant_group_id, created_at "
-            "FROM wa_drafts WHERE chat_jid=? AND owner_user_id=? "
+            f"FROM wa_drafts WHERE chat_jid IN ({_qmarks(jids)}) AND owner_user_id=? "
             "ORDER BY created_at DESC LIMIT ?",
-            (chat_jid, uid, limit),
+            (*jids, uid, limit),
         ).fetchall()
     out = []
     for r in rows:

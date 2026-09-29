@@ -27,6 +27,7 @@ import { CommunityApp } from "./apps/community/CommunityApp";
 import { CommandPalette } from "./components/CommandPalette";
 import { NotificationBell } from "./components/NotificationBell";
 import { HelpPanel } from "./components/HelpPanel";
+import { FocusCard } from "@/components/FocusCard";
 import { AppHint } from "./components/AppHint";
 // OnboardingModal kept as a file for now, but not mounted — user
 // said the small inline onboarding hints throughout the app are
@@ -201,6 +202,7 @@ createRoot(document.getElementById("root")!).render(
             <HelpPanel />
             <AppHint />
             <DocBucketPill />
+            <FocusCard />
           </ChromeGate>
           {/* VoiceFab + NavigationBridge always mounted — VoiceFab is
               the only voice path in/out, NavigationBridge is invisible

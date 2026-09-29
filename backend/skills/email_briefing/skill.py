@@ -120,7 +120,7 @@ async def execute(ctx, hours: int = 24) -> dict[str, Any]:
         }
 
     prompt = _build_prompt(thread_blocks, stats, hours)
-    summary = await _call_llm(prompt)
+    summary = await _call_llm(prompt, max_tokens=1200)
 
     return {
         "summary": summary,

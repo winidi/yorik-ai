@@ -107,6 +107,21 @@ async def execute(
                 f"default account will be pre-selected instead; mention that so they can double-check it."
             )
 
+    # Which of the person's own accounts sends it. Without a chosen
+    # default and with several accounts, nothing is picked: the card
+    # asks (Dirk 2026-09-29 — the Composer silently took the first).
+    from backend.database import get_conn as _gc2
+    with _gc2() as conn:
+        own = [dict(r) for r in conn.execute(
+            "SELECT id, email, display_name, is_default FROM email_accounts "
+            "WHERE owner_user_id = ? AND enabled = 1 ORDER BY id", (user_id,)).fetchall()]
+    if account_id is None and own:
+        default = [a for a in own if a.get("is_default")]
+        if default:
+            account_id = default[0]["id"]
+        elif len(own) == 1:
+            account_id = own[0]["id"]
+
     payload = {
         "to":          to,
         "subject":     (subject or "").strip(),
@@ -115,7 +130,27 @@ async def execute(
         "attachments": attachments,
     }
 
-    # 1. Durable — survives a different tab, a reload, or the user
+    # 1. A real card in the chat, not just a sentence — mirrors
+    # writing_draft_created's WritingDraftCard for letters/invoices.
+    body_preview = (body or "").strip().replace("\n", " ")
+    if len(body_preview) > 160:
+        body_preview = body_preview[:157] + "…"
+    from backend.ui_tools import _append
+    card = {
+        "type":                "email_ready",
+        "to":                  to,
+        "subject":             payload["subject"],
+        "preview":             body_preview,
+        "attachment_filename": attachment_filename,
+        "account_id":          account_id,
+        "accounts":            [{"id": a["id"], "email": a["email"],
+                                 "name": a.get("display_name") or ""} for a in own] if len(own) > 1 else [],
+    }
+    _append(card)
+    # The card learns what became of the draft (sent / thrown away).
+    payload["card"] = {"conversation_id": getattr(ctx, "conversation_id", None), "uid": card.get("uid")}
+
+    # 2. Durable — survives a different tab, a reload, or the user
     # coming back later. See module docstring for why this exists.
     from backend.database import get_conn
     with get_conn() as conn:
@@ -125,20 +160,6 @@ async def execute(
             (f"pending_email_draft_{user_id}", json.dumps(payload)),
         )
         conn.commit()
-
-    # 2. A real card in the chat, not just a sentence — mirrors
-    # writing_draft_created's WritingDraftCard for letters/invoices.
-    body_preview = (body or "").strip().replace("\n", " ")
-    if len(body_preview) > 160:
-        body_preview = body_preview[:157] + "…"
-    from backend.ui_tools import _append
-    _append({
-        "type":                "email_ready",
-        "to":                  to,
-        "subject":             payload["subject"],
-        "preview":             body_preview,
-        "attachment_filename": attachment_filename,
-    })
 
     return {
         "ok":            True,

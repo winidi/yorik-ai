@@ -144,7 +144,7 @@ export function WhatsAppApp() {
   const status = statusApi.data;
   const needsPairing = !status?.connected;
   const activeChat = useMemo(
-    () => chats.find(c => c.jid === activeJid),
+    () => chats.find(c => c.jid === activeJid || !!c.aliases?.includes(activeJid || "")),
     [chats, activeJid],
   );
 
@@ -230,7 +230,7 @@ export function WhatsAppApp() {
             onSent={refreshAll}
           />
         ) : (
-          <EmptyThread chatsCount={chats.length} />
+          <EmptyThread chatsCount={chats.length} onOpenList={() => tri.setLeftOpen(true)} />
         )}
       </section>
 
@@ -371,7 +371,7 @@ function ChatListPane({
         )}
         {filtered.map(c => (
           <ChatRow key={c.jid} chat={c}
-            active={activeJid === c.jid}
+            active={activeJid === c.jid || !!c.aliases?.includes(activeJid || "")}
             draftCount={draftCounts[c.jid] || 0}
             ambiguousName={duplicateNames.has((c.name || "").trim().toLowerCase())}
             onClick={() => onSelect(c.jid)} />
@@ -394,15 +394,15 @@ const PUSH_NAME_HINT = "The name this contact chose for themselves — not from 
 function ChatRow({ chat, active, draftCount, ambiguousName, onClick }:
   { chat: WaChat; active: boolean; draftCount: number; ambiguousName: boolean; onClick: () => void }) {
   const rawName = chat.name || chat.jid.split("@")[0];
-  // When two chats share a pushName ("Tom" / "Tom"), append the last
-  // 4 jid digits + a marker for @lid pseudo-jids so the user can tell
-  // them apart before clicking. The actual chat is keyed by jid so the
-  // routing is always correct — this is purely a visual aid.
+  // When two chats still share a name ("Tom" / "Tom" — two people),
+  // append the number's last 4 digits so the user can tell them apart.
+  // A LID is no number and means nothing to a person: no suffix. The
+  // same person's two addresses are one chat already (backend merge).
   const localPart = chat.jid.split("@")[0];
   const digits = localPart.replace(/\D/g, "");
   const isLid = chat.jid.endsWith("@lid");
-  const suffix = ambiguousName
-    ? ` · ${isLid ? "@lid " : ""}…${digits.slice(-4)}`
+  const suffix = ambiguousName && !isLid && digits.length >= 4
+    ? ` · …${digits.slice(-4)}`
     : "";
   const name = rawName + suffix;
   const shown = withPushMark(chat, name);
@@ -1051,7 +1051,7 @@ function ThinkingDots() {
 
 // ───────────────────────── empty states ──────────────────────────────
 
-function EmptyThread({ chatsCount }: { chatsCount: number }) {
+function EmptyThread({ chatsCount, onOpenList }: { chatsCount: number; onOpenList?: () => void }) {
   return (
     <div className="flex-1 flex items-center justify-center p-12">
       <div className="text-center max-w-sm">
@@ -1061,9 +1061,22 @@ function EmptyThread({ chatsCount }: { chatsCount: number }) {
         <h2 className="text-lg font-semibold mb-2">Your WhatsApp inbox</h2>
         <p className="text-sm text-muted-foreground leading-relaxed">
           {chatsCount === 0
-            ? "Once you scan the QR code, your chats will appear on the left."
-            : "Pick a conversation on the left. Yorik auto-drafts a reply for every incoming message."}
+            ? "Once you scan the QR code, your chats will appear here."
+            : <>
+                <span className="hidden md:inline">Pick a conversation on the left. Yorik suggests replies you can send or change.</span>
+                <span className="md:hidden">Yorik suggests replies you can send or change.</span>
+              </>}
         </p>
+        {chatsCount > 0 && onOpenList && (
+          // On a phone the list is a drawer — "on the left" pointed at
+          // nothing (2026-09-29), so the list gets a real button.
+          <button
+            onClick={onOpenList}
+            className="md:hidden mt-5 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
+          >
+            <MessageSquare className="w-4 h-4" /> Show chats
+          </button>
+        )}
       </div>
     </div>
   );

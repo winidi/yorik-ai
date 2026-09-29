@@ -205,6 +205,10 @@ def fresh_app(monkeypatch: pytest.MonkeyPatch, pg_template: dict[str, str]) -> I
     monkeypatch.setenv("HOMEOS_DB_PATH", str(Path(tmp.name) / "family.db"))
     monkeypatch.setenv("HOMEOS_DOCS_DIR", str(Path(tmp.name) / "docs"))
     monkeypatch.setenv("HOMEOS_DOCS_DB_PATH", str(Path(tmp.name) / "documents.db"))
+    # The live WhatsApp bridge listens on 127.0.0.1:3015 on the dev box;
+    # a test must never reach it (e2e/household.py does the same).
+    monkeypatch.setenv("YORIK_WA_BRIDGE_URL", "http://127.0.0.1:9")
+    monkeypatch.setenv("YORIK_WA_BRIDGE_WS", "ws://127.0.0.1:9/events")
 
     # Force re-import so module-level constants bind to the env vars we
     # just set, even if a previous test already loaded the module.

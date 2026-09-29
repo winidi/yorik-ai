@@ -114,16 +114,22 @@ async def execute(
             "find_person first and pass the contact_id."
         )
 
+    # A person's phone-number chat and LID chat are one conversation
+    # (backend/whatsapp_aliases.py): read the history from both.
+    from backend.whatsapp_aliases import same_chat
+    jids = same_chat(user_id, chat_jid)
+    marks = ",".join("?" * len(jids))
     with get_conn() as conn:
         chat_row = conn.execute(
-            "SELECT jid, name, is_group FROM wa_chats WHERE jid=? AND owner_user_id=?",
-            (chat_jid, user_id),
+            f"SELECT jid, name, is_group FROM wa_chats WHERE jid IN ({marks}) AND owner_user_id=? "
+            "ORDER BY (jid = ?) DESC, last_message_ts DESC LIMIT 1",
+            (*jids, user_id, chat_jid),
         ).fetchone()
         recent = conn.execute(
             "SELECT from_me, push_name, timestamp, text, transcript "
-            "FROM wa_messages WHERE chat_jid=? AND owner_user_id=? "
+            f"FROM wa_messages WHERE chat_jid IN ({marks}) AND owner_user_id=? "
             "ORDER BY timestamp DESC LIMIT 20",
-            (chat_jid, user_id),
+            (*jids, user_id),
         ).fetchall() if chat_row else []
 
     # Branch: existing thread (has chat_row + messages) vs initiate mode
@@ -262,7 +268,10 @@ async def execute(
                     "INSERT INTO wa_drafts (chat_jid, draft_text, sources_json, owner_user_id, "
                     "                       status, variant_group_id, variant_label) "
                     "VALUES (?, ?, ?, ?, 'pending', ?, ?)",
-                    (chat_jid, d["text"], json.dumps(sources), user_id,
+                    # the stored chat row's address — wa_drafts.chat_jid
+                    # references wa_chats(jid), and the number's row may
+                    # not exist when the thread runs under the LID
+                    (chat_row["jid"], d["text"], json.dumps(sources), user_id,
                      group_id, d["label"]),
                 )
             conn.commit()

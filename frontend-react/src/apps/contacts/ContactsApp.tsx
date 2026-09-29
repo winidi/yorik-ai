@@ -303,8 +303,8 @@ export function ContactsApp() {
               the fold on a 667px-tall phone for little gain. Active
               count above is the load-bearing info. */}
           <p className="hidden md:block text-sm text-muted-foreground mt-2">
-            People and businesses Yorik knows about. Used by Compose, Email and the agent
-            to look up addresses and phone numbers instead of guessing.
+            People and businesses Yorik knows about. Yorik looks up addresses and
+            phone numbers here instead of guessing.
           </p>
         </header>
 

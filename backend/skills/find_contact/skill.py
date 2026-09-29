@@ -31,6 +31,44 @@ def _first_address_line(addresses: Optional[List[dict]]) -> Optional[str]:
     return ", ".join(bits) or None
 
 
+def _last_contact(contacts: List[dict], user_id: Any) -> dict:
+    """{contact_id: unix time of the latest WhatsApp or mail exchange}."""
+    from datetime import datetime
+    from backend.database import get_conn
+    try:
+        from backend.whatsapp_aliases import same_chat
+    except Exception:  # noqa: BLE001
+        same_chat = lambda _u, j: [j]  # noqa: E731
+    out: dict = {}
+    with get_conn() as conn:
+        for c in contacts:
+            best = 0
+            for ch in c.get("channels") or []:
+                v = (ch.get("value") or "").strip()
+                if not v:
+                    continue
+                try:
+                    if ch.get("kind") == "whatsapp":
+                        jids = same_chat(str(user_id), v.lower() if "@" in v else
+                                         f"{''.join(x for x in v if x.isdigit())}@s.whatsapp.net")
+                        marks = ",".join("?" * len(jids))
+                        row = conn.execute(f"SELECT MAX(timestamp) AS t FROM wa_messages WHERE chat_jid IN ({marks}) "
+                                           "AND owner_user_id = ?", (*jids, user_id)).fetchone()
+                        best = max(best, int(row["t"] or 0))
+                    elif ch.get("kind") == "email":
+                        row = conn.execute("SELECT MAX(COALESCE(date_received, date_sent)) AS t FROM email_messages "
+                                           "WHERE LOWER(from_email) = ? AND owner_user_id = ?",
+                                           (v.lower(), user_id)).fetchone()
+                        t = row["t"] if row else None
+                        if t:
+                            best = max(best, int(datetime.fromisoformat(str(t).replace("Z", "+00:00")).timestamp()))
+                except Exception:  # noqa: BLE001 — ranking is a nicety
+                    continue
+            if best:
+                out[int(c["id"])] = best
+    return out
+
+
 async def execute(
     ctx,
     query: Optional[str] = None,
@@ -89,6 +127,17 @@ async def execute(
     # is revoked between the SELECT and the hydration.
     hydrated = [C.get(r["id"], role=role, user_id=user_id) for r in rows]
     hydrated = [h for h in hydrated if h is not None]
+    # The same person twice — once by number, once as a bare WhatsApp
+    # LID — is one candidate, not two (contacts.lid_twins).
+    _twins = C.lid_twins(hydrated, user_id)
+    hydrated = [h for h in hydrated if int(h["id"]) not in _twins]
+    # Several matches: the one the person wrote with last comes first
+    # (Dirk 2026-09-29: of seven Beates, the one I talk to is on top).
+    if len(hydrated) > 1:
+        _recent = _last_contact(hydrated, user_id)
+        for h in hydrated:
+            h["last_contact_ts"] = _recent.get(int(h["id"]))
+        hydrated.sort(key=lambda h: h.get("last_contact_ts") or 0, reverse=True)
 
     # Ambiguity hint — when >1 candidate matches a name query, the LLM
     # must STOP and ask the user which one. Auto-picking the first match
@@ -213,6 +262,7 @@ async def execute(
                                    if ch["kind"] == "phone"), None),
                     "whatsapp": next((ch["value"] for ch in (c.get("channels") or [])
                                        if ch["kind"] == "whatsapp"), None),
+                    "last_contact_ts": c.get("last_contact_ts"),
                     # First postal address one-lined. Powers the picker's
                     # address subline AND lets downstream skills
                     # (add_calendar_event, Anfahrt routing) reuse the

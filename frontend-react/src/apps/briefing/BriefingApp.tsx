@@ -378,7 +378,14 @@ function RenderSection({ section }: { section: SectionResult }) {
   }
   if (section.render === "events_list") {
     const events = section.result?.events || [];
-    const freeSlots = section.result?.free_slots || [];
+    // A slot that is already over is no use ("08:00–15:00" read at 16:00);
+    // one that started earlier today begins now.
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const freeSlots = (section.result?.free_slots || [])
+      .filter((s: any) => s.date > today || (s.date === today && s.end > hhmm))
+      .map((s: any) => (s.date === today && s.start < hhmm ? { ...s, start: hhmm } : s));
     if (events.length === 0 && freeSlots.length === 0) {
       return <p className="text-sm text-muted-foreground italic">Nothing on the calendar.</p>;
     }
@@ -446,7 +453,7 @@ function TaskList({ tasks }: { tasks: any[] }) {
               )}
               aria-hidden="true"
             >
-              {t.done && <span className="text-2xs text-primary-foreground">✓</span>}
+              {!!t.done && <span className="text-2xs text-primary-foreground">✓</span>}
             </span>
             <span className={cn("flex-1", t.done && "line-through text-muted-foreground")}>
               {t.title}

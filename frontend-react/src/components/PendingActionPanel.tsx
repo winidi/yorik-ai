@@ -20,6 +20,7 @@
  */
 
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { CheckCircle2, FlaskConical, X, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -33,7 +34,7 @@ interface PendingAction {
   llm_model?: string;
 }
 
-type Resolution = "confirmed" | "cancelled" | "test";
+type Resolution = "confirmed" | "cancelled" | "test" | "gone";
 
 interface Props {
   action: PendingAction;
@@ -41,12 +42,18 @@ interface Props {
   onResolved?: (kind: Resolution) => void;
   /** Compact mode for tight popovers (voice). */
   compact?: boolean;
+  /** What the chat remembered about this card (done / cancelled /
+   *  undone) — a reload shows the stamp instead of live buttons. */
+  done?: string;
 }
 
-export function PendingActionPanel({ action, onResolved, compact }: Props) {
+const FROM_DONE: Record<string, Resolution> = { done: "confirmed", cancelled: "cancelled", undone: "test" };
+
+export function PendingActionPanel({ action, onResolved, compact, done }: Props) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState<Resolution | null>(null);
   const devMode = !!(useAuth().user as any)?.dev_mode;
-  const [resolved, setResolved] = useState<Resolution | null>(null);
+  const [resolved, setResolved] = useState<Resolution | null>(done ? FROM_DONE[done] ?? "gone" : null);
   const [err, setErr] = useState<string | null>(null);
 
   const resolve = useCallback(async (kind: Resolution) => {
@@ -70,11 +77,14 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
       setResolved(kind);
       onResolved?.(kind);
     } catch (e: any) {
-      setErr(e?.message || "Couldn't resolve. Try again.");
+      // Already dealt with elsewhere (another tab, before a reload that
+      // did not remember it): say so instead of a raw 404.
+      if (e?.status === 404) setResolved("gone");
+      else setErr(e?.message || t("chat.pending.failed"));
     } finally {
       setBusy(null);
     }
-  }, [action.pending_id, onResolved]);
+  }, [action.pending_id, onResolved, t]);
 
   // Deletes are staged, not applied (preview.mode === "confirm_before"):
   // "Delete" runs it, "Keep" discards it, and there is no "Just
@@ -94,7 +104,7 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
       <div className={cn("px-3 pt-2.5 pb-2", compact ? "pb-1.5" : "")}>
         <div className="flex items-center gap-1.5 mb-1.5">
           <AlertCircle className="w-3.5 h-3.5 text-violet-500" />
-          <span className="text-xs font-semibold">{deferred ? "Delete this?" : "Does this look right?"}</span>
+          <span className="text-xs font-semibold">{deferred ? t("chat.pending.deleteThis") : t("chat.pending.looksRight")}</span>
           {devMode && (
             <span className="text-2xs text-muted-foreground font-mono ml-auto">
               {action.skill}{action.llm_model && ` · ${action.llm_model}`}
@@ -121,12 +131,12 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
             "hover:bg-muted transition inline-flex items-center justify-center gap-1",
             busy === "test" && "opacity-60 cursor-wait",
           )}
-          title="Run it, then revert. Doesn't count toward the LLM's success rate."
+          title={t("chat.pending.justTestingTitle")}
         >
           {busy === "test"
             ? <Loader2 className="w-3 h-3 animate-spin" />
             : <FlaskConical className="w-3 h-3 text-amber-500" />}
-          Just testing
+          {t("chat.pending.justTesting")}
         </button>}
         <button
           onClick={() => resolve("cancelled")}
@@ -137,7 +147,7 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
             busy === "cancelled" && "opacity-60 cursor-wait",
           )}
         >
-          {busy === "cancelled" ? "…" : deferred ? "Keep" : "Cancel"}
+          {busy === "cancelled" ? "…" : deferred ? t("chat.pending.keep") : t("chat.pending.cancel")}
         </button>
         <button
           onClick={() => resolve("confirmed")}
@@ -152,7 +162,7 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
           {busy === "confirmed"
             ? <Loader2 className="w-3 h-3 animate-spin" />
             : <CheckCircle2 className="w-3 h-3" />}
-          {deferred ? "Delete" : "Looks good"}
+          {deferred ? t("chat.pending.delete") : t("chat.pending.looksGood")}
         </button>
       </div>
     </div>
@@ -160,10 +170,12 @@ export function PendingActionPanel({ action, onResolved, compact }: Props) {
 }
 
 function ResolvedStamp({ kind, compact, deferred }: { kind: Resolution; compact?: boolean; deferred?: boolean }) {
+  const { t } = useTranslation();
   const data = {
-    confirmed: { icon: CheckCircle2, color: "text-emerald-600", label: deferred ? "Deleted" : "Confirmed" },
-    cancelled: { icon: X,            color: "text-muted-foreground", label: deferred ? "Kept — nothing deleted" : "Cancelled — reverted" },
-    test:      { icon: FlaskConical, color: "text-amber-600", label: "Tested — reverted" },
+    confirmed: { icon: CheckCircle2, color: "text-emerald-600", label: deferred ? t("chat.pending.deleted") : t("chat.pending.confirmed") },
+    cancelled: { icon: X,            color: "text-muted-foreground", label: deferred ? t("chat.pending.kept") : t("chat.pending.cancelled") },
+    test:      { icon: FlaskConical, color: "text-amber-600", label: t("chat.pending.tested") },
+    gone:      { icon: CheckCircle2, color: "text-muted-foreground", label: t("chat.pending.gone") },
   }[kind];
   const Icon = data.icon;
   return (

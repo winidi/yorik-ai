@@ -29,7 +29,7 @@ export function EmailRecipientCheckCard({ typed, suggestions, subject }: {
     setBusy(true);
     try {
       await api.post("/api/email/pending-draft/confirm", { to });
-      navigate("/email");
+      navigate("/email?draft=pending");
     } catch (e: any) {
       toast(t("chat.email.failed", { error: e?.message || e }), "error");
     } finally {

@@ -37,6 +37,9 @@ interface PendingAction {
 
 interface Props {
   action: PendingAction;
+  /** "undone" when the chat remembered an Undo on this chip. */
+  done?: string;
+  onUndone?: () => void;
 }
 
 // Window during which Undo is one-click. After that the chip stays
@@ -45,10 +48,10 @@ interface Props {
 const UNDO_WINDOW_MS = 30_000;
 
 
-export function PendingActionChip({ action }: Props) {
+export function PendingActionChip({ action, done, onUndone }: Props) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
-  const [undone, setUndone] = useState(false);
+  const [undone, setUndone] = useState(done === "undone");
   const [err, setErr] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -71,12 +74,13 @@ export function PendingActionChip({ action }: Props) {
       );
       for (const a of r.ui_actions || []) emitUiAction(a);
       setUndone(true);
+      onUndone?.();
     } catch (e: any) {
       setErr(e?.message || t("planning.chip.undoFailed"));
     } finally {
       setBusy(false);
     }
-  }, [busy, undone, expired, action.pending_id, t]);
+  }, [busy, undone, expired, action.pending_id, t, onUndone]);
 
   const summary = summarizeSkill(action.skill, action.preview);
   const href = undone ? null : navTargetFor(action.skill, action.preview);

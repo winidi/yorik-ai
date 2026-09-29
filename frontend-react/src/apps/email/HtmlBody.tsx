@@ -40,14 +40,20 @@ interface Props {
   cidMap?: Record<string, number>;
 }
 
+// Mails are written for a white page: most set dark text and no
+// background of their own, so on Yorik's dark panel they read black on
+// black. The body therefore sits on white, like a sheet of paper — the
+// way Gmail and Apple Mail show mail in dark mode.
 const BASE_STYLE = `
   <style>
+    html { color-scheme: light; background: #ffffff; }
     html, body {
       margin: 0; padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
-      font-size: 14px; line-height: 1.55; color: inherit;
+      font-size: 14px; line-height: 1.55; color: #1f2328;
       word-wrap: break-word;
     }
+    body { padding: 16px; }
     img { max-width: 100%; height: auto; }
     table { max-width: 100%; }
     a { color: #6366f1; }
@@ -230,7 +236,7 @@ export function HtmlBody({
       sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
       title="email body"
       srcDoc={fullSrc}
-      className={`w-full border-0 ${className}`}
+      className={`w-full border-0 rounded-lg bg-white ${className}`}
       style={fill ? { height: "100%" } : { height: `${height}px` }}
     />
   );

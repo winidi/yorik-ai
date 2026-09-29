@@ -1,4 +1,10 @@
 {
   "reading": "Yorik is reading…",
-  "add": "Add"
+  "add": "Add",
+  "focus": {
+    "now": "Working on",
+    "open": "Open this task",
+    "pause": "Pause",
+    "done": "Done"
+  }
 }

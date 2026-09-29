@@ -3958,6 +3958,36 @@ def _fold_elapsed_into_actual(conn, task_id: int) -> None:
     )
 
 
+@app.get("/api/tasks/running")
+def running_task(
+    role: str = Depends(_auth.current_role),
+    actor: Optional[Dict[str, Any]] = Depends(_auth.current_user_optional),
+) -> Dict[str, Any]:
+    """The caller's task whose timer runs right now, if any — the one
+    the focus card shows on every screen (Dirk 2026-09-29: "one card,
+    whatever I am doing, that says which task I am working on"). Mine
+    means assigned to me, or unassigned and created by me — the same
+    rule the start endpoint uses for "one running timer per person"."""
+    if not actor:
+        return {"task": None}
+    uid = actor.get("id")
+    with conn_ctx(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT t.id, t.title, t.notes, t.started_at, t.actual_minutes, t.estimated_minutes, t.due_date "
+            "FROM tasks t WHERE t.started_at IS NOT NULL AND COALESCE(t.done, 0) = 0 AND ("
+            "  EXISTS (SELECT 1 FROM task_assignees a WHERE a.task_id = t.id AND a.user_id = ?) "
+            "  OR (NOT EXISTS (SELECT 1 FROM task_assignees a2 WHERE a2.task_id = t.id) "
+            "      AND t.created_by_user_id = ?)) "
+            "ORDER BY t.started_at DESC LIMIT 1",
+            (uid, uid),
+        ).fetchone()
+    if not row:
+        return {"task": None}
+    task = dict(row)
+    task["elapsed_minutes"] = int(task.get("actual_minutes") or 0) + _elapsed_minutes_since(task["started_at"])
+    return {"task": task}
+
+
 @app.post("/api/tasks/{task_id}/start")
 def start_task(
     task_id: int,
@@ -5001,6 +5031,11 @@ def list_contacts(
         if not r: continue
         c = _contacts.get(r["id"], role=role, user_id=uid if uid is not None else None)
         if c: hydrated.append(c)
+    # A person's WhatsApp LID captured as a second contact next to the
+    # real one: leave it out (see contacts.lid_twins).
+    twins = _contacts.lid_twins(hydrated, uid)
+    if twins:
+        hydrated = [c for c in hydrated if int(c["id"]) not in twins]
     # Bulk-inject per-user yorik_assist_enabled (mig 123). One query
     # instead of N. Missing prefs row → False.
     if hydrated and uid is not None:
@@ -8959,6 +8994,24 @@ def list_conversations(
     return out[:limit]
 
 
+def _is_interim_note(msgs: List[Any], i: int) -> bool:
+    """Text the model wrote next to a tool call ("User said 'next
+    Thursday' → lookup table → 2026-10-01"), when the same turn goes on
+    to a real answer. It is the model thinking aloud, not a reply, and
+    showed up as its own bubble after a reload (2026-09-29)."""
+    m = msgs[i]
+    if m.get("role") != "assistant" or not m.get("tool_calls"):
+        return False
+    for later in msgs[i + 1:]:
+        if not isinstance(later, dict):
+            continue
+        if later.get("role") == "user":
+            return False
+        if later.get("role") == "assistant" and (later.get("content") or "").strip():
+            return True
+    return False
+
+
 @app.get("/api/conversations/{conversation_id}")
 def get_conversation(conversation_id: str, role: str = Depends(_auth.current_role),
                      user: dict[str, Any] = Depends(_auth.current_user)) -> Dict[str, Any]:
@@ -9039,11 +9092,12 @@ def get_conversation(conversation_id: str, role: str = Depends(_auth.current_rol
     # carry their agent_trace + photos + documents.
     if source == "agent":
         msgs = [
-            m for m in msgs
+            m for i, m in enumerate(msgs)
             if isinstance(m, dict)
             and m.get("role") in ("user", "assistant")
             and not m.get("internal")        # the grounding check's note to the model
             and (m.get("role") == "user" or (m.get("content") or "").strip())
+            and not _is_interim_note(msgs, i)
         ]
 
     return {
@@ -9054,6 +9108,22 @@ def get_conversation(conversation_id: str, role: str = Depends(_auth.current_rol
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
+
+
+class CardMarkBody(BaseModel):
+    state: str
+    data: Optional[Dict[str, Any]] = None
+
+
+@app.post("/api/conversations/{conversation_id}/cards/{uid}")
+def mark_chat_card(conversation_id: str, uid: str, body: CardMarkBody,
+                   user: dict[str, Any] = Depends(_auth.current_user)) -> Dict[str, Any]:
+    """A chat card was dealt with (WhatsApp sent, delete confirmed,
+    contact picked). Stored on the message so a reload shows it done
+    instead of offering the button again."""
+    if not _conversation_io.mark_card(conversation_id, user["id"], uid, body.state, body.data):
+        raise HTTPException(status_code=404, detail="card not found")
+    return {"ok": True}
 
 
 @app.delete("/api/conversations/{conversation_id}", status_code=204, response_class=Response)

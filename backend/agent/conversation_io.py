@@ -239,12 +239,17 @@ def save_messages(
         m for m in (messages or [])
         if isinstance(m, dict) and m.get("role") != "system"
     ]
-    blob = json.dumps(persisted, ensure_ascii=False, default=str)
     with conn_ctx(DB_PATH) as conn:
         existing = conn.execute(
-            "SELECT user_id FROM agent_conversations WHERE id = ?",
+            "SELECT user_id, messages_json FROM agent_conversations WHERE id = ?",
             (conversation_id,),
         ).fetchone()
+        if existing:
+            # A card the person resolved while this turn was running
+            # (sent, deleted …) must keep that mark: the loop loaded the
+            # messages before the click and would write them back without it.
+            _keep_card_marks(persisted, existing["messages_json"])
+        blob = json.dumps(persisted, ensure_ascii=False, default=str)
         if existing and not owns(existing, user_id):
             logger.warning(
                 "refused to overwrite conversation %s (owner=%r, attempted by=%r)",
@@ -266,6 +271,81 @@ def save_messages(
                 "(id, user_role, user_id, messages_json) VALUES (?, ?, ?, ?)",
                 (conversation_id, user_role, user_id, blob),
             )
+
+
+def _cards(messages: Any):
+    """Every chat card (ui_action) stored on the messages, in order."""
+    for m in messages if isinstance(messages, list) else []:
+        meta = m.get("metadata") if isinstance(m, dict) else None
+        acts = meta.get("ui_actions") if isinstance(meta, dict) else None
+        for a in acts if isinstance(acts, list) else []:
+            if isinstance(a, dict):
+                yield a
+
+
+def _keep_card_marks(new_messages: List[Dict[str, Any]], old_blob: Any) -> None:
+    try:
+        old = json.loads(old_blob or "[]")
+    except (TypeError, ValueError):
+        return
+    marks = {a["uid"]: a for a in _cards(old) if a.get("uid") and a.get("done")}
+    if not marks:
+        return
+    for a in _cards(new_messages):
+        m = marks.get(a.get("uid"))
+        if m and not a.get("done"):
+            a["done"] = m["done"]
+            if "done_data" in m:
+                a["done_data"] = m["done_data"]
+
+
+CARD_STATES = frozenset({"sent", "deleted", "kept", "discarded", "picked", "done", "cancelled", "undone"})
+
+
+def mark_card(conversation_id: str, user_id: Any, uid: str, state: str,
+              data: Optional[Dict[str, Any]] = None) -> bool:
+    """Remember on the stored message that a chat card was dealt with
+    (a WhatsApp sent, a delete confirmed, a contact picked), so a reload
+    shows it done instead of offering the button again — a sent draft
+    offered "Send" again after a reload (2026-09-29). Returns False when
+    the conversation or card is not the caller's."""
+    if state not in CARD_STATES:
+        return False
+    fields: Dict[str, Any] = {"done": state}
+    if data:
+        fields["done_data"] = data
+    return update_card(conversation_id, user_id, uid, **fields)
+
+
+def update_card(conversation_id: str, user_id: Any, uid: str, **fields: Any) -> bool:
+    """Set fields on one stored chat card of the caller's conversation."""
+    if not conversation_id or not uid or not fields:
+        return False
+    with conn_ctx(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT user_id, messages_json FROM agent_conversations WHERE id = ?",
+            (conversation_id,),
+        ).fetchone()
+        if not row or not owns(row, user_id):
+            return False
+        try:
+            messages = json.loads(row["messages_json"] or "[]")
+        except (TypeError, ValueError):
+            return False
+        hit = False
+        for a in _cards(messages):
+            if a.get("uid") == uid:
+                a.update(fields)
+                hit = True
+        if not hit:
+            return False
+        # updated_at stays: dealing with a card is not a new turn and
+        # must not move the chat to the top of the list.
+        conn.execute(
+            "UPDATE agent_conversations SET messages_json = ? WHERE id = ?",
+            (json.dumps(messages, ensure_ascii=False, default=str), conversation_id),
+        )
+    return True
 
 
 def load_ledger(conversation_id: str, user_id: Any) -> Dict[str, Any]:

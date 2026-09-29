@@ -29,7 +29,7 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { formatDate } from "@/i18n/format";
 import {
-  Plus, Trash2, Check, X, CalendarDays, Loader2, ChevronRight,
+  Plus, Trash2, Check, X, CalendarDays, Loader2, ChevronRight, Play, Pause,
   CheckSquare, Square, ListTodo, Sparkles, Clock, Flag,
   ChevronDown, Repeat, Inbox as InboxIcon, Sun, CalendarRange,
   Layers, Eye, EyeOff,
@@ -41,6 +41,7 @@ import { Dock } from "@/components/Dock";
 import { useAuth } from "@/components/AuthGate";
 import type { Task } from "../calendar/types";
 import { toast } from "@/components/Toast";
+import { announceFocusChange } from "@/components/FocusCard";
 import { ListSkeleton } from "@/components/Skeleton";
 import { TickMark } from "@/components/TickMark";
 import { MemberStack } from "@/components/PersonAvatar";
@@ -94,6 +95,14 @@ interface AskResponse {
 export function TasksApp() {
   const { t } = useTranslation();
   const tasksApi = useApi<ExtendedTask[]>(`/api/tasks?role=${ROLE}`, []);
+  // The focus card (on every screen) can finish or pause a task.
+  const refetchTasks = useRef(tasksApi.refetch);
+  refetchTasks.current = tasksApi.refetch;
+  useEffect(() => {
+    const on = () => { void refetchTasks.current(); };
+    window.addEventListener("yorik:tasks-changed", on);
+    return () => window.removeEventListener("yorik:tasks-changed", on);
+  }, []);
   // The list is yours: tasks assigned to you, and unassigned ones you
   // created. What others shared with you, and what you handed to
   // someone else, shows with "Others" (off by default, kept per device).
@@ -265,6 +274,7 @@ export function TasksApp() {
   const toggle = useCallback(async (t: ExtendedTask) => {
     try {
       await api.patch(`/api/tasks/${t.id}?role=${ROLE}`, { done: t.done ? 0 : 1 });
+      if (t.started_at) announceFocusChange();
       tasksApi.refetch();
     } catch (e: any) { toast(`Failed: ${e?.message || e}`); }
   }, [tasksApi]);
@@ -317,6 +327,7 @@ export function TasksApp() {
       const endpoint = t.started_at ? "stop" : "start";
       await api.post(`/api/tasks/${t.id}/${endpoint}?role=${ROLE}`);
       tasksApi.refetch();
+      announceFocusChange();
     } catch (e: any) { toast(`Timer failed: ${e?.message || e}`); }
   }, [tasksApi]);
 
@@ -1469,9 +1480,26 @@ function TaskRow({
             expanded editor (TaskInlineEditor's new "Delete" button)
             via tap-to-expand. Desktop keeps the always-visible
             trash since hover gives natural targeting affordance. */}
+        {onToggleTimer && !task.done && (
+          // Focus: start this task's timer; the FocusCard then shows it
+          // on every screen. Visible while running, on hover otherwise.
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleTimer(); }}
+            className={cn(
+              "shrink-0 p-1.5 rounded-md transition",
+              task.started_at
+                ? "inline-flex text-emerald-500 hover:bg-emerald-500/10"
+                : "hidden md:group-hover:inline-flex text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10",
+            )}
+            title={task.started_at ? "Pause focus" : "Focus on this task"}
+            aria-label={task.started_at ? "Pause focus" : "Focus on this task"}
+          >
+            {task.started_at ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+          </button>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="hidden md:inline-flex shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition"
+          className="hidden md:group-hover:inline-flex shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition"
           title="Delete task"
           aria-label="Delete task"
         >
@@ -1498,6 +1526,7 @@ function TaskRow({
           onSaved={onSaved}
           onDelete={onRemove}
           onAddSubtask={onAddSubtask}
+          onToggleTimer={task.done ? undefined : onToggleTimer}
         />
       )}
 
@@ -1579,8 +1608,10 @@ function TaskRow({
 }
 
 function TaskInlineEditor({
-  task, onCancel, onSaved, onDelete, onAddSubtask,
+  task, onCancel, onSaved, onDelete, onAddSubtask, onToggleTimer,
 }: {
+  /** Start / pause focus on this task (its timer). */
+  onToggleTimer?: () => void;
   task: ExtendedTask;
   onCancel: () => void;
   onSaved: () => void;
@@ -1698,6 +1729,23 @@ function TaskInlineEditor({
             aria-label="Delete task"
           >
             <Trash2 className="w-3.5 h-3.5" /> Delete
+          </button>
+        )}
+        {onToggleTimer && (
+          <button
+            type="button"
+            onClick={onToggleTimer}
+            className={cn(
+              "text-xs h-9 px-3 rounded-md flex items-center gap-1 transition",
+              task.started_at
+                ? "border border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white",
+              !onDelete && "mr-auto",
+            )}
+          >
+            {task.started_at
+              ? <><Pause className="w-3.5 h-3.5" /> Pause focus</>
+              : <><Play className="w-3.5 h-3.5" /> Focus</>}
           </button>
         )}
         <button

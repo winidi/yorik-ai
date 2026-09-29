@@ -38,6 +38,12 @@ export function CalendarImportDialog({ calendars, onClose, onChanged }: {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // Esc closes it, like every other dialog people know.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   // subscribe
   const [url, setUrl] = useState("");
   const [source, setSource] = useState<SourceId>("google");

@@ -195,7 +195,7 @@ export function ChatApp() {
 
         <footer className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
           {me?.user
-            ? <>Logged in as <span className="text-foreground font-medium">{me.user.first_name || me.user.name.split(" ")[0] || me.user.name}</span> · {role}</>
+            ? <>Logged in as <span className="text-foreground font-medium">{me.user.first_name || me.user.name.split(" ")[0] || me.user.name}</span></>
             : "Loading…"}
         </footer>
       </aside>
@@ -631,6 +631,10 @@ function Thread({
     const handler = (e: Event) => {
       const seed = (e as CustomEvent<{ seed: string }>).detail?.seed;
       if (seed) {
+        // The cards also park the seed in sessionStorage (for a Thread
+        // that mounts later); sent right here, it must not linger there
+        // and pop up in the next new chat's input box.
+        try { if (sessionStorage.getItem("yorik_chat_seed") === seed) sessionStorage.removeItem("yorik_chat_seed"); } catch {}
         setText(seed);
         // Auto-send on the next tick.
         setTimeout(() => {
@@ -1552,6 +1556,13 @@ function Thread({
 // Bubble
 // ---------------------------------------------------------------------------
 
+/** What a person sees of their own message. A picked contact is sent
+ *  as "I mean: Beate <3, contact_id=459" so Yorik needs no second
+ *  lookup; the id is for Yorik, not for the bubble. */
+function visibleUserText(content: string | undefined): string {
+  return (content || "").replace(/,\s*contact_id=\d+/g, "");
+}
+
 function MessageBubble({
   message, isLast, role, conversationId, messageIdx,
   onRegenerate, regenBusy, regenDisabled, onEditContent,
@@ -1573,6 +1584,14 @@ function MessageBubble({
   const me = useAuth().user;
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
+  // A card that was dealt with (sent, deleted, picked) remembers it on
+  // the stored message, so a reload shows it done instead of offering
+  // the button again.
+  const markCard = (uid: string | undefined, state: string, data?: Record<string, unknown>) => {
+    if (!conversationId || !uid) return;
+    api.post(`/api/conversations/${encodeURIComponent(conversationId)}/cards/${encodeURIComponent(uid)}`,
+             { state, data }).catch(() => { /* the card still shows it done until a reload */ });
+  };
   // Inline edit — local to the bubble. Save commits via onEditContent
   // up to ChatApp's message state; cancel discards the draft.
   const [editing, setEditing] = useState(false);
@@ -1664,7 +1683,7 @@ function MessageBubble({
               </div>
             </div>
           ) : isUser
-            ? message.content
+            ? visibleUserText(message.content)
             : <AssistantMarkdown>{message.content}</AssistantMarkdown>}
         </div>
 
@@ -1780,8 +1799,10 @@ function MessageBubble({
             // Deletes are staged, not applied: they need a real
             // Delete / Keep decision, not a "done · Undo" chip.
             return a.preview?.mode === "confirm_before"
-              ? <PendingActionPanel key={a.pending_id} action={action} />
-              : <PendingActionChip key={a.pending_id} action={action} />;
+              ? <PendingActionPanel key={a.pending_id} action={action} done={a.done}
+                                    onResolved={(k) => markCard(a.uid, k === "confirmed" ? "done" : k === "test" ? "undone" : "cancelled")} />
+              : <PendingActionChip key={a.pending_id} action={action} done={a.done}
+                                   onUndone={() => markCard(a.uid, "undone")} />;
           })}
         {/* Compose-draft cards — the LLM called compose_draft skill;
             this is the magical inline experience: TipTap editor in
@@ -1818,7 +1839,8 @@ function MessageBubble({
           .filter(a => a.type === "email_ready")
           .map((a: any, i: number) => (
             <EmailDraftReadyCard key={i} to={a.to || ""} subject={a.subject || ""}
-                                  preview={a.preview} attachmentFilename={a.attachment_filename} />
+                                  preview={a.preview} attachmentFilename={a.attachment_filename}
+                                  accounts={a.accounts || []} accountId={a.account_id ?? null} done={a.done} />
           ))}
         {!isUser && message.ui_actions && message.ui_actions
           .filter(a => a.type === "email_recipient_check")
@@ -1870,7 +1892,9 @@ function MessageBubble({
           .filter(a => a.type === "whatsapp_draft_created")
           .map((a: any, i: number) => (
             <WhatsAppDraftCard key={`${a.chat_jid}-${i}`} chatJid={a.chat_jid} recipient={a.recipient || ""}
-                               text={a.text || ""} isNewChat={!!a.is_new_chat} />
+                               text={a.text || ""} isNewChat={!!a.is_new_chat}
+                               sentText={a.done === "sent" ? (a.done_data?.text ?? a.text ?? "") : null}
+                               onSent={(t) => markCard(a.uid, "sent", { text: t })} />
           ))}
         {/* Template picker — the LLM called compose_draft with a vague
             body, so the skill emitted picker candidates instead of a
@@ -1911,6 +1935,8 @@ function MessageBubble({
               query={a.query}
               contacts={a.contacts || []}
               ranked={!!a.ranked}
+              picked={a.done === "picked" ? String(a.done_data?.name || "") : null}
+              onPicked={(name) => markCard(a.uid, "picked", { name })}
             />
           ))}
         {/* Tasks list — check_tasks emits this so questions like "welche
@@ -2764,6 +2790,9 @@ type ContactCandidate = {
   phone?: string | null;
   whatsapp?: string | null;
   address?: string | null;
+  /** Unix seconds of the latest WhatsApp/mail exchange — the list comes
+   *  sorted by it, the row says "last: 3 days ago". */
+  last_contact_ts?: number | null;
   /** 0..1 — present when the LLM ranked these via the render-mode call
    *  of list_contacts_for_picking (ranked_picks=[...]). Rendered as a
    *  small percentage pill on the row. */
@@ -2774,10 +2803,26 @@ type ContactCandidate = {
   reason?: string;
 };
 
+/** A phone number people can read: "+49 176 37995916" instead of
+ *  "4917637995916". WhatsApp LIDs are not numbers and give "". */
+function readablePhone(raw?: string | null): string {
+  const v = (raw || "").trim();
+  if (!v || v.endsWith("@lid")) return "";
+  const digits = v.replace(/@.*$/, "").replace(/\D/g, "");
+  if (digits.length < 7) return v;
+  if (v.startsWith("0") && !v.startsWith("00")) return v;       // national format as typed
+  const d = digits.replace(/^00/, "");
+  const cc = d.startsWith("1") || d.startsWith("7") ? d.slice(0, 1) : d.slice(0, 2);
+  const rest = d.slice(cc.length);
+  return `+${cc} ${rest.slice(0, 3)} ${rest.slice(3)}`.trim();
+}
+
 function ContactPickerCard({
   query,
   contacts,
   ranked = false,
+  picked = null,
+  onPicked,
 }: {
   query: string;
   contacts: ContactCandidate[];
@@ -2785,17 +2830,33 @@ function ContactPickerCard({
    *  render mode (ranked_picks=[...]) with confidence + reason fields.
    *  Header copy + row ordering shift to match. */
   ranked?: boolean;
+  /** Name chosen earlier (remembered on the message) — the card then
+   *  shows just that instead of offering the list again. */
+  picked?: string | null;
+  onPicked?: (name: string) => void;
 }) {
   const { t: tr } = useTranslation();
   const [browseOpen, setBrowseOpen] = useState(false);
+  const [chosen, setChosen] = useState<string | null>(picked);
 
   if (!contacts.length) return null;
 
+  if (chosen) {
+    return (
+      <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border border-violet-500/30 bg-violet-500/[0.06] text-violet-500">
+        <Check className="w-3 h-3" /> {chosen}
+      </div>
+    );
+  }
+
   const pick = (c: ContactCandidate) => {
     // Include the id so the LLM doesn't have to re-resolve. Use the
-    // same chat-seed pattern as the other pickers.
+    // same chat-seed pattern as the other pickers. The bubble shows
+    // the name only (see visibleUserText).
     const tag = c.relation ? ` (${c.relation})` : "";
     const seed = i18n.t("messages.seed.iMean", { name: c.display_name, tag, id: c.id });
+    setChosen(c.display_name);
+    onPicked?.(c.display_name);
     try { sessionStorage.setItem("yorik_chat_seed", seed); } catch {}
     window.dispatchEvent(new CustomEvent("yorik:chat-seed-and-send", { detail: { seed } }));
   };
@@ -2816,12 +2877,15 @@ function ContactPickerCard({
           {ordered.map((c, i) => {
             // Lead with relation/kind, then address on its own line, then
             // a compact contact-channel row (phone · email · whatsapp).
-            const header = c.relation
-              || (c.kind === "business" ? tr("chat.contact.business") : tr("chat.contact.person"));
+            // "Person" said nothing (every row is one); only a relation
+            // or "Business" helps tell entries apart.
+            const header = c.relation || (c.kind === "business" ? tr("chat.contact.business") : "");
+            const phone = readablePhone(c.phone);
+            const wa = readablePhone(c.whatsapp);
             const channels = [
-              c.phone || "",
+              phone,
               c.email || "",
-              c.whatsapp ? c.whatsapp.replace(/@.*$/, "") : "",
+              wa && wa !== phone ? `WhatsApp ${wa}` : (!phone && c.whatsapp ? "WhatsApp" : ""),
             ].filter(Boolean).join(" · ");
             const conf = typeof c.confidence === "number" ? Math.round(c.confidence * 100) : null;
             const confTone =
@@ -2850,12 +2914,14 @@ function ContactPickerCard({
                     </span>
                   )}
                   <span className="text-2xs text-violet-500 opacity-0 group-hover:opacity-100 transition">
-                    pick →
+                    {tr("chat.contact.pickArrow")}
                   </span>
                 </div>
-                <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                  {header}
-                </div>
+                {header && (
+                  <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                    {header}
+                  </div>
+                )}
                 {c.reason && (
                   <div className="text-xs text-violet-500/80 mt-0.5 line-clamp-2 italic">
                     {c.reason}
@@ -2869,6 +2935,11 @@ function ContactPickerCard({
                 {channels && (
                   <div className="text-xs text-muted-foreground/80 mt-0.5 line-clamp-1">
                     {channels}
+                  </div>
+                )}
+                {!!c.last_contact_ts && (
+                  <div className="text-2xs text-muted-foreground/70 mt-0.5">
+                    {tr("chat.contact.lastContact", { when: formatDate(new Date(c.last_contact_ts * 1000)) })}
                   </div>
                 )}
               </button>

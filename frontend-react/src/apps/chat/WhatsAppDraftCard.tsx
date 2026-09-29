@@ -14,19 +14,25 @@
  */
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { MessageCircle, ArrowRight, Send, Check } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 
 export const WA_PREFILL_KEY = (jid: string) => `wa-prefill:${jid}`;
 
-export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNewChat }: {
+export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNewChat, sentText, onSent }: {
   chatJid: string; recipient: string; text: string; isNewChat?: boolean;
+  /** Set when this draft was already sent (remembered on the message):
+   *  the card shows what went out, with no Send button. */
+  sentText?: string | null;
+  onSent?: (text: string) => void;
 }) {
   const navigate = useNavigate();
-  const [text, setText] = useState(initialText);
+  const { t: tr } = useTranslation();
+  const [text, setText] = useState(sentText ?? initialText);
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState(sentText != null);
   const number = chatJid.endsWith("@s.whatsapp.net") ? "+" + chatJid.split("@")[0] : "";
 
   async function send() {
@@ -36,8 +42,9 @@ export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNew
     try {
       await api.post(`/api/whatsapp/chats/${encodeURIComponent(chatJid)}/send`, { text: t });
       setSent(true);
+      onSent?.(t);
     } catch (e: any) {
-      toast(`Senden fehlgeschlagen: ${e?.message || e}`, "error");
+      toast(tr("chat.whatsapp.sendFailed", { error: e?.message || String(e) }), "error");
     } finally {
       setSending(false);
     }
@@ -55,7 +62,7 @@ export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNew
           <MessageCircle className="w-5 h-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="font-semibold truncate">WhatsApp an {recipient || number || chatJid}</div>
+          <div className="font-semibold truncate">{tr("chat.whatsapp.to", { name: recipient || number || tr("chat.whatsapp.thisChat") })}</div>
           {number && recipient && <div className="text-xs text-muted-foreground truncate">{number}</div>}
         </div>
       </div>
@@ -72,12 +79,12 @@ export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNew
             onClick={openChat}
             className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted"
           >
-            Im WhatsApp-Chat öffnen <ArrowRight className="w-4 h-4" />
+            {tr("chat.whatsapp.openChat")} <ArrowRight className="w-4 h-4" />
           </button>
         )}
         {sent ? (
           <span className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-primary">
-            <Check className="w-4 h-4" /> Gesendet
+            <Check className="w-4 h-4" /> {tr("chat.whatsapp.sent")}
           </span>
         ) : (
           <button
@@ -85,7 +92,7 @@ export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNew
             disabled={sending || !text.trim()}
             className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium disabled:opacity-50"
           >
-            <Send className="w-4 h-4" /> {sending ? "Sende…" : "Senden"}
+            <Send className="w-4 h-4" /> {sending ? tr("chat.whatsapp.sending") : tr("chat.whatsapp.send")}
           </button>
         )}
       </div>

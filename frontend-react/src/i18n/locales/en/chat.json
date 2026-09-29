@@ -33,7 +33,13 @@
     "useAndOpen": "Use this address and open",
     "noSubject": "(no subject)",
     "to": "to {{to}}",
-    "openAndSend": "Open and send"
+    "openAndSend": "Open and send",
+    "from": "From",
+    "chooseAccount": "Choose an account…",
+    "pickAccountFirst": "Choose the sender first",
+    "makeDefault": "Always send from this account",
+    "sent": "Sent",
+    "discarded": "Thrown away"
   },
   "draftKind": {
     "letter": "Letter",
@@ -106,11 +112,39 @@
     "none": "No contacts",
     "business": "Business",
     "person": "Person",
-    "filterPlaceholder": "Filter (name or relationship)…"
+    "filterPlaceholder": "Filter (name or relationship)…",
+    "pickArrow": "pick →",
+    "lastContact": "last in touch: {{when}}"
   },
   "tasks": {
     "markOpen": "Mark as open",
     "markDone": "Mark as done",
     "header": "Tasks ({{total}})"
+  },
+  "whatsapp": {
+    "to": "WhatsApp to {{name}}",
+    "thisChat": "this chat",
+    "openChat": "Open in WhatsApp chat",
+    "sent": "Sent",
+    "sending": "Sending…",
+    "send": "Send",
+    "sendFailed": "Sending failed: {{error}}"
+  },
+  "pending": {
+    "deleteThis": "Delete this?",
+    "looksRight": "Does this look right?",
+    "justTesting": "Just testing",
+    "justTestingTitle": "Run it, then revert. Doesn't count toward the model's success rate.",
+    "keep": "Keep",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "looksGood": "Looks good",
+    "deleted": "Deleted",
+    "confirmed": "Confirmed",
+    "kept": "Kept — nothing deleted",
+    "cancelled": "Cancelled — reverted",
+    "tested": "Tested — reverted",
+    "gone": "Already handled",
+    "failed": "Couldn't resolve. Try again."
   }
 }

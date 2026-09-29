@@ -18,7 +18,7 @@ import {
   X, ExternalLink, Eye, FolderOpen, Sparkles, FileImage, FileCode,
   File as FileIcon, AlertCircle, Plus, Check, Bookmark, BookmarkCheck,
   Type, CheckCircle2, XCircle, Info, Mail,
-  Tag as TagIcon, User as UserIcon2, Files as FilesIcon, Calendar as CalIcon, ChevronRight, Lock, UsersRound, Briefcase, House,
+  ArrowLeft, Tag as TagIcon, User as UserIcon2, Files as FilesIcon, Calendar as CalIcon, ChevronRight, Lock, UsersRound, Briefcase, House,
 } from "lucide-react";
 import { useDocBucket } from "./DocBucketContext";
 import { cn } from "@/lib/utils";
@@ -105,28 +105,46 @@ export function DocumentsApp() {
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  // Deep-link: /r/documents?doc=N&source=paperless|native — opens that
-  // doc on mount so the chat's "In Documents öffnen" button (and any
-  // LLM-driven navigate_to) lands on the right preview instead of the
-  // default list view. Paperless docs use NEGATIVE id internally
-  // (see backend list_documents); we apply that here.
+  // The open document lives in the URL: /r/documents?doc=N&source=
+  // paperless|native. Opening one pushes a history entry, so the
+  // browser's (or the phone's) Back closes it and returns to the list
+  // — before 2026-09-29 the URL never changed and Back left the app.
+  // The chat's "open in Documents" link and navigate_to land here the
+  // same way. Paperless docs use NEGATIVE ids internally (see backend
+  // list_documents).
   const [urlParams, setUrlParams] = useSearchParams();
+  const pushedDoc = useRef(false);
   useEffect(() => {
     const docParam = urlParams.get("doc");
-    if (!docParam) return;
+    if (!docParam) { setSelectedId(null); return; }
     const n = parseInt(docParam, 10);
     if (Number.isNaN(n)) return;
     const isPaperless = (urlParams.get("source") || "paperless") === "paperless";
     setSelectedId(isPaperless ? -Math.abs(n) : Math.abs(n));
-    // Strip the params so a reload doesn't keep snapping back to the
-    // same doc after the user navigates around inside the app.
+  }, [urlParams]);
+  const openDoc = useCallback((id: number) => {
+    const next = new URLSearchParams(urlParams);
+    next.set("doc", String(Math.abs(id)));
+    next.set("source", id < 0 ? "paperless" : "native");
+    // One entry per opened document: switching between documents
+    // replaces it, so Back always means "back to the list".
+    setUrlParams(next, { replace: !!urlParams.get("doc") });
+    pushedDoc.current = pushedDoc.current || !urlParams.get("doc");
+  }, [urlParams, setUrlParams]);
+  const closeDoc = useCallback(() => {
+    if (!urlParams.get("doc")) { setSelectedId(null); return; }
+    if (pushedDoc.current) {
+      pushedDoc.current = false;
+      window.history.back();
+      return;
+    }
+    // Arrived straight on a document (a link from the chat): there is
+    // no list entry behind it to go back to, so swap this one.
     const next = new URLSearchParams(urlParams);
     next.delete("doc");
     next.delete("source");
     setUrlParams(next, { replace: true });
-    // Only run on mount — subsequent state changes mustn't re-trigger.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [urlParams, setUrlParams]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchHits, setSearchHits] = useState<DocumentSearchHit[] | null>(null);
@@ -452,7 +470,7 @@ export function DocumentsApp() {
           onPick={(kind) => {
             setActiveFacetKind(kind);
             setActiveFacet(null);
-            setSelectedId(null);
+            closeDoc();
             setSearchHits(null);
             setSearchQuery("");
           }}
@@ -465,7 +483,7 @@ export function DocumentsApp() {
           activeId={activeFacet?.id ?? null}
           onPick={(node) => {
             setActiveFacet(node);
-            setSelectedId(null);
+            closeDoc();
             setSearchHits(null);
             setSearchQuery("");
             tri.closeAll();
@@ -473,7 +491,7 @@ export function DocumentsApp() {
         />
 
         <footer className="border-t border-border px-4 py-3 text-xs text-muted-foreground flex items-center justify-between">
-          <span>{me?.user?.name ? `Signed in · ${role}` : "Loading…"}</span>
+          <span>{me?.user?.name ? `Signed in as ${me.user.name.split(" ")[0]}` : "Loading…"}</span>
           <button
             onClick={() => listApi.refetch()}
             title="Reload list"
@@ -500,7 +518,7 @@ export function DocumentsApp() {
             searching={searching}
             query={searchQuery}
             onPickDoc={(docId) => {
-              setSelectedId(docId);
+              openDoc(docId);
               setSearchHits(null);
               setSearchQuery("");
             }}
@@ -512,8 +530,9 @@ export function DocumentsApp() {
               facetKind={activeFacetKind}
               activeFacet={activeFacet}
               docTitle={selected.title}
-              onAll={() => { setSelectedId(null); setActiveFacet(null); }}
-              onFolder={() => { setSelectedId(null); }}
+              onAll={() => { closeDoc(); setActiveFacet(null); }}
+              onFolder={closeDoc}
+              onBack={closeDoc}
             />
             <PreviewPane doc={selected} role={role} />
           </>
@@ -527,7 +546,7 @@ export function DocumentsApp() {
             hasNext={docsResp?.has_next ?? false}
             hasPrev={docsResp?.has_prev ?? false}
             loading={listApi.loading}
-            onPickDoc={(id) => setSelectedId(id)}
+            onPickDoc={(id) => openDoc(id)}
             onPrev={() => setPage(p => Math.max(1, p - 1))}
             onNext={() => setPage(p => p + 1)}
             onUp={() => setActiveFacet(null)}
@@ -586,7 +605,7 @@ export function DocumentsApp() {
        * button needs three taps (menu → drawer → +); this is one.
        * Bottom-LEFT to match the Yorik FAB convention (right side is
        * reserved for VoiceFab). Admin-only mirrors the sidebar button. */}
-      {(role === "admin" || role === "platform_admin") && (
+      {(role === "admin" || role === "platform_admin") && !selected && (
         <button
           onClick={() => setShowUploadDialog(true)}
           disabled={uploading}
@@ -914,13 +933,8 @@ function PreviewPane({ doc, role }: { doc: YorikDocument; role: string }) {
           <div className="min-w-0">
             <div className="font-semibold truncate">{doc.title}</div>
             <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
-              <span className="truncate max-w-[60vw] md:max-w-none">{doc.mime_type || "unknown"}</span>
+              <span className="truncate max-w-[60vw] md:max-w-none">{fileKind(doc.mime_type)}</span>
               {doc.bytes > 0 && <span className="opacity-60">· {fmtBytes(doc.bytes)}</span>}
-              {doc.source === "paperless" && (
-                <span className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-500 text-2xs font-medium">
-                  Paperless
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -1135,7 +1149,7 @@ function FacetSideList({
       <div className="flex-1 px-4 py-6 text-center text-xs text-muted-foreground leading-relaxed">
         No {labelForKind(kind).toLowerCase()}s yet.
         {kind === "tag" && (
-          <> Run the autotagger from <strong>Settings → Embeddings</strong> to populate this list.</>
+          <> Documents get tags as they are filed.</>
         )}
       </div>
     );
@@ -1172,13 +1186,15 @@ function FacetSideList({
  * Shown in both the doc-card grid and the preview pane.
  */
 function Breadcrumb({
-  activeFacet, facetKind, docTitle, onAll, onFolder, total,
+  activeFacet, facetKind, docTitle, onAll, onFolder, onBack, total,
 }: {
   activeFacet: FacetNode | null;
   facetKind: FacetKind;
   docTitle?: string | null;
   onAll: () => void;
   onFolder?: () => void;
+  /** Shown as a real "← Back" button while a document is open. */
+  onBack?: () => void;
   total?: number;
 }) {
   // Three rendering modes:
@@ -1196,6 +1212,14 @@ function Breadcrumb({
         </>
       ) : (
         <>
+          {docTitle && onBack && (
+            <button
+              onClick={onBack}
+              className="mr-2 -ml-2 inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-foreground hover:bg-muted transition shrink-0"
+            >
+              <ArrowLeft className="w-4 h-4" /> Back
+            </button>
+          )}
           <button
             onClick={onAll}
             className="text-muted-foreground hover:text-foreground transition"
@@ -1642,8 +1666,7 @@ function BrowseTree({
       </div>
       {!loading && !hasAny && (
         <p className="px-2 py-2 text-xs text-muted-foreground leading-relaxed">
-          No tags or correspondents in Paperless yet. Run the autotagger from{" "}
-          <strong>Settings → Embeddings</strong> to populate this tree.
+          No tags or senders yet — documents get them as they are filed.
         </p>
       )}
     </div>
@@ -1890,6 +1913,20 @@ function DocSearchGroup({ hits, onPickDoc }:
 // Metadata + actions pane (right)
 // ---------------------------------------------------------------------------
 
+/** "PDF", "Image", "Word document" — not "application/pdf". */
+function fileKind(mime?: string | null): string {
+  const m = (mime || "").toLowerCase();
+  if (!m) return "File";
+  if (m.includes("pdf")) return "PDF";
+  if (m.startsWith("image/")) return "Image";
+  if (m.includes("word") || m.includes("opendocument.text")) return "Word document";
+  if (m.includes("sheet") || m.includes("excel") || m.includes("csv")) return "Spreadsheet";
+  if (m.includes("presentation") || m.includes("powerpoint")) return "Presentation";
+  if (m.startsWith("text/")) return "Text";
+  if (m.includes("message/rfc822")) return "Email";
+  return "File";
+}
+
 function MetadataPane({
   doc, role, onReindexed,
 }: {
@@ -1921,6 +1958,11 @@ function MetadataPane({
 
   const indexed = !!doc.indexed_at;
   const paperlessUrl = paperlessUrlFromHost();
+  // Documents from the archive (Paperless) come without size, search
+  // index or roles here — the list sends placeholders (0 bytes, "admin",
+  // 0 chunks). Showing them read as "empty file, never indexed, admins
+  // only" (2026-09-29), so they are left out for those.
+  const fromArchive = doc.source === "paperless";
 
   return (
     <>
@@ -1931,23 +1973,19 @@ function MetadataPane({
         <div>
           <div className="font-semibold leading-none text-sm">Details</div>
           <div className="text-2xs text-muted-foreground mt-0.5">
-            File · index · access
+            {fromArchive ? "File" : "File · index · access"}
           </div>
         </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
         <Section label="File">
-          <Row label="Type">
-            <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
-              {doc.mime_type || "unknown"}
-            </span>
-          </Row>
-          <Row label="Size">{fmtBytes(doc.bytes)}</Row>
-          <Row label="Uploaded">{formatDate(doc.created_at)}</Row>
+          <Row label="Type">{fileKind(doc.mime_type)}</Row>
+          {doc.bytes > 0 && <Row label="Size">{fmtBytes(doc.bytes)}</Row>}
+          <Row label={fromArchive ? "Date" : "Uploaded"}>{formatDate(doc.created_at)}</Row>
         </Section>
 
-        <Section label="Index">
+        {!fromArchive && <Section label="Index">
           <Row label="Status">
             {indexed
               ? <span className="text-emerald-500 inline-flex items-center gap-1">
@@ -1960,9 +1998,9 @@ function MetadataPane({
           </Row>
           <Row label="Chunks">{doc.chunk_count}</Row>
           {indexed && <Row label="Indexed at">{formatDate(doc.indexed_at!)}</Row>}
-        </Section>
+        </Section>}
 
-        <Section label="Access">
+        {!fromArchive && <Section label="Access">
           <Row label="Visible to">
             <div className="flex flex-wrap gap-1">
               {(doc.allowed_roles || "").split(",").map(r => r.trim()).filter(Boolean).map(r => (
@@ -1975,7 +2013,7 @@ function MetadataPane({
           {doc.tags && (
             <Row label="Tags">{doc.tags}</Row>
           )}
-        </Section>
+        </Section>}
 
         <div className="pt-1">
           <a
@@ -1991,7 +2029,7 @@ function MetadataPane({
           >
             <Mail className="w-4 h-4" /> Send via email
           </button>
-          <button
+          {!fromArchive && <button
             onClick={reindex}
             disabled={reindexing}
             className="w-full mt-2 inline-flex items-center justify-center gap-2 px-3 py-2.5 md:py-2 rounded-lg bg-muted hover:bg-muted/70 text-foreground text-sm transition disabled:opacity-50"
@@ -1999,7 +2037,7 @@ function MetadataPane({
             {reindexing
               ? <><Loader2 className="w-4 h-4 animate-spin" /> Reindexing…</>
               : <><RefreshCw className="w-4 h-4" /> Reindex</>}
-          </button>
+          </button>}
           {paperlessUrl && (
             <a
               href={paperlessUrl}

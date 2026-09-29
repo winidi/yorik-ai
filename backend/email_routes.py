@@ -89,6 +89,9 @@ class SendBody(BaseModel):
     in_reply_to: Optional[str] = None
     references: list[str] = Field(default_factory=list)
     draft_id: Optional[int] = None  # if this send came from an auto-draft variant
+    # True when the Composer was opened from the draft Yorik staged in
+    # the chat (prepare_email): the send clears it and marks its card.
+    from_yorik_draft: bool = False
     # Inline attachments uploaded with the send call. The composer
     # base64-encodes files on drop; the backend decodes here.
     attachments: list[SendAttachmentIn] = Field(default_factory=list)
@@ -292,8 +295,11 @@ async def update_account(account_id: int, body: AccountUpdate,
             credential_store.put(row["credential_key"], new_creds)
         conn.commit()
 
-    from . import email_fetcher
-    await email_fetcher.reload_account(account_id)
+    # Choosing the default sender changes nothing about fetching; only
+    # restart the account's IMAP loop when something it uses changed.
+    if (body.display_name, body.enabled, body.import_scope, body.password, body.smtp_password) != (None,) * 5:
+        from . import email_fetcher
+        await email_fetcher.reload_account(account_id)
     return {"ok": True}
 
 
@@ -2000,9 +2006,11 @@ def get_pending_draft(user: dict = Depends(current_user)) -> dict:
     on the very first GET, so opening the chat card, looking, and NOT
     sending yet meant it was already gone if the user came back —
     "he only opened the mail once?!". It now only goes away when
-    prepare_email stages a newer one (INSERT OR REPLACE) or the user
-    actually sends (see /send, which clears it on success) — never
-    just from looking at it."""
+    prepare_email stages a newer one (INSERT OR REPLACE), the user
+    actually sends (see /send, which clears it on success) or throws
+    it away (DELETE below) — never just from looking at it. The Email
+    app asks for it only when opened from the chat card
+    (/email?draft=pending), so it no longer pops up on every visit."""
     key = _pending_draft_key(user["id"])
     with get_conn() as conn:
         row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
@@ -2012,6 +2020,64 @@ def get_pending_draft(user: dict = Depends(current_user)) -> dict:
         return {"draft": json.loads(row["value"])}
     except (TypeError, ValueError, json.JSONDecodeError):
         return {"draft": None}
+
+
+def _close_pending_draft(user_id: str, state: str) -> int:
+    """Drop the staged draft and mark its chat card (sent / discarded)."""
+    key = _pending_draft_key(user_id)
+    with get_conn() as conn:
+        row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
+        cur = conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
+        conn.commit()
+    try:
+        card = (json.loads(row["value"]) or {}).get("card") if row else None
+    except (TypeError, ValueError):
+        card = None
+    if card and card.get("conversation_id") and card.get("uid"):
+        from .agent.conversation_io import mark_card
+        mark_card(card["conversation_id"], user_id, card["uid"], state)
+    return cur.rowcount or 0
+
+
+@router.delete("/pending-draft")
+def delete_pending_draft(user: dict = Depends(current_user)) -> dict:
+    """The person threw away the draft Yorik staged. Without this, the
+    chat card would bring it back even though they discarded it."""
+    return {"deleted": _close_pending_draft(user["id"], "discarded")}
+
+
+class PendingAccountBody(BaseModel):
+    account_id: int
+    make_default: bool = False
+
+
+@router.post("/pending-draft/account")
+def choose_pending_account(body: PendingAccountBody, user: dict = Depends(current_user)) -> dict:
+    """The chat card's "from which account?" — sets the sender of the
+    staged draft and, when asked, makes it the person's default."""
+    uid = user["id"]
+    key = _pending_draft_key(uid)
+    with get_conn() as conn:
+        acct = conn.execute("SELECT id FROM email_accounts WHERE id = ? AND owner_user_id = ?",
+                            (body.account_id, uid)).fetchone()
+        if not acct:
+            raise HTTPException(404, "account not found")
+        row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
+        if not row:
+            raise HTTPException(404, "no staged draft")
+        draft = json.loads(row["value"] or "{}")
+        draft["account_id"] = body.account_id
+        conn.execute("UPDATE app_settings SET value = ? WHERE key = ?", (json.dumps(draft), key))
+        if body.make_default:
+            conn.execute("UPDATE email_accounts SET is_default = 0 WHERE owner_user_id = ?", (uid,))
+            conn.execute("UPDATE email_accounts SET is_default = 1 WHERE id = ?", (body.account_id,))
+        conn.commit()
+        card = draft.get("card") or {}
+    if card.get("conversation_id") and card.get("uid"):
+        # The card remembers the choice across a reload.
+        from .agent.conversation_io import update_card
+        update_card(card["conversation_id"], uid, card["uid"], account_id=body.account_id)
+    return {"ok": True}
 
 
 class ConfirmRecipientBody(BaseModel):
@@ -2104,14 +2170,14 @@ async def send_message(body: SendBody, user: dict = Depends(current_user)):
     )
     if not result.get("ok"):
         raise HTTPException(502, result.get("error", "send failed"))
-    # A successful send clears any prepare_email draft still staged for
-    # this user — best-effort, never fails the send itself.
-    try:
-        with get_conn() as conn:
-            conn.execute("DELETE FROM app_settings WHERE key = ?", (_pending_draft_key(user["id"]),))
-            conn.commit()
-    except Exception:  # noqa: BLE001
-        pass
+    # Sending the draft Yorik staged clears it and tells its chat card
+    # "sent" — best-effort, never fails the send itself. Any other mail
+    # leaves it alone (until 2026-09-29 every send threw it away).
+    if body.from_yorik_draft:
+        try:
+            _close_pending_draft(user["id"], "sent")
+        except Exception:  # noqa: BLE001
+            pass
     # Mark the source draft as 'used' + siblings as 'discarded'.
     if body.draft_id is not None:
         with get_conn() as conn:

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import os
+import uuid
 from contextvars import ContextVar
 from typing import Any, Dict, List, Literal, Optional, Type
 
@@ -50,6 +51,11 @@ def get_ui_actions() -> List[Dict[str, Any]]:
 
 
 def _append(action: Dict[str, Any]) -> None:
+    # A stable id per card so the chat can remember it was dealt with
+    # (sent, deleted, picked) — see conversation_io.mark_card. Set on
+    # the caller's dict too, so a skill can hand it on (prepare_email).
+    if isinstance(action, dict):
+        action.setdefault("uid", uuid.uuid4().hex[:12])
     cur = list(_pending_ui_actions.get())
     cur.append(action)
     _pending_ui_actions.set(cur)
@@ -662,6 +668,10 @@ SKILL_MAX_CHARS = {
     "payments_to": 6_000,          # ten Anthropic payments were 3400 characters (2026-09-27)
     "recurring_payments": 6_000,   # cut at 1500, the model narrowed the dates in a loop (2026-09-28)
     "whatsapp_read": 6_000,
+    # A help page is read whole: cut at 1500, the calendar page lost its
+    # "bring your Google calendar" part and Yorik said there was no such
+    # thing (2026-09-29). The largest page is about 8000 characters.
+    "yorik_help": 12_000,
 }
 
 

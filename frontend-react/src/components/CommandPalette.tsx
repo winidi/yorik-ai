@@ -54,6 +54,32 @@ const SOURCE_ORDER: Array<keyof typeof SOURCE_META> = [
   "recordings", "drafts", "letters", "bank", "pipelines", "immich",
 ];
 
+/** How well a hit matches the words typed: a word as a whole word in
+ *  the title counts most, inside the title less, in the snippet least. */
+function matchScore(hit: SearchHit, words: string[]): number {
+  const title = (hit.title || "").toLowerCase();
+  const titleWords = new Set(title.split(/[^\p{L}\p{N}]+/u));
+  const rest = `${hit.subtitle || ""} ${hit.snippet || ""}`.toLowerCase();
+  let score = 0;
+  for (const w of words) {
+    if (titleWords.has(w)) score += 3;
+    else if (title.includes(w)) score += 2;
+    if (rest.includes(w)) score += 1;
+  }
+  return score;
+}
+
+/** Sources with the best-matching hit first — "kobra vertrag" put the
+ *  Kobra document under five Vodafone mails (2026-09-29). The fixed
+ *  order only breaks ties. */
+function orderedSources(data: SearchResponse | null, query: string): Array<keyof typeof SOURCE_META> {
+  if (!data) return SOURCE_ORDER;
+  const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+  const best = (k: keyof typeof SOURCE_META) =>
+    Math.max(0, ...(data.results[k] || []).map(h => matchScore(h, words)));
+  return [...SOURCE_ORDER].sort((a, b) => best(b) - best(a));
+}
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -112,9 +138,10 @@ export function CommandPalette() {
   const flat = useMemo(() => {
     if (!data) return [];
     const out: SearchHit[] = [];
-    for (const k of SOURCE_ORDER) (data.results[k] || []).forEach(h => out.push(h));
+    for (const k of orderedSources(data, query)) (data.results[k] || []).forEach(h => out.push(h));
     return out;
-  }, [data]);
+  }, [data, query]);
+  const sources = useMemo(() => orderedSources(data, query), [data, query]);
 
   const navigate = useCallback((hit: SearchHit) => {
     setOpen(false);
@@ -184,7 +211,7 @@ export function CommandPalette() {
             </div>
           ) : (
             <>
-              {SOURCE_ORDER.map(source => {
+              {sources.map(source => {
                 const hits = data.results[source] || [];
                 if (hits.length === 0) return null;
                 const meta = SOURCE_META[source];

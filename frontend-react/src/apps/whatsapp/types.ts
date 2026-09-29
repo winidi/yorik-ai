@@ -20,6 +20,10 @@ export interface WaChat {
   last_message_ts?: number | null;
   last_message_text?: string | null;
   unread_count: number;
+  /** Every address of this chat. WhatsApp knows a person by phone
+   *  number and by an opaque "LID"; the backend folds both into one
+   *  chat keyed by the number (backend/whatsapp_aliases.py). */
+  aliases?: string[];
 }
 
 export interface WaMessage {

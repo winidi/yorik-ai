@@ -919,3 +919,52 @@ __all__ = [
     "bump_interaction", "bump_use",
     "status_counts",
 ]
+
+
+def _number_tail(value: str) -> str:
+    """The last nine digits of a phone number or phone JID — enough to
+    match "+49 176 3799 5916", "0176 37995916" and "4917637995916@s.whatsapp.net"."""
+    v = (value or "").strip().lower()
+    if v.endswith("@lid") or v.endswith("@g.us"):
+        return ""
+    digits = re.sub(r"\D", "", v.split("@", 1)[0])
+    return digits[-9:] if len(digits) >= 7 else ""
+
+
+def lid_twins(contacts: List[Dict[str, Any]], user_id: Any) -> set:
+    """Ids of contacts that are only a WhatsApp LID of someone else in
+    `contacts`: WhatsApp knows a person by number and by an opaque LID,
+    and Yorik captured the LID as a second contact ("Beate" next to
+    "Beate <3", 2026-09-29). A contact counts as a twin when every
+    channel it has is a LID that the bridge maps to a number another
+    contact in the list already carries. Nothing is deleted — callers
+    leave twins out of lists and pickers."""
+    if not contacts:
+        return set()
+    try:
+        from .whatsapp_aliases import lid_to_number
+        aliases = lid_to_number(str(user_id)) if user_id else {}
+    except Exception:  # noqa: BLE001
+        aliases = {}
+    if not aliases:
+        return set()
+    owner_of: Dict[str, int] = {}
+    for c in contacts:
+        for ch in c.get("channels") or []:
+            if ch.get("kind") in ("phone", "whatsapp"):
+                tail = _number_tail(ch.get("value") or "")
+                if tail:
+                    owner_of.setdefault(tail, int(c["id"]))
+    twins = set()
+    for c in contacts:
+        chans = c.get("channels") or []
+        lids = [(ch.get("value") or "").lower() for ch in chans
+                if ch.get("kind") == "whatsapp" and (ch.get("value") or "").lower().endswith("@lid")]
+        if not lids or len(lids) != len(chans):
+            continue
+        for lid in lids:
+            other = owner_of.get(_number_tail(aliases.get(lid, "")))
+            if other is not None and other != int(c["id"]):
+                twins.add(int(c["id"]))
+                break
+    return twins

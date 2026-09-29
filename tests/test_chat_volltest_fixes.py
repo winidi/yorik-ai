@@ -209,7 +209,8 @@ class TestWhatsAppDraftCardAndIntent:
             return _pending_ui_actions.get()
         actions = asyncio.run(run())
         assert "Brot" in seen["prompt"]
-        cards = [a for a in actions if a["type"] == "whatsapp_draft_created"]
+        cards = [{k: v for k, v in a.items() if k != "uid"}
+                 for a in actions if a["type"] == "whatsapp_draft_created"]
         assert cards == [{"type": "whatsapp_draft_created", "chat_jid": jid, "recipient": "Anna <3",
                           "text": "Ich bring nachher Brot mit!", "is_new_chat": False}]
 
