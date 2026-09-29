@@ -463,6 +463,11 @@ def check(answer: str, messages: List[Dict[str, Any]], raws: Optional[List[Tuple
         if exact:
             corrected = corrected.replace(q, exact, 1)
             add_source(_find_source(raws, lambda t: _norm_text(exact) in _norm_text(t)))
+        elif any(skill == "yorik_help" for skill, _ in raws):
+            # Yorik's own help text, loosely retold: nothing to verify, but
+            # not shown as a quote either — a quote is word for word
+            # (Dirk 2026-09-29). The line stays as plain text.
+            corrected = re.sub(r"(?m)^>\s*(" + re.escape(q) + ")", r"\1", corrected, count=1)
         else:
             missing.append("„" + q.strip("„“”\"«» ") + "“")
 

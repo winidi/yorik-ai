@@ -319,3 +319,16 @@ def test_english_weekday_dates_are_corrected_too():
     assert fix_weekdays("Friday, October 2 at 10:00", d) == "Friday, October 2 at 10:00"
     assert fix_weekdays("Sonntag, 3. Okt.", d) == "Samstag, 3. Okt."
     assert fix_weekdays("Sa, 10.10.", d) == "Sa, 10.10."
+
+
+def test_a_loosely_retold_help_text_is_no_quote_and_no_warning():
+    """Quoting the help text in its own words got '(quote not verified, left
+    out)' (2026-09-29). With a help result in the turn, such a line is no
+    quote any more (a quote is word for word) and nothing is flagged."""
+    from backend.agent.grounding import check
+    raw = [("yorik_help", {"topic": "email", "body": "Open the Mail app and click + next to Accounts in the list on the left."})]
+    v = check("To add an account:\n> Open Mail and press the plus next to Accounts.\nThen fill in the IMAP host.", [], raw)
+    assert v.ok and not v.missing
+    assert v.text == "To add an account:\nOpen Mail and press the plus next to Accounts.\nThen fill in the IMAP host."
+    mail = [("read_email", {"subject": "Kita", "body": "Bitte Brotdose mitgeben."})]
+    assert not check("> Bitte Regenjacke mitgeben.", [], mail).ok             # other sources stay strict
