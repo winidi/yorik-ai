@@ -248,7 +248,7 @@ async def ask(
     from backend.email_addresses import current_user_text as _cut
     _cut.set(message or "")
     # A question searches everything first (backend/agent/prefetch.py).
-    _pre = await _prefetch.run(message, user_id=user.id, role=role)
+    _pre = await _prefetch.run(message, user_id=user.id, role=role, llm=llm)
     if _pre:
         messages.extend(_pre["messages"])
         turn_raws.append(("universal_search", _pre["raw"]))
@@ -907,7 +907,7 @@ async def ask_stream(
     _cut.set(message or "")
     # A question searches everything first (backend/agent/prefetch.py);
     # the chat shows it like any other tool step.
-    _pre = await _prefetch.run(message, user_id=user.id, role=role)
+    _pre = await _prefetch.run(message, user_id=user.id, role=role, llm=llm)
     if _pre:
         messages.extend(_pre["messages"])
         turn_raws.append(("universal_search", _pre["raw"]))

@@ -205,3 +205,28 @@ def test_a_person_who_leaves_stops_the_model_and_the_turn_is_not_saved(admin_id)
     assert fake.closed and fake.sent < 50                    # the model stopped early
     assert not any(isinstance(e, streaming.FinalResult) for e in events)
     assert ci.load_messages("conv-left", admin_id) == []     # nothing saved
+
+
+def test_prefetch_asks_the_chats_own_model_server(monkeypatch):
+    """The wording variants went to the env address without a key, so on a
+    server with a key (or after Settings → LLM changed it) they failed
+    quietly."""
+    import httpx
+    from types import SimpleNamespace as NS
+    from backend.agent import prefetch
+    seen = {}
+
+    class _Client:
+        def __init__(self, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, url, json=None, headers=None):
+            seen.update(url=url, model=json.get("model"), auth=headers.get("Authorization"))
+            return httpx.Response(200, json={"choices": [{"message": {"content": '{"also": ["Rechnung"]}'}}]},
+                                  request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+    llm = NS(base_url="https://llm.example/v1/", model="qwen-x", api_key="sk-123")
+    out = asyncio.run(prefetch._real_variants("wo ist die invoice?", "invoice", llm))
+    assert out == ["Rechnung"]
+    assert seen == {"url": "https://llm.example/v1/chat/completions", "model": "qwen-x", "auth": "Bearer sk-123"}

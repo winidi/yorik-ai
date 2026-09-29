@@ -347,7 +347,7 @@ def test_prefetch_searches_the_models_variants_too(house, monkeypatch):
     from backend import search_routes
     from backend.agent import prefetch
     asked = []
-    async def fake_variants(message, query):
+    async def fake_variants(message, query, llm=None):
         return ["anthropic invoice"]
     async def fake_search(q, user):
         asked.append(q)

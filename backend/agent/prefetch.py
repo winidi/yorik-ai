@@ -98,23 +98,27 @@ VARIANTS_PROMPT = (
 VARIANTS_TIMEOUT_S = 4.0
 
 
-async def variants(message: str, query: str) -> List[str]:
+async def variants(message: str, query: str, llm: Any = None) -> List[str]:
     """Other wordings from the model, before the search: the user's own
     words missed the English invoice and the Anthropic receipt for
     "Claude" (2026-09-27; Dirk chose this over a second search by code).
     Nothing when the model is slow or answers oddly — the search then
-    runs with the user's words alone."""
+    runs with the user's words alone. Asks the chat's own model server
+    (`llm`: address, model and key as set in Settings → LLM); the
+    environment is only the fallback."""
     import httpx
     from .llm import _thinking_kwargs_enabled
     body: Dict[str, Any] = {
         "messages": [{"role": "user", "content": VARIANTS_PROMPT.format(message=message, query=query)}],
         "temperature": 0.2, "max_tokens": 80}
-    if os.getenv("HOMEOS_MODEL"):
-        body["model"] = os.getenv("HOMEOS_MODEL")
+    model = getattr(llm, "model", None) or os.getenv("HOMEOS_MODEL")
+    if model:
+        body["model"] = model
     if _thinking_kwargs_enabled():
         body["chat_template_kwargs"] = {"enable_thinking": False}
         body["reasoning_effort"] = "none"
-    base = os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1")
+    base = (getattr(llm, "base_url", None) or os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1")).rstrip("/")
+    key = getattr(llm, "api_key", None) or "not-used"
     import time
     from backend import speed
     limit = speed.budget(VARIANTS_TIMEOUT_S, "llm")   # slower machines get longer
@@ -122,7 +126,7 @@ async def variants(message: str, query: str) -> List[str]:
     try:
         async with httpx.AsyncClient(timeout=limit) as client:
             r = await client.post(f"{base}/chat/completions", json=body,
-                                  headers={"Authorization": "Bearer not-used"})
+                                  headers={"Authorization": f"Bearer {key}"})
         r.raise_for_status()
         speed.record("llm", time.perf_counter() - t0)
         raw = (r.json().get("choices") or [{}])[0].get("message", {}).get("content") or ""
@@ -164,7 +168,7 @@ def should_search(message: str) -> bool:
     return bool(_QUESTION.search(text))
 
 
-async def run(message: str, *, user_id: Any, role: Optional[str]) -> Optional[Dict[str, Any]]:
+async def run(message: str, *, user_id: Any, role: Optional[str], llm: Any = None) -> Optional[Dict[str, Any]]:
     """The two messages to put before the model (a synthetic tool call and
     its result) plus the raw hits for source labels, or None."""
     if not user_id or not should_search(message):
@@ -179,7 +183,7 @@ async def run(message: str, *, user_id: Any, role: Optional[str]) -> Optional[Di
     import asyncio
     user = {"id": user_id, "role": role or "member"}
     query = keywords(message)
-    also = await variants(message, query)
+    also = await variants(message, query, llm)
     try:
         runs = await asyncio.gather(*(universal_search(q=q, user=user) for q in [query, *also]))
         raw = merge(list(runs))

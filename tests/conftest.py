@@ -299,6 +299,7 @@ def _no_llm_search_variants(monkeypatch):
     backend.agent.prefetch.variants itself."""
     from backend.agent import prefetch
 
-    async def none(message, query):
+    async def none(message, query, llm=None):
         return []
+    monkeypatch.setattr(prefetch, "_real_variants", prefetch.variants, raising=False)
     monkeypatch.setattr(prefetch, "variants", none)
