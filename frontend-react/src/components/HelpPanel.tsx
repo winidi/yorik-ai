@@ -18,7 +18,7 @@ interface Page extends Topic { body: string }
 // Which help page belongs to which app (app id as in the Dock).
 const TOPIC_FOR_APP: Record<string, string> = {
   home: "next-steps", calendar: "calendar", tasks: "tasks", chat: "next-steps",
-  docs: "paperless", compose: "compose", write: "schreiben", photos: "immich",
+  docs: "paperless", compose: "write", write: "write", photos: "immich",
   whatsapp: "whatsapp", email: "email", contacts: "contacts", briefing: "briefing",
   board: "family-board", recordings: "recordings", finance: "finance",
   pipelines: "pipelines", settings: "first-run",
