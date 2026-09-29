@@ -5,13 +5,14 @@
 Two ways to use it:
 
 - **With your agent (recommended).** Connect Hermes or another MCP client to `http://<yorik>:8000/mcp` with a personal token. The agent gets one tool per Yorik skill, Yorik keeps the data, the rights and the confirmations. See [docs/MCP.md](docs/MCP.md).
-- **On its own.** Yorik's built-in assistant runs on a local model (Qwen 3.5 9B by default) and can hand questions it cannot answer from the household's data to your agent (`ask_agent`). It works, and it is the less polished of the two paths.
+- **On its own.** Yorik's built-in assistant runs on a local model and can hand questions it cannot answer from the household's data to your agent (`ask_agent`). The install sets up a small model (Qwen 3.5 9B) that fits most PCs; the assistant is tuned on Qwen3.8-27B on an NVIDIA GPU, and smaller models answer less reliably. Treat the chat as beta.
 
 > ### ⚠️ Early rolling alpha. Expect bugs.
 >
 > Core features work on the maintainer's box and pass automated tests, but
-> Yorik hasn't been field-tested by anyone else yet. The security audit was
-> done **today**. Don't run it on a machine that holds data you can't lose.
+> Yorik hasn't been field-tested by anyone else yet. The permission model was
+> audited in September 2026 and the findings were fixed. Don't run it on a
+> machine that holds data you can't lose.
 >
 > The most valuable thing you can do right now is install it, hit the rough
 > edges, and file a bug report via the
@@ -53,7 +54,7 @@ Yorik runs as one Docker stack — the same on Linux, Windows and macOS. 16 GB R
 | | |
 |---|---|
 | **Windows 10/11** | download `Yorik-Setup-Windows.zip` from the [latest release](https://github.com/winidi/yorik-ai/releases/latest), unzip, double-click `Yorik-Setup.cmd` |
-| **macOS** | `Yorik-Setup-Mac.zip` from the release, double-click `Yorik Setup.command` (not yet tested on a real Mac) |
+| **macOS** (untested) | `Yorik-Setup-Mac.zip` from the release, unzip, then in Terminal: `cd` into the folder and `bash install-mac.sh`. Double-clicking `Yorik Setup.command` also works once you allow it under System Settings → Privacy & Security → "Open Anyway". Nobody has run it on a real Mac yet: reports welcome. |
 | **Linux** | `git clone https://github.com/winidi/yorik-ai && cd yorik-ai && bash install.sh` |
 | **A spare mini PC** | `bash scripts/build-appliance.sh` makes an install stick; boot the PC from it |
 
@@ -61,9 +62,15 @@ Each one sets up Docker if needed, starts Yorik, photos, documents, WhatsApp, a 
 
 Details, what lives where, updates: [docs/INSTALL.md](docs/INSTALL.md). Broken? [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
-## Bring your own LLM
+## The AI model
 
-Yorik is a client to any OpenAI-compatible local LLM (Ollama, LM Studio, llama.cpp, vLLM, llama-swap). Install one, then **Settings → LLM → Scan now**. Tested with Qwen 3.5 9B (standard and MTP). Any tool-calling model in that class works.
+The install brings a local model server (Ollama) with a small model. An NVIDIA GPU is used when Docker can see it. On a Mac, install the [Ollama app](https://ollama.com) first and Yorik uses it with the Apple GPU. AMD GPUs are not used inside Docker; there the model runs on the CPU and answers take tens of seconds.
+
+Already run a model server (llama.cpp, LM Studio, vLLM, Ollama, llama-swap)? Point Yorik at it: **Settings → LLM → Scan now**. Any OpenAI-compatible server with tool calling works; the chat is tuned on Qwen3.8-27B.
+
+## Language
+
+Yorik comes from a German household. The interface is mostly English; some apps (Schreiben, Pipelines, Finance), the e-invoicing and parts of the assistant's wording are German. Translations are welcome.
 
 ## What works / what's rough
 
@@ -78,12 +85,14 @@ Yorik is a client to any OpenAI-compatible local LLM (Ollama, LM Studio, llama.c
 - German invoice numbering with GoBD audit trail
 - Voice: Parakeet STT + WeSpeaker speaker ID (both CPU, via sherpa-onnx) + Supertonic-3 TTS
 - Multi-user, cookie sessions, country/locale picker
-- BYO Immich/Paperless/WhatsApp (auto-detected, skipped if you already run them)
+- Photos (Immich), documents (Paperless) and the WhatsApp bridge come bundled
 - Encrypted backups via age
+
+**Experimental** (off until you switch them on; marked in Settings → Apps): Pipelines (Yorik follows up on a sent mail until the answer comes), Finance (read-only bank access via FinTS), Schreiben (letters and invoices), Recordings (dinner and meeting transcripts).
 
 **Rough — your bug reports help:**
 - First-run on <8 GB RAM is painful; recommend ≥16 GB
-- Voice latency depends on your LLM (a 7–9B model on CPU = ~5–10 s reply)
+- Without a GPU the assistant is slow: expect tens of seconds per answer
 - XRechnung PDF/A-3 isn't fully validated against all 2026 schema variants
 - Phone and tablet are the primary surface, but the layout was built desktop-first; expect rough edges
 - Multi-family hosting on one box (workspaces) is scaffolded, not finished
@@ -92,7 +101,7 @@ Is your install healthy? `bash scripts/smoke-check.sh` walks health, login, a ta
 
 ## Architecture
 
-Python FastAPI backend on `:8000`, React 19 frontend, Postgres for everything personal (the bundled Supabase stack — one database, schemas `public` and `docs`), pgvector for document and message embeddings. An in-tree agent loop wraps the LLM with ~60 role-gated skills it can call as tools. Docker Compose orchestrates the optional bundled Immich + Paperless + WhatsApp bridge; each is BYO-aware.
+Python FastAPI backend on `:8000`, React 19 frontend, Postgres for everything personal (the bundled Supabase stack — one database, schemas `public` and `docs`), pgvector for document and message embeddings. An in-tree agent loop wraps the LLM with ~80 role-gated skills it can call as tools. Docker Compose orchestrates the optional bundled Immich + Paperless + WhatsApp bridge; each is BYO-aware.
 
 Deeper: [ARCHITECTURE.md](ARCHITECTURE.md). Security stance: [THREAT_MODEL.md](THREAT_MODEL.md).
 
@@ -139,4 +148,4 @@ Yorik is the glue, not the engines.
 
 ---
 
-Questions? [GitHub Discussions](https://github.com/winidi/yorik-ai/discussions). Bugs? [Open an issue](https://github.com/winidi/yorik-ai/issues/new/choose). Security? Email [hi@yorik.ai](mailto:hi@yorik.ai).
+Questions or bugs? [Open an issue](https://github.com/winidi/yorik-ai/issues/new/choose). Security? Email [hi@yorik.ai](mailto:hi@yorik.ai).

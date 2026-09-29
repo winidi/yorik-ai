@@ -43,8 +43,10 @@ say yes.
 
 ## macOS
 
-From the release, `Yorik-Setup-Mac.zip`, then double-click
-`Yorik Setup.command`. It installs Docker Desktop (Homebrew if present,
+From the release, `Yorik-Setup-Mac.zip`, unzip it, then either open
+Terminal in that folder and run `bash install-mac.sh`, or double-click
+`Yorik Setup.command`. macOS blocks a downloaded script the first time:
+System Settings → Privacy & Security → "Open Anyway" lets it run. It installs Docker Desktop (Homebrew if present,
 otherwise the official download), puts Yorik in
 `~/Library/Application Support/Yorik`, backups in `~/Documents/Yorik Backups`.
 Docker can't use the Apple GPU; with the [Ollama app](https://ollama.com)
