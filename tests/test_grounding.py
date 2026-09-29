@@ -286,3 +286,17 @@ def test_an_iban_quoted_in_groups_is_the_same_iban():
     chat = [{"role": "tool", "content": json.dumps({"snippet": "DE32500105175422716331"})}]
     assert check("> DE32 5001 0517 5422 7163 31", chat).ok
     assert not check("> DE32 5001 0517 5422 7163 32", chat).ok
+
+
+def test_dollars_pounds_and_us_phone_numbers_are_checked_too():
+    """The check knew only euros and +49 (2026-09-29): an invented dollar
+    amount or US number passed unchecked."""
+    from backend.agent.grounding import check, needs_hold
+    raw = [("show_transactions", {"rows": [{"payee": "Verizon", "amount": "-1,234.56 USD"}]}),
+           ("find_person", {"phone": "(555) 123-4567"})]
+    assert check("You paid $1,234.56 to Verizon.", [], raw).ok
+    assert not check("You paid $1,999.00 to Verizon.", [], raw).ok
+    assert check("Call them at +1 555 123 4567.", [], raw).ok
+    assert not check("Call them at +1 555 987 6543.", [], raw).ok
+    assert check("It was about $2,000.", [], raw).ok                  # rounded on purpose
+    assert needs_hold("That is $12") and needs_hold("Call (555) 12")

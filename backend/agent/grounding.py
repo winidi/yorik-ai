@@ -28,16 +28,22 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 # ─── patterns ────────────────────────────────────────────────────────
 
 IBAN = re.compile(r"\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,4})?\b")
-PHONE = re.compile(r"(?<![\w+])(?:\+\d{2}|00\d{2}|0)\d[\d /-]{6,}\d(?![\w])")
+# German (0151 …, +49 …) and international forms (+1 555 …, (555) 123-4567, 555-123-4567)
+PHONE = re.compile(r"(?<![\w+])(?:(?:\+\d{1,3}|00\d{2})[ -]?\d|0\d|\(\d{3}\)\s?\d|\d{3}-\d{3}-\d)[\d /()-]{5,}\d(?![\w])")
 MAIL = re.compile(r"\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b")
-_NUM = r"\d{1,3}(?:[.  ]\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?"
-MONEY = re.compile(rf"(?:(?:€|EUR)\s?(?P<a>{_NUM}))|(?:(?P<b>{_NUM})\s?(?:€|EUR\b|Euro\b|euro\b))")
+# 1,234.56 (English) and 1.234,56 (German) and plain 38 / 38.5
+_NUM = r"\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{1,3}(?:[.  ]\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?"
+_CUR_PRE = r"(?:€|EUR|US\$|\$|USD|£|GBP|CHF|Fr\.)"
+_CUR_POST = r"(?:€|EUR\b|[Ee]uros?\b|USD\b|\$|[Dd]ollars?\b|£|GBP\b|[Pp]ounds?\b|CHF\b|Franken\b)"
+MONEY = re.compile(rf"(?:{_CUR_PRE}\s?(?P<a>{_NUM}))|(?:(?P<b>{_NUM})\s?{_CUR_POST})")
 LONGNUM = re.compile(r"(?<![\w.,])\d(?:[ ]?\d){6,}(?![\w.,]*\d)")
-APPROX = re.compile(r"(?:ca\.|circa|rund|etwa|ungefähr|knapp|gut|über|unter|fast|~|≈)\s*$", re.I)
+APPROX = re.compile(r"(?:ca\.|circa|rund|etwa|ungefähr|knapp|gut|über|unter|fast|about|around|approx\.?|"
+                    r"approximately|roughly|nearly|almost|over|under|some|~|≈)\s*$", re.I)
 
 # While streaming: once the text so far could hold one of the above,
 # the rest is held back until the check has run.
-HOLD = re.compile(r"(?m)\b[A-Z]{2}\d{2}(?:\b|\s?\d)|^\s*>|\d\s?(?:€|EUR|Euro)|€\s?\d|@[\w-]+\.|(?:\+|00)\d{2}\s?\d|\b0\d{3,}[ /-]?\d")
+HOLD = re.compile(r"(?m)\b[A-Z]{2}\d{2}(?:\b|\s?\d)|^\s*>|\d\s?(?:€|EUR|Euro|USD|\$|£|CHF)|[€$£]\s?\d|"
+                  r"@[\w-]+\.|(?:\+|00)\d{1,3}\s?\d|\b0\d{3,}[ /-]?\d|\(\d{3}\)\s?\d|\b\d{3}-\d{3}-\d")
 
 
 @dataclass
@@ -380,8 +386,13 @@ def check(answer: str, messages: List[Dict[str, Any]], raws: Optional[List[Tuple
             ok = key in digits_blob
             src = _find_source(raws, lambda t: key in _digits(t)) if ok else None
         elif kind == "phone":
+            # the national part (German numbers with or without +49), else
+            # the last nine digits (+1 555 123 4567 vs (555) 123-4567)
             key = _phone_key(raw)
-            ok = bool(key) and key in digits_blob
+            tail = _digits(raw)[-9:]
+            ok = bool(key) and (key in digits_blob or (len(tail) == 9 and tail in digits_blob))
+            if ok and key not in digits_blob:
+                key = tail
             src = _find_source(raws, lambda t: key and key in _digits(t)) if ok else None
         else:
             if numbers is None:
