@@ -36,3 +36,26 @@ def test_disabled_app_skill_refuses_to_run(fresh_app):
     with pytest.raises(Exception):
         asyncio.run(get_registry().invoke("recording_status", ctx=ctx))
     A.set_opt_in_enabled("recordings", True)
+
+
+def test_pipelines_is_opt_in_but_stays_on_where_it_is_used(fresh_app):
+    """Pipelines became opt-in and experimental on 2026-09-29. A fresh
+    install starts without it; an install that already has pipelines
+    keeps it, and the switch works normally afterwards."""
+    from backend import apps as A
+    from backend.database import get_conn
+    client, uid = login_client(fresh_app, role="admin", name="Dirk")
+    ids = lambda: {a["id"] for a in client.get("/api/apps").json()}
+    assert "pipelines" not in ids()                              # fresh: off, nothing written
+    with get_conn() as conn:
+        assert conn.execute("SELECT 1 FROM app_settings WHERE key = 'app_enabled_pipelines'").fetchone() is None
+        conn.execute("INSERT INTO pipelines (owner_user_id, kind, title) VALUES (?, 'nachfassen', 'Kündigung')", (uid,))
+        conn.commit()
+    assert "pipelines" in ids()                                  # in use: kept on, and recorded
+    with get_conn() as conn:
+        assert conn.execute("SELECT value FROM app_settings WHERE key = 'app_enabled_pipelines'").fetchone()[0] == "1"
+    A.set_opt_in_enabled("pipelines", False)
+    assert "pipelines" not in ids()                              # the admin's "off" wins over the rows
+    opt = {a["id"]: a for a in client.get("/api/apps/opt-in").json()}
+    assert all(opt[i]["experimental"] for i in ("pipelines", "finance", "write", "recordings"))
+    assert not opt["whatsapp"]["experimental"]

@@ -2133,6 +2133,9 @@ function Reader({
   const detail = useApi<EmailMessageDetail>(`/api/email/messages/${messageRow.id}`, []);
   const m = detail.data;
   const navigate = useNavigate();
+  // "Follow the answer" only while the Pipelines app is on (opt-in).
+  const apps = useApi<Array<{ id: string }>>("/api/apps", []);
+  const pipelinesOn = !!apps.data?.some(a => a.id === "pipelines");
 
   // Remote-image gate. Off by default (privacy) — flipped per-message
   // when the user clicks "Show images". When the sender is on the
@@ -2224,8 +2227,8 @@ function Reader({
               to: "", subject: `Fwd: ${m.subject}`,
               body: `\n\n--- Forwarded message ---\nFrom: ${m.from_name || m.from_email}\nSubject: ${m.subject}\n\n${m.body_text || ""}`,
             })} />
-          {m.is_sent && (
-            <ToolbarBtn icon={Workflow} label="Antwort verfolgen (Pipelines)"
+          {m.is_sent && pipelinesOn && (
+            <ToolbarBtn icon={Workflow} label="Follow up until answered (Pipelines)"
               onClick={async () => {
                 try {
                   const p = await api.post<{ id: number }>("/api/pipelines", { mail_id: messageRow.id });

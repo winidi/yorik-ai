@@ -4760,6 +4760,7 @@ interface OptInApp {
   icon: string;
   description: string;
   enabled: boolean;
+  experimental?: boolean;
 }
 
 function AppsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
@@ -4827,7 +4828,17 @@ function AppsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
               <div className="p-5 flex items-start gap-4">
                 <div className="text-2xl shrink-0">{a.icon}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold">{a.name}</div>
+                  <div className="font-semibold flex items-center gap-2 flex-wrap">
+                    {a.name}
+                    {a.experimental && (
+                      <span
+                        className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-600 dark:text-amber-400"
+                        title="Works on the maintainer's machine, little real use elsewhere yet. Feedback welcome."
+                      >
+                        Experimental
+                      </span>
+                    )}
+                  </div>
                   <div className="text-sm text-muted-foreground mt-1 leading-relaxed">
                     {a.description}
                   </div>

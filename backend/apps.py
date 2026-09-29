@@ -54,6 +54,13 @@ class App:
     # Shipping them disabled-by-default keeps a fresh install from showing
     # apps that crash on first click.
     opt_in: bool = False
+    # Shown with an "Experimental" badge in Settings → Apps: it works on
+    # the maintainer's box but has seen little real use elsewhere.
+    experimental: bool = False
+    # For an app that became opt-in after it had shipped switched on:
+    # an install with rows in this table keeps it on (written once to
+    # app_settings, so the switch then behaves like any other).
+    in_use_table: Optional[str] = None
 
 
 _REGISTRY: Dict[str, App] = {}
@@ -67,7 +74,9 @@ def _is_opt_in_enabled(app_id: str) -> bool:
          a user who explicitly set this expects the app to be on even if
          the DB row is missing or stale.
       2. `app_settings.app_enabled_<id> = '1'` (set by the Settings UI).
-      3. Default off.
+      3. No row yet, and the app's `in_use_table` has rows: on (and
+         recorded as on).
+      4. Default off.
 
     Kept tolerant of a missing app_settings table / unreachable DB so an
     early-boot /api/apps call doesn't 500.
@@ -82,8 +91,27 @@ def _is_opt_in_enabled(app_id: str) -> bool:
                 "SELECT value FROM app_settings WHERE key = ?",
                 (f"app_enabled_{app_id}",),
             ).fetchone()
-        return bool(row and str(row[0]).strip() == "1")
+        if row is not None:
+            return str(row[0]).strip() == "1"
     except Exception:  # noqa: BLE001 — see docstring
+        return False
+    return _keep_on_if_in_use(app_id)
+
+
+def _keep_on_if_in_use(app_id: str) -> bool:
+    app = _REGISTRY.get(app_id)
+    table = app.in_use_table if app else None
+    if not table:
+        return False
+    try:
+        from . import database
+        with database.get_conn() as conn:
+            used = conn.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone() is not None
+        if used:
+            set_opt_in_enabled(app_id, True)
+            log.info("app '%s' is opt-in now and already in use here: kept on", app_id)
+        return used
+    except Exception:  # noqa: BLE001 — a missing table means "not in use"
         return False
 
 
@@ -160,6 +188,7 @@ def to_dict(app: App) -> Dict[str, Any]:
         "aliases": list(app.aliases),
         "chrome": app.chrome,
         "opt_in": app.opt_in,
+        "experimental": app.experimental,
     }
 
 
@@ -249,6 +278,7 @@ register(App(
     tags=["bundled"],
     aliases=["schreiben", "brief", "letter", "briefpapier", "letterhead"],
     opt_in=True,
+    experimental=True,
 ))
 
 # Photos is an iframe over a separate Immich instance running on this host.
@@ -314,11 +344,14 @@ register(App(
     tags=["bundled", "optional"],
     aliases=["recordings", "recording", "dinner", "aufnahme", "aufnahmen", "abendessen", "protokoll"],
     opt_in=True,
+    experimental=True,
 ))
 
 # Pipelines — Yorik follows a matter until it is done: a sent mail
-# until the answer comes, later much more. On for everyone; parents and
-# admins can switch it off per person inside the app.
+# until the answer comes, later much more. Opt-in and experimental since
+# 2026-09-29 (German only so far); an install that already has pipelines
+# keeps it on. Once on, parents and admins can switch it off per person
+# inside the app.
 register(App(
     id="pipelines",
     name="Pipelines",
@@ -328,6 +361,9 @@ register(App(
     chrome="embedded",
     tags=["bundled"],
     aliases=["pipelines", "pipeline", "nachfassen", "erinnerungen", "dranbleiben", "follow up"],
+    opt_in=True,
+    experimental=True,
+    in_use_table="pipelines",
 ))
 
 register(App(
@@ -340,6 +376,7 @@ register(App(
     tags=["bundled", "optional"],
     aliases=["finance", "finanzen", "bank", "konto", "konten", "umsätze", "umsatz"],
     opt_in=True,
+    experimental=True,
 ))
 
 register(App(
