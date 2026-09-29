@@ -41,7 +41,7 @@ def test_read_around_a_hit(chat):
     out = asyncio.run(execute(ctx=_ctx(chat["me"]), around_message_id=chat["ids"]["m1"], before=2, after=2))
     assert [m["text"] for m in out["messages"]] == ["DE32500105175422716331", "Sprawdzilam Konto.", "Danke!"]
     assert out["messages"][0]["hit"] is True and out["messages"][0]["who"] == "Mama"
-    assert out["messages"][2]["who"] == "ich"
+    assert out["messages"][2]["who"] == "me"
     assert out["messages_after_this_window"] == 2      # the later account change is flagged
     assert "still current" in out["_llm_hint"]
 
@@ -88,9 +88,9 @@ def test_calculate_refuses_anything_but_arithmetic(bad):
 def test_date_info():
     from backend.skills.date_info.skill import execute
     out = asyncio.run(execute(ctx=None, date="2026-10-02"))
-    assert out["result"]["weekday"] == "Freitag"
+    assert out["result"]["weekday"] == "Friday"
     out = asyncio.run(execute(ctx=None, date="2026-12-31", add_weeks=-4))
-    assert out["result"]["shown"] == "Donnerstag, 03.12.2026"
+    assert out["result"]["shown"] == "Thursday, 2026-12-03"
     out = asyncio.run(execute(ctx=None, date="2026-01-31", add_months=1, until="2026-03-01"))
     assert out["result"]["date"] == "2026-02-28" and out["days_between"] == 29
 

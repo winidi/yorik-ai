@@ -212,5 +212,5 @@ def test_agent_candidates_skip_what_yorik_already_has(planner, monkeypatch):
         return {"answer": "- Steuerberater anrufen | 15 | offen\n- Video 9 schneiden | 90 | Deadline"}
     ctx.call_skill = fake_call
     out = asyncio.run(plan_my_day(ctx, date="2030-04-03"))
-    assert "Homebase" in seen["q"] and "keine Yorik-Tools" in seen["q"]
+    assert "Homebase" in seen["q"] and "don't call any Yorik tools" in seen["q"]
     assert [c["title"] for c in out["agent_candidates"]] == ["Video 9 schneiden"]

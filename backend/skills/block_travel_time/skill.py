@@ -517,9 +517,9 @@ def _analyse_return_trip(
     warning: Optional[str] = None
     if overlap > 0:
         warning = (
-            f"Rückfahrt ({drive_minutes} Min) überschneidet sich um "
-            f"{overlap} Min mit „{next_row['title']}“ um "
-            f"{next_start.strftime('%H:%M')}. Termin verschieben?"
+            f"The drive back ({drive_minutes} min) overlaps by "
+            f"{overlap} min with \"{next_row['title']}\" at "
+            f"{next_start.strftime('%H:%M')}. Move the appointment?"
         )
 
     return {

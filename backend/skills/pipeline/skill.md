@@ -35,7 +35,7 @@ outputs:
     type: integer
   pipelines:
     type: array
-    description: For op=list — title, state (entwurf/laeuft/pausiert/erledigt/abgebrochen), next step, link.
+    description: For op=list — title, state (draft/running/paused/done/cancelled), next step, link.
 cost: 1–3 SELECTs; follow_up starts one background LLM call that writes the reminders.
 permissions: [admin, member]
 side_effects: follow_up creates a draft pipeline (nothing is sent before the person approves); pause/resume change its state.

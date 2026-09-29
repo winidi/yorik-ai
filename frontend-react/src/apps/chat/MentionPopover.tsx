@@ -27,6 +27,7 @@ import {
   CornerDownLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import i18n from "@/i18n";
 import { api } from "@/lib/api";
 import type { MentionResults, MentionItem } from "./types";
 
@@ -74,28 +75,28 @@ interface SlashCommand {
 const SLASH_COMMANDS: SlashCommand[] = [
   { name: "today",  label: "What's on today",
     description: "Show today's calendar + open tasks",
-    fullMessage: "Was steht heute an? Bitte zeig auch offene Aufgaben." },
+    fullMessage: "messages.slash.today" },
   { name: "week",  label: "This week",
     description: "Week overview",
-    fullMessage: "Was steht diese Woche an?" },
+    fullMessage: "messages.slash.week" },
   { name: "tasks", label: "Open tasks",
     description: "List currently open tasks",
-    fullMessage: "Welche Aufgaben sind noch offen?" },
+    fullMessage: "messages.slash.tasks" },
   { name: "event", label: "New calendar event",
     description: "Add an event — type the rest after the prefix",
-    template: "Trag einen Termin ein: " },
+    template: "messages.slash.event" },
   { name: "task",  label: "New task",
     description: "Add a task — type the rest after the prefix",
-    template: "Neue Aufgabe: " },
+    template: "messages.slash.task" },
   { name: "letter", label: "Write a letter",
     description: "Draft a letter — type the recipient + topic after",
-    template: "Schreib einen Brief an " },
+    template: "messages.slash.letter" },
   { name: "find", label: "Find a document",
     description: "Search your filing cabinet",
-    template: "Finde das Dokument zu " },
+    template: "messages.slash.find" },
   { name: "contact", label: "Find a contact",
     description: "Search contacts by name",
-    template: "Wer ist " },
+    template: "messages.slash.contact" },
 ];
 
 
@@ -139,8 +140,9 @@ function SlashPanel({ prefix, onPick, onCancel }: {
     if (!pick) return;
     onPick({
       displayText: `/${pick.name}`,
-      fullMessage: pick.fullMessage,
-      tag: pick.template,
+      // The preset is sent as the person's own words: in their language.
+      fullMessage: pick.fullMessage && i18n.t(pick.fullMessage),
+      tag: pick.template && i18n.t(pick.template),
     });
   }, onCancel);
 
@@ -157,8 +159,8 @@ function SlashPanel({ prefix, onPick, onCancel }: {
           onMouseEnter={() => setHighlight(i)}
           onClick={() => onPick({
             displayText: `/${c.name}`,
-            fullMessage: c.fullMessage,
-            tag: c.template,
+            fullMessage: c.fullMessage && i18n.t(c.fullMessage),
+            tag: c.template && i18n.t(c.template),
           })}
           className={cn(
             "w-full text-left px-3 py-2.5 md:py-1.5 text-sm md:text-xs flex items-start gap-2 transition active:bg-violet-500/20",

@@ -129,7 +129,7 @@ async def execute(
         else:
             parts.append(
                 f"No person matched query={query!r} in source={src!r}. "
-                "If you were about to claim 'X gibt es nicht' — quote this "
+                "If you were about to claim 'X doesn't exist' — quote this "
                 "honest empty result, do not hallucinate. If you searched "
                 "only one source and the user clearly meant the other, try "
                 "again with source='auto'."

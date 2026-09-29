@@ -67,7 +67,7 @@ async def execute(ctx, chat_jid: Optional[str] = None, contact_id: Optional[int]
         item: Dict[str, Any] = {
             "id": r["id"],
             "when": _when(r["timestamp"]),
-            "who": "ich" if r["from_me"] else (r["push_name"] or chat["name"] or ""),
+            "who": "me" if r["from_me"] else (r["push_name"] or chat["name"] or ""),
             "text": (r["text"] or r["transcript"] or "").strip(),
         }
         if r["media_kind"]:

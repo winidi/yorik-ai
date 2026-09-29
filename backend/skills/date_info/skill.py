@@ -10,7 +10,9 @@ import calendar
 from datetime import date as _date, timedelta
 from typing import Any, Dict, Optional
 
-WEEKDAYS_DE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+# English for the model; it answers in the person's language (the reply's
+# weekday is checked against the date in grounding.fix_weekdays).
+WEEKDAYS_EN = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
 def _parse(v: Optional[str]) -> _date:
@@ -28,8 +30,9 @@ def _add_months(d: _date, n: int) -> _date:
 
 
 def describe(d: _date) -> Dict[str, Any]:
-    return {"date": d.isoformat(), "weekday": WEEKDAYS_DE[d.weekday()], "weekday_en": d.strftime("%A"),
-            "iso_week": d.isocalendar()[1], "shown": f"{WEEKDAYS_DE[d.weekday()]}, {d.strftime('%d.%m.%Y')}"}
+    wd = WEEKDAYS_EN[d.weekday()]
+    return {"date": d.isoformat(), "weekday": wd, "weekday_en": wd,
+            "iso_week": d.isocalendar()[1], "shown": f"{wd}, {d.isoformat()}"}
 
 
 async def execute(ctx, date: Optional[str] = None, add_days: int = 0, add_weeks: int = 0,

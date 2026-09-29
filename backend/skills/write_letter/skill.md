@@ -39,6 +39,6 @@ category: productivity
 
 # write_letter
 
-The letter half of the "Schreiben" app. The model writes the text, the
+The letter half of the "Write" app. The model writes the text, the
 code sets the look (the person's letterhead, DIN 5008). The draft opens
 in /r/write, where it is edited, turned into a PDF, sent or filed.

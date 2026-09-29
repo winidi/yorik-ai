@@ -15,9 +15,9 @@ when_to_use: |
   Three places get checked, in order of trust:
     1. Contacts — anyone with relation matching ("my dentist", "Mrs
        Dr. Schmidt"), kind='business' + a relevant keyword in the name
-       ("Zahnarztpraxis Müller"), or a category tag.
+       ("Dr. Miller dental practice"), or a category tag.
     2. Paperless — past invoices/letters with correspondents matching
-       the category (e.g. correspondent name contains "Zahnarzt").
+       the category (e.g. the correspondent's name contains the word for "dentist" in the documents' language).
     3. Past calendar events — titles containing the category that have
        a location set.
 

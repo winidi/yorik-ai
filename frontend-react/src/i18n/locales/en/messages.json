@@ -1,0 +1,18 @@
+{
+  "slash": {
+    "today": "What's on today? Please show open tasks too.",
+    "week": "What's on this week?",
+    "tasks": "Which tasks are still open?",
+    "event": "Add an appointment: ",
+    "task": "New task: ",
+    "letter": "Write a letter to ",
+    "find": "Find the document about ",
+    "contact": "Who is "
+  },
+  "seed": {
+    "attached": "I attached “{{name}}” (attachment #{{id}}).",
+    "iTake": "I'll take: {{list}}",
+    "noneOfThese": "None of these — I have my own {{category}}. Ask me for the name.",
+    "iMean": "I mean: {{name}}{{tag}}, contact_id={{id}}"
+  }
+}

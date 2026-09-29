@@ -137,5 +137,6 @@
   "cardTo": "to {{name}}",
   "cardRecipientMissing": "— recipient missing",
   "cardMarked": "Still marked on the sheet: {{list}}",
-  "cardOpen": "Open and edit"
+  "cardOpen": "Open and edit",
+  "sendDefaultBody": "Hello,\n\nplease find my letter attached as a PDF.\n\nKind regards"
 }

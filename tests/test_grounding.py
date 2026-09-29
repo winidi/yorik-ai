@@ -165,8 +165,13 @@ def test_chip_names_the_user_as_sender():
     raw = [("whatsapp_read", {"chat": "Mama Nowa", "chat_jid": "4917@s.whatsapp.net",
                               "messages": [{"id": 5, "when": "Do 24.09.2026 19:39", "who": "ich",
                                             "text": "DE85500105175438012374"}]})]
+    from backend.agent.grounding import set_language
+    set_language("de")                                   # chips follow the person's language
     v = check("Die Nummer ist DE85 5001 0517 5438 0123 74.", [], raw)
     assert v.ok and v.sources[0]["label"] == "WhatsApp · Mama Nowa · von dir · Do 24.09.2026 19:39"
+    set_language("en")
+    v = check("The number is DE85 5001 0517 5438 0123 74.", [], raw)
+    assert v.sources[0]["label"] == "WhatsApp · Mama Nowa · from you · Do 24.09.2026 19:39"
 
 
 def test_fallback_drops_an_unbacked_quote_and_keeps_the_rest():

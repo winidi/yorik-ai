@@ -59,9 +59,9 @@ def test_list_pause_resume(home, monkeypatch):
     assert [p["title"] for p in listed["pipelines"]] == ["Kündigung Stromvertrag"]
     store.update(pid, state="laeuft")
     paused, _ = _run(home["dirk"], monkeypatch, op="pause", pipeline_id=pid)
-    assert paused["state"] == "pausiert"
+    assert paused["state"] == "paused"
     resumed, _ = _run(home["dirk"], monkeypatch, op="resume", pipeline_id=pid)
-    assert resumed["state"] == "laeuft"
+    assert resumed["state"] == "running"
 
 
 def test_someone_elses_pipeline_is_not_touched(home, monkeypatch):

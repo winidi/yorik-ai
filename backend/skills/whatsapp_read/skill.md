@@ -39,7 +39,7 @@ inputs:
 outputs:
   messages:
     type: array
-    description: Each with id, when, who ("ich" = the user), text, media, calendar (for .ics), hit (the searched message).
+    description: Each with id, when, who ("me" = the user), text, media, calendar (for .ics), hit (the searched message).
   messages_after_this_window:
     type: integer
     description: How many newer messages follow — a large number means the chat went on and may have changed things.

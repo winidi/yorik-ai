@@ -2,7 +2,7 @@
 name: fill_pdf_form
 description: Fill the fields of a PDF form the user attached in chat, from their profile and what they say.
 when_to_use: |
-  The user attached a PDF (referenced as "Anhang #<number>") and asks to
+  The user attached a PDF (referenced as "attachment #<number>") and asks to
   fill it out — "fill in the form", "put my details in there",
   "can you fill that out for me".
   Pass `notes` with anything the user said that isn't already in their
@@ -21,7 +21,7 @@ inputs:
   attachment_id:
     type: integer
     required: true
-    description: "The number after Anhang # for the PDF form to fill."
+    description: "The number after attachment # for the PDF form to fill."
   notes:
     type: string
     required: false

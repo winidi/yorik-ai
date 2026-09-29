@@ -44,9 +44,9 @@ const SOURCE_META: Record<string, { label: string; icon: any; tint: string }> = 
   contacts:  { label: "Contacts",  icon: Users,        tint: "text-orange-500" },
   recordings: { label: "Recordings", icon: Mic,        tint: "text-rose-500" },
   drafts:    { label: "Letters & drafts", icon: PenLine, tint: "text-sky-500" },
-  letters:   { label: "Schreiben", icon: PenLine,      tint: "text-sky-500" },
+  letters:   { label: "Write",     icon: PenLine,      tint: "text-sky-500" },
   bank:      { label: "Bank",      icon: Landmark,     tint: "text-lime-600" },
-  pipelines: { label: "Nachfassen", icon: ArrowRight,  tint: "text-indigo-500" },
+  pipelines: { label: "Follow-ups", icon: ArrowRight,  tint: "text-indigo-500" },
 };
 
 const SOURCE_ORDER: Array<keyof typeof SOURCE_META> = [

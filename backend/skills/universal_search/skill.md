@@ -15,7 +15,7 @@ inputs:
     type: array
     items: { type: string }
     required: false
-    description: Up to 3 other wordings of the same search — synonyms, and the key words in the language the item may be written in (e.g. "Rechnung Server" → "invoice server", "netcup"; "Claude" → "Anthropic").
+    description: Up to 3 other wordings of the same search — synonyms, and the key words in the language the item may be written in (e.g. the words of a foreign-language invoice; "Claude" → "Anthropic").
 outputs:
   query:
     type: string
@@ -55,6 +55,6 @@ The UI renders cards from the result set — do NOT paraphrase hits in prose, an
 - `query`: the few words that carry the question, in the user's words.
 - `also`: up to 3 other wordings whenever the item may be written in
   another language or under another name — an English invoice
-  ("Rechnung Server" → "invoice server"), the company behind a product
+  (search its words in that language too), the company behind a product
   ("Claude" → "Anthropic"), a shop's legal name. Each wording is searched
   and the hits are merged.

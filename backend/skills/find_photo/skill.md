@@ -5,8 +5,8 @@ when_to_use: |
   Reply ONE short sentence; never list filenames or describe photos in prose — the photos_found cards are the answer.
 
   ═══ TWO HARD RULES FOR `query` (CLIP content search) ═══
-  1. **Translate to ENGLISH before calling.** Immich's CLIP model (ViT-B-32 OpenAI) was trained on English captions only. German / French / Spanish queries return semantically-random results because the model never saw those tokens. The user types "in einem Anzug" → you call with query='suit'. "am Strand" → query='beach'. "im Schnee" → query='snow'. ALWAYS English, even when the user's prompt is in another language.
-  2. **Never include person names.** CLIP cannot match faces. A name in `query` either matches nothing or accidentally matches based on filename text. Names ALWAYS go in `person` or `people` — those use Immich's face-recognition index. "Dirk in einem Anzug" → query='suit', person='Dirk' (NOT query='Dirk Anzug', NOT query='Dirk suit').
+  1. **Translate to ENGLISH before calling.** Immich's CLIP model (ViT-B-32 OpenAI) was trained on English captions only. Queries in other languages return semantically-random results because the model never saw those tokens. Whatever language the user writes in, pass the English words: "in a suit" → query='suit', "at the beach" → query='beach', "in the snow" → query='snow'. ALWAYS English.
+  2. **Never include person names.** CLIP cannot match faces. A name in `query` either matches nothing or accidentally matches based on filename text. Names ALWAYS go in `person` or `people` — those use Immich's face-recognition index. "Dirk in a suit" → query='suit', person='Dirk' (NOT query='Dirk suit').
 
   - User asks for a photo of a specific person ("show me a picture of Sara", "show me photos of Grandma", "find pictures of Anna from last summer") → call with op='of_person', person='<the name>'. Immich's face recognition handles the matching. DON'T put the name in `query` and use op='search' — that's CLIP text search which won't filter by face.
   - Generic content search ("photos from the beach", "pictures of the sunset") → op='search' with query=<content>.
@@ -32,16 +32,16 @@ when_to_use: |
   - **Camera** ("from the iPhone", "from the Canon") → `camera_make='Apple'` or `camera_model='iPhone 14 Pro'`.
 
   Examples (combine any subset):
-    "Fotos von Dirk in einem Anzug" / "photos of Dirk in a suit"
+    "photos of Dirk in a suit"
         → op='search', person='Dirk', query='suit'
           (CLIP content + face filter AND'd in one Immich call. Note
           query='suit' — ENGLISH — even though the user asked in German.
-          Do NOT collapse into query='Dirk Anzug' or query='Dirk suit'
+          Do NOT collapse into query='Dirk suit'
           — CLIP doesn't know who Dirk is, and the German word returns
           semantically-random results.)
-    "Bilder vom Sonnenuntergang am Strand" → op='search', query='sunset at the beach'
+    "pictures of the sunset at the beach" → op='search', query='sunset at the beach'
           (German prompt → English query. Always.)
-    "Foto im Anzug vor dem Spiegel" → op='search', query='suit in front of a mirror'
+    "photo in a suit in front of the mirror" → op='search', query='suit in front of a mirror'
     "favourite photo of Sara from Italy"
         → favorites_only=true, person='Sara', location='Italy'
     "photos from the 2023 road trip in Spain"
@@ -63,13 +63,13 @@ inputs:
       Free-text content query (Immich CLIP semantic search).
       MUST be in ENGLISH — CLIP was trained on English captions only;
       German / French / Spanish queries return semantically-random
-      results. Translate before calling: "Anzug" → "suit", "am Strand"
-      → "at the beach", "im Schnee" → "in the snow".
+      results. Translate before calling, whatever the user's language:
+      "suit", "at the beach", "in the snow".
       ONLY the content the user is looking for — never names, never
       dates. Names go in `person` / `people` (face-recognition index),
       dates in `date` / `start_iso`+`end_iso` (EXIF index). Examples:
       query='suit', query='sunset at the beach', query='red car',
-      query='cake'. NOT query='Dirk suit', NOT query='Anzug', NOT
+      query='cake'. NOT query='Dirk suit', NOT a non-English word, NOT
       query='2007'.
   op:
     type: string

@@ -32,7 +32,7 @@ inputs:
 outputs:
   result:
     type: object
-    description: date, weekday (German), weekday_en, iso_week, shown ("Freitag, 02.10.2026").
+    description: date, weekday, weekday_en (same), iso_week, shown ("Friday, 2026-10-02").
   days_between:
     type: integer
 cost: instant, no network.

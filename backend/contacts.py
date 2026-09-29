@@ -36,6 +36,17 @@ log = logging.getLogger("yorik.contacts")
 # ---------------------------------------------------------------------------
 
 
+
+# How to address someone: stored as the German forms (the extractor and
+# old rows use them); the model may say it in English.
+_SALUTATION = {"informal": "du", "formal": "Sie", "du": "du", "sie": "Sie"}
+
+
+def salutation_code(value):
+    if value is None:
+        return None
+    return _SALUTATION.get(str(value).strip().lower(), value)
+
 def normalize_email(value: str) -> str:
     """Lower-case + trim. Doesn't validate; that's the caller's job."""
     return (value or "").strip().lower()

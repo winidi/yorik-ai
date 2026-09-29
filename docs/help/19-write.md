@@ -1,5 +1,5 @@
 ---
-title: Schreiben — letters, invoices and quotes with your own letterhead
+title: Write — letters, invoices and quotes with your own letterhead
 nav_app: write
 summary: Yorik writes a letter, an invoice or a quote as a draft and never asks back; you correct it on the sheet, finalise, send or file it. The look is your letterhead, the same every time; invoices are checked e-invoices.
 ---

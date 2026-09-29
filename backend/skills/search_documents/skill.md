@@ -8,10 +8,10 @@ when_to_use: |
   use different terminology ("electricity bill" finds documents about
   "energy statement", etc.).
 
-  USE THIS for the German word "Rechnung" when the user wants the
-  scanned document — "find a Rechnung", "show me the Rechnung from
-  X", "what's the IBAN on the Rechnung", "Rechnung aufmachen". The
-  same word in German also means a bills-table row (check_bills),
+  USE THIS for a bill or invoice when the user wants the
+  scanned document — "find the invoice", "show me the bill from
+  X", "what's the IBAN on the invoice", "open the invoice". In some
+  languages the same word also means a bills-table row (check_bills),
   but if the user asks to FIND, OPEN, READ, or extract anything from
   it, they mean the PDF — this skill, not check_bills.
 

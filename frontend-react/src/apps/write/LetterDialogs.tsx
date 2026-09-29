@@ -41,7 +41,7 @@ export function SendDialog({ doc, to, subject, onClose, onDone }: { doc: Written
   const [accountId, setAccountId] = useState<number | null>(null);
   const [addr, setAddr] = useState(to);
   const [subj, setSubj] = useState(subject);
-  const [message, setMessage] = useState("Guten Tag,\n\nanbei erhalten Sie mein Schreiben als PDF.\n\nMit freundlichen Grüßen");
+  const [message, setMessage] = useState(() => t("write.sendDefaultBody"));
   // A letter can also BE the mail (text, closing, name) instead of a PDF
   // attached to one; the last choice is kept on this device.
   const canText = doc.kind === "letter";

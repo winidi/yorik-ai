@@ -12,7 +12,7 @@ inputs:
   attachment_id:
     type: integer
     required: true
-    description: The number after "Anhang #" in the user's message.
+    description: "The number after \"attachment #\" in the user's message."
   visibility:
     type: string
     required: false

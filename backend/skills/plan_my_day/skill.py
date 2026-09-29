@@ -10,11 +10,11 @@ from typing import Any, Dict, List, Optional
 # can be parsed into candidates; the agent knows the person's files and
 # notes (Homebase), Yorik does not and should not.
 AGENT_QUESTION = (
-    "Ich plane meinen Tag für {date} ({weekday}). Nenne mir bis zu 10 Kandidaten aus meinen Notizen, "
-    "Dateien und dem Backlog auf dem Rechner (Homebase), die heute sinnvoll wären. Meine Yorik-Aufgaben "
-    "und den Yorik-Kalender kenne ich schon, die nicht nennen und dafür keine Yorik-Tools aufrufen. "
-    "Antworte NUR mit Zeilen im Format\n- Titel | Minuten | warum (ein Satz)\n"
-    "Keine Einleitung, kein Fazit. Fristen zuerst.{request}"
+    "I'm planning my day for {date} ({weekday}). Give me up to 10 candidates from my notes, files and "
+    "the backlog on the computer (Homebase) that would make sense today. I already know my Yorik tasks "
+    "and the Yorik calendar: don't name them and don't call any Yorik tools for them. "
+    "Answer ONLY with lines in the format\n- title | minutes | why (one sentence)\n"
+    "No introduction, no summary. Deadlines first.{request}"
 )
 
 _LINE = re.compile(r"^\s*[-*•]\s*(?P<title>[^|]+?)\s*\|\s*(?P<min>\d{1,3})?\s*(?:min|Min\.?|Minuten)?\s*\|?\s*(?P<why>.*)$")
@@ -73,11 +73,11 @@ async def execute(ctx, date: Optional[str] = None, ask_agent: bool = True,
     out["_full_output"] = True      # the whole context, not the 1500-char card
     out["_llm_hint"] = (
         "Write the draft in the user's language with exactly these sections, in this order: "
-        "(1) Feste Termine: fixed_events, never moved. "
-        "(2) Zeitblöcke: at most 4 items with HH:MM, fitted into free_minutes, carry_over first. "
-        "(3) Heute: every remaining open task that is due today, overdue or undated — all of them, one line each, no times. "
-        "(4) Vorschläge aus Gesprächen: report_candidates, up to 8, each with its 'from'; they are NOT in the plan until the user picks one. "
-        "(5) Aus Hermes: ALL agent_candidates with their minutes and why; same rule, suggestions only. Omit the section only when there are none. "
+        "(1) Fixed appointments: fixed_events, never moved. "
+        "(2) Time blocks: at most 4 items with HH:MM, fitted into free_minutes, carry_over first. "
+        "(3) Today: every remaining open task that is due today, overdue or undated — all of them, one line each, no times. "
+        "(4) Suggestions from conversations: report_candidates, up to 8, each with its 'from'; they are NOT in the plan until the user picks one. "
+        "(5) From your agent: ALL agent_candidates with their minutes and why; same rule, suggestions only. Omit the section only when there are none. "
         "(6) Backlog: one line — how many open tasks stay unplanned (backlog.open_total minus what is in 2 and 3) and up to 5 titles. "
         "Follow rules. Then ask what to change; call plan_day only when the user says it is good. "
         "When the user corrects who does what or a habit, ask once whether to remember it and call remember_planning_rule."

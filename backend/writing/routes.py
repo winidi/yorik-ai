@@ -12,6 +12,8 @@ from pydantic import BaseModel
 
 from . import einvoice, invoice as inv_mod, layouts, letterhead as lh_mod, recipient as rcp_mod, store
 
+from ..messages import tr
+
 router = APIRouter(tags=["writing"])
 
 
@@ -419,9 +421,9 @@ def rewrite(body: RewriteIn, user: Dict[str, Any] = Depends(_user())) -> Dict[st
         raise HTTPException(status_code=400, detail="text and instruction are needed")
     from ..agent.llm import LlmClient
     client = LlmClient(model=os.getenv("HOMEOS_MODEL", "qwen3.5-9b"), base_url=os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1"))
-    prompt = ("Du überarbeitest einen Abschnitt aus einem Brief. Gib NUR den überarbeiteten Text zurück, ohne Einleitung, ohne Anführungszeichen, "
-              "ohne Erklärungen, in derselben Sprache wie der Text (außer der Wunsch verlangt eine andere). Absätze durch Leerzeilen trennen.\n\n"
-              f"Wunsch: {wish}\n\nText:\n{text}")
+    prompt = ("You are revising a passage from a letter. Return ONLY the revised text: no introduction, no quotation marks, "
+              "no explanations, in the same language as the text (unless the request asks for another). Separate paragraphs with blank lines.\n\n"
+              f"Request: {wish}\n\nText:\n{text}")
     try:
         resp = client.chat(messages=[{"role": "user", "content": prompt}], max_tokens=1500, temperature=0.4)
     except Exception as exc:  # noqa: BLE001
@@ -511,7 +513,7 @@ def finalise_doc(doc_id: int, body: FinaliseIn, user: Dict[str, Any] = Depends(_
     content = {**doc["content"], "number": number, "date": issue, "due_date": due}
     want_e = doc["kind"] == "invoice" and lh["country"] == "DE" and not body.without_e_invoice
     if want_e and not einvoice.available():
-        raise HTTPException(status_code=409, detail={"message": "Die E-Rechnung kann hier noch nicht erzeugt werden: die Erweiterung „ZUGFeRD“ ist nicht installiert (Settings → Extensions).",
+        raise HTTPException(status_code=409, detail={"message": tr("write.einvoice_missing", user_id=uid),
                                                      "can_continue_without": True})
     numbered = {**doc, "content": content, "number": number}
     page = _render(numbered, uid, preview=False)
@@ -522,7 +524,7 @@ def finalise_doc(doc_id: int, body: FinaliseIn, user: Dict[str, Any] = Depends(_
     if want_e:
         made = einvoice.make(blob, inv_mod.einvoice_payload(lh, doc["recipient"], content, number=number, issue_date=issue, due_date=due))
         if not made["ok"]:
-            raise HTTPException(status_code=422, detail={"message": "Die E-Rechnung hat die Prüfung nicht bestanden; es wurde keine Nummer vergeben.",
+            raise HTTPException(status_code=422, detail={"message": tr("write.einvoice_failed", user_id=uid),
                                                          "problems": made["problems"], "can_continue_without": True})
         blob, e_result = made["pdf"], {"format": "Factur-X / ZUGFeRD 2 (EN 16931)", "checked": True}
     elif doc["kind"] == "invoice":

@@ -24,7 +24,7 @@ async def execute(ctx, days: int = 30, account_id: Optional[int] = None,
                                      table_alias="a")
     q = (
         # Round-ups go to savings, not to the shop's category (2026-09-28)
-        f"SELECT CASE WHEN {ROUNDUP_SQL} THEN 'Sparen (Aufrundungen)' "
+        f"SELECT CASE WHEN {ROUNDUP_SQL} THEN 'Savings (round-ups)' "
         "            ELSE COALESCE(t.category, 'unkategorisiert') END AS category, "
         "       SUM(t.amount) AS total, COUNT(*) AS n "
         "FROM bank_transactions t JOIN bank_accounts a ON a.id = t.account_id "
@@ -42,7 +42,8 @@ async def execute(ctx, days: int = 30, account_id: Optional[int] = None,
     with get_conn() as conn:
         rows = conn.execute(q, params).fetchall()
 
-    by_category = [dict(r) for r in rows]
+    from backend.finance_categories import english
+    by_category = [dict(r, category=english(r["category"])) for r in rows]
     if not by_category:
         return {"by_category": [], "_llm_hint": f"No transactions in the last {days} days to summarise. "
                                                  f"Say so; don't invent numbers."}
@@ -54,7 +55,7 @@ async def execute(ctx, days: int = 30, account_id: Optional[int] = None,
         "total_outgoing": total_out,
         "total_incoming": total_in,
         "_llm_hint": (
-            f"Sums over {days} days, negative = outgoing. A large 'unkategorisiert' bucket means many "
+            f"Sums over {days} days, negative = outgoing. A large 'Uncategorised' bucket means many "
             f"transactions don't match a rule yet — say so honestly rather than presenting it as complete."
         ),
     }

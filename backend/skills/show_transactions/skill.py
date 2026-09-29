@@ -40,7 +40,8 @@ async def execute(ctx, days: int = 30, account_id: Optional[int] = None,
         # "Abos" finds "Verträge & Abos" — the model guessed short names
         # and got nothing back (chat test 2026-09-26).
         q += " AND LOWER(COALESCE(t.category, '')) LIKE ?"
-        params.append(f"%{category.strip().lower()}%")
+        from backend.finance_categories import stored as _stored_category
+        params.append(f"%{_stored_category(category).strip().lower()}%")
     if search:
         like = f"%{search.strip().lower()}%"
         q += " AND (LOWER(COALESCE(t.counterparty, '')) LIKE ? OR LOWER(COALESCE(t.purpose, '')) LIKE ?)"
@@ -50,7 +51,8 @@ async def execute(ctx, days: int = 30, account_id: Optional[int] = None,
     with get_conn() as conn:
         rows = conn.execute(q, params).fetchall()
 
-    txs = [dict(r) for r in rows]
+    from backend.finance_categories import english as _en_category
+    txs = [dict(r, category=_en_category(r["category"])) for r in rows]
     # A round-up (ING "Kleingeld Plus") moves the change of a card
     # purchase to the person's own savings and names the shop in its
     # purpose, so "anthropic" found it and the chat counted it as money
@@ -125,5 +127,6 @@ def _categories_note(user_id: Any, role: Optional[str]) -> str:
         rows = conn.execute(
             "SELECT DISTINCT t.category FROM bank_transactions t JOIN bank_accounts a ON a.id = t.account_id "
             f"WHERE {frag} AND t.category IS NOT NULL ORDER BY t.category", list(params)).fetchall()
-    names = [r["category"] for r in rows if r["category"]]
+    from backend.finance_categories import english
+    names = [english(r["category"]) for r in rows if r["category"]]
     return f" Categories that exist: {', '.join(names)}." if names else ""

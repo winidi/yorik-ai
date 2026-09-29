@@ -33,7 +33,7 @@ inputs:
   attachment_id:
     type: integer
     required: false
-    description: "The attachment number (Anhang #<n>) of the file to include."
+    description: "The attachment number (attachment #<n>) of the file to include."
   paperless_doc_id:
     type: integer
     required: false

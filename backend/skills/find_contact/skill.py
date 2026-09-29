@@ -102,8 +102,8 @@ async def execute(
             f"no direct match for query={query!r}. "
             "NEXT STEP: call list_contacts_for_picking — it returns the "
             "FULL address book (~30 chars per contact). Scan it with "
-            "natural-language matching: 'Oma' might be relation='Großmutter', "
-            "'Klempner' might be 'plumber', 'mein Bruder' could match the "
+            "natural-language matching, in any language: 'Grandma' might be "
+            "relation='grandmother', 'the plumber' a business, 'my brother' the "
             "relation field. Only after THAT comes back empty too, ask "
             "the user."
         )

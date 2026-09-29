@@ -80,43 +80,43 @@ def _sender(owner: str) -> dict[str, str]:
     return {"name": full, "first": r["first_name"] or (r["name"] or "").split(" ")[0]}
 
 
-_RULES = """Regeln:
-- Schreibe in der Sprache der ursprünglichen Mail (meist Deutsch), in der Stimme der absendenden Person, als ganz normale E-Mail.
-- Nur Klartext, keine Markdown-Zeichen, keine Platzhalter wie [Name] oder [Datum]. Was du nicht weißt, lässt du weg.
-- Erfinde nichts: keine Nummern, Beträge, Daten, Paragraphen oder Drohungen, die nicht aus dem Material stammen.
-- Nenne das Anliegen konkret (worum es ging, wann geschrieben, welche Nummer, falls vorhanden), damit man die Mail ohne das Zitat versteht.
-- Kurz: 3 bis 7 Sätze plus Anrede und Gruß. Das ursprüngliche Schreiben wird automatisch darunter zitiert; wiederhole es nicht.
-- Der Betreff bleibt der Betreff der ursprünglichen Mail mit „Re: “ davor, außer eine Frist gehört hinein."""
+_RULES = """Rules:
+- Write in the language of the original mail, in the voice of the person who sent it, as a perfectly ordinary email.
+- Plain text only, no Markdown, no placeholders like [Name] or [Date]. Leave out what you don't know.
+- Invent nothing: no numbers, amounts, dates, legal sections or threats that are not in the material.
+- Name the matter concretely (what it was about, when it was written, which reference number if there is one), so the mail makes sense without the quote.
+- Short: 3 to 7 sentences plus greeting and sign-off. The original message is quoted below it automatically; don't repeat it.
+- The subject stays the original mail's subject with "Re: " in front, unless a deadline belongs in it."""
 
 
 def draft_sequence(owner: str, origin: dict[str, Any]) -> Optional[dict[str, Any]]:
     """{goal, kind, reminders:[{after_days, why, subject, body}], handover_days} or None."""
     who = _sender(owner)
     sent = _fmt(_parse(origin.get("sent_at")))
-    prompt = f"""Du hilfst einer Person, an einer gesendeten E-Mail dranzubleiben, bis die erwartete Antwort kommt.
-Plane die Nachfass-Erinnerungen und schreibe sie.
+    prompt = f"""You help a person follow up on an email they sent until the expected answer arrives.
+Plan the follow-up reminders and write them.
 
-Die ursprüngliche Mail (gesendet am {sent} von {who['name'] or 'der Person'} an {', '.join(origin.get('to') or [])}):
-Betreff: {origin.get('subject') or ''}
+The original mail (sent on {sent} by {who['name'] or 'the person'} to {', '.join(origin.get('to') or [])}):
+Subject: {origin.get('subject') or ''}
 ---
 {(origin.get('body_excerpt') or '')[:3000]}
 ---
 
-Überlege:
-1. Was für ein Anliegen ist das (kuendigung, anfrage, forderung, bewerbung, termin, sonstiges)?
-2. Welche Antwort wird erwartet? (z. B. „Kündigungsbestätigung mit Datum des Vertragsendes“, nicht bloß eine Eingangsbestätigung.)
-3. Wie viele Erinnerungen sind angemessen (1 bis 3) und nach wie vielen Tagen jeweils (gezählt ab der vorigen Nachricht)? Richte dich nach dem Anliegen und nach Fristen, die in der Mail stehen. Eine Behörde oder Firma braucht meist länger als eine Privatperson; eine Forderung verträgt festere Abstände.
-4. Nach wie vielen Tagen nach der letzten Erinnerung soll die Person selbst übernehmen?
-5. Jede Erinnerung wird etwas bestimmter als die vorige: erst freundlich nachfragen, dann um Antwort innerhalb einer Frist bitten.
+Think about:
+1. What kind of matter is this (cancellation, inquiry, claim, application, appointment, other)?
+2. What answer is expected? (e.g. "confirmation of the cancellation with the date the contract ends", not merely an acknowledgement of receipt.)
+3. How many reminders are appropriate (1 to 3), and after how many days each (counted from the previous message)? Go by the matter and by any deadlines in the mail. An authority or company usually takes longer than a private person; a claim can take firmer intervals.
+4. How many days after the last reminder should the person take over?
+5. Each reminder is a little firmer than the one before: first a friendly follow-up, then a request for an answer within a deadline.
 
 {_RULES}
-- Wann die Erinnerungen tatsächlich rausgehen, steht noch nicht fest; Yorik schreibt jede kurz vor dem Senden mit den echten Daten neu. Nenne deshalb außer dem Datum der ursprünglichen Mail KEIN Datum: „meine Erinnerung“ statt „meine Erinnerung vom …“, „innerhalb von sieben Tagen“ statt „bis zum …“.
-- Keine erfundene Dringlichkeit („die Frist läuft ab“), wenn sie nicht in der Mail steht.
-- Unterschreibe mit „{who['name']}“.
+- When the reminders actually go out is not fixed yet; Yorik rewrites each one shortly before sending, with the real dates. So name NO date other than the original mail's: "my reminder" rather than "my reminder of …", "within seven days" rather than "by …".
+- No invented urgency ("the deadline is running out") unless it is in the mail.
+- Sign with "{who['name']}".
 
-Antworte NUR mit JSON in genau dieser Form:
-{{"kind": "...", "goal": "erwartete Antwort in einem kurzen Satz",
-  "reminders": [{{"after_days": 5, "why": "ein kurzer Satz, warum dieser Abstand", "subject": "...", "body": "..."}}],
+Answer ONLY with JSON in exactly this form:
+{{"kind": "cancellation|inquiry|claim|application|appointment|other", "goal": "the expected answer in one short sentence",
+  "reminders": [{{"after_days": 5, "why": "one short sentence on why this interval", "subject": "...", "body": "..."}}],
   "handover_days": 7}}"""
     try:
         data = _json(_complete(prompt))
@@ -158,35 +158,35 @@ def rewrite_due(p: dict[str, Any], step: dict[str, Any], history: dict[str, Any]
     sent_at = _parse(origin.get("sent_at"))
     days = (now - sent_at).days if sent_at else None
     deadline = _fmt(now + timedelta(days=7))
-    lines = [f"- am {s['date']}: {s['body'][:600]}" for s in history.get("sent") or []]
-    notes = [f"- am {n['date']} von {n['from']}: „{n['subject']}“ — {n.get('snippet') or ''}"[:300]
+    lines = [f"- on {s['date']}: {s['body'][:600]}" for s in history.get("sent") or []]
+    notes = [f"- on {n['date']} from {n['from']}: \"{n['subject']}\" — {n.get('snippet') or ''}"[:300]
              for n in history.get("not_answers") or []]
     last = history.get("number") == history.get("total")
-    prompt = f"""Schreibe die Erinnerung, die heute ({_fmt(now)}) rausgehen soll.
+    prompt = f"""Write the reminder that is to go out today ({_fmt(now)}).
 
-Worum es geht: {p.get('goal') or ''}
-Ursprüngliche Mail vom {_fmt(sent_at)}{f' (vor {days} Tagen)' if days is not None else ''} an {', '.join(origin.get('to') or [])}:
-Betreff: {origin.get('subject') or ''}
+What it is about: {p.get('goal') or ''}
+Original mail of {_fmt(sent_at)}{f' ({days} days ago)' if days is not None else ''} to {', '.join(origin.get('to') or [])}:
+Subject: {origin.get('subject') or ''}
 ---
 {(origin.get('body_excerpt') or '')[:2500]}
 ---
 
-Bisher gesendete Erinnerungen:
-{chr(10).join(lines) or '- keine, das ist die erste'}
+Reminders sent so far:
+{chr(10).join(lines) or '- none, this is the first'}
 
-Mails, die seitdem kamen, aber NICHT die erwartete Antwort waren (von der Person so eingestuft):
-{chr(10).join(notes) or '- keine'}
+Mails that came since but were NOT the expected answer (the person said so):
+{chr(10).join(notes) or '- none'}
 
-Das ist Erinnerung {history.get('number')} von {history.get('total')}.{' Es ist die letzte: bitte deutlich, aber höflich um Antwort bis zum ' + deadline + '.' if last else ''}
-Wenn eine Eingangsbestätigung kam, erwähne sie („Sie haben den Eingang am … bestätigt, eine inhaltliche Antwort steht aber noch aus“).
-Wenn schon Erinnerungen rausgingen, beziehe dich darauf und wiederhole nicht dieselben Sätze.
-Vorheriger Entwurf zur Orientierung (darf frei umgeschrieben werden):
+This is reminder {history.get('number')} of {history.get('total')}.{' It is the last one: ask clearly but politely for an answer by ' + deadline + '.' if last else ''}
+If an acknowledgement of receipt came, mention it ("you confirmed receipt on …, but a reply on the matter is still outstanding").
+If reminders have already gone out, refer to them and don't repeat the same sentences.
+Previous draft for orientation (may be rewritten freely):
 {(step['payload'].get('body') or '')[:1500]}
 
 {_RULES}
-- Unterschreibe mit „{who['name']}“.
+- Sign with "{who['name']}".
 
-Antworte NUR mit JSON: {{"subject": "...", "body": "..."}}"""
+Answer ONLY with JSON: {{"subject": "...", "body": "..."}}"""
     try:
         data = _json(_complete(prompt, max_tokens=900))
     except Exception as exc:  # noqa: BLE001

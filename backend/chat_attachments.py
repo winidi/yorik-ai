@@ -250,8 +250,8 @@ async def describe_image(row: Dict[str, Any], question: Optional[str] = None) ->
     screenshot). Same endpoint as every other in-skill LLM call."""
     from .agent.llm import LlmClient
     data = Path(row["path"]).read_bytes()
-    prompt = question or ("Beschreibe knapp, was auf dem Bild zu sehen ist. Steht Text darauf, gib ihn vollständig "
-                          "und wörtlich wieder (Absender, Datum, Beträge, Nummern).")
+    prompt = question or ("Briefly describe what the picture shows. If there is text on it, reproduce it completely "
+                          "and word for word (sender, date, amounts, numbers).")
     client = LlmClient(model=os.getenv("HOMEOS_MODEL", "qwen3.5-9b"),
                        base_url=os.getenv("HOMEOS_LLM_BASE_URL", "http://127.0.0.1:8080/v1"), request_timeout=120)
     content = [{"type": "text", "text": prompt},
@@ -296,8 +296,8 @@ async def read_scanned_pdf(row: Dict[str, Any]) -> tuple[str, int, int]:
         pages = await asyncio.to_thread(_render_pdf_pages, row["path"], tmpdir, last)
         for n, png in enumerate(pages, start=1):
             b64 = base64.b64encode(Path(png).read_bytes()).decode()
-            content = [{"type": "text", "text": "Gib den gesamten Text dieser Seite wörtlich und vollständig wieder, in "
-                                                "Lesereihenfolge, Tabellen zeilenweise. Keine Kommentare, keine Zusammenfassung."},
+            content = [{"type": "text", "text": "Reproduce all the text on this page word for word and completely, in "
+                                                "reading order, tables row by row. No comments, no summary."},
                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}]
             result = await asyncio.to_thread(client.chat, [{"role": "user", "content": content}],
                                              max_tokens=1800, temperature=0.0)

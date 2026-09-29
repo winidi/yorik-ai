@@ -105,7 +105,7 @@ _TOPIC_KEYWORDS = {
     "next-steps":      ["next", "now", "weiter", "nächstes", "naechstes", "als", "danach"],
     "recordings":      ["recording", "recordings", "aufnahme", "aufnahmen", "aufnehmen", "transkript", "transcript", "protokoll", "abendessen"],
     "family-board":    ["board", "tafel", "familientafel", "wall", "wand", "tablet", "kiosk", "routine", "routinen", "chore", "chores"],
-    "schreiben":       ["schreiben", "writing", "write", "brief", "briefe", "letter", "briefkopf", "letterhead",
+    "write":           ["schreiben", "writing", "write", "brief", "briefe", "letter", "briefkopf", "letterhead",
                         "compose", "invoice", "rechnung", "offer", "angebot", "quote", "template", "vorlage", "kündig", "kundig"],
     "finance":         ["finance", "finanzen", "bank", "konto", "kontostand", "umsatz", "umsätze", "ausgaben", "spending", "fints"],
     "pipelines":       ["pipeline", "pipelines", "nachfassen", "follow", "followup", "follow-up", "antwort", "reply", "dranbleiben"],

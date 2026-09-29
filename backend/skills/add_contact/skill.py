@@ -8,6 +8,7 @@ tool call. The granular skills stay around for EDIT cases (adding
 a second email / address to an existing contact).
 """
 from __future__ import annotations
+from backend.contacts import salutation_code
 
 from typing import Any, Dict, List, Optional
 
@@ -139,7 +140,7 @@ async def execute(
         relation=relation,
         birthday=birthday,
         language_pref=language_pref,
-        salutation_pref=salutation_pref,
+        salutation_pref=salutation_code(salutation_pref),
         legal_name=legal_name,
         tax_id=tax_id,
         iban=iban,

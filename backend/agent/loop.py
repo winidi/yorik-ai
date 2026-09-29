@@ -1768,6 +1768,7 @@ def _grounding_gate(text: str, messages: List[Dict[str, Any]], raws: List[Any],
     """("ok", sources_action|None) / ("retry", nudge message) / ("fallback", text).
     The answer itself is messages[-1]; it is not evidence for itself."""
     try:
+        _grounding.set_language(language)
         verdict = _grounding.check(text, messages[:-1], raws)
     except Exception:  # noqa: BLE001 — a broken check must not eat the answer
         log.exception("grounding check failed")

@@ -102,7 +102,7 @@ async def execute(
         result["_llm_hint"] = (
             f"No Yorik user matches query={q!r} role={role_filter!r}. "
             "This is an HONEST not-found, not a tool failure — quote it "
-            "to the user as 'X hat kein Yorik-Konto' and (if relevant) "
+            "to the user as 'X has no Yorik account' and (if relevant) "
             "offer to add them as a household member."
         )
     elif len(users) > 1 and q:

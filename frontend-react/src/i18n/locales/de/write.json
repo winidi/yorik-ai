@@ -137,5 +137,6 @@
   "cardTo": "an {{name}}",
   "cardRecipientMissing": "— Empfänger fehlt",
   "cardMarked": "Auf dem Blatt noch markiert: {{list}}",
-  "cardOpen": "Öffnen und bearbeiten"
+  "cardOpen": "Öffnen und bearbeiten",
+  "sendDefaultBody": "Guten Tag,\n\nanbei erhalten Sie mein Schreiben als PDF.\n\nMit freundlichen Grüßen"
 }

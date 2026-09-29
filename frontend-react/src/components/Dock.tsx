@@ -21,6 +21,7 @@ import {
   Mic, type LucideIcon, LayoutGrid, PenLine, Landmark, Workflow, CircleHelp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import i18n from "@/i18n";
 import { api } from "@/lib/api";
 import { dockOrderFor, isKid, REACT_ROUTES } from "@/lib/dock-order";
 import { useAuth } from "@/components/AuthGate";
@@ -122,8 +123,8 @@ export function Dock({ activeAppId }: Props) {
       <button
         key={a.id}
         onClick={() => handleClick(a.id)}
-        title={a.name}
-        aria-label={a.name}
+        title={i18n.t(`apps.${a.id}`, { defaultValue: a.name })}
+        aria-label={i18n.t(`apps.${a.id}`, { defaultValue: a.name })}
         className={cn(
           "relative inline-flex items-center justify-center w-12 h-12 rounded-2xl shrink-0",
           "transition-[transform,opacity,box-shadow] duration-150 ease-[cubic-bezier(.34,1.56,.64,1)]",

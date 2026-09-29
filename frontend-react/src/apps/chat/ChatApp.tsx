@@ -1466,7 +1466,7 @@ function Thread({
       setUploadToast(null);
       const note = text.trim();
       window.dispatchEvent(new CustomEvent("yorik:chat-seed-and-send", {
-        detail: { seed: `${note ? note + "\n\n" : ""}Ich habe „${att.filename}“ angehängt (Anhang #${att.id}).` },
+        detail: { seed: `${note ? note + "\n\n" : ""}${i18n.t("messages.seed.attached", { name: att.filename, id: att.id })}` },
       }));
     } catch (err: any) {
       setUploadToast({ kind: "err", text: tr("chat.upload.failed", { error: err?.message || err }) });
@@ -2679,13 +2679,13 @@ function PoiPickerCard({
   const pick = (p: Poi) => {
     const parts = [p.name];
     if (p.address) parts.push(p.address);
-    const seed = `Ich nehme: ${parts.join(", ")}`;
+    const seed = i18n.t("messages.seed.iTake", { list: parts.join(", ") });
     try { sessionStorage.setItem("yorik_chat_seed", seed); } catch {}
     window.dispatchEvent(new CustomEvent("yorik:chat-seed-and-send", { detail: { seed } }));
   };
 
   const pickOwn = () => {
-    const seed = `Keiner davon — ich habe meinen eigenen ${poiCategory}. Frag mich nach dem Namen.`;
+    const seed = i18n.t("messages.seed.noneOfThese", { category: poiCategory });
     try { sessionStorage.setItem("yorik_chat_seed", seed); } catch {}
     window.dispatchEvent(new CustomEvent("yorik:chat-seed-and-send", { detail: { seed } }));
   };
@@ -2795,7 +2795,7 @@ function ContactPickerCard({
     // Include the id so the LLM doesn't have to re-resolve. Use the
     // same chat-seed pattern as the other pickers.
     const tag = c.relation ? ` (${c.relation})` : "";
-    const seed = `Ich meine: ${c.display_name}${tag}, contact_id=${c.id}`;
+    const seed = i18n.t("messages.seed.iMean", { name: c.display_name, tag, id: c.id });
     try { sessionStorage.setItem("yorik_chat_seed", seed); } catch {}
     window.dispatchEvent(new CustomEvent("yorik:chat-seed-and-send", { detail: { seed } }));
   };
@@ -3307,7 +3307,7 @@ function ContactsFoundCard({
   const handleClick = (c: ContactCardRow) => {
     if (pickToChat) {
       const tag = c.relation ? ` (${c.relation})` : "";
-      const seed = `Ich meine: ${c.display_name}${tag}, contact_id=${c.id}`;
+      const seed = i18n.t("messages.seed.iMean", { name: c.display_name, tag, id: c.id });
       try { sessionStorage.setItem("yorik_chat_seed", seed); } catch {}
       window.dispatchEvent(new CustomEvent("yorik:chat-seed-and-send", { detail: { seed } }));
       return;

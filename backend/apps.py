@@ -262,7 +262,7 @@ register(App(
 # it is on, Compose's chat skills step aside (skills/registry.py).
 register(App(
     id="write",
-    name="Schreiben",
+    name="Write",
     icon="🖋️",
     description="Letters with your own letterhead: Yorik writes the text, you correct it, one click makes the PDF, sends it or files it in Paperless.",
     view_kind="native",

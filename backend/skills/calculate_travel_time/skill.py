@@ -116,13 +116,13 @@ async def execute(
     dur_human = result.get("duration_human") or f"{dur_min} min"
     dist_km = result.get("distance_km") or 0
     provider = result.get("provider") or "osrm"
-    mode_word = {"driving": "Auto", "cycling": "Fahrrad", "walking": "zu Fuß"}.get(mode, mode)
+    mode_word = {"driving": "by car", "cycling": "by bike", "walking": "on foot"}.get(mode, mode)
 
     return {
         "_llm_hint": (
-            f"shown_to_user: {dur_human} ({dist_km} km) {mode_word} von "
-            f"„{result['from'].get('label', src)}\" nach "
-            f"„{result['to'].get('label', to)}\". "
+            f"shown_to_user: {dur_human} ({dist_km} km) {mode_word} from "
+            f"\"{result['from'].get('label', src)}\" to "
+            f"\"{result['to'].get('label', to)}\". "
             "Quote the duration + distance in the user's language; keep it short."
         ),
         "ok":             True,

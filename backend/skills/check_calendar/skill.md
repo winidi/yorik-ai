@@ -29,7 +29,7 @@ inputs:
       Case-insensitive substring filter on event title. USE THIS whenever
       the user is asking about a SPECIFIC event ("the dentist appointment",
       "when's the haircut", "find the Müller meeting"). Pass the key word
-      (e.g. "Zahnarzt", "haircut", "Müller"). The skill auto-widens to
+      (as it is written in the event titles, e.g. "dentist", "haircut", "Miller"). The skill auto-widens to
       ±2 days if your window has 0 hits — handy when your weekday math
       was off by one. Without this you'd get ALL events in the window
       and have to filter mentally, which fails when the date is wrong.

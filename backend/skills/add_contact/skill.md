@@ -74,7 +74,7 @@ inputs:
   salutation_pref:
     type: string
     required: false
-    description: "'du' | 'Sie' | 'first-name' | 'formal'"
+    description: "'informal' | 'formal' | 'first-name'"
   legal_name:
     type: string
     required: false

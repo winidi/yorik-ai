@@ -1,6 +1,7 @@
 """update_contact skill — apply-then-confirm UPDATE on contacts."""
 from __future__ import annotations
 from typing import Any, List, Optional
+from backend.contacts import salutation_code
 
 
 async def execute(
@@ -29,7 +30,7 @@ async def execute(
     for k, v in [
         ("display_name", display_name), ("aliases", aliases), ("kind", kind),
         ("relation", relation), ("birthday", birthday),
-        ("language_pref", language_pref), ("salutation_pref", salutation_pref),
+        ("language_pref", language_pref), ("salutation_pref", salutation_code(salutation_pref)),
         ("legal_name", legal_name), ("tax_id", tax_id), ("iban", iban),
         ("notes", notes),
     ]:

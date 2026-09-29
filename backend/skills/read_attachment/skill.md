@@ -2,7 +2,7 @@
 name: read_attachment
 description: Read a file the user attached in the chat (PDF, Word, text, photo) by its number.
 when_to_use: |
-  The user says they uploaded or attached a file and the message names it as "Anhang #<number>"; call this first with that number.
+  The user says they uploaded or attached a file and the message names it as "attachment #<number>"; call this first with that number.
   Use it again with `question` when the user asks something specific about the same attachment, and always for a question about a picture.
   After reading, tell the user in one or two sentences what the file is (kind, sender, date, amount), then follow `_llm_hint` about filing.
 when_not_to_use: |
@@ -11,7 +11,7 @@ inputs:
   attachment_id:
     type: integer
     required: true
-    description: The number after "Anhang #" in the user's message.
+    description: "The number after \"attachment #\" in the user's message."
   question:
     type: string
     required: false

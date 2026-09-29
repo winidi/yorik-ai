@@ -97,7 +97,8 @@ def _list(owner: str) -> Dict[str, Any]:
     for p in store.list_for(owner):
         steps = store.steps(p["id"])
         nxt = engine.next_open_step(steps)
-        row = {"pipeline_id": p["id"], "title": p["title"], "state": p["state"], "mode": p["mode"],
+        row = {"pipeline_id": p["id"], "title": p["title"], "state": STATE_EN.get(p["state"], p["state"]),
+               "mode": {"begleitet": "accompanied", "autonom": "autonomous"}.get(p["mode"], p["mode"]),
                "attention": p.get("attention"), "next_step": nxt["action"] if nxt else None,
                "link": f"/r/pipelines/{p['id']}"}
         reply = _reply_received(owner, p.get("origin") or {})
@@ -108,11 +109,16 @@ def _list(owner: str) -> Dict[str, Any]:
             row["next_step"] = None
         rows.append(row)
     return {"pipelines": rows,
-            "_llm_hint": ("States: entwurf = draft, not started; laeuft = running; pausiert = paused; "
-                          "erledigt = done; abgebrochen = cancelled. Answer from this list only. "
+            "_llm_hint": ("States: draft = not started yet; running; paused; done; cancelled. "
+                          "Answer from this list only. "
                           # approved by Dirk 2026-09-28
                           "If reply_received is set, say that an answer came — from whom and when; "
                           "nothing is left to follow up.")}
+
+
+# Stored state codes → the words the model sees.
+STATE_EN = {"entwurf": "draft", "laeuft": "running", "pausiert": "paused",
+            "erledigt": "done", "abgebrochen": "cancelled"}
 
 
 def _reply_received(owner: str, origin: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -149,13 +155,14 @@ def _set_running(owner: str, pipeline_id: Optional[int], op: str) -> Dict[str, A
     p = store.get(int(pipeline_id), owner)
     if not p:
         return {"ok": False, "_llm_hint": f"Pipeline {pipeline_id} not found for this person."}
-    want_from, want_to, note = (("laeuft", "pausiert", "Pausiert (Chat)") if op == "pause"
-                                else ("pausiert", "laeuft", "Fortgesetzt (Chat)"))
+    from backend.messages import tr
+    want_from, want_to = ("laeuft", "pausiert") if op == "pause" else ("pausiert", "laeuft")
+    note = tr("pipelines.event.paused" if op == "pause" else "pipelines.event.resumed", user_id=owner) + " (Chat)"
     if op == "resume" and not store.person_enabled(owner):
         return {"ok": False, "_llm_hint": "Pipelines are switched off for this person. Tell them."}
     if p["state"] != want_from:
-        return {"ok": False, "_llm_hint": f"Pipeline is '{p['state']}', cannot {op}. Tell the person."}
+        return {"ok": False, "_llm_hint": f"Pipeline is {STATE_EN.get(p['state'], p['state'])}, cannot {op}. Tell the person."}
     store.update(p["id"], state=want_to, next_run_at=None if op == "pause" else store.now())
     store.event(p["id"], "mensch", note)
-    return {"ok": True, "pipeline_id": p["id"], "state": want_to,
-            "_llm_hint": f"Pipeline '{p['title']}' is now {want_to}. Confirm in one short sentence."}
+    return {"ok": True, "pipeline_id": p["id"], "state": STATE_EN[want_to],
+            "_llm_hint": f"Pipeline '{p['title']}' is now {STATE_EN[want_to]}. Confirm in one short sentence."}

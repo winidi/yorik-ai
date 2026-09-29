@@ -110,6 +110,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pipelines.why.domain_name": {"en": "sender domain {{d}} matches the name", "de": "Absender-Domain {{d}} passt zum Namen"},
     "pipelines.why.number": {"en": "mentions {{n}}", "de": "nennt {{n}}"},
     "pipelines.why.word": {"en": "contains “{{w}}”", "de": "enthält „{{w}}“"},
+    # ── Write ──
+    "write.einvoice_missing": {"en": "The e-invoice can't be made here yet: the \"ZUGFeRD\" extension isn't installed (Settings → Extensions).",
+                               "de": "Die E-Rechnung kann hier noch nicht erzeugt werden: die Erweiterung „ZUGFeRD“ ist nicht installiert (Settings → Extensions)."},
+    "write.einvoice_failed": {"en": "The e-invoice did not pass the check; no number was used.",
+                              "de": "Die E-Rechnung hat die Prüfung nicht bestanden; es wurde keine Nummer vergeben."},
     # ── Pipelines: more ──
     "pipelines.parents_only": {"en": "Only parents or admins", "de": "Nur Eltern oder Admins"},
     "pipelines.event.llm_unreachable": {"en": "The AI model wasn't reachable. The template stays", "de": "Das Sprachmodell war nicht erreichbar — Vorlage bleibt stehen"},

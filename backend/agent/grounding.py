@@ -196,9 +196,29 @@ def _quotes(answer: str) -> List[str]:
 
 # ─── source labels ───────────────────────────────────────────────────
 
-_SOURCE_NAMES = {"email": "Mail", "whatsapp": "WhatsApp", "paperless": "Dokument", "immich": "Foto",
-                 "calendar": "Kalender", "tasks": "Aufgabe", "contacts": "Kontakt", "recordings": "Aufnahme",
-                 "drafts": "Entwurf", "bank": "Konto", "letters": "Schreiben", "pipelines": "Nachfassen"}
+# Source chips are read by people: in their language (set by the loop
+# for the turn; English when unknown).
+import contextvars as _cv
+_LANG: "_cv.ContextVar[str]" = _cv.ContextVar("grounding_lang", default="en")
+
+_WORDS = {
+    "en": {"email": "Mail", "whatsapp": "WhatsApp", "paperless": "Document", "immich": "Photo",
+           "calendar": "Calendar", "tasks": "Task", "contacts": "Contact", "recordings": "Recording",
+           "drafts": "Draft", "bank": "Account", "letters": "Write", "pipelines": "Follow-up",
+           "from_you": "from you", "from": "from {who}", "calculated": "Calculated: ", "source": "Source"},
+    "de": {"email": "Mail", "whatsapp": "WhatsApp", "paperless": "Dokument", "immich": "Foto",
+           "calendar": "Kalender", "tasks": "Aufgabe", "contacts": "Kontakt", "recordings": "Aufnahme",
+           "drafts": "Entwurf", "bank": "Konto", "letters": "Schreiben", "pipelines": "Nachfassen",
+           "from_you": "von dir", "from": "von {who}", "calculated": "Berechnet: ", "source": "Quelle"},
+}
+
+
+def set_language(language: str | None) -> None:
+    _LANG.set((language or "en")[:2].lower())
+
+
+def _w(key: str) -> str:
+    return _WORDS.get(_LANG.get(), _WORDS["en"])[key]
 
 
 def _walk(obj: Any, ancestors: List[Dict[str, Any]]):
@@ -239,7 +259,8 @@ def _label(skill: str, chain: List[Dict[str, Any]]) -> Dict[str, str]:
         # who wrote it, on the chip: "DE85 … von Mama" was the user's own
         # message (live test 2026-09-27) — the chip makes that visible
         who = str(inner.get("who") or inner.get("subtitle") or "")
-        by = "von dir" if who.lower() in ("ich", "you", "the user") else (f"von {who}" if who and who != chat else "")
+        by = _w("from_you") if who.lower() in ("me", "ich", "you", "the user") else \
+            (_w("from").format(who=who) if who and who != chat else "")
         return {"label": " · ".join(x for x in ("WhatsApp", chat, by, when) if x), "link": link}
     if skill == "read_email" or src == "email":
         subject = pick("subject", "title")
@@ -251,16 +272,17 @@ def _label(skill: str, chain: List[Dict[str, Any]]) -> Dict[str, str]:
         title = pick("title")
         doc = pick("doc_id")
         link = pick("navigate_to") or (f"/r/documents?doc={doc}&source=paperless" if doc else "/r/documents")
-        return {"label": " · ".join(x for x in ("Dokument", title) if x), "link": link}
+        return {"label": " · ".join(x for x in (_w("paperless"), title) if x), "link": link}
     if skill in ("show_transactions", "spending_summary") or src == "bank":
         cp = pick("counterparty", "title")
-        return {"label": " · ".join(x for x in ("Konto", cp, pick("booking_date")) if x), "link": "/r/finance"}
+        return {"label": " · ".join(x for x in (_w("bank"), cp, pick("booking_date")) if x), "link": "/r/finance"}
     if skill in ("recording_status", "recording_report") or src == "recordings":
-        return {"label": " · ".join(x for x in ("Aufnahme", pick("title")) if x),
+        return {"label": " · ".join(x for x in (_w("recordings"), pick("title")) if x),
                 "link": pick("navigate_to") or "/r/recordings"}
     if skill == "calculate":
-        return {"label": "Berechnet: " + pick("expression"), "link": ""}
-    name = _SOURCE_NAMES.get(src, skill or "Quelle")
+        return {"label": _w("calculated") + pick("expression"), "link": ""}
+    words = _WORDS.get(_LANG.get(), _WORDS["en"])
+    name = words.get(src) or skill or _w("source")
     return {"label": " · ".join(x for x in (name, pick("title", "display_name", "subject")) if x),
             "link": pick("navigate_to")}
 

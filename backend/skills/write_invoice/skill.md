@@ -20,7 +20,7 @@ inputs:
   lines:
     type: array
     required: true
-    description: Line items, each an object with text, qty, unit (Std., Stk., pauschal), unit_price (net, a number) and optionally vat_percent.
+    description: Line items, each an object with text, qty, unit (as it should be printed, in the invoice's language, e.g. hrs, pcs, flat rate), unit_price (net, a number) and optionally vat_percent.
   subject:
     type: string
     required: false
@@ -65,7 +65,7 @@ category: productivity
 
 # write_invoice
 
-The data half of the "Schreiben" app. The model hands over customer and
+The data half of the "Write" app. The model hands over customer and
 line items; the code computes the sums, sets the look (the person's
 letterhead) and, when the person finalises the invoice, takes the number
 and builds the e-invoice. Nothing here can burn an invoice number.

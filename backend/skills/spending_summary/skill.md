@@ -43,6 +43,6 @@ category: productivity
 # spending_summary
 
 Categorisation is a small hardcoded keyword table today (v1) — a
-sizeable "unkategorisiert" bucket is expected and should be named
+sizeable "Uncategorised" bucket is expected and should be named
 honestly, not smoothed over. Same visibility rule as the other finance
 skills, enforced by the query, not by the model.

@@ -28,7 +28,7 @@ when_to_use: |
   - Errors, "not working", debug, logs → topic="troubleshooting"
   - Recording a conversation, transcript, dinner recording → topic="recordings"
   - Family board, wall tablet, kiosk, routines, chores → topic="family-board"
-  - Writing letters in the Schreiben app, letterhead → topic="schreiben"
+  - Writing letters in the Write app, letterhead → topic="write"
   - Bank account, spending, finances → topic="finance"
   - Following up on a sent mail, pipelines → topic="pipelines"
 
@@ -48,7 +48,7 @@ inputs:
       One of the topic ids: first-run | llm-setup | paperless | immich
       | tailscale | voice | whatsapp | email | compose | contacts
       | calendar | tasks | briefing | themes | extensions | troubleshooting
-      | next-steps | recordings | family-board | schreiben | finance | pipelines.
+      | next-steps | recordings | family-board | write | finance | pipelines.
       Pick the closest one to the user's question.
   query:
     type: string

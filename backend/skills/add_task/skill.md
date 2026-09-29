@@ -22,7 +22,7 @@ inputs:
   category:
     type: string
     required: false
-    description: One of the configured task categories (admin / haushalt / arbeit / etc.) — only if you can pick the right one with high confidence. Otherwise omit.
+    description: One of the task categories that exist in this household — only if you can pick the right one with high confidence. Otherwise omit.
   notes:
     type: string
     required: false

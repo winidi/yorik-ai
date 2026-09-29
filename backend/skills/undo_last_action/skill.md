@@ -2,9 +2,9 @@
 name: undo_last_action
 description: Roll back the most recent mutation (delete / add / update) made by Yorik this session.
 when_not_to_use: |
-  NEVER trigger on bare "wieder" or "nochmal" — those are German discourse particles, not undo signals. "lösche X UND Y wieder bitte" means "delete X AND Y too, please" — the user wants Y deleted, NOT the previous action undone. Same for "schreib das wieder so" / "mach das wieder kurz" — "wieder" here is a softener.
+  NEVER trigger on words that only mean "again", "too" or "once more", in any language. "Delete X and Y again, please" means "delete Y as well" — the user wants Y deleted, NOT the previous action undone. The same for "write it like that again" or "make it short again".
 
-  Only trigger when the user explicitly signals reversal: "rückgängig", "stell wieder her", "wiederherstellen", "doch nicht", "war falsch", "undo", "revert", "restore". If the message ALSO names a new action ("lösche … wieder"), do the new action; do NOT add a free undo_last_action call alongside it.
+  Only trigger when the user explicitly asks to reverse something, in any language: "undo", "revert", "restore", "take that back", "never mind", "that was wrong". If the message ALSO names a new action ("delete … again"), do the new action; do NOT add a free undo_last_action call alongside it.
 when_to_use: |
   Trigger this when the user signals that the previous mutation was wrong
   and should be reverted. Typical phrasings:

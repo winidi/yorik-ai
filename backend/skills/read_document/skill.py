@@ -158,7 +158,7 @@ def _build_result(doc_id: int, source: str, rows,
             f"question>') — same doc, but the multimodal LLM reads the "
             f"rendered PDF pages directly instead of paperless's OCR text.\n"
             f"Recovery option 2: read_document on a DIFFERENT doc_id from "
-            f"the search hits — prefer Vertrag / Kalkulationsblatt / "
-            f"Rechnung over Auszahlungsbestätigung."
+            f"the search hits — prefer a contract, calculation sheet or "
+            f"invoice over a payout confirmation."
         )
     return result

@@ -22,11 +22,11 @@ inputs:
   category:
     type: string
     required: false
-    description: Limit to one category, e.g. Lebensmittel, Wohnen, Abos.
+    description: Limit to one category, e.g. Groceries, Housing, Contracts & subscriptions.
   search:
     type: string
     required: false
-    description: Text to find in the counterparty or purpose, case-insensitive (e.g. "Hetzner", "Stadtwerke", "Miete").
+    description: Text to find in the counterparty or purpose as the bank wrote it (usually the bank's language), case-insensitive, e.g. a company name like "Hetzner".
   from_date:
     type: string
     required: false
