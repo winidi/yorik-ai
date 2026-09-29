@@ -209,7 +209,9 @@ async def ask(
     audit.reset_turn()
 
     # 3) Build message list ────────────────────────────────────────────
-    history = conversation_io.trim_history(conversation_io.load_messages(conversation_id, user.id))
+    # The model sees the recent part; the older turns are saved back with
+    # this turn so the conversation on disk keeps its beginning.
+    older, history = conversation_io.split_history(conversation_io.load_messages(conversation_id, user.id))
     # Per-conversation entity ledger — see entity_ledger.py. Concatenated
     # onto the main system prompt so the LLM resolves "the appointment
     # I just made" / "make it friendlier" against a compact, explicit
@@ -638,7 +640,7 @@ async def ask(
             final_text = stripped
 
     conversation_io.save_messages(
-        conversation_id, role, user.id, messages,
+        conversation_id, role, user.id, older + messages,
     )
     # Persist the ledger AFTER save_messages — the row must exist first
     # in case this was the conversation's first turn.
@@ -871,7 +873,9 @@ async def ask_stream(
     # 3) Build messages — see the block in ask() for why the ledger is
     # concatenated into the main system prompt instead of sent as a
     # second system message.
-    history = conversation_io.trim_history(conversation_io.load_messages(conversation_id, user.id))
+    # The model sees the recent part; the older turns are saved back with
+    # this turn so the conversation on disk keeps its beginning.
+    older, history = conversation_io.split_history(conversation_io.load_messages(conversation_id, user.id))
     from . import entity_ledger as _ledger_mod
     ledger = conversation_io.load_ledger(conversation_id, user.id)
     ledger_block = _ledger_mod.render_for_llm(ledger)
@@ -1295,7 +1299,7 @@ async def ask_stream(
             messages[-1]["content"] = stripped
             final_text = stripped
 
-    conversation_io.save_messages(conversation_id, role, user.id, messages)
+    conversation_io.save_messages(conversation_id, role, user.id, older + messages)
     conversation_io.save_ledger(conversation_id, ledger, user.id)
 
     # Fire-and-forget LLM title generation when the conversation has

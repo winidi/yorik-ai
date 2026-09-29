@@ -133,3 +133,27 @@ def test_llm_failure_is_one_readable_sentence(admin_id):
     assert out["error"] is True
     assert "erreiche das Sprachmodell" in out["response"]
     assert "Traceback" not in out["response"] and "APIConnectionError" not in out["response"]
+
+
+def test_a_long_conversation_keeps_its_beginning_on_disk(admin_id, monkeypatch):
+    """The model sees only the recent turns; until 2026-09-29 the trimmed
+    list was also what got saved, so the oldest turns vanished for good."""
+    from backend.agent import conversation_io as ci, loop
+    from backend.agent.context import User
+    from backend.agent.tools import ToolRegistry
+    monkeypatch.setenv("YORIK_LLM_CTX", "1000")                 # budget floor: 8,000 chars
+    old = []
+    for i in range(40):
+        old += [{"role": "user", "content": f"u{i} " + "x" * 200},
+                {"role": "assistant", "content": f"a{i} " + "y" * 200}]
+    ci.save_messages("conv-long", "admin", admin_id, old)
+    fake = _FakeLlm([{"role": "assistant", "content": "ok"}])
+    reg = ToolRegistry(); reg.register(_EchoTool())
+    asyncio.run(loop.ask("hallo", user=User(id=admin_id, role="admin", language="en", name=None),
+                         registry=reg, llm=fake, system_prompt="You are a test butler.",
+                         conversation_id="conv-long"))
+    seen = " ".join(str(m.get("content")) for m in fake.calls[0])
+    assert "u0 " not in seen and "u39 " in seen                   # the model got the recent part
+    saved = ci.load_messages("conv-long", admin_id)
+    assert saved[0]["content"].startswith("u0 ") and len(saved) == len(old) + 2
+    assert saved[-1]["content"] == "ok"

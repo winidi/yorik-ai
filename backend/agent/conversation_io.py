@@ -167,6 +167,18 @@ def trim_history(messages: List[Dict[str, Any]], max_chars: Optional[int] = None
     return kept
 
 
+def split_history(messages: List[Dict[str, Any]], max_chars: Optional[int] = None,
+                  ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """``(older, recent)``: ``recent`` is what trim_history lets the model
+    see, ``older`` the turns in front of it. The loop saves ``older +
+    this turn``, so a long conversation keeps its beginning on disk
+    (until 2026-09-29 the trimmed list was saved and the oldest turns
+    were lost for good)."""
+    msgs = [m for m in (messages or []) if isinstance(m, dict) and m.get("role") != "system"]
+    recent = trim_history(msgs, max_chars)
+    return msgs[:len(msgs) - len(recent)], recent
+
+
 def sanitize_for_llm(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Return a copy of ``messages`` with storage-only extras removed.
 
