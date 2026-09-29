@@ -25,7 +25,7 @@
      (tiles + its offset). Anything fixed to the bottom edge — the mail
      composer, a minimised pill — sits above this line, so the Dock
      never covers a button. */
-  --dock-clearance: calc(max(0.875rem, env(safe-area-inset-bottom) + 0.25rem) + 4.25rem);
+  --dock-clearance: calc(max(0.875rem, env(safe-area-inset-bottom) + 0.25rem) + 4.125rem);
   color-scheme: light;
   /* Light is soft rather than paper-white: a faintly violet grey ground
      (L 0.955), cards a step lighter, text a deep plum-grey instead of
