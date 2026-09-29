@@ -300,3 +300,17 @@ def test_dollars_pounds_and_us_phone_numbers_are_checked_too():
     assert not check("Call them at +1 555 987 6543.", [], raw).ok
     assert check("It was about $2,000.", [], raw).ok                  # rounded on purpose
     assert needs_hold("That is $12") and needs_hold("Call (555) 12")
+
+
+def test_english_weekday_dates_are_corrected_too():
+    """"by Sunday, 3 Oct" went through in the English chat test (2026-09-29):
+    3 October 2026 is a Saturday. German forms stay as they were."""
+    from datetime import date
+    from backend.agent.grounding import fix_weekdays
+    d = date(2026, 9, 29)
+    assert fix_weekdays("by Sunday, 3 Oct", d) == "by Saturday, 3 Oct"
+    assert fix_weekdays("Sun, Oct 3", d) == "Sat, Oct 3"
+    assert fix_weekdays("Sunday, October 3rd, 2026", d) == "Saturday, October 3rd, 2026"
+    assert fix_weekdays("Friday, October 2 at 10:00", d) == "Friday, October 2 at 10:00"
+    assert fix_weekdays("Sonntag, 3. Okt.", d) == "Samstag, 3. Okt."
+    assert fix_weekdays("Sa, 10.10.", d) == "Sa, 10.10."

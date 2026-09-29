@@ -557,13 +557,19 @@ _MONTHS.update({m: i for i, m in enumerate(
      "october", "november", "december"], 1)})
 _WD_NAMES = (r"Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag|Mo|Di|Mi|Do|Fr|Sa|So"
              r"|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun")
-_DATE_PART = (r"(?P<day>\d{1,2})(?:\.|st|nd|rd|th)?\s*(?:(?P<mname>Januar|Februar|März|April|Mai|Juni|Juli|August|"
-              r"September|Oktober|November|Dezember|January|February|March|May|June|July|October|December)"
-              r"|(?P<mnum>\d{1,2})\.)(?:\s*(?P<year>\d{4}))?")
+_MNAMES = (r"Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember|"
+           r"January|February|March|May|June|July|October|December|"
+           r"Jan|Feb|Mär|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Okt|Oct|Nov|Dez|Dec")
+_DATE_PART = (r"(?P<day>\d{1,2})(?:\.|st|nd|rd|th)?\s*(?:(?P<mname>" + _MNAMES + r")\b\.?"
+              r"|(?P<mnum>\d{1,2})\.)(?:,?\s*(?P<year>\d{4}))?")
+# The English order: "Sunday, October 3", "Sun, Oct 3rd, 2026"
+_MDATE_PART = (r"(?P<mname>" + _MNAMES + r")\b\.?\s+(?P<day>\d{1,2})(?:st|nd|rd|th)?\b(?!\.\d)"
+               r"(?:,?\s*(?P<year>\d{4}))?(?P<mnum>)")
 # "Samstag, 10. Oktober", "Sa, 10.10." — and the weekday after the date,
 # "22. September (Sa)" (2026-09-28: 22.09. was a Tuesday)
 _WD_DATE = re.compile(r"\b(?P<wd>" + _WD_NAMES + r")\b\.?(?P<mid>,?\s+(?:de[nrm]\s+)?)" + _DATE_PART, re.I)
 _DATE_WD = re.compile(_DATE_PART + r"\s*\((?P<wd>" + _WD_NAMES + r")\.?\)", re.I)
+_WD_MDATE = re.compile(r"\b(?P<wd>" + _WD_NAMES + r")\b\.?(?P<mid>,?\s+(?:the\s+)?)" + _MDATE_PART, re.I)
 
 
 def fix_weekdays(text: str, today=None) -> str:
@@ -576,7 +582,7 @@ def fix_weekdays(text: str, today=None) -> str:
     def repl(m: "re.Match[str]") -> str:
         try:
             day = int(m.group("day"))
-            month = _MONTHS[m.group("mname").lower()] if m.group("mname") else int(m.group("mnum"))
+            month = _month_of(m.group("mname")) if m.group("mname") else int(m.group("mnum"))
             if m.group("year"):
                 d = date(int(m.group("year")), month, day)
             else:
@@ -593,4 +599,11 @@ def fix_weekdays(text: str, today=None) -> str:
             return m.group(0)
         start = m.start("wd") - m.start()
         return m.group(0)[:start] + right + m.group(0)[start + len(wd):]
-    return _DATE_WD.sub(repl, _WD_DATE.sub(repl, text or ""))
+    return _WD_MDATE.sub(repl, _DATE_WD.sub(repl, _WD_DATE.sub(repl, text or "")))
+
+
+def _month_of(name: str) -> int:
+    n = name.lower().rstrip(".")
+    if n in _MONTHS:
+        return _MONTHS[n]
+    return next(i for m, i in _MONTHS.items() if m[:3] == n[:3])
