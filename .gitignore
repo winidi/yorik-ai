@@ -89,3 +89,6 @@ models/
 docs/audits/
 docs/plans/
 notes/
+
+# TypeScript build caches change on every build
+*.tsbuildinfo

@@ -62,6 +62,8 @@ Each one sets up Docker if needed, starts Yorik, photos, documents, WhatsApp, a 
 
 Details, what lives where, updates: [docs/INSTALL.md](docs/INSTALL.md). Broken? [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
+The installers use `deploy/`. The `docker-compose*.yml`, `start.sh` and `install.sh --classic` at the top of the repository are the developer setup (Yorik on the host, services in Docker); you don't need them to run Yorik.
+
 ## The AI model
 
 The install brings a local model server (Ollama) with a small model. An NVIDIA GPU is used when Docker can see it. On a Mac, install the [Ollama app](https://ollama.com) first and Yorik uses it with the Apple GPU. AMD GPUs are not used inside Docker; there the model runs on the CPU and answers take tens of seconds.
