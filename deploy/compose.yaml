@@ -50,6 +50,10 @@ services:
       YORIK_TAILSCALE_HTTPS_PORT: "443"
       YORIK_TZ: ${TZ:-Europe/Berlin}
       YORIK_BACKUP_DIR_LABEL: ${YORIK_BACKUP_DIR:-the backups folder next to Yorik's settings}
+      # Photos and documents for the backup (read-only mounts below).
+      YORIK_PHOTOS_DIR: /media/photos
+      YORIK_PAPERLESS_DATA_DIR: /media/documents-data
+      YORIK_PAPERLESS_MEDIA_DIR: /media/documents
       TZ: ${TZ:-Europe/Berlin}
     volumes:
       - yorik_data:/app/data
@@ -58,6 +62,11 @@ services:
       - ts_socket:/var/run/tailscale:ro
       # Where "Update now" leaves its request for the updater below.
       - updater:/updater
+      # The photo and document volumes, read-only, so a backup holds the
+      # originals too (without them it held Yorik's own data only).
+      - photos:/media/photos:ro
+      - documents_data:/media/documents-data:ro
+      - documents_media:/media/documents:ro
       # Backups land in a folder on the computer (the installer picks
       # it; point it at a USB or cloud drive to keep copies off the box).
       - type: bind

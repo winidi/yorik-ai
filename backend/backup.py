@@ -75,12 +75,28 @@ def _pg_argv(container: str, pw: str, args: list[str], *, stdin: bool = False) -
     return ["docker", "exec"] + (["-i"] if stdin else []) + ["-e", f"PGPASSWORD={pw}", container] + list(args)
 
 
+def _media_dir(env_key: str, classic: Path) -> Path:
+    return Path(os.getenv(env_key) or classic)
+
+
+def _copy_tree(src: Path, dst: Path) -> None:
+    """copytree that keeps going past a file it cannot read (another
+    container's file with tight permissions): the rest of the photos
+    are worth more than an all-or-nothing backup."""
+    try:
+        shutil.copytree(src, dst, dirs_exist_ok=False)
+    except shutil.Error as exc:
+        failed = exc.args[0] if exc.args and isinstance(exc.args[0], list) else []
+        log.warning("backup: %d file(s) under %s could not be copied; first: %s",
+                    len(failed), src, failed[:1])
+
+
 def _probe_argv(container: str) -> list[str]:
     """Is the database container up? In the Docker stack compose starts
     it before Yorik; the client call itself reports if it isn't."""
     if _in_docker_stack():
         return ["echo", "true"]
-    return _probe_argv(container)
+    return ["docker", "inspect", "-f", "{{.State.Running}}", container]
 
 # Backups never touch the originals — only the snapshots. So the only
 # way one backup can hurt another is racing on the temp-dir cleanup.
@@ -303,12 +319,15 @@ def _bundle(opts: dict[str, Any], staging: Path) -> tuple[Path, list[str]]:
         shutil.copytree(BRIEFINGS_DIR, staging / "briefings", dirs_exist_ok=False)
         includes.append("briefings")
 
-    # 5. Optional heavy dirs.
+    # 5. Optional heavy dirs. In the Docker stack the photos and the
+    #    documents live in the Immich / Paperless volumes, mounted
+    #    read-only into Yorik's container (YORIK_PHOTOS_DIR, …); on a
+    #    classic install they are under data/.
     if opts.get("include_photos"):
-        photos = DATA_DIR / "immich" / "library"
+        photos = _media_dir("YORIK_PHOTOS_DIR", DATA_DIR / "immich" / "library")
         if photos.exists():
             log.info("backup: including photo library (this can take a while)")
-            shutil.copytree(photos, staging / "immich_library", dirs_exist_ok=False)
+            _copy_tree(photos, staging / "immich_library")
             includes.append("immich_library")
         # Postgres dump — without this the JPEGs are recoverable but
         # albums, faces, smart-search, date-taken metadata are all
@@ -320,10 +339,10 @@ def _bundle(opts: dict[str, Any], staging: Path) -> tuple[Path, list[str]]:
 
     if opts.get("include_paperless"):
         for sub in ("data", "media"):
-            p = DATA_DIR / "paperless" / sub
+            p = _media_dir(f"YORIK_PAPERLESS_{sub.upper()}_DIR", DATA_DIR / "paperless" / sub)
             if p.exists():
                 log.info("backup: including paperless %s", sub)
-                shutil.copytree(p, staging / f"paperless_{sub}", dirs_exist_ok=False)
+                _copy_tree(p, staging / f"paperless_{sub}")
                 includes.append(f"paperless_{sub}")
 
     # 5b. WhatsApp bridge state. The Baileys bridge stores its pairing
