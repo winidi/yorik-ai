@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the suggestion! Before filing, please check if there's already an [open Discussion](https://github.com/winidi/yorik-ai/discussions) about this — early-stage ideas are usually better in Discussions than as Issues.
+        Thanks for the suggestion! Before filing, please check whether an [open Issue](https://github.com/winidi/yorik-ai/issues) already covers it.
 
   - type: textarea
     id: problem

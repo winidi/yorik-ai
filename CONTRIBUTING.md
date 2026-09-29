@@ -7,7 +7,7 @@ Thanks for your interest. This document covers everything you need to send a pat
 1. Fork on GitHub, clone your fork
 2. Create a branch: `git checkout -b your-feature`
 3. Make your change
-4. Run tests: `pytest tests/ -q`
+4. Run tests (they need a throwaway Postgres, see [Local development](#local-development)): `pytest tests/ -q`
 5. Build the frontend if you touched it: `cd frontend-react && npm run build`
 6. Commit with `-s` (signs the Developer Certificate of Origin): `git commit -s -m "Fix X in Y"`
 7. Push your branch, open a PR
@@ -19,7 +19,7 @@ We use the [Developer Certificate of Origin](https://developercertificate.org/) 
 - The contribution was created by you (or you have permission to submit it under the project's license)
 - You agree to license it under AGPL-3.0-or-later (matching the project)
 
-A signed commit has a `Signed-off-by: Your Name <your@email>` line at the bottom. CI will block unsigned commits.
+A signed commit has a `Signed-off-by: Your Name <your@email>` line at the bottom. CI rejects a pull request with an unsigned commit.
 
 We deliberately chose DCO over a Contributor License Agreement because:
 
@@ -32,24 +32,24 @@ We deliberately chose DCO over a Contributor License Agreement because:
 **Beta priorities** (best path to a merged PR right now):
 
 1. **Bug fixes** for issues with the `bug` label
-2. **Translations** — anything under `frontend-react/src/i18n/` (DE + EN exist, FR/PL/ES/IT wanted)
+2. **Translations** — there is no i18n framework yet: the UI text is English with German parts, written inline in the components. Setting one up (and moving the strings) is welcome; open an Issue first so we agree on the approach
 3. **Connectors** — new ones in `backend/connectors/`. See [the connector contributor guide](docs/CONNECTORS.md)
 4. **Documentation** — especially install guides for non-Ubuntu distros (Fedora, openSUSE, Arch)
 5. **Templates** — invoice/letter templates for non-DE/EN countries
 
-**Hold off on** (these need design discussion first — open a Discussion before a PR):
+**Hold off on** (these need design discussion first — open an Issue before a PR):
 
 - Major UI redesigns
 - New top-level apps
 - Anything that adds a new external service dependency
 - Anything that adds telemetry
 
-If you're not sure, [open a Discussion](https://github.com/winidi/yorik-ai/discussions) before writing code.
+If you're not sure, [open an Issue](https://github.com/winidi/yorik-ai/issues/new/choose) before writing code.
 
 ## Code style
 
-- **Python**: black + isort defaults. No type-checking enforced yet but typed code is welcome.
-- **TypeScript**: project tsconfig + the existing ESLint setup. No prettier (the codebase uses default Vite formatting).
+- **Python**: no formatter or linter is enforced yet; follow the style of the file you edit (4 spaces, type hints where they help). Typed code is welcome.
+- **TypeScript**: the project tsconfig (`npx tsc -p tsconfig.app.json --noEmit` must pass). No ESLint or prettier yet.
 - **Comments**: only where the *why* is non-obvious. Don't comment what well-named code already says.
 - **Tests**: required for new backend endpoints. UI tests are optional but welcome.
 - **No new dependencies** without opening an Issue first.
@@ -67,11 +67,22 @@ If you're not sure, [open a Discussion](https://github.com/winidi/yorik-ai/discu
 
 ```bash
 # Backend
-cd yorik
+cd yorik-ai
 python3 -m venv venv && source venv/bin/activate
-pip install -r backend/requirements.txt
-pytest tests/ -q                                 # should be green
-uvicorn backend.main:app --reload                # :8000 with hot reload
+pip install -r backend/requirements.txt -r requirements-dev.txt
+
+# Tests build a fresh database per test from a Postgres with pgvector
+# (the same setup CI uses, see .github/workflows/ci.yml):
+docker run -d --name yorik-test-pg -p 5435:5432 \
+  -e POSTGRES_USER=supabase_admin -e POSTGRES_PASSWORD=yorik-test -e POSTGRES_DB=postgres \
+  pgvector/pgvector:pg16
+for r in "postgres LOGIN SUPERUSER PASSWORD 'yorik-test'" "anon NOLOGIN" "authenticated NOLOGIN" \
+         "service_role NOLOGIN" "authenticator LOGIN NOINHERIT"; do
+  docker exec yorik-test-pg psql -U supabase_admin -d postgres -c "CREATE ROLE $r;"
+done
+YORIK_DB_HOST=127.0.0.1 YORIK_DB_PORT=5435 YORIK_DB_PASSWORD=yorik-test pytest tests/ -q
+
+uvicorn backend.main:app --reload                # :8000 with hot reload (needs a configured install)
 
 # Frontend (only if you touch React)
 cd frontend-react
