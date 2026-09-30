@@ -744,20 +744,18 @@ export function TasksApp() {
                 </button>
               ))}
             </div>
-            <div className="md:hidden mb-3">
+            <div className="md:hidden mb-2">
               <button
                 type="button"
                 onClick={() => setMobileToolsOpen(o => !o)}
                 aria-expanded={mobileToolsOpen}
                 aria-controls="mobile-smart-tools"
-                className="w-full h-10 px-3 rounded-xl bg-card border border-border text-sm text-foreground hover:border-violet-500/30 transition flex items-center justify-between gap-2"
+                className="h-8 px-3 rounded-full bg-card border border-border text-xs text-foreground hover:border-violet-500/30 transition inline-flex items-center gap-1.5"
               >
-                <span className="flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-violet-500" />
-                  Smart tools
-                </span>
+                <Sparkles className="w-3.5 h-3.5 text-violet-500" />
+                Smart tools
                 <ChevronDown className={cn(
-                  "w-4 h-4 text-muted-foreground transition",
+                  "w-3.5 h-3.5 text-muted-foreground transition",
                   mobileToolsOpen && "rotate-180",
                 )} />
               </button>
@@ -807,8 +805,11 @@ export function TasksApp() {
         {/* View tabs (Today / Inbox / Upcoming / All) + Show done +
             grouping selector. Replaces the old Open/Done/All filter
             with the Things-3-style view model. */}
-        <div className="flex flex-wrap gap-2 mb-4 items-center">
-          <div className="flex gap-1.5 mr-auto flex-wrap">
+        {/* On a phone everything above the first task took ~60 % of the
+            screen (2026-09-29): the filters are one row that scrolls
+            sideways there, and wrap freely on a desktop. */}
+        <div className="flex flex-nowrap md:flex-wrap gap-2 mb-3 md:mb-4 items-center overflow-x-auto md:overflow-visible -mx-4 px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex gap-1.5 mr-auto flex-nowrap md:flex-wrap shrink-0">
             <ViewTab icon={<Sun className="w-3 h-3" />}
                      label="Today"    count={viewCounts.today}
                      danger={viewCounts.overdue}
@@ -827,7 +828,7 @@ export function TasksApp() {
           <button
             onClick={() => setShowDone(s => !s)}
             className={cn(
-              "text-xs h-10 md:h-7 px-2.5 rounded-full border transition flex items-center gap-1",
+              "text-xs h-9 md:h-7 px-2.5 rounded-full border transition flex items-center gap-1 shrink-0 whitespace-nowrap",
               showDone
                 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400"
                 : "bg-card border-border text-muted-foreground hover:text-foreground",
@@ -843,7 +844,7 @@ export function TasksApp() {
             <button
               onClick={() => setShowOthers(v => { try { localStorage.setItem("yorik_tasks_show_others", v ? "0" : "1"); } catch {} return !v; })}
               className={cn(
-                "text-xs h-10 md:h-7 px-2.5 rounded-full border transition flex items-center gap-1",
+                "text-xs h-9 md:h-7 px-2.5 rounded-full border transition flex items-center gap-1 shrink-0 whitespace-nowrap",
                 showOthers
                   ? "bg-violet-500/10 border-violet-500/30 text-violet-700 dark:text-violet-300"
                   : "bg-card border-border text-muted-foreground hover:text-foreground",
@@ -856,12 +857,12 @@ export function TasksApp() {
             </button>
           )}
           {!magicResult && (
-            <div className="relative">
+            <div className="relative shrink-0">
               <select
                 value={grouping}
                 onChange={e => setGrouping(e.target.value as GroupMode)}
                 aria-label="Group tasks by"
-                className="text-xs h-10 md:h-7 pl-3 pr-8 rounded-full bg-card border border-border text-muted-foreground hover:text-foreground focus:outline-none appearance-none cursor-pointer"
+                className="text-xs h-9 md:h-7 pl-3 pr-8 rounded-full bg-card border border-border text-muted-foreground hover:text-foreground focus:outline-none appearance-none cursor-pointer"
               >
                 <option value="due">Group · by due date</option>
                 <option value="category">Group · by category</option>
@@ -1119,9 +1120,9 @@ function ViewTab({ icon, label, count, active, onClick, danger, dangerTitle }: {
     <button
       onClick={onClick}
       className={cn(
-        // h-10 on mobile clears Apple HIG's 44pt minimum touch target;
+        // h-9 on mobile is close to Apple HIG's 44pt minimum touch target;
         // desktop keeps the compact h-7.
-        "text-xs h-10 md:h-7 px-3 rounded-full border transition flex items-center gap-1.5",
+        "text-xs h-9 md:h-7 px-3 rounded-full border transition flex items-center gap-1.5 shrink-0 whitespace-nowrap",
         active
           ? "bg-primary text-primary-foreground border-primary"
           : "bg-card border-border text-muted-foreground hover:text-foreground",
@@ -1460,12 +1461,14 @@ function TaskRow({
         </button>
 
         {/* Snooze chips. Mobile: always visible (no hover on touch
-            devices, so hover-only would be unreachable). Desktop:
-            hover-only as before to keep the resting row uncluttered. */}
+            devices, so hover-only would be unreachable), and only one —
+            two pushed the title down to "E-Mail beantworten i…"
+            (2026-09-29); a week's snooze is a tap away in the editor's
+            date field. Desktop: hover-only as before to keep the
+            resting row uncluttered. */}
         {onSnooze && !task.done && (
           <div className="flex md:hidden items-center gap-1 shrink-0">
             <SnoozeChip label="+1d"  onClick={() => onSnooze(isoDaysFromNow(1))} />
-            <SnoozeChip label="+1w"  onClick={() => onSnooze(isoDaysFromNow(7))} />
           </div>
         )}
         {onSnooze && !task.done && (

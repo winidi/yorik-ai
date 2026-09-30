@@ -2560,7 +2560,9 @@ function TravelTimeAnnouncement({ events }: { events: CalendarEvent[] }) {
     try { localStorage.setItem(TRAVEL_TIP_DISMISS_KEY, "1"); } catch {}
   }
   return (
-    <div className="px-6 py-2.5 border-b border-border bg-amber-500/[0.06]">
+    // A "what's new" tip, not the calendar: on a phone it ate the space
+    // above the first appointment (2026-09-29), so it stays desktop-only.
+    <div className="hidden md:block px-6 py-2.5 border-b border-border bg-amber-500/[0.06]">
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 rounded-full bg-amber-500/15 flex items-center justify-center shrink-0">
           <Car className="w-4 h-4 text-amber-600" />
