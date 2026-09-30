@@ -8,7 +8,7 @@ async def execute(
     ctx,
     name: str,
     amount: float,
-    currency: str = "EUR",
+    currency: Optional[str] = None,
     due_date: Optional[str] = None,
     recurring: Optional[str] = None,
     notes: Optional[str] = None,
@@ -21,6 +21,11 @@ async def execute(
         amount_f = float(amount)
     except (TypeError, ValueError) as e:
         raise ValueError(f"amount must be a number: {e}")
+    if not currency:
+        # The household's money (country in onboarding), not always EUR.
+        from backend.household_settings import currency as _household_currency
+        currency = _household_currency()
+    currency = str(currency).strip().upper()[:3]
     if due_date:
         try:
             datetime.strptime(due_date[:10], "%Y-%m-%d")

@@ -52,3 +52,24 @@ def set_setting(key: str, value: str, *,
             (key, value, updated_by_user_id),
         )
         conn.commit()
+
+
+def currency() -> str:
+    """The money this household counts in — ISO code, e.g. "EUR", "USD",
+    "CHF". Set explicitly (locale.currency), else derived from the
+    country chosen in onboarding, else EUR. Amounts that come with their
+    own currency (a bank booking, an invoice in dollars) keep it; this
+    is the default for everything that has none."""
+    cur = (get_setting("locale.currency") or "").strip().upper()
+    if len(cur) == 3:
+        return cur
+    country = (get_setting("locale.country") or "").strip().upper()
+    if country:
+        try:
+            from .locale import COUNTRY_LOCALE
+            found = COUNTRY_LOCALE.get(country, {}).get("currency")
+            if found:
+                return found
+        except Exception:  # noqa: BLE001
+            pass
+    return "EUR"

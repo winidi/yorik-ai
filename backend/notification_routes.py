@@ -12,6 +12,7 @@ from .auth_sessions import current_user
 from .database import get_conn
 from . import notifications as notif
 from . import email_blocklist
+from .household_settings import currency as _household_currency
 
 log = logging.getLogger("yorik.notification_routes")
 
@@ -91,7 +92,7 @@ async def accept_proposal(notification_id: int, user: dict = Depends(current_use
         skill_args = {
             "name":             payload.get("subject") or f"Bill from {payload.get('vendor', 'unknown')}",
             "amount":           extracted.get("amount") or 0,
-            "currency":         extracted.get("currency", "EUR"),
+            "currency":         extracted.get("currency") or _household_currency(),
             "due_date":         due,
             "notes":            f"Auto-imported from email (notif #{notification_id})",
             "email_message_id": payload.get("message_id"),

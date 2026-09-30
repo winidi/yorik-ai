@@ -29,7 +29,20 @@ export function formatNumber(n: number, opts?: Intl.NumberFormatOptions): string
   return n.toLocaleString(locale(), opts);
 }
 
-/** Money: the currency comes with the amount (bank rows, invoices), EUR when unknown. */
-export function formatMoney(amount: number, currency = "EUR"): string {
-  return amount.toLocaleString(locale(), { style: "currency", currency });
+let householdCurrency = "EUR";
+
+/** The household's money (from /api/auth/me), set once signed in. */
+export function setHouseholdCurrency(code: string | null | undefined): void {
+  const c = (code || "").trim().toUpperCase();
+  if (c.length === 3) householdCurrency = c;
+}
+
+export function currency(): string {
+  return householdCurrency;
+}
+
+/** Money: the currency comes with the amount (bank rows, invoices); an
+ *  amount without one is in the household's currency. */
+export function formatMoney(amount: number, currency?: string | null): string {
+  return amount.toLocaleString(locale(), { style: "currency", currency: currency || householdCurrency });
 }

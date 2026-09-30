@@ -117,7 +117,7 @@ def test_amount_spellings():
     assert cents("1,234.56") == 123456 and cents("") is None
     assert _in_text(21420, "Amount paid €214.20") and _in_text(21420, "Betrag 214,20 EUR")
     assert _in_text(123456, "Summe 1.234,56 €") and not _in_text(21420, "€1214.20")
-    assert money(-55922) == "-559,22 €" and money(400, "USD") == "4,00 USD"
+    assert money(-55922) == "-559,22 €" and money(400, "USD") == "$4.00" and money(400, "CHF") == "4,00 CHF"
 
 
 def test_number_in_the_purpose_matches_and_reminders_are_one_claim():

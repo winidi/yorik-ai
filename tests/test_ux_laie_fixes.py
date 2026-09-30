@@ -241,3 +241,45 @@ def test_no_draft_while_the_contact_choice_is_open(fresh_app):
     for kw in ({"contact_id": 11}, {"chat_jid": "4915128811000@s.whatsapp.net"}):
         out = asyncio.run(run(**kw))
         assert out["ok"] is False and out["_llm_hint"].startswith("STOP") and out["drafts"] == []
+
+
+def test_country_sets_currency_and_survives_in_the_database(fresh_app, monkeypatch, tmp_path):
+    """b16: the country chosen in onboarding also decides the money the
+    household counts in; in Docker the choice lives in the DB, not in a
+    config.env that vanishes with the container."""
+    from backend import locale as L
+    from backend.household_settings import currency
+    monkeypatch.setenv("HOMEOS_CONFIG_FILE", str(tmp_path / "config.env"))
+    assert currency() == "EUR"
+    out = L.apply_country("US")
+    assert out["applied"] and out["currency"] == "USD" and out["tz"] == "America/New_York"
+    assert currency() == "USD" and (tmp_path / "config.env").read_text().count("YORIK_TZ=America/New_York") == 1
+    monkeypatch.setenv("YORIK_TZ", "Europe/Berlin")
+    L.apply_saved()
+    import os
+    assert os.environ["YORIK_TZ"] == "America/New_York"
+    # Docker: nothing written to config.env, the note says where OCR comes from
+    monkeypatch.setenv("YORIK_RUNTIME", "docker")
+    (tmp_path / "config.env").unlink()
+    out = L.apply_country("CH")
+    assert out["currency"] == "CHF" and "installer" in out["note"] and not (tmp_path / "config.env").exists()
+    assert currency() == "CHF"
+    assert L.apply_country("XX")["applied"] is False
+
+
+def test_a_bill_without_currency_takes_the_households(fresh_app, monkeypatch, tmp_path):
+    import asyncio
+    from backend import locale as L
+    from backend.skills._add_bill.skill import execute
+    from backend.skills.registry import Registry, SkillContext
+    from backend.database import get_conn
+    from tests.conftest import seed_user
+    from backend.payments import money
+    monkeypatch.setenv("HOMEOS_CONFIG_FILE", str(tmp_path / "config.env"))
+    uid = seed_user(name="Ann", role="admin", email="ann@example.com")
+    L.apply_country("GB")
+    asyncio.run(execute(ctx=SkillContext(Registry(), role="admin", user_id=uid), name="Water", amount=12.5,
+                        due_date="2026-10-15"))
+    with get_conn() as conn:
+        row = conn.execute("SELECT currency FROM bills WHERE name = 'Water'").fetchone()
+    assert row["currency"] == "GBP" and money(1250) == "£12.50"

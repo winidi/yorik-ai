@@ -458,7 +458,7 @@ def update_self_profile(body: SelfProfile,
     # restarts the HOST's bundled Paperless, which would clobber shared
     # state across all tenants. Country stays saved on user_profiles
     # for the tenant; only the host-wide side effects are suppressed.
-    if user.get("role") == "admin" and payload.get("country"):
+    if user.get("role") in ("admin", "platform_admin") and payload.get("country"):
         from . import external_users as _eu
         if _eu._is_tenant_mode():
             result["locale_applied"] = {"applied": False, "note": "tenant mode — host locale unchanged"}

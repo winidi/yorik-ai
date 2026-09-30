@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
-import { formatDate } from "@/i18n/format";
+import { formatDate, formatMoney, currency as householdCurrency } from "@/i18n/format";
 import {
   Loader2, Send, Plus, Search, Trash2, MessageSquare, Sparkles,
   FileText, Download, Eye, X, ArrowDown, ThumbsUp, ThumbsDown,
@@ -2059,7 +2059,7 @@ function MessageBubble({
             <PriceSummaryCard
               key={i}
               title={a.title}
-              currency={a.currency || "EUR"}
+              currency={a.currency || householdCurrency()}
               lineItems={a.line_items || []}
               totalEur={a.total_eur || 0}
               totalCount={a.total_count || 0}
@@ -2415,8 +2415,7 @@ function PriceSummaryCard({
 }) {
   const { t: tr } = useTranslation();
   if (!lineItems || lineItems.length === 0) return null;
-  const symbol = currency === "EUR" ? "€" : currency;
-  function fmt(v: number) { return v.toFixed(2).replace(".", ","); }
+  function fmt(v: number) { return formatMoney(v, currency); }
   function shortHost(url: string): string {
     try { return new URL(url).hostname.replace(/^www\./, ""); }
     catch { return url.slice(0, 30); }
@@ -2439,17 +2438,17 @@ function PriceSummaryCard({
               {li.count}× {li.label}
             </span>
             <span className="text-xs text-muted-foreground tabular-nums shrink-0">
-              {fmt(li.unit_eur)} {symbol}
+              {fmt(li.unit_eur)}
             </span>
             <span className="font-medium tabular-nums shrink-0 w-20 text-right">
-              {fmt(li.subtotal_eur)} {symbol}
+              {fmt(li.subtotal_eur)}
             </span>
           </li>
         ))}
       </ul>
       <div className="px-4 py-2.5 border-t border-emerald-500/30 bg-emerald-500/10 flex items-center justify-between text-sm font-semibold">
         <span>{tr("chat.price.total")}</span>
-        <span className="tabular-nums">{fmt(totalEur)} {symbol}</span>
+        <span className="tabular-nums">{fmt(totalEur)}</span>
       </div>
       {sourceUrl && (
         <div className="px-4 py-1.5 text-2xs text-muted-foreground border-t border-emerald-500/15 truncate">

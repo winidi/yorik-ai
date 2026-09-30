@@ -12,6 +12,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { applyLanguage } from "@/i18n";
+import { setHouseholdCurrency } from "@/i18n/format";
 import { Loader2, Sparkles } from "lucide-react";
 import { api, registerSessionExpiredHandler as api_registerSessionExpiredHandler } from "@/lib/api";
 import type { AuthMe, YorikUser } from "@/lib/api";
@@ -61,6 +62,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   // The person's language for every text and date (i18n/index.ts).
   const language = state?.user?.language;
   useEffect(() => { applyLanguage(language); }, [language]);
+  const householdCurrency = state?.currency;
+  useEffect(() => { setHouseholdCurrency(householdCurrency); }, [householdCurrency]);
 
   // The role on <html> lets CSS size things per person: a child's
   // account gets everything a little larger (index.css).

@@ -139,6 +139,14 @@ if ($needBuild) {
 # The computer's time zone as Yorik needs it (IANA). .NET 6+ converts
 # by itself; Windows PowerShell 5.1 has no converter, so a table of the
 # common zones (from CLDR windowsZones), then the plain UTC offset.
+# The document reader's language from the computer's language. The bundled
+# reader (Paperless) ships English, German, French, Italian and Spanish.
+function Get-OcrLanguage {
+  switch ((Get-Culture).TwoLetterISOLanguageName) {
+    "de" { "deu+eng" } "fr" { "fra+eng" } "it" { "ita+eng" } "es" { "spa+eng" } default { "eng" }
+  }
+}
+
 function Get-IanaZone {
   $z = try { Get-TimeZone } catch { $null }
   if (-not $z) { return "Europe/Berlin" }
@@ -185,7 +193,7 @@ if (-not (Test-Path $envFile)) {
   $iana = Get-IanaZone
   $t = Get-Content (Join-Path $Home_ "env.template") -Raw
   $vals = @{
-    "YORIK_VERSION" = $Version; "TZ" = $iana
+    "YORIK_VERSION" = $Version; "TZ" = $iana; "PAPERLESS_OCR_LANGUAGE" = (Get-OcrLanguage)
     "YORIK_DB_PASSWORD" = (Hex 24); "YORIK_JWT_SECRET" = (Hex 32); "IMMICH_DB_PASSWORD" = (Hex 24)
     "PAPERLESS_DB_PASSWORD" = (Hex 24); "PAPERLESS_SECRET_KEY" = (Hex 32); "PAPERLESS_ADMIN_PASSWORD" = (Hex 12)
     "PAPERLESS_YORIK_TOKEN" = (Hex 24); "YORIK_WA_BRIDGE_TOKEN" = (Hex 24)

@@ -187,6 +187,14 @@ async def _suggestions_capture_main_loop() -> None:
     import asyncio as _asyncio
     _suggestions_pkg.set_main_loop(_asyncio.get_running_loop())
 
+
+@app.on_event("startup")
+async def _apply_household_locale() -> None:
+    """The timezone the household chose in onboarding beats the
+    installer's guess (Docker: TZ from the host's clock)."""
+    from . import locale as _locale
+    _locale.apply_saved()
+
 # Backup — age-encrypted snapshots, configurable target, daily schedule.
 from . import backup_routes as _backup_routes
 app.include_router(_backup_routes.router)
@@ -498,9 +506,13 @@ def auth_me(request: Request,
         # the background polling must not be what keeps a person signed
         # in in the hallway.
         sid = request.cookies.get(_auth.COOKIE_NAME) or ""
+        from .household_settings import currency as _currency
         return {"logged_in": True, "user": user, "is_tenant": is_tenant,
                 "wall_unlock": _auth.session_is_wall_unlock(sid),
-                "wall_unlock_seconds": _auth.WALL_UNLOCK_SECONDS}
+                "wall_unlock_seconds": _auth.WALL_UNLOCK_SECONDS,
+                # The money this household counts in — the UI's default
+                # for amounts that come without a currency.
+                "currency": _currency()}
     return {
         "logged_in": False,
         "setup_required": not _auth.has_any_password(),

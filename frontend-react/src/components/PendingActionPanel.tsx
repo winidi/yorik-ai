@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { emitUiAction } from "@/lib/uiActions";
 import { useAuth } from "@/components/AuthGate";
+import { currency as householdCurrency } from "@/i18n/format";
 
 interface PendingAction {
   pending_id: string;
@@ -336,7 +337,7 @@ function TaskDeletePreview({ p }: { p: any }) {
 
 function fmtMoney(amount?: number, currency?: string): string {
   if (amount == null) return "—";
-  const c = currency || "EUR";
+  const c = currency || householdCurrency();
   try {
     return new Intl.NumberFormat([], { style: "currency", currency: c }).format(amount);
   } catch {

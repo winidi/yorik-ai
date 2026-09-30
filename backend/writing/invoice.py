@@ -8,6 +8,8 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Dict, List
 
+from ..household_settings import currency as _household_currency
+
 CENT = Decimal("0.01")
 MAX_LINES = 200
 
@@ -134,7 +136,7 @@ def einvoice_payload(letterhead: Dict[str, Any], recipient: Dict[str, Any], cont
     if zero_net or not rows:
         rows.append({"vat_percent": "0", "category": "E", "net": str(zero_net), "vat": "0.00", "exemption_reason": reason})
     return {
-        "number": number, "issue_date": issue_date, "currency": "EUR",
+        "number": number, "issue_date": issue_date, "currency": _household_currency(),
         "seller": {"name": letterhead.get("business_name") or letterhead.get("sender_name"), "street": letterhead.get("street"),
                    "postcode": letterhead.get("postcode"), "city": letterhead.get("city"), "country": letterhead.get("country") or "DE",
                    "vat_id": letterhead.get("vat_id") or None, "tax_id": None if letterhead.get("vat_id") else (letterhead.get("tax_id") or None)},

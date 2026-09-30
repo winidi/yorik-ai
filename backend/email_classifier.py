@@ -21,6 +21,8 @@ import logging
 import re
 from typing import Any, Optional
 
+from .household_settings import currency as _household_currency
+
 log = logging.getLogger("homeos.email_classifier")
 
 
@@ -277,7 +279,7 @@ def _extract_bill(text: str) -> dict:
     out: dict = {}
     m = _pick_amount(text)
     if m:
-        cur = m.group(1) or m.group(4) or "EUR"
+        cur = m.group(1) or m.group(4) or _household_currency()
         try:
             out["amount"] = _parse_amount(m.group(2) or m.group(3) or "")
             out["currency"] = {"€": "EUR", "$": "USD", "£": "GBP"}.get(cur, cur).upper()
@@ -414,8 +416,8 @@ def _propose_action(message_id: int, category: str, row: dict) -> None:
         if _bill_llm_enabled(owner_id) and (llm := _extract_bill_llm(text, row)):
             # The model's answer as a whole — its "no due date" on a
             # receipt included; the rules fill only a missing currency.
-            extracted = {**llm, "currency": llm.get("currency") or extracted.get("currency") or "EUR"}
-        amount_s = (f"{extracted['amount']:.2f} {extracted.get('currency', 'EUR')}"
+            extracted = {**llm, "currency": llm.get("currency") or extracted.get("currency") or _household_currency()}
+        amount_s = (f"{extracted['amount']:.2f} {extracted.get('currency') or _household_currency()}"
                     if "amount" in extracted else "amount unknown")
         due_s = f", due {extracted['due_date']}" if "due_date" in extracted else ""
         title = f"New bill from {sender}?"

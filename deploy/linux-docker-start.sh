@@ -7,6 +7,16 @@
 phase "Start Yorik (Docker)"
 cd "$INSTALL_DIR/deploy"
 
+# The document reader's language from the computer's language ("de_DE",
+# "fr", "en_US"). The bundled reader (Paperless) ships English, German,
+# French, Italian and Spanish; anything else reads English.
+ocr_for() {
+  case "$(printf '%s' "$1" | cut -c1-2 | tr 'A-Z' 'a-z')" in
+    de) echo "deu+eng" ;; fr) echo "fra+eng" ;; it) echo "ita+eng" ;; es) echo "spa+eng" ;;
+    *)  echo "eng" ;;
+  esac
+}
+
 # .env: generated once, never overwritten (it holds the passwords).
 if [[ ! -f .env ]]; then
   r() { openssl rand -hex "${1:-24}"; }
@@ -19,6 +29,7 @@ if [[ ! -f .env ]]; then
       -e "s|^PAPERLESS_YORIK_TOKEN=.*|PAPERLESS_YORIK_TOKEN=$(r)|" \
       -e "s|^YORIK_WA_BRIDGE_TOKEN=.*|YORIK_WA_BRIDGE_TOKEN=$(r)|" \
       -e "s|^TZ=.*|TZ=$(timedatectl show -p Timezone --value 2>/dev/null || echo Europe/Berlin)|" \
+      -e "s|^PAPERLESS_OCR_LANGUAGE=.*|PAPERLESS_OCR_LANGUAGE=$(ocr_for "${LANG:-en}")|" \
       env.template > .env
   chmod 600 .env
   ok "settings created with fresh passwords (deploy/.env)"

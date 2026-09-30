@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { Landmark, Plus, RefreshCw, Trash2, X, Loader2, Search, Check, Pencil } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
-import { formatDate, formatDateTime, formatMoney } from "@/i18n/format";
+import { formatDate, formatDateTime, formatMoney, currency as householdCurrency } from "@/i18n/format";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -78,7 +78,7 @@ function catLabel(cat: string): string {
 
 type Tab = "uebersicht" | "konten" | "umsaetze" | "vertraege";
 
-function money(n: number, currency = "EUR"): string {
+function money(n: number, currency?: string | null): string {
   return formatMoney(n, currency);
 }
 
@@ -188,7 +188,7 @@ export function FinanceApp() {
   }
 
   // Totals are shown in the account currency (EUR when nothing is known).
-  const currency = transactions[0]?.currency || "EUR";
+  const currency = transactions[0]?.currency || householdCurrency();
   const hasAccounts = accounts.length > 0;
   const showSidebar = hasAccounts && (tab === "uebersicht" || tab === "umsaetze");
 

@@ -19,21 +19,49 @@ from typing import Dict, Optional
 
 log = logging.getLogger("homeos.locale")
 
-# country code → (timezone, OCR language pack(s), per-user reply language)
+# country code → (timezone, OCR language pack(s), per-user reply language,
+# the money people there count in)
 # OCR packs are Tesseract language codes; always include "eng" as a fallback
 # so foreign-language documents in the same library still OCR.
 # US has many timezones — default to America/New_York; user can override.
 COUNTRY_LOCALE: Dict[str, Dict[str, str]] = {
-    "DE": {"tz": "Europe/Berlin", "ocr": "deu+eng", "language": "de"},
-    "AT": {"tz": "Europe/Vienna", "ocr": "deu+eng", "language": "de"},
-    "CH": {"tz": "Europe/Zurich", "ocr": "deu+fra+ita+eng", "language": "de"},
-    "US": {"tz": "America/New_York", "ocr": "eng", "language": "en"},
-    "GB": {"tz": "Europe/London", "ocr": "eng", "language": "en"},
-    "PL": {"tz": "Europe/Warsaw", "ocr": "pol+eng", "language": "pl"},
-    "FR": {"tz": "Europe/Paris", "ocr": "fra+eng", "language": "fr"},
-    "ES": {"tz": "Europe/Madrid", "ocr": "spa+eng", "language": "es"},
-    "IT": {"tz": "Europe/Rome", "ocr": "ita+eng", "language": "it"},
+    "DE": {"tz": "Europe/Berlin", "ocr": "deu+eng", "language": "de", "currency": "EUR"},
+    "AT": {"tz": "Europe/Vienna", "ocr": "deu+eng", "language": "de", "currency": "EUR"},
+    "CH": {"tz": "Europe/Zurich", "ocr": "deu+fra+ita+eng", "language": "de", "currency": "CHF"},
+    "US": {"tz": "America/New_York", "ocr": "eng", "language": "en", "currency": "USD"},
+    "GB": {"tz": "Europe/London", "ocr": "eng", "language": "en", "currency": "GBP"},
+    "PL": {"tz": "Europe/Warsaw", "ocr": "pol+eng", "language": "pl", "currency": "PLN"},
+    "FR": {"tz": "Europe/Paris", "ocr": "fra+eng", "language": "fr", "currency": "EUR"},
+    "ES": {"tz": "Europe/Madrid", "ocr": "spa+eng", "language": "es", "currency": "EUR"},
+    "IT": {"tz": "Europe/Rome", "ocr": "ita+eng", "language": "it", "currency": "EUR"},
 }
+
+
+def _in_docker() -> bool:
+    return os.getenv("YORIK_RUNTIME") == "docker"
+
+
+def remember(locale: Dict[str, str], country: str) -> None:
+    """Keep the chosen locale in the database, so it survives a rebuilt
+    container (config.env inside the Docker image does not) and the
+    household's currency has a source."""
+    from .household_settings import set_setting
+    set_setting("locale.country", country)
+    set_setting("locale.tz", locale["tz"])
+    set_setting("locale.ocr", locale["ocr"])
+    set_setting("locale.currency", locale["currency"])
+
+
+def apply_saved() -> None:
+    """At start-up: the timezone the household chose wins over the
+    installer's guess. Called from main's startup."""
+    try:
+        from .household_settings import get_setting
+        tz = get_setting("locale.tz")
+    except Exception:  # noqa: BLE001
+        return
+    if tz:
+        os.environ["YORIK_TZ"] = tz
 
 
 def _config_path() -> Path:
@@ -99,16 +127,28 @@ def apply_country(country_code: str) -> Dict[str, str]:
     if not locale:
         return {"applied": False, "note": f"no locale mapping for country '{cc}' — keeping current values"}
 
-    _write_env_vars({
-        "YORIK_TZ": locale["tz"],
-        "PAPERLESS_OCR_LANGUAGE": locale["ocr"],
-    })
+    try:
+        remember(locale, cc)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("locale: could not store the choice: %s", exc)
     # Update the running process's view of TZ too so any code reading
     # os.environ inside the same boot sees the new value.
     os.environ["YORIK_TZ"] = locale["tz"]
     os.environ["PAPERLESS_OCR_LANGUAGE"] = locale["ocr"]
 
-    restart_note = _paperless_restart_if_bundled()
+    if _in_docker():
+        # The stack's .env (TZ, PAPERLESS_OCR_LANGUAGE) lives on the host;
+        # the installer filled it from the computer's own settings. The
+        # container cannot edit it or restart Paperless, so only Yorik's
+        # own timezone and the currency change here.
+        note = ("timezone and currency saved — the document reader's language comes from the "
+                "installer (PAPERLESS_OCR_LANGUAGE in deploy/.env)")
+    else:
+        _write_env_vars({
+            "YORIK_TZ": locale["tz"],
+            "PAPERLESS_OCR_LANGUAGE": locale["ocr"],
+        })
+        note = _paperless_restart_if_bundled() or "config.env updated — Paperless not running, no restart needed"
 
     return {
         "applied":      True,
@@ -116,5 +156,6 @@ def apply_country(country_code: str) -> Dict[str, str]:
         "tz":           locale["tz"],
         "ocr_language": locale["ocr"],
         "language":     locale["language"],
-        "note":         restart_note or "config.env updated — Paperless not running, no restart needed",
+        "currency":     locale["currency"],
+        "note":         note,
     }

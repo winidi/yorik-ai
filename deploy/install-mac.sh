@@ -76,10 +76,20 @@ else
   unzip -oq /tmp/yorik-deploy.zip -d "$HOME_"; rm -f /tmp/yorik-deploy.zip
 fi
 cd "$HOME_"
+# The document reader's language from the computer's language ("de_DE",
+# "fr", "en_US"). The bundled reader (Paperless) ships English, German,
+# French, Italian and Spanish; anything else reads English.
+ocr_for() {
+  case "$(printf '%s' "$1" | cut -c1-2 | tr 'A-Z' 'a-z')" in
+    de) echo "deu+eng" ;; fr) echo "fra+eng" ;; it) echo "ita+eng" ;; es) echo "spa+eng" ;;
+    *)  echo "eng" ;;
+  esac
+}
 if [[ ! -f .env ]]; then
   r() { openssl rand -hex "${1:-24}"; }
   tz=$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')
   sed -e "s|^YORIK_VERSION=.*|YORIK_VERSION=$VERSION|" -e "s|^TZ=.*|TZ=${tz:-Europe/Berlin}|" \
+      -e "s|^PAPERLESS_OCR_LANGUAGE=.*|PAPERLESS_OCR_LANGUAGE=$(ocr_for "$(defaults read -g AppleLocale 2>/dev/null || echo "${LANG:-en}")")|" \
       -e "s|^YORIK_DB_PASSWORD=.*|YORIK_DB_PASSWORD=$(r)|" -e "s|^YORIK_JWT_SECRET=.*|YORIK_JWT_SECRET=$(r 32)|" \
       -e "s|^IMMICH_DB_PASSWORD=.*|IMMICH_DB_PASSWORD=$(r)|" -e "s|^PAPERLESS_DB_PASSWORD=.*|PAPERLESS_DB_PASSWORD=$(r)|" \
       -e "s|^PAPERLESS_SECRET_KEY=.*|PAPERLESS_SECRET_KEY=$(r 32)|" -e "s|^PAPERLESS_ADMIN_PASSWORD=.*|PAPERLESS_ADMIN_PASSWORD=$(r 12)|" \

@@ -166,4 +166,7 @@ export interface AuthMe {
   wall_unlock?: boolean;
   /** How long the unlock holds without a touch, in seconds. */
   wall_unlock_seconds?: number;
+  /** ISO code of the household's money ("EUR", "USD"), from the country
+   *  chosen in onboarding. Default for amounts without a currency. */
+  currency?: string;
 }

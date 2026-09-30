@@ -64,10 +64,21 @@ def _in_text(amount_cents: int, text: str) -> bool:
     return any(re.search(rf"(?<![\d.,]){re.escape(f)}(?![\d])", flat) for f in forms)
 
 
-def money(amount_cents: int, currency: str = "EUR") -> str:
-    s = f"{abs(amount_cents) / 100:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+_SYMBOL = {"EUR": "€", "USD": "$", "GBP": "£"}
+
+
+def money(amount_cents: int, currency: Optional[str] = None) -> str:
+    """"1.234,56 €" / "$1,234.56" / "1.234,56 CHF" — the household's
+    currency when the amount has none."""
+    cur = (currency or "").strip().upper()
+    if not cur:
+        from .household_settings import currency as _household_currency
+        cur = _household_currency()
     sign = "-" if amount_cents < 0 else ""
-    return f"{sign}{s} €" if (currency or "EUR").upper() == "EUR" else f"{sign}{s} {currency.upper()}"
+    if cur in ("USD", "GBP"):
+        return f"{sign}{_SYMBOL[cur]}{abs(amount_cents) / 100:,.2f}"
+    s = f"{abs(amount_cents) / 100:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{sign}{s} {_SYMBOL.get(cur, cur)}"
 
 
 # ─── reading a receipt ───────────────────────────────────────────────

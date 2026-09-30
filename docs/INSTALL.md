@@ -116,6 +116,7 @@ stays. Installs follow `stable` (released versions); `YORIK_VERSION` in
 | | |
 |---|---|
 | `.env` next to `compose.yaml` | settings and generated passwords (keep private) |
+| `TZ` and `PAPERLESS_OCR_LANGUAGE` in `.env` | time zone and the document reader's languages; the installer fills them from the computer. Change them there and run `docker compose up -d`. Country, language and currency you pick in Yorik itself (Settings → Profile). |
 | Docker volumes `yorik_*` | database, photos, documents, WhatsApp session, model, Yorik's files |
 | Backups folder (`YORIK_BACKUP_DIR`) | encrypted snapshots; Home → "Set up Yorik" → Turn on backups |
 
