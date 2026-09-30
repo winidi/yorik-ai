@@ -145,6 +145,19 @@
     "cancelled": "Abgebrochen — rückgängig gemacht",
     "tested": "Getestet — rückgängig gemacht",
     "gone": "Schon erledigt",
-    "failed": "Das ging nicht. Bitte nochmal versuchen."
+    "failed": "Das ging nicht. Bitte nochmal versuchen.",
+    "shareThis": "Diesen Kontakt teilen?",
+    "changeVisibility": "Ändern, wer dieses Dokument sieht?",
+    "share": "Teilen",
+    "change": "Ändern",
+    "shared": "Geteilt",
+    "changed": "Geändert",
+    "leftAsIs": "Bleibt wie es war",
+    "shareWithEdit": "{{name}} sieht und bearbeitet diesen Kontakt",
+    "shareWithRead": "{{name}} sieht diesen Kontakt",
+    "visOnlyMe": "Nur du siehst es",
+    "visParents": "Die Erwachsenen im Haushalt sehen es",
+    "visBusiness": "Alle in der Firmengruppe sehen es",
+    "visHousehold": "Der ganze Haushalt sieht es"
   }
 }

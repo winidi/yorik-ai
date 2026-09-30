@@ -283,3 +283,51 @@ def test_a_bill_without_currency_takes_the_households(fresh_app, monkeypatch, tm
     with get_conn() as conn:
         row = conn.execute("SELECT currency FROM bills WHERE name = 'Water'").fetchone()
     assert row["currency"] == "GBP" and money(1250) == "£12.50"
+
+
+def test_niche_skills_are_off_until_the_admin_says_otherwise(fresh_app):
+    """s19 (Dirk 2026-09-30): the outside agent, the day planner, venue
+    prices and PDF forms are not offered on a fresh install; Settings →
+    Skills can turn each on, and that choice is what counts afterwards."""
+    from tests.conftest import login_client
+    from backend.skills import get_registry
+    from backend.skills.registry import NICHE_OFF_BY_DEFAULT, get_admin_disabled_skills
+    client, _ = login_client(fresh_app, role="admin", name="Dirk", email="dd@example.com")
+    offered = {r["name"] for r in get_registry().index(role="admin")}
+    assert not (NICHE_OFF_BY_DEFAULT & offered) and "check_calendar" in offered
+    assert get_admin_disabled_skills() == set(NICHE_OFF_BY_DEFAULT)
+    assert client.patch("/api/skills/plan_my_day", json={"enabled": True}).status_code == 200
+    assert "plan_my_day" in {r["name"] for r in get_registry().index(role="admin")}
+    assert get_admin_disabled_skills() == set(NICHE_OFF_BY_DEFAULT) - {"plan_my_day"}
+
+
+def test_sharing_a_contact_waits_for_the_card(fresh_app):
+    """s18 (Dirk 2026-09-30): sharing a contact and changing a document's
+    visibility go through a confirmation card like a delete."""
+    import asyncio
+    from tests.conftest import login_client, seed_user
+    from backend import contacts as C
+    from backend.database import get_conn
+    from backend.skills.share_contact.skill import execute
+    from backend.skills.registry import Registry, SkillContext
+    from backend.ui_tools import get_ui_actions, reset_ui_actions
+    client, dirk = login_client(fresh_app, role="admin", name="Dirk", email="dk@example.com")
+    beate = seed_user(name="Beate", role="member", email="be@example.com")
+    cid = C.create(display_name="Zahnarzt Dr. Weber", kind="business", created_by_user_id=dirk)
+    async def run():
+        reset_ui_actions()
+        out = await execute(ctx=SkillContext(Registry(), role="admin", user_id=dirk),
+                            contact_id=cid, with_user_id=beate, can_edit=False)
+        return out, get_ui_actions()
+    out, actions = asyncio.run(run())
+    assert out["pending"] and "NOTHING is shared yet" in out["_llm_hint"]
+    card = [a for a in actions if a["type"] == "pending_confirmation"][0]
+    assert card["preview"]["mode"] == "confirm_before" and card["preview"]["action"] == "share"
+    assert card["preview"]["with_name"] == "Beate"
+    with get_conn() as conn:
+        assert conn.execute("SELECT COUNT(*) AS n FROM row_shares WHERE row_id = ?", (cid,)).fetchone()["n"] == 0
+    r = client.post(f"/api/pending/{out['pending_id']}/confirm", json={})
+    assert r.status_code == 200 and r.json()["applied"]["applied"] == "share_contact", r.text
+    with get_conn() as conn:
+        row = conn.execute("SELECT level FROM row_shares WHERE row_id = ? AND user_id = ?", (cid, beate)).fetchone()
+    assert row and row["level"] == "read"

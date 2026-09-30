@@ -768,4 +768,12 @@ def apply(pending_id: str) -> Dict[str, Any]:
                  "reason": f"deleted draft: {args.get('subject') or draft_id}"})
         return {"applied": kind, "draft_id": draft_id, "deleted": deleted}
 
+    if kind == "share_contact":
+        from .skills.share_contact.skill import apply_share
+        return {"applied": kind, **apply_share(args)}
+
+    if kind == "set_document_visibility":
+        from .skills.set_document_visibility.skill import apply_visibility
+        return {"applied": kind, **apply_visibility(args)}
+
     raise ValueError(f"unknown deferred action kind: {kind!r}")

@@ -75,7 +75,10 @@ def test_compose_is_retired_and_a_skill_toggle_keeps_app_skills_out_of_the_saved
 
     A.set_opt_in_enabled("recordings", False)
     assert client.patch("/api/skills/check_tasks", json={"enabled": False}).status_code == 200
-    assert get_admin_disabled_skills() == {"check_tasks"}           # not the recording skills, not Compose
+    from backend.skills.registry import NICHE_OFF_BY_DEFAULT
+    # the niche skills that are off by default stay off; not the
+    # recording skills, not Compose
+    assert get_admin_disabled_skills() == NICHE_OFF_BY_DEFAULT | {"check_tasks"}
     A.set_opt_in_enabled("recordings", True)
     assert "start_recording" in {r["name"] for r in get_registry().index(role="admin")}
     client.patch("/api/skills/check_tasks", json={"enabled": True})

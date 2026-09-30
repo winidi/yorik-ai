@@ -64,8 +64,12 @@ class TestSetDocumentVisibility:
              patch("backend.skills.set_document_visibility.skill.requests.get",
                    side_effect=_fake_paperless_get(owner_paperless_uid=7)), \
              patch("backend.paperless_visibility.change_document_visibility", side_effect=_change_ok):
-            result = asyncio.run(execute(ctx=_mk_ctx(role="member", user_id=beate), document_id=42, visibility="business"))
-            assert result["visibility"] == "business" and result["document_id"] == 42
+            staged = asyncio.run(execute(ctx=_mk_ctx(role="member", user_id=beate), document_id=42, visibility="business"))
+            # s18: a confirmation card first; the change happens when it is confirmed
+            assert staged["pending"] and staged["visibility"] == "business" and staged["document_id"] == 42
+            from backend import pending_actions as pa
+            result = pa.apply(staged["pending_id"])
+            assert result["applied"] == "set_document_visibility" and result["visibility"] == "business"
 
     def test_non_owner_member_blocked(self, fresh_app):
         """Caller is paperless_uid=5; doc is owned by paperless_uid=7."""

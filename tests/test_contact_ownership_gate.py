@@ -55,6 +55,16 @@ def _mk_ctx(*, role: str, user_id: str):
     return SkillContext(Registry(), role=role, user_id=user_id)
 
 
+
+async def _confirmed_share(**kw):
+    """share_contact stages a confirmation card (s18); the tests confirm it
+    the way the card does."""
+    from backend import pending_actions as pa
+    from backend.skills.share_contact.skill import execute
+    staged = await execute(**kw)
+    assert staged["pending"] and staged["pending_id"]
+    return pa.apply(staged["pending_id"])
+
 class TestUpdateContact:
     def test_member_can_update_own_contact(self, two_user_db):
         """Member updating a contact THEY created is allowed."""
@@ -160,7 +170,7 @@ class TestPerUserSharing:
 
     def test_share_grants_edit_access(self, two_user_db):
         admin_contact_id, _ = two_user_db
-        from backend.skills.share_contact.skill import execute as share
+        share = _confirmed_share
         from backend.skills.update_contact.skill import execute as upd
         asyncio.run(share(
             ctx=_mk_ctx(role="admin", user_id=IDS["admin"]),
@@ -177,7 +187,7 @@ class TestPerUserSharing:
 
     def test_share_view_only_blocks_edit(self, two_user_db):
         admin_contact_id, _ = two_user_db
-        from backend.skills.share_contact.skill import execute as share
+        share = _confirmed_share
         from backend.skills.update_contact.skill import execute as upd
         from backend.calendars import RowOwnerPermissionError
         asyncio.run(share(
@@ -195,7 +205,7 @@ class TestPerUserSharing:
 
     def test_unshare_revokes_access(self, two_user_db):
         admin_contact_id, _ = two_user_db
-        from backend.skills.share_contact.skill import execute as share
+        share = _confirmed_share
         from backend.skills.unshare_contact.skill import execute as unshare
         from backend.skills.update_contact.skill import execute as upd
         from backend.calendars import RowOwnerPermissionError

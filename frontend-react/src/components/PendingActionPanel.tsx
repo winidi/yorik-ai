@@ -91,10 +91,23 @@ export function PendingActionPanel({ action, onResolved, compact, done }: Props)
   // "Delete" runs it, "Keep" discards it, and there is no "Just
   // testing" because nothing has happened yet.
   const deferred = action.preview?.mode === "confirm_before";
+  // What a confirm-before card is about: a delete, or sharing a
+  // contact / changing who sees a document (s18). Each gets its own
+  // question and verb; the layout is the same.
+  const kind: "delete" | "share" | "visibility" =
+    action.preview?.action === "share" ? "share"
+    : action.preview?.action === "visibility" ? "visibility"
+    : "delete";
+  const ask = kind === "share" ? t("chat.pending.shareThis")
+            : kind === "visibility" ? t("chat.pending.changeVisibility")
+            : t("chat.pending.deleteThis");
+  const verb = kind === "share" ? t("chat.pending.share")
+             : kind === "visibility" ? t("chat.pending.change")
+             : t("chat.pending.delete");
 
   // Resolution stamp (collapsed state after a click).
   if (resolved) {
-    return <ResolvedStamp kind={resolved} compact={compact} deferred={deferred} />;
+    return <ResolvedStamp kind={resolved} compact={compact} deferred={deferred} what={kind} />;
   }
 
   return (
@@ -105,7 +118,7 @@ export function PendingActionPanel({ action, onResolved, compact, done }: Props)
       <div className={cn("px-3 pt-2.5 pb-2", compact ? "pb-1.5" : "")}>
         <div className="flex items-center gap-1.5 mb-1.5">
           <AlertCircle className="w-3.5 h-3.5 text-violet-500" />
-          <span className="text-xs font-semibold">{deferred ? t("chat.pending.deleteThis") : t("chat.pending.looksRight")}</span>
+          <span className="text-xs font-semibold">{deferred ? ask : t("chat.pending.looksRight")}</span>
           {devMode && (
             <span className="text-2xs text-muted-foreground font-mono ml-auto">
               {action.skill}{action.llm_model && ` · ${action.llm_model}`}
@@ -155,7 +168,7 @@ export function PendingActionPanel({ action, onResolved, compact, done }: Props)
           disabled={busy !== null}
           className={cn(
             "text-xs px-2 py-1.5 rounded-md text-white font-medium",
-            deferred ? "bg-rose-600 hover:bg-rose-700" : "bg-violet-500 hover:bg-violet-600",
+            deferred && kind === "delete" ? "bg-rose-600 hover:bg-rose-700" : "bg-violet-500 hover:bg-violet-600",
             "transition inline-flex items-center justify-center gap-1 shadow-sm",
             busy === "confirmed" && "opacity-80 cursor-wait",
           )}
@@ -163,18 +176,21 @@ export function PendingActionPanel({ action, onResolved, compact, done }: Props)
           {busy === "confirmed"
             ? <Loader2 className="w-3 h-3 animate-spin" />
             : <CheckCircle2 className="w-3 h-3" />}
-          {deferred ? t("chat.pending.delete") : t("chat.pending.looksGood")}
+          {deferred ? verb : t("chat.pending.looksGood")}
         </button>
       </div>
     </div>
   );
 }
 
-function ResolvedStamp({ kind, compact, deferred }: { kind: Resolution; compact?: boolean; deferred?: boolean }) {
+function ResolvedStamp({ kind, compact, deferred, what = "delete" }:
+  { kind: Resolution; compact?: boolean; deferred?: boolean; what?: "delete" | "share" | "visibility" }) {
   const { t } = useTranslation();
+  const done = what === "share" ? t("chat.pending.shared") : what === "visibility" ? t("chat.pending.changed") : t("chat.pending.deleted");
+  const notDone = what === "delete" ? t("chat.pending.kept") : t("chat.pending.leftAsIs");
   const data = {
-    confirmed: { icon: CheckCircle2, color: "text-emerald-600", label: deferred ? t("chat.pending.deleted") : t("chat.pending.confirmed") },
-    cancelled: { icon: X,            color: "text-muted-foreground", label: deferred ? t("chat.pending.kept") : t("chat.pending.cancelled") },
+    confirmed: { icon: CheckCircle2, color: "text-emerald-600", label: deferred ? done : t("chat.pending.confirmed") },
+    cancelled: { icon: X,            color: "text-muted-foreground", label: deferred ? notDone : t("chat.pending.cancelled") },
     test:      { icon: FlaskConical, color: "text-amber-600", label: t("chat.pending.tested") },
     gone:      { icon: CheckCircle2, color: "text-muted-foreground", label: t("chat.pending.gone") },
   }[kind];
@@ -203,6 +219,8 @@ function PendingPreview({ skill, preview }: { skill: string; preview: any }) {
   if (skill === "add_bill")              return <BillCreatePreview p={preview} />;
   if (skill === "update_bill")           return <BillUpdatePreview p={preview} />;
   if (skill === "delete_bill")           return <BillDeletePreview p={preview} />;
+  if (skill === "share_contact")         return <SharePreview p={preview} />;
+  if (skill === "set_document_visibility") return <VisibilityPreview p={preview} />;
   // Any other action: its fields as plain label/value lines instead of
   // raw JSON. Nested values fall back to a short JSON string.
   const rows = Object.entries(preview || {}).filter(([, v]) => v !== null && v !== undefined && v !== "");
@@ -214,6 +232,32 @@ function PendingPreview({ skill, preview }: { skill: string; preview: any }) {
           {typeof v === "object" ? JSON.stringify(v) : String(v)}
         </div>
       ))}
+    </div>
+  );
+}
+
+function SharePreview({ p }: { p: any }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-0.5 text-xs">
+      <div><span className="font-semibold">{p.contact?.display_name}</span></div>
+      <div className="text-muted-foreground">
+        {t(p.can_edit ? "chat.pending.shareWithEdit" : "chat.pending.shareWithRead", { name: p.with_name })}
+      </div>
+    </div>
+  );
+}
+
+function VisibilityPreview({ p }: { p: any }) {
+  const { t } = useTranslation();
+  const who: Record<string, string> = {
+    private: t("chat.pending.visOnlyMe"), parents: t("chat.pending.visParents"),
+    business: t("chat.pending.visBusiness"), shared: t("chat.pending.visHousehold"),
+  };
+  return (
+    <div className="space-y-0.5 text-xs">
+      <div><span className="font-semibold">{p.document?.title}</span></div>
+      <div className="text-muted-foreground">{who[p.visibility] || p.visibility}</div>
     </div>
   );
 }

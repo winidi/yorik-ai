@@ -183,13 +183,24 @@ class SkillContext:
 
 _DISABLED_SKILLS_KEY = "disabled_skills"
 
+# Off until an admin turns them on (Settings → Skills; Dirk 2026-09-30):
+# niche tools that cost every model attention on every turn — an outside
+# agent, the day planner, venue prices, PDF forms. The first save of the
+# toggles replaces this default with whatever the admin chose.
+NICHE_OFF_BY_DEFAULT = frozenset({
+    "ask_agent",
+    "plan_my_day", "plan_day", "remember_planning_rule",
+    "extract_price_table", "compute_group_price", "save_venue",
+    "fill_pdf_form",
+})
+
 
 def get_admin_disabled_skills() -> set[str]:
     """Only the skills an admin switched off in Settings → Skills. This is
     what the toggles read and write back; the skills of apps that are off
     and retired ones are added on top by _get_disabled_skills (writing
-    those back too kept an app's skills off after the app came back on)."""
-    out: set[str] = set()
+    those back too kept an app's skills off after the app came back on).
+    Before the admin ever saved the toggles, the niche skills are off."""
     try:
         from ..database import get_conn
         with get_conn() as conn:
@@ -197,11 +208,11 @@ def get_admin_disabled_skills() -> set[str]:
                 "SELECT value FROM app_settings WHERE key = ?",
                 (_DISABLED_SKILLS_KEY,),
             ).fetchone()
-        if row and row["value"]:
-            out |= {n.strip() for n in str(row["value"]).split(",") if n.strip()}
     except Exception:  # noqa: BLE001
-        pass
-    return out
+        return set()
+    if row is None:
+        return set(NICHE_OFF_BY_DEFAULT)
+    return {n.strip() for n in str(row["value"] or "").split(",") if n.strip()}
 
 
 def _get_disabled_skills() -> set[str]:

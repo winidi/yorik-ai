@@ -145,6 +145,19 @@
     "cancelled": "Cancelled — reverted",
     "tested": "Tested — reverted",
     "gone": "Already handled",
-    "failed": "Couldn't resolve. Try again."
+    "failed": "Couldn't resolve. Try again.",
+    "shareThis": "Share this contact?",
+    "changeVisibility": "Change who sees this document?",
+    "share": "Share",
+    "change": "Change",
+    "shared": "Shared",
+    "changed": "Changed",
+    "leftAsIs": "Left as it was",
+    "shareWithEdit": "{{name}} will see and edit this contact",
+    "shareWithRead": "{{name}} will see this contact",
+    "visOnlyMe": "Only you will see it",
+    "visParents": "The adults of the household will see it",
+    "visBusiness": "Everyone in the business group will see it",
+    "visHousehold": "The whole household will see it"
   }
 }
