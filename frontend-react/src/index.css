@@ -220,6 +220,9 @@ h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.005em; }
    one rule here instead of 280 class changes. */
 @media (max-width: 767px) {
   input, textarea, select { font-size: 16px; }
+  /* On phones the Dock is a tab bar flush with the bottom edge:
+     56px of tabs plus the home-indicator inset (Dock.tsx). */
+  :root { --dock-clearance: calc(3.5rem + env(safe-area-inset-bottom)); }
 }
 
 /* 100vh is taller than the visible screen in mobile browsers (the

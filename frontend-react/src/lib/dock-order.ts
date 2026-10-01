@@ -28,6 +28,17 @@ export function dockOrderFor(role?: string | null): string[] {
   return isKid(role) ? KID_ORDER : DOCK_ORDER;
 }
 
+// On a phone the Dock is a tab bar: four fixed tabs plus "More", which
+// opens a sheet with everything else. Dirk 2026-10-02: the daily four,
+// WhatsApp stays under More for now. A child's tabs start with the
+// family board, like their Dock.
+export const PHONE_TABS = ["home", "chat", "calendar", "tasks"];
+export const KID_PHONE_TABS = ["home", "board", "tasks", "calendar"];
+
+export function phoneTabsFor(role?: string | null): string[] {
+  return isKid(role) ? KID_PHONE_TABS : PHONE_TABS;
+}
+
 // app id → React route inside this SPA. Apps not in this map
 // either don't exist in the React shell (vanilla) or are
 // community apps mounted via /community-app/:appId.

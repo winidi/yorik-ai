@@ -1,3 +1,21 @@
 {
-  "write": "Write"
+  "home": "Home",
+  "chat": "Chat",
+  "calendar": "Calendar",
+  "tasks": "Tasks",
+  "docs": "Documents",
+  "write": "Write",
+  "photos": "Photos",
+  "whatsapp": "WhatsApp",
+  "email": "Email",
+  "contacts": "Contacts",
+  "briefing": "Briefing",
+  "board": "Family board",
+  "recordings": "Recordings",
+  "finance": "Finance",
+  "pipelines": "Pipelines",
+  "settings": "Settings",
+  "help": "Help",
+  "more": "More",
+  "all_apps": "All apps"
 }

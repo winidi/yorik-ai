@@ -13,19 +13,20 @@
  */
 
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   House, Calendar, ListTodo, MessageSquare, FolderOpen,
   FilePlus, Camera, MessageCircle, Inbox, Contact,
   Newspaper, Settings,
-  Mic, type LucideIcon, LayoutGrid, PenLine, Landmark, Workflow, CircleHelp } from "lucide-react";
+  Mic, type LucideIcon, LayoutGrid, PenLine, Landmark, Workflow, CircleHelp, Grip } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import i18n from "@/i18n";
 import { api } from "@/lib/api";
-import { dockOrderFor, isKid, REACT_ROUTES } from "@/lib/dock-order";
+import { dockOrderFor, isKid, phoneTabsFor, REACT_ROUTES } from "@/lib/dock-order";
 import { useAuth } from "@/components/AuthGate";
 import { openHelp } from "@/components/HelpPanel";
+import { useIsPhone } from "@/lib/use-is-phone";
 
 interface AppInfo {
   id: string;
@@ -74,9 +75,16 @@ interface Props {
   activeAppId: string;
 }
 
+function appName(a: AppInfo): string {
+  return i18n.t(`apps.${a.id}`, { defaultValue: a.name });
+}
+
 export function Dock({ activeAppId }: Props) {
   const [apps, setApps] = useState<AppInfo[]>([]);
+  const [moreOpen, setMoreOpen] = useState(false);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const phone = useIsPhone();
   const role = useAuth().user?.role;
   const kid = isKid(role);
   const DOCK_ORDER = dockOrderFor(role);
@@ -86,6 +94,15 @@ export function Dock({ activeAppId }: Props) {
       .then(setApps)
       .catch(() => setApps([]));
   }, []);
+
+  // The "More" sheet closes when you leave the page or press Escape.
+  useEffect(() => { setMoreOpen(false); }, [pathname]);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMoreOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [moreOpen]);
 
   if (apps.length === 0) return null;
 
@@ -97,6 +114,7 @@ export function Dock({ activeAppId }: Props) {
   const builtins = [...ordered, ...extras];
 
   function handleClick(appId: string) {
+    setMoreOpen(false);
     if (REACT_ROUTES[appId]) {
       navigate(REACT_ROUTES[appId]);
       return;
@@ -151,6 +169,136 @@ export function Dock({ activeAppId }: Props) {
       </button>
     );
   };
+
+  if (phone) {
+    // Phone: a tab bar flush with the bottom edge — four fixed tabs plus
+    // "More", which lifts a sheet with every other app. Labels under the
+    // glyphs, the active tab tinted; the bar pads itself for the home
+    // indicator (safe-area-inset-bottom) so nothing sits under the gesture
+    // zone. `--dock-clearance` in index.css matches this height on phones.
+    const tabIds = phoneTabsFor(role);
+    const tabs = tabIds.map(id => byId[id]).filter(Boolean) as AppInfo[];
+    const rest = [...builtins, ...community].filter(a => !tabIds.includes(a.id));
+    // Settings is not an "app" in /api/apps; Home shows it to grown-ups,
+    // so the sheet does too.
+    if (!kid && !byId.settings) rest.push({ id: "settings", name: "Settings", icon: "⚙️", bundled: true });
+    const activeInMore = !tabIds.includes(activeAppId);
+    const label = (a: AppInfo) => appName(a);
+
+    const tabButton = (a: AppInfo) => {
+      const v = APP_VISUAL[a.id];
+      const Icon = v?.Icon;
+      const isActive = activeAppId === a.id && !moreOpen;
+      return (
+        <button
+          key={a.id}
+          onClick={() => handleClick(a.id)}
+          aria-label={label(a)}
+          aria-current={isActive ? "page" : undefined}
+          className={cn(
+            "flex flex-col items-center justify-center gap-0.5 min-w-0",
+            isActive ? "text-primary" : "text-muted-foreground",
+          )}
+        >
+          <span className={cn("grid place-items-center w-11 h-7 rounded-xl transition-colors", isActive && "bg-primary/15")}>
+            {Icon
+              ? <Icon className="w-6 h-6" strokeWidth={isActive ? 2.25 : 1.8} aria-hidden />
+              : <span className="text-xl leading-none">{a.icon || "▣"}</span>}
+          </span>
+          <span className="text-[10.5px] leading-none font-medium truncate max-w-full px-0.5">{label(a)}</span>
+        </button>
+      );
+    };
+
+    const sheetTile = (a: AppInfo) => {
+      const v = APP_VISUAL[a.id];
+      const Icon = v?.Icon;
+      const isActive = activeAppId === a.id;
+      return (
+        <button
+          key={a.id}
+          onClick={() => handleClick(a.id)}
+          className="flex flex-col items-center gap-1.5 min-w-0 text-foreground/90"
+        >
+          <span className={cn(
+            "grid place-items-center w-12 h-12 rounded-2xl ring-1",
+            v ? cn("bg-gradient-to-br", isActive ? v.activeGradient : v.gradient, isActive ? v.activeRing : v.ring)
+              : "bg-card/60 ring-border/60",
+          )}>
+            {Icon
+              ? <Icon className={cn("w-[22px] h-[22px]", v?.text ?? "text-foreground/80")} strokeWidth={2.25} aria-hidden />
+              : <span className="text-2xl leading-none">{a.icon || "▣"}</span>}
+          </span>
+          <span className="text-[11px] leading-tight text-center truncate max-w-full">{label(a)}</span>
+        </button>
+      );
+    };
+
+    return (
+      <>
+        {moreOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/40"
+            onClick={() => setMoreOpen(false)}
+            aria-hidden
+          />
+        )}
+        {moreOpen && (
+          <div
+            role="dialog"
+            aria-label={i18n.t("apps.all_apps")}
+            className={cn(
+              "fixed inset-x-0 z-50 bottom-[calc(3.5rem+env(safe-area-inset-bottom))]",
+              "rounded-t-2xl border-t border-border bg-card shadow-[0_-12px_36px_rgba(0,0,0,0.45)]",
+              "px-4 pt-2 pb-5 max-h-[70vh] overflow-y-auto",
+            )}
+          >
+            <span className="block w-9 h-1 rounded-full bg-border mx-auto mb-3" aria-hidden />
+            <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">{i18n.t("apps.all_apps")}</p>
+            <div className="grid grid-cols-4 gap-x-2 gap-y-4">
+              {rest.map(sheetTile)}
+              <button
+                onClick={() => { setMoreOpen(false); openHelp(); }}
+                data-tour="help"
+                className="flex flex-col items-center gap-1.5 min-w-0 text-foreground/90"
+              >
+                <span className="grid place-items-center w-12 h-12 rounded-2xl ring-1 ring-border/60 bg-card/60">
+                  <CircleHelp className="w-[22px] h-[22px] text-muted-foreground" strokeWidth={2.25} aria-hidden />
+                </span>
+                <span className="text-[11px] leading-tight text-center">{i18n.t("apps.help")}</span>
+              </button>
+            </div>
+          </div>
+        )}
+        <nav
+          aria-label="App tabs"
+          data-tour="dock"
+          className={cn(
+            "fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom)]",
+            "border-t border-border bg-background/95 backdrop-blur-xl",
+          )}
+        >
+          <div className="grid grid-cols-5 h-14">
+            {tabs.map(tabButton)}
+            <button
+              onClick={() => setMoreOpen(o => !o)}
+              aria-label={i18n.t("apps.more")}
+              aria-expanded={moreOpen}
+              className={cn(
+                "flex flex-col items-center justify-center gap-0.5 min-w-0",
+                moreOpen || activeInMore ? "text-primary" : "text-muted-foreground",
+              )}
+            >
+              <span className={cn("grid place-items-center w-11 h-7 rounded-xl transition-colors", (moreOpen || activeInMore) && "bg-primary/15")}>
+                <Grip className="w-6 h-6" strokeWidth={moreOpen || activeInMore ? 2.25 : 1.8} aria-hidden />
+              </span>
+              <span className="text-[10.5px] leading-none font-medium">{i18n.t("apps.more")}</span>
+            </button>
+          </div>
+        </nav>
+      </>
+    );
+  }
 
   return (
     <nav
