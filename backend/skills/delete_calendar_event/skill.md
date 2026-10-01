@@ -8,6 +8,7 @@ when_to_use: |
   IMPORTANT: this skill deletes exactly ONE event per call. If the user
   asks to delete multiple events, call this skill multiple times — once
   per event_id. Never combine.
+  - "delete all of tomorrow's appointments": check_calendar first, then one call per event — each gets its own card; tell the user how many cards are waiting.
 inputs:
   event_id:
     type: integer

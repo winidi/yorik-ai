@@ -59,6 +59,10 @@ interface DocsListResponse {
 export function DocumentsApp() {
   const { data: me } = useApi<{ user?: { id: number; name: string; role: string } }>("/api/auth/me", []);
   const role = me?.user?.role || "admin";
+  // Uploading is for the adults (admins and members); children and
+  // viewers browse. Until 2026-10-01 only admins saw the button while
+  // the API took anyone's file (Dirk: members may upload).
+  const canUpload = role === "admin" || role === "platform_admin" || role === "member" || role === "employee";
 
   // Browse-mode state.
   //   activeFacetKind = which "folder type" is showing in the center
@@ -406,11 +410,11 @@ export function DocumentsApp() {
             </a>
             <button
               onClick={() => setShowUploadDialog(true)}
-              disabled={(role !== "admin" && role !== "platform_admin") || uploading}
-              title={(role === "admin" || role === "platform_admin") ? "Upload documents" : "Admin only"}
+              disabled={!canUpload || uploading}
+              title={canUpload ? "Upload documents" : "Adults of the household can upload"}
               className={cn(
                 "w-10 h-10 md:w-8 md:h-8 inline-flex items-center justify-center rounded-lg transition",
-                (role === "admin" || role === "platform_admin")
+                canUpload
                   ? "hover:bg-muted text-muted-foreground hover:text-foreground"
                   : "opacity-40 cursor-not-allowed",
               )}
@@ -551,7 +555,7 @@ export function DocumentsApp() {
             onNext={() => setPage(p => p + 1)}
             onUp={() => setActiveFacet(null)}
             role={role}
-            canUpload={(role === "admin" || role === "platform_admin")}
+            canUpload={canUpload}
             onUpload={() => setShowUploadDialog(true)}
           />
         )}
@@ -605,7 +609,7 @@ export function DocumentsApp() {
        * button needs three taps (menu → drawer → +); this is one.
        * Bottom-LEFT to match the Yorik FAB convention (right side is
        * reserved for VoiceFab). Admin-only mirrors the sidebar button. */}
-      {(role === "admin" || role === "platform_admin") && !selected && (
+      {canUpload && !selected && (
         <button
           onClick={() => setShowUploadDialog(true)}
           disabled={uploading}
