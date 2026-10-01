@@ -108,6 +108,9 @@ interface MobileTopBarProps {
   /** A thin row under the bar (a search pill, the calendar's day/week
    *  switch): part of the same sticky block, 36 px, no second "bar". */
   below?: React.ReactNode;
+  /** Home shows its name at the left like an app's own screen; everything
+   *  else centres the title. */
+  titleAlign?: "center" | "left";
 }
 
 /** The id NotificationBell portals its button into on a phone, so the
@@ -122,6 +125,7 @@ export const MOBILE_BELL_SLOT_ID = "yorik-mobile-bell-slot";
  *  as a separate circle. */
 export function MobileTopBar({
   title, onMenuClick, onBack, backLabel = "Back", onContextClick, contextLabel = "Details", rightAction, below,
+  titleAlign = "center",
 }: MobileTopBarProps) {
   return (
     <div className="md:hidden sticky top-0 z-30 shrink-0 border-b border-border bg-background/90 backdrop-blur pt-[env(safe-area-inset-top)]">
@@ -145,7 +149,8 @@ export function MobileTopBar({
         ) : (
           <span className="w-2 shrink-0" />
         )}
-        <div className="flex-1 min-w-0 text-[17px] font-semibold tracking-tight truncate text-center">
+        <div className={cn("flex-1 min-w-0 text-[17px] font-semibold tracking-tight truncate",
+                            titleAlign === "left" ? "text-left pl-2" : "text-center")}>
           {title}
         </div>
         <div className="flex items-center shrink-0">

@@ -133,6 +133,7 @@ export function HomeApp() {
           slot. Help lives in the Dock's "?" and a pull on the page reloads
           it, so the desktop's Help/Refresh pair stays desktop-only. */}
       <MobileTopBar
+        titleAlign="left"
         title={<span className="inline-flex items-center gap-2"><img src="/r/butler-mark.png" alt="" className="w-6 h-6 object-contain dark:invert" />Yorik</span>}
         rightAction={
           <button
