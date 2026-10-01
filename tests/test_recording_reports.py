@@ -135,7 +135,7 @@ def test_adopted_task_reaches_the_named_persons_day_plan(fresh_app, transcript):
     from backend.database import get_conn
     with get_conn() as conn:
         assigned = {str(r["user_id"]) for r in conn.execute("SELECT user_id FROM task_assignees WHERE task_id = ?", (tid,)).fetchall()}
-    assert assigned == {dirk, beate}
+    assert assigned == {beate}          # given to Beate: hers, not also Dirk's (2026-10-01)
     titles = {t["title"] for t in D.context_for(beate, "2030-04-04", "member")["open_tasks"]}
     assert "Küche aufräumen" in titles
 

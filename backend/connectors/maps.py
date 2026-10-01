@@ -95,9 +95,14 @@ def _geocode_one(query: str) -> Optional[Dict[str, Any]]:
     if cached and (now - cached[0]) < _GEOCODE_TTL_S:
         return cached[1]
 
+    # A bare name ("Dr. Mueller") used to resolve to the first match
+    # anywhere on earth — 3 h 26 min to the dentist (2026-09-29). Prefer
+    # the household's country and the area around home.
+    params: Dict[str, Any] = {"q": query, "format": "jsonv2", "limit": 1, "addressdetails": 1}
+    params.update(_home_bias())
     r = requests.get(
         NOMINATIM_URL,
-        params={"q": query, "format": "jsonv2", "limit": 1, "addressdetails": 1},
+        params=params,
         headers={"User-Agent": USER_AGENT},
         timeout=TIMEOUT_S,
     )
@@ -115,6 +120,56 @@ def _geocode_one(query: str) -> Optional[Dict[str, Any]]:
     }
     _GEOCODE_CACHE[key] = (now, result)
     return result
+
+
+_HOME_BIAS: Dict[str, Any] = {}
+_HOME_BIAS_AT = 0.0
+
+
+def _home_bias() -> Dict[str, Any]:
+    """Nominatim parameters that pull results towards the household:
+    `countrycodes` from the country chosen in onboarding and a wide
+    `viewbox` (~±1°, about 100 km) around the household's address, as a
+    preference, not a wall (bounded=0). Cached for an hour; empty when
+    neither is known."""
+    global _HOME_BIAS, _HOME_BIAS_AT
+    now = time.time()
+    if _HOME_BIAS_AT and now - _HOME_BIAS_AT < 3600:
+        return _HOME_BIAS
+    bias: Dict[str, Any] = {}
+    try:
+        from ..household_settings import get_setting
+        from ..database import get_conn
+        country = (get_setting("locale.country") or "").strip().lower()
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT country, address_street, address_postcode, address_city FROM user_profiles "
+                "WHERE role IN ('platform_admin', 'admin') AND COALESCE(address_city, '') <> '' "
+                "ORDER BY created_at LIMIT 1").fetchone()
+        if not country and row and row["country"]:
+            country = str(row["country"]).strip().lower()
+        if country and len(country) == 2:
+            bias["countrycodes"] = country
+        if row:
+            home = " ".join(x for x in (row["address_street"], row["address_postcode"], row["address_city"]) if x)
+            key = f"home:{home.lower()}"
+            cached = _GEOCODE_CACHE.get(key)
+            anchor = cached[1] if cached else None
+            if anchor is None and home.strip():
+                r = requests.get(NOMINATIM_URL, params={"q": home, "format": "jsonv2", "limit": 1,
+                                                        **({"countrycodes": country} if len(country) == 2 else {})},
+                                 headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT_S)
+                arr = r.json() if r.ok else []
+                anchor = {"lat": float(arr[0]["lat"]), "lon": float(arr[0]["lon"])} if arr else None
+                _GEOCODE_CACHE[key] = (now, anchor)  # type: ignore[assignment]
+            if anchor:
+                lat, lon = anchor["lat"], anchor["lon"]
+                bias["viewbox"] = f"{lon - 1:.4f},{lat + 1:.4f},{lon + 1:.4f},{lat - 1:.4f}"
+                bias["bounded"] = 0
+    except Exception:  # noqa: BLE001 — bias is a nicety; plain search still works
+        bias = bias or {}
+    _HOME_BIAS, _HOME_BIAS_AT = bias, now
+    return bias
 
 
 def _resolve(point: Any) -> Optional[Dict[str, Any]]:

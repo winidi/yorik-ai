@@ -259,9 +259,22 @@ def _docs_by_names(names: list[str], user_id: str) -> list[dict[str, Any]]:
         from . import paperless_ingest
         from .external_users import get_user_paperless_creds
         creds = get_user_paperless_creds(user_id)
-        # Search by the first name (best signal); semantic search
-        # broadens automatically.
-        return paperless_ingest.search(names[0], k=DOCS_LIMIT, creds_override=creds) or []
+        # Search by the first name (best signal). Nearest-neighbour search
+        # always answers with *something*, so keep only hits within the
+        # usual distance AND naming the person — the card for an
+        # "Erbbaurecht" mail listed four unrelated documents (2026-10-01).
+        hits = paperless_ingest.search(names[0], k=DOCS_LIMIT * 2, creds_override=creds) or []
+        limit = paperless_ingest.semantic_max_distance()
+        wanted = [n.lower() for n in names if n and len(n) >= 3]
+        out = []
+        for h in hits:
+            if h.get("distance") is not None and h["distance"] > limit:
+                continue
+            hay = f"{h.get('doc_title') or ''} {h.get('correspondent') or ''} {h.get('text') or ''}".lower()
+            if wanted and not any(w in hay for w in wanted):
+                continue
+            out.append(h)
+        return out[:DOCS_LIMIT]
     except Exception:
         return []
 

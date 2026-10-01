@@ -82,6 +82,12 @@ async def execute(
                              (_dt.now().isoformat(timespec="seconds"), task_id))
             elif updates["done"] == 0:
                 conn.execute("UPDATE tasks SET done_at = NULL WHERE id = ?", (task_id,))
+                if int(before_dict.get("done") or 0) == 1:
+                    from backend import tasks_recurrence as _rec
+                    try:
+                        _rec.retract_next_instance(conn=conn, task_id=task_id)
+                    except Exception:  # noqa: BLE001
+                        pass
         # Recurring task: detect 0→1 done flip and spawn the next
         # instance in the same transaction so the rollback can sweep
         # the child too. Best-effort — never block the actual update.

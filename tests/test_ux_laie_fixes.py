@@ -331,3 +331,118 @@ def test_sharing_a_contact_waits_for_the_card(fresh_app):
     with get_conn() as conn:
         row = conn.execute("SELECT level FROM row_shares WHERE row_id = ? AND user_id = ?", (cid, beate)).fetchone()
     assert row and row["level"] == "read"
+
+
+def test_untick_takes_the_spawned_routine_copy_back_and_the_board_hides_tomorrow(fresh_app):
+    """Q49/Q36 (2026-10-01): a tick spawns tomorrow's instance; the board
+    showed it at once, so children ticked the same routine four times.
+    Untick removes the spawned copy; the board shows routines up to today."""
+    from tests.conftest import login_client
+    from datetime import date, timedelta
+    client, uid = login_client(fresh_app, role="admin", name="Dirk", email="d10@example.com")
+    from backend.database import get_conn
+    with get_conn() as conn:
+        conn.execute("UPDATE user_profiles SET kiosk_agenda_consent = 1 WHERE id = ?", (uid,)); conn.commit()
+    today = date.today().isoformat()
+    r = client.post("/api/tasks?role=admin", json={"title": "Zähne putzen", "due_date": today, "recurrence_rule": "daily"})
+    tid = r.json()["id"]
+    assert client.patch(f"/api/tasks/{tid}?role=admin", json={"done": True}).status_code == 200
+    rows = [t for t in client.get("/api/tasks?role=admin").json() if t["title"] == "Zähne putzen"]
+    assert sorted((t["done"], t["due_date"][:10]) for t in rows) == [(0, (date.today() + timedelta(days=1)).isoformat()), (1, today)]
+    # the board: today's done tick, not tomorrow's open copy
+    board = client.get("/api/ambient/board").json()
+    shown = [(t["title"], t["done"]) for t in board["tasks"] if t["title"] == "Zähne putzen"]
+    assert shown == [("Zähne putzen", True)]
+    # untick → the spawned copy is gone, one open task remains
+    assert client.patch(f"/api/tasks/{tid}?role=admin", json={"done": False}).status_code == 200
+    rows = [t for t in client.get("/api/tasks?role=admin").json() if t["title"] == "Zähne putzen"]
+    assert [(t["done"], t["due_date"][:10]) for t in rows] == [(0, today)]
+
+
+def test_starting_a_shared_task_leaves_the_other_persons_timer_alone(fresh_app):
+    """Q38: Dirk starts a chore shared with Beate — Beate's own running
+    task keeps running; only Dirk's other timer stops."""
+    from tests.conftest import login_client, seed_user
+    dirk_c, dirk = login_client(fresh_app, role="admin", name="Dirk", email="d11@example.com")
+    beate = seed_user(name="Beate", role="member", email="b11@example.com")
+    from backend import auth_sessions
+    from fastapi.testclient import TestClient
+    sid = auth_sessions.create_session(beate, user_agent="pytest", ip="127.0.0.1")
+    beate_c = TestClient(fresh_app); beate_c.cookies.set(auth_sessions.COOKIE_NAME, sid)
+    shared = dirk_c.post("/api/tasks?role=admin", json={"title": "Keller", "assignee_user_ids": [dirk, beate]}).json()["id"]
+    hers = beate_c.post("/api/tasks?role=member", json={"title": "Steuer", "assignee_user_ids": [beate]}).json()["id"]
+    his = dirk_c.post("/api/tasks?role=admin", json={"title": "Video", "assignee_user_ids": [dirk]}).json()["id"]
+    assert beate_c.post(f"/api/tasks/{hers}/start?role=member").status_code == 200
+    assert dirk_c.post(f"/api/tasks/{his}/start?role=admin").status_code == 200
+    assert dirk_c.post(f"/api/tasks/{shared}/start?role=admin").status_code == 200
+    rows = {t["title"]: t for t in dirk_c.get("/api/tasks?role=admin").json()}
+    assert rows["Keller"]["started_at"] and rows["Video"]["started_at"] is None
+    hers_rows = {t["title"]: t for t in beate_c.get("/api/tasks?role=member").json()}
+    assert hers_rows["Steuer"]["started_at"]                 # Beate's timer untouched
+
+
+def test_person_card_documents_must_name_the_person(fresh_app, monkeypatch):
+    """Q24: the card's document list came from nearest-neighbour search
+    with no floor — four unrelated documents for "Erbbaurecht"."""
+    from backend import people_routes as P, paperless_ingest as PI
+    hits = [
+        {"doc_title": "Kobra Aufnahmeantrag", "text": "Kobra Kampfsport Peine", "distance": 0.61, "correspondent": None},
+        {"doc_title": "Erbbauzins Mahnung", "text": "Sehr geehrter Herr … Erbbaurecht", "distance": 0.31, "correspondent": "Erbbaurecht"},
+        {"doc_title": "Netcup invoice", "text": "server", "distance": 0.40, "correspondent": "netcup"},
+    ]
+    monkeypatch.setattr(PI, "search", lambda q, k=8, creds_override=None: hits)
+    monkeypatch.setattr(PI, "semantic_max_distance", lambda: 0.55)
+    monkeypatch.setattr("backend.external_users.get_user_paperless_creds", lambda uid: None)
+    out = P._docs_by_names(["Erbbaurecht"], "u1")
+    assert [h["doc_title"] for h in out] == ["Erbbauzins Mahnung"]
+
+
+def test_geocoding_prefers_the_households_country_and_home_area(fresh_app, monkeypatch):
+    """Q31: 'Dr. Mueller' resolved to the first Dr. Müller on earth."""
+    from backend.connectors import maps
+    from backend.database import get_conn
+    from backend import locale as L
+    from tests.conftest import seed_user
+    uid = seed_user(name="Dirk", role="admin", email="d12@example.com")
+    with get_conn() as conn:
+        conn.execute("UPDATE user_profiles SET address_street='Amselweg 1', address_postcode='31224', address_city='Peine' WHERE id=?", (uid,))
+        conn.commit()
+    L.remember(L.COUNTRY_LOCALE["DE"], "DE")
+    calls = []
+    class R:
+        ok = True
+        def __init__(self, payload): self._p = payload
+        def json(self): return self._p
+        def raise_for_status(self): pass
+    def fake_get(url, params=None, headers=None, timeout=None):
+        calls.append(dict(params or {}))
+        if params.get("q", "").startswith("Amselweg"):
+            return R([{"lat": "52.32", "lon": "10.23", "display_name": "Peine"}])
+        return R([{"lat": "52.33", "lon": "10.24", "display_name": "Dr. Mueller, Peine", "type": "dentist"}])
+    monkeypatch.setattr(maps.requests, "get", fake_get)
+    maps._HOME_BIAS_AT = 0.0; maps._GEOCODE_CACHE.clear()
+    hit = maps._geocode_one("Dr. Mueller")
+    assert hit and "Peine" in hit["label"]
+    q = [c for c in calls if c.get("q") == "Dr. Mueller"][0]
+    assert q["countrycodes"] == "de" and q["bounded"] == 0 and q["viewbox"].startswith("9.2300,53.3200")
+
+
+def test_two_invoices_at_once_get_two_numbers(fresh_app):
+    """Q57: the second of two simultaneous allocations failed with an
+    integrity error instead of getting the next number."""
+    import threading
+    from backend.compose import series as S
+    from tests.conftest import seed_user
+    uid = seed_user(name="Dirk", role="admin", email="d13@example.com")
+    created = S.install_preset("de", owner_user_id=uid)
+    sid = next(c["id"] for c in created if c["kind"] == "rechnung")
+    got, errors = [], []
+    def go():
+        try:
+            got.append(S.consume(sid, consumed_by_user_id=uid, title="x")["number"])
+        except Exception as exc:  # noqa: BLE001
+            errors.append(repr(exc))
+    ts = [threading.Thread(target=go) for _ in range(4)]
+    [t.start() for t in ts]; [t.join() for t in ts]
+    assert not errors, errors
+    assert sorted(got) == list(range(min(got), min(got) + 4))

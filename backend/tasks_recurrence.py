@@ -197,3 +197,36 @@ def materialise_next_instance(
         "INSERT INTO task_board_order (user_id, task_id, position) "
         "SELECT user_id, ?, position FROM task_board_order WHERE task_id = ?", (new_id, task_id))
     return new_id
+
+
+def retract_next_instance(*, conn, task_id: int) -> Optional[int]:
+    """Undo materialise_next_instance when the tick is taken back: the
+    open sibling it created (same title, rule, people and creator, newer
+    than this task, still untouched) goes away again. Until 2026-10-01 a
+    tick + untick left two open copies, and on the family board each tick
+    of the morning routine bred the next one (four "Mittagessen" in a
+    row). Returns the removed task's id, or None when there is nothing
+    to take back."""
+    row = conn.execute(
+        "SELECT title, recurrence_rule, created_by_user_id FROM tasks WHERE id = ?", (task_id,),
+    ).fetchone()
+    if not row or not row["recurrence_rule"]:
+        return None
+
+    def _assignees(tid: int) -> set[str]:
+        return {str(r["user_id"]) for r in conn.execute(
+            "SELECT user_id FROM task_assignees WHERE task_id = ?", (tid,)).fetchall()}
+    mine = _assignees(task_id)
+    for other in conn.execute(
+        "SELECT id, created_by_user_id FROM tasks "
+        "WHERE title = ? AND recurrence_rule = ? AND done = 0 AND id > ? "
+        "  AND started_at IS NULL AND (actual_minutes IS NULL OR actual_minutes = 0) "
+        "ORDER BY id DESC LIMIT 1",
+        (row["title"], row["recurrence_rule"], task_id),
+    ).fetchall():
+        if _assignees(other["id"]) == mine and str(other["created_by_user_id"]) == str(row["created_by_user_id"]):
+            conn.execute("DELETE FROM task_board_order WHERE task_id = ?", (other["id"],))
+            conn.execute("DELETE FROM task_assignees WHERE task_id = ?", (other["id"],))
+            conn.execute("DELETE FROM tasks WHERE id = ?", (other["id"],))
+            return int(other["id"])
+    return None

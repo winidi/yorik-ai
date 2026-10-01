@@ -1484,6 +1484,11 @@ def ambient_board(request: Request, days: int = 7) -> Dict[str, Any]:
                         routine_log.append({"title": r["title"], "user_id": u, "day": done_day})
                 if r["done"] and done_day != today.isoformat():
                     continue
+                # The next instance a tick just created (due tomorrow) is
+                # not today's work: showing it had children tick the same
+                # routine four times in a row (2026-09-30).
+                if routine and not r["done"] and (r["due_date"] or "")[:10] > today.isoformat():
+                    continue
                 tasks.append({"id": r["id"], "title": r["title"], "due_date": r["due_date"], "done": bool(r["done"]),
                               "done_at": r["done_at"], "assignee_ids": mine, "person": r["person"] or "",
                               "positions": positions.get(r["id"], {}), "recurrence_rule": r["recurrence_rule"] or "",
@@ -3909,8 +3914,14 @@ def update_task(
             conn.execute("UPDATE tasks SET done_at = ? WHERE id = ? AND done_at IS NULL",
                          (datetime.now().isoformat(timespec="seconds"), task_id))
     elif pre_done == 1 and patch.done is False:
+        from . import tasks_recurrence as _rec
         with conn_ctx(DB_PATH) as conn:
             conn.execute("UPDATE tasks SET done_at = NULL WHERE id = ?", (task_id,))
+            # A tick taken back takes the next instance it spawned with it.
+            try:
+                _rec.retract_next_instance(conn=conn, task_id=task_id)
+            except Exception:  # noqa: BLE001
+                pass
 
     # Recurring task: if this PATCH just flipped done from 0→1, spawn
     # the next instance. Skip when patch.done wasn't actually part of
@@ -4016,18 +4027,22 @@ def start_task(
     user_id = actor.get("id") if actor else None
     with conn_ctx(DB_PATH) as conn:
         if user_id is not None:
-            # One running timer per person: starting a task stops the
-            # other running tasks of the people it is assigned to (a
-            # parent who starts a child's task stops the child's other
-            # timer, not their own); an unassigned task counts for its
-            # creator.
+            # One running timer per person. Whose timers stop: the
+            # starter's own when the task is theirs (also when it is
+            # shared with others — until 2026-10-01 Dirk starting a shared
+            # chore paused Beate's unrelated work); the assignees' when a
+            # parent starts a child's task for them. An unassigned task
+            # counts for its creator.
+            assignees = {str(r["user_id"]) for r in conn.execute(
+                "SELECT user_id FROM task_assignees WHERE task_id = ?", (task_id,)).fetchall()}
+            people = [str(user_id)] if (str(user_id) in assignees or not assignees) else sorted(assignees)
+            ph = ",".join("?" * len(people))
             others = conn.execute(
                 "SELECT t.id FROM tasks t WHERE t.started_at IS NOT NULL AND t.id != ? AND ("
-                "  t.id IN (SELECT a2.task_id FROM task_assignees a2 WHERE a2.user_id IN "
-                "           (SELECT a1.user_id FROM task_assignees a1 WHERE a1.task_id = ?)) "
-                "  OR (NOT EXISTS (SELECT 1 FROM task_assignees a3 WHERE a3.task_id = ?) "
-                "      AND t.created_by_user_id = ?))",
-                (task_id, task_id, task_id, user_id),
+                f"  t.id IN (SELECT a2.task_id FROM task_assignees a2 WHERE a2.user_id IN ({ph})) "
+                "  OR (NOT EXISTS (SELECT 1 FROM task_assignees a3 WHERE a3.task_id = t.id) "
+                f"      AND t.created_by_user_id IN ({ph})))",
+                (task_id, *people, *people),
             ).fetchall()
             for r in others:
                 _fold_elapsed_into_actual(conn, int(r["id"]))
@@ -11424,8 +11439,19 @@ def system_status(
 
     # Email connector (combined view of imap + gmail)
     email_kinds = sorted(n for n in connector_names if n and n.startswith("email-"))
+    # Mail lives in email_accounts (Email → Add account) — the legacy
+    # "email-imap" connector names made the page say "Not configured"
+    # next to three idling accounts (2026-10-01).
+    try:
+        with conn_ctx(DB_PATH) as _c:
+            _n_accounts = int(_c.execute(
+                "SELECT COUNT(*) AS n FROM email_accounts WHERE COALESCE(enabled, 1) = 1").fetchone()["n"] or 0)
+    except Exception:  # noqa: BLE001
+        _n_accounts = 0
+    if _n_accounts:
+        email_kinds = [f"{_n_accounts} account{'s' if _n_accounts != 1 else ''}"] + email_kinds
     email = {
-        "configured": ("email-imap" in connector_names) or ("email-gmail" in connector_names),
+        "configured": _n_accounts > 0 or ("email-imap" in connector_names) or ("email-gmail" in connector_names),
         "kinds":      email_kinds,
     }
 

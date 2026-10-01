@@ -55,25 +55,22 @@ async def execute(
              (recurrence_rule or "").strip().lower() or None),
         )
         task_id = cur.lastrowid
-        # Auto-assign the creator so the task appears on their Personal
-        # calendar view via the assignee link too (matches what the
-        # REST POST /api/tasks does).
-        if creator_id is not None:
-            conn.execute(
-                "INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)",
-                (task_id, creator_id),
-            )
-        # A named household member is assigned too, so the task shows up
-        # in their day planning (person stays free text for outsiders).
+        # Whose task is it: the named household member's when there is
+        # one, otherwise the creator's (so it shows on their calendar via
+        # the assignee link, as the REST POST does). Until 2026-10-01 the
+        # creator was always added too — "Müll rausbringen für Ben" sat in
+        # Anna's list and in both columns of the family board.
+        member = None
         if person and person.strip():
             member = conn.execute(
                 "SELECT id FROM user_profiles WHERE lower(name) = lower(?) LIMIT 1", (person.strip(),)
             ).fetchone()
-            if member and str(member["id"]) != str(creator_id):
-                conn.execute(
-                    "INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)",
-                    (task_id, member["id"]),
-                )
+        assignee = member["id"] if member else creator_id
+        if assignee is not None:
+            conn.execute(
+                "INSERT OR IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)",
+                (task_id, assignee),
+            )
         row = conn.execute(
             "SELECT id, title, due_date, done, person, notes, space_id, "
             "       category, parent_task_id, recurrence_rule "

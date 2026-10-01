@@ -180,10 +180,10 @@ async def _supervisor_once() -> None:
     """Spawns one _account_loop per enabled account at startup, then
     sleeps. Account add/remove is event-driven via reload_account."""
     from . import workers
-    # Supervisor heartbeats once at start-up + on account add/remove.
-    # No periodic tick — only show stale after several hours of silence.
+    # Supervisor heartbeats at start-up, on account add/remove and
+    # every ten minutes while it waits (see the loop below).
     workers.register("email_supervisor", kind="supervisor",
-                     expected_interval_s=3600)
+                     expected_interval_s=600)
     try:
         await asyncio.sleep(2)  # let DB init finish on cold start
         accounts = _load_enabled_account_ids()
@@ -193,9 +193,20 @@ async def _supervisor_once() -> None:
         log.info("email supervisor: %d active account(s)", len(accounts))
         workers.heartbeat("email_supervisor", "ok",
                           f"{len(accounts)} active account(s)")
-        # Stay alive until shutdown.
-        if _supervisor_stop:
-            await _supervisor_stop.wait()
+        # Stay alive until shutdown, saying so every ten minutes: with a
+        # single heartbeat at start-up the status page called a healthy
+        # supervisor "stuck" after five hours (2026-10-01).
+        while True:
+            if _supervisor_stop:
+                try:
+                    await asyncio.wait_for(_supervisor_stop.wait(), timeout=600)
+                    break
+                except asyncio.TimeoutError:
+                    pass
+            else:
+                await asyncio.sleep(600)
+            workers.heartbeat("email_supervisor", "ok",
+                              f"{len([t for t in _account_tasks.values() if not t.done()])} active account(s)")
     except asyncio.CancelledError:
         log.info("email supervisor cancelled")
         workers.report_error("email_supervisor", "cancelled")

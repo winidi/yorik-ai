@@ -362,16 +362,17 @@ def consume(
     notes: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Atomically allocate the next number. Bumps `next_number`, handles
-    year-rollover, inserts an audit row, returns the allocation. SQLite's
-    default isolation gives us a single-writer guarantee — combined with
-    the `BEGIN IMMEDIATE` we open via `conn_ctx`, two concurrent consumes
-    will serialize. The UNIQUE(series_id, year, number) constraint is the
-    belt to that suspender."""
+    year-rollover, inserts an audit row, returns the allocation. The
+    series row is locked for the transaction (SELECT … FOR UPDATE), so
+    two invoices written at the same moment queue up instead of the
+    second one failing (Postgres since Phase E; the SQLite-era
+    BEGIN IMMEDIATE no longer applies). The UNIQUE(series_id, year,
+    number) constraint stays as the belt to that suspender."""
     year = datetime.now().year
     pdf_hash = hashlib.sha256(pdf_bytes).hexdigest() if pdf_bytes else None
 
     with conn_ctx() as conn:
-        row = conn.execute("SELECT * FROM document_series WHERE id = ?", (series_id,)).fetchone()
+        row = conn.execute("SELECT * FROM document_series WHERE id = ? FOR UPDATE", (series_id,)).fetchone()
         if not row:
             raise ValueError(f"series {series_id} not found")
         s = _row(row)
