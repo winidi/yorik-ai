@@ -481,3 +481,18 @@ def test_whatsapp_photos_survive_a_bridge_restart(fresh_app, monkeypatch, tmp_pa
     r = client.get("/api/whatsapp/media/ABC123")
     assert r.status_code == 200 and r.content == FakeResp.content and r.headers["content-type"].startswith("image/jpeg")
     assert client.get("/api/whatsapp/media/NOPE").status_code == 404
+
+
+def test_a_weekday_or_tomorrow_in_a_mail_is_a_date():
+    """e2e 'school letter becomes an appointment': 'Wandertag am Freitag'
+    had no date for the calendar."""
+    from datetime import date
+    from backend.email_invites import extract_appointment
+    today = date(2026, 10, 1)                       # a Thursday
+    assert extract_appointment("Elternbrief: Wandertag am Freitag.", today=today)["date"] == "2026-10-02"
+    assert extract_appointment("Donnerstag Elternabend", today=today)["date"] == "2026-10-08"   # next, not today
+    assert extract_appointment("kommt ihr morgen um drei?", today=today)["date"] == "2026-10-02"
+    assert extract_appointment("See you tomorrow at 9am", today=today) == {"date": "2026-10-02", "time": "09:00"}
+    # a written date next to a weekday wins; "Guten Morgen" is not a day
+    assert extract_appointment("Freitag, 3. Oktober um 14 Uhr", today=today)["date"] == "2026-10-03"
+    assert "date" not in extract_appointment("Guten Morgen, die Rechnung", today=today)

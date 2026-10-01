@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional
 
 
 def _unescape(v: str) -> str:
-    return v.replace("\\n", "\n").replace("\\N", "\n").replace("\\,", ",").replace("\;", ";").replace("\\\\", "\\").strip()
+    return v.replace("\\n", "\n").replace("\\N", "\n").replace("\\,", ",").replace("\\;", ";").replace("\\\\", "\\").strip()
 
 
 def _ics_time(value: str, params: Dict[str, str]) -> tuple[Optional[datetime], bool]:
@@ -117,6 +117,16 @@ def _hhmm(h: int, mi: int, suffix: Optional[str]) -> Optional[str]:
     return f"{h:02d}:{mi:02d}" if 0 <= h < 24 and 0 <= mi < 60 else None
 
 
+_WEEKDAYS = {
+    "montag": 0, "dienstag": 1, "mittwoch": 2, "donnerstag": 3, "freitag": 4, "samstag": 5, "sonnabend": 5, "sonntag": 6,
+    "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6,
+}
+_WEEKDAY_RE = re.compile(r"\b(" + "|".join(_WEEKDAYS) + r")\b", re.I)
+# German relative days only in lower case: "Guten Morgen" / "am Morgen" is
+# the time of day, "morgen" the day after today.
+_RELATIVE_RE = re.compile(r"(?<![\wäöü])(übermorgen|uebermorgen|morgen|heute|[Tt]omorrow|[Tt]oday)(?![\wäöü])")
+
+
 def extract_appointment(text: str, today: Optional[_date] = None) -> Dict[str, str]:
     """Best-effort {date, time, end_time} from an email's text. Numeric
     and ISO dates, month names in German and English, 24-hour and
@@ -150,6 +160,19 @@ def extract_appointment(text: str, today: Optional[_date] = None) -> Dict[str, s
         mo, d = int(m.group(2)), int(m.group(1))
         if 1 <= mo <= 12:
             consider(m.start(), _valid(year_for(m.group(3), mo, d), mo, d))
+    # "am Freitag", "next Tuesday", "morgen": the next such day from
+    # today. Only when no written date was found — a weekday next to a
+    # date ("Freitag, 3. Oktober") is just decoration. Added 2026-10-02:
+    # the school's "Wandertag am Freitag" could not be put in the calendar.
+    if not found:
+        if (m := _RELATIVE_RE.search(text)):
+            word = m.group(1).lower()
+            days = {"morgen": 1, "tomorrow": 1, "übermorgen": 2, "uebermorgen": 2, "heute": 0, "today": 0}[word]
+            consider(m.start(), (today + timedelta(days=days)).isoformat())
+        if (m := _WEEKDAY_RE.search(text)):
+            wd = _WEEKDAYS[m.group(1).lower()]
+            ahead = (wd - today.weekday()) % 7 or 7
+            consider(m.start(), (today + timedelta(days=ahead)).isoformat())
     if found:
         out["date"] = found[1]
 

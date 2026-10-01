@@ -295,3 +295,20 @@ def test_compact_mode_collapses_skills_behind_invoke_skill(token_client):
     # full mode does not gate
     r = _rpc(client, token, "tools/call", {"name": "check_tasks", "arguments": {}}, mode="full")
     assert r.json()["result"]["isError"] is False, r.json()["result"]
+
+
+def test_an_agent_gets_the_rows_the_chat_would_show_as_cards(token_client, fresh_app):
+    """e2e 'an agent reads her tasks' failed: check_tasks told the agent
+    only '10 open tasks — rendered as cards' and no titles."""
+    client, token, uid, _ = token_client
+    from backend.database import get_conn
+    with get_conn() as conn:
+        conn.execute("INSERT INTO tasks (title, done, created_by_user_id, due_date) VALUES ('Steuererklärung abgeben', 0, ?, '2030-01-05')", (uid,))
+        tid = conn.execute("SELECT id FROM tasks WHERE title = 'Steuererklärung abgeben'").fetchone()["id"]
+        conn.execute("INSERT INTO task_assignees (task_id, user_id) VALUES (?, ?)", (tid, uid))
+        conn.commit()
+    r = _rpc(client, token, "tools/call", {"name": "check_tasks", "arguments": {"include_undated": True}})
+    assert r.status_code == 200, r.text
+    assert "Steuererklärung abgeben" in r.text
+    body = r.json()["result"]["structuredContent"]
+    assert body["cards"] and body["note"].startswith("There is no screen here")

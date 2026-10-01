@@ -379,6 +379,17 @@ async def call_tool(user: dict[str, Any], name: str, arguments: dict[str, Any],
     except SkillError as exc:
         raise ToolError(str(exc)) from exc
     payload: dict[str, Any] = {"result": result}
+    # The chat renders many results as cards and tells the model only the
+    # count ("shown_to_user: 10 open tasks — rendered as cards"). An
+    # outside agent has no screen: it gets the cards' rows here.
+    cards = [a for a in get_ui_actions()
+             if a.get("type") not in ("pending_confirmation", "refresh_data", "navigate_to", "show_calendar",
+                                      "help_open_app", "sources")]
+    if cards:
+        payload["cards"] = cards
+        hint = result.get("_llm_hint") if isinstance(result, dict) else None
+        if isinstance(hint, str) and "shown_to_user" in hint:
+            payload["note"] = "There is no screen here: the rows the chat would show as cards are in `cards`."
     for action in get_ui_actions():
         if action.get("type") == "pending_confirmation":
             preview = action.get("preview") or {}
