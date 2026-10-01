@@ -25,7 +25,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { Menu, PanelRight, X } from "lucide-react";
+import { ChevronLeft, Menu, PanelRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface TriPane {
@@ -97,6 +97,10 @@ interface MobileTopBarProps {
   title?: React.ReactNode;
   /** Opens the left drawer; apps without one (Home, Tasks) leave it out. */
   onMenuClick?: () => void;
+  /** A "‹" at the left instead of the menu — a screen stacked on top of
+   *  a list (WhatsApp thread over the chat list). Wins over onMenuClick. */
+  onBack?: () => void;
+  backLabel?: string;
   onContextClick?: () => void;
   contextLabel?: string;
   /** One app action at the right, e.g. the calendar's quick-add. */
@@ -117,12 +121,20 @@ export const MOBILE_BELL_SLOT_ID = "yorik-mobile-bell-slot";
  *  170 px of chrome before the first appointment) and the bell floated
  *  as a separate circle. */
 export function MobileTopBar({
-  title, onMenuClick, onContextClick, contextLabel = "Details", rightAction, below,
+  title, onMenuClick, onBack, backLabel = "Back", onContextClick, contextLabel = "Details", rightAction, below,
 }: MobileTopBarProps) {
   return (
     <div className="md:hidden sticky top-0 z-30 shrink-0 border-b border-border bg-background/90 backdrop-blur pt-[env(safe-area-inset-top)]">
       <div className="h-11 pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.25rem,env(safe-area-inset-right))] flex items-center gap-0.5">
-        {onMenuClick ? (
+        {onBack ? (
+          <button
+            onClick={onBack}
+            aria-label={backLabel}
+            className="w-11 h-11 rounded-md text-foreground flex items-center justify-center shrink-0"
+          >
+            <ChevronLeft className="w-7 h-7 -ml-1" />
+          </button>
+        ) : onMenuClick ? (
           <button
             onClick={onMenuClick}
             aria-label="Open menu"

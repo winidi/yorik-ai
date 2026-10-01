@@ -47,7 +47,33 @@ export function WhatsAppApp() {
     const p = new URLSearchParams(window.location.search);
     return p.get("chat");
   })();
-  const [activeJid, setActiveJid] = useState<string | null>(initialJid);
+  const [activeJid, setActiveJidState] = useState<string | null>(initialJid);
+  // On a phone the chat list is the screen and a chat opens on top of it
+  // (like WhatsApp itself, Dirk 2026-10-01). Opening pushes ?chat= so
+  // the phone's Back returns to the list; the list is the state "no
+  // chat". Desktop keeps all three panes side by side.
+  const phone = () => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+  const setActiveJid = useCallback((jid: string | null) => {
+    setActiveJidState(jid);
+    if (!phone()) return;
+    const url = new URL(window.location.href);
+    if (jid) {
+      url.searchParams.set("chat", jid);
+      window.history.pushState({ chat: jid }, "", url.toString());
+    } else {
+      url.searchParams.delete("chat");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+  useEffect(() => {
+    const onPop = () => setActiveJidState(new URLSearchParams(window.location.search).get("chat"));
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  const backToList = useCallback(() => {
+    if (window.history.state && window.history.state.chat) window.history.back();
+    else setActiveJid(null);
+  }, [setActiveJid]);
   const [draftCounts, setDraftCounts] = useState<Record<string, number>>({});
   const [showImport, setShowImport] = useState(false);
   const [showBriefing, setShowBriefing] = useState(false);
@@ -155,10 +181,26 @@ export function WhatsAppApp() {
       <MobileBackdrop show={tri.leftOpen || tri.rightOpen} onClick={tri.closeAll} />
       {/* ── Chat list ───────────────────────────────────────── */}
       <aside className={cn(
-        "w-[330px] border-r border-border flex flex-col bg-sidebar shrink-0",
-        mobileAsideLeft(tri.leftOpen),
+        "md:w-[330px] md:border-r border-border flex flex-col bg-sidebar shrink-0",
+        // Phone: the list IS the screen while no chat is open; with a
+        // chat open it is the drawer behind the ☰ (unchanged).
+        activeJid ? mobileAsideLeft(tri.leftOpen) : "max-md:w-full max-md:flex-1 max-md:min-w-0",
       )}>
-        <header className="h-16 px-5 flex items-center justify-between border-b border-border">
+        {!activeJid && (
+          <MobileTopBar
+            title="WhatsApp"
+            rightAction={
+              <button
+                onClick={refreshAll}
+                className="w-11 h-11 rounded-md flex items-center justify-center text-muted-foreground"
+                aria-label="Reload"
+              >
+                <RefreshCw className={cn("w-5 h-5", chatsApi.loading && "animate-spin")} />
+              </button>
+            }
+          />
+        )}
+        <header className="hidden md:flex h-16 px-5 items-center justify-between border-b border-border">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center">
               <MessageSquare className="w-4 h-4 text-emerald-500" />
@@ -216,10 +258,11 @@ export function WhatsAppApp() {
       </aside>
 
       {/* ── Thread ──────────────────────────────────────────── */}
-      <section className="flex-1 flex flex-col bg-background min-w-0 thread-bg">
+      <section className={cn("flex-1 flex-col bg-background min-w-0 thread-bg md:flex", activeJid ? "flex" : "hidden")}>
         <MobileTopBar
           title={activeChat?.name || (activeJid ? activeJid.split("@")[0] : "WhatsApp")}
-          onMenuClick={() => tri.setLeftOpen(true)}
+          onBack={backToList}
+          backLabel="Back to chats"
           onContextClick={activeJid ? () => tri.setRightOpen(true) : undefined}
           contextLabel="Drafts"
         />
@@ -538,7 +581,7 @@ function Thread({ jid, chat, onSent }:
   return (
     <>
       {/* Thread header */}
-      <header className="h-16 px-6 flex items-center gap-3 border-b border-border bg-card/40 backdrop-blur-sm">
+      <header className="hidden md:flex h-16 px-6 items-center gap-3 border-b border-border bg-card/40 backdrop-blur-sm">
         <PersonHover identifier={jid}>
           <WaAvatar jid={jid} name={name} size="lg" />
         </PersonHover>
