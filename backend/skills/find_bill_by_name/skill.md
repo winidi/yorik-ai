@@ -1,6 +1,6 @@
 ---
 name: find_bill_by_name
-description: Look up bill IDs by name — helper for the next update_bill / delete / mark_bill_paid step.
+description: Look up bill ids by name before update_bill / delete_bill.
 when_to_use: |
   When the user names a SPECIFIC bill ("mark the Stromrechnung as
   paid", "delete the gym membership bill", "wann ist die
