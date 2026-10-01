@@ -41,6 +41,7 @@ import { Dock } from "@/components/Dock";
 import { useAuth } from "@/components/AuthGate";
 import type { Task } from "../calendar/types";
 import { toast } from "@/components/Toast";
+import { MobileTopBar } from "@/components/MobileShell";
 import { announceFocusChange } from "@/components/FocusCard";
 import { ListSkeleton } from "@/components/Skeleton";
 import { TickMark } from "@/components/TickMark";
@@ -540,14 +541,17 @@ export function TasksApp() {
 
   return (
     <div className="h-screen overflow-y-auto flex flex-col bg-background">
+      {/* Phone: the shared app bar; the big icon and prose heading are
+          desktop-only, the count line stays small. */}
+      <MobileTopBar title="Tasks" />
       {/* pt: tighter on mobile so the heading + bar don't eat the first
           viewport. pb: reserves room for the dock + iOS home indicator
           (env safe-area). Used to also reserve ~88px for the sticky
           bottom composer; that's gone now (unified into the bar at the
           top), so the bottom padding can be tighter. */}
-      <main className="flex-1 flex flex-col max-w-6xl mx-auto w-full px-4 sm:px-8 pt-5 md:pt-10 pb-[max(7rem,calc(env(safe-area-inset-bottom)+5rem))] md:pb-24">
-        <header className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
+      <main className="flex-1 flex flex-col max-w-6xl mx-auto w-full px-4 sm:px-8 pt-3 md:pt-10 pb-[max(7rem,calc(env(safe-area-inset-bottom)+5rem))] md:pb-24">
+        <header className="mb-4 md:mb-6">
+          <div className="hidden md:flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/30 to-teal-500/30 flex items-center justify-center shadow-md">
               <ListTodo className="w-5 h-5 text-emerald-500" />
             </div>

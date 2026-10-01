@@ -511,13 +511,38 @@ export function CalendarApp() {
           dock instead of sliding under it. Desktop unchanged — the
           desktop layout has enough natural whitespace at the bottom. */}
       <main className="flex-1 flex flex-col min-w-0 bg-background pb-[calc(env(safe-area-inset-bottom)+5rem)] md:pb-0">
+        {/* Phone: one bar (date, quick-add, tasks drawer, bell) and a
+            slim row for day navigation, search and the view switch. The
+            desktop header below is desktop-only — stacked, the two gave
+            170 px of chrome before the first appointment (2026-10-01). */}
         <MobileTopBar
           title={viewTitle(view, anchor, gridStart)}
           onMenuClick={() => tri.setLeftOpen(true)}
           onContextClick={() => tri.setRightOpen(true)}
           contextLabel="Tasks"
+          rightAction={
+            <button
+              onClick={() => setQuickAddOpen(true)}
+              className="w-11 h-11 rounded-md flex items-center justify-center text-violet-600 dark:text-violet-400"
+              aria-label="Quick add event"
+            >
+              <Sparkles className="w-[22px] h-[22px]" />
+            </button>
+          }
+          below={
+            <>
+              <div className="flex items-center gap-0.5 -ml-1">
+                <button onClick={prevMonth} aria-label="Previous" className="w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground"><ChevronLeft className="w-5 h-5" /></button>
+                <button onClick={goToToday} className="px-2 h-8 text-xs rounded-md text-foreground font-medium">{t("common.today")}</button>
+                <button onClick={nextMonth} aria-label="Next" className="w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground"><ChevronRight className="w-5 h-5" /></button>
+              </div>
+              <span className="flex-1" />
+              <button onClick={() => setSearchOpen(true)} aria-label="Search events" className="w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground"><Search className="w-[18px] h-[18px]" /></button>
+              <ViewSwitcher value={view} onChange={setView} options={["day", "week"]} compact />
+            </>
+          }
         />
-        <header className="h-16 px-3 md:px-6 flex items-center justify-between border-b border-border">
+        <header className="hidden md:flex h-16 px-3 md:px-6 items-center justify-between border-b border-border">
           <div className="flex items-center gap-4">
             {/* Title is shown by MobileTopBar above; hide the duplicate
                 on mobile to give the nav buttons + view switcher
@@ -2890,8 +2915,8 @@ function EventSearchModal({
   );
 }
 
-function ViewSwitcher({ value, onChange, options }:
-  { value: ViewMode; onChange: (v: ViewMode) => void; options?: ViewMode[] }) {
+function ViewSwitcher({ value, onChange, options, compact = false }:
+  { value: ViewMode; onChange: (v: ViewMode) => void; options?: ViewMode[]; compact?: boolean }) {
   const opts: ViewMode[] = options || ["day", "week", "month"];
   return (
     <div className="inline-flex rounded-md border border-border bg-muted/30 p-0.5">
@@ -2902,7 +2927,8 @@ function ViewSwitcher({ value, onChange, options }:
           aria-label={`${o} view`}
           aria-pressed={value === o}
           className={cn(
-            "px-2 md:px-3 h-9 md:h-7 text-xs rounded capitalize transition font-medium",
+            compact ? "px-2 h-6 text-2xs" : "px-2 md:px-3 h-9 md:h-7 text-xs",
+            "rounded capitalize transition font-medium",
             value === o
               ? "bg-card text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground",

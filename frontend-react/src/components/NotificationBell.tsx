@@ -8,7 +8,10 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useLocation } from "react-router-dom";
 import * as Popover from "@radix-ui/react-popover";
+import { MOBILE_BELL_SLOT_ID } from "@/components/MobileShell";
 import { Bell, Check, CheckCheck, Loader2, ShieldAlert, X, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -172,6 +175,21 @@ export function NotificationBell() {
   // notification row instead of firing immediately. Lets the user pick
   // "also block the whole domain" before committing.
   const [spamConfirmId, setSpamConfirmId] = useState<number | null>(null);
+
+  // On a phone the button lives in the app bar (MobileTopBar's slot),
+  // not in a floating circle over the content. One bell instance keeps
+  // polling; only its button moves. Looked up again on every route,
+  // because each screen mounts its own bar.
+  const loc = useLocation();
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const phone = window.matchMedia("(max-width: 767px)");
+    const find = () => setSlot(phone.matches ? document.getElementById(MOBILE_BELL_SLOT_ID) : null);
+    find();
+    const t = window.setTimeout(find, 150);          // bars that mount after data arrives
+    phone.addEventListener("change", find);
+    return () => { window.clearTimeout(t); phone.removeEventListener("change", find); };
+  }, [loc.pathname]);
   async function markSpam(n: Notification, blockDomain: boolean) {
     setBusyId(n.id);
     try {
@@ -194,22 +212,39 @@ export function NotificationBell() {
     }
   }
 
+  const badge = unread > 0 && (
+    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-2xs font-semibold flex items-center justify-center shadow">
+      {unread > 99 ? "99+" : unread}
+    </span>
+  );
+  const label = unread > 0 ? `${unread} unread notification${unread === 1 ? "" : "s"}` : "No new notifications";
+  const trigger = slot ? (
+    <Popover.Trigger asChild>
+      <button
+        className="relative w-11 h-11 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground"
+        aria-label="Notifications"
+        title={label}
+      >
+        <Bell className="w-[22px] h-[22px]" />
+        {badge}
+      </button>
+    </Popover.Trigger>
+  ) : (
+    <Popover.Trigger asChild>
+      <button
+        className="fixed z-[60] w-10 h-10 top-[calc(env(safe-area-inset-top)+0.25rem)] right-[max(0.75rem,env(safe-area-inset-right))] md:top-3 md:right-3 rounded-full bg-card border border-border shadow-md hover:shadow-lg flex items-center justify-center text-muted-foreground hover:text-foreground transition"
+        aria-label="Notifications"
+        title={label}
+      >
+        <Bell className="w-4 h-4" />
+        {badge}
+      </button>
+    </Popover.Trigger>
+  );
+
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
-        <button
-          className="fixed z-[60] w-10 h-10 top-[calc(env(safe-area-inset-top)+0.25rem)] right-[max(0.75rem,env(safe-area-inset-right))] md:top-3 md:right-3 rounded-full bg-card border border-border shadow-md hover:shadow-lg flex items-center justify-center text-muted-foreground hover:text-foreground transition"
-          aria-label="Notifications"
-          title={unread > 0 ? `${unread} unread notification${unread === 1 ? "" : "s"}` : "No new notifications"}
-        >
-          <Bell className="w-4 h-4" />
-          {unread > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-2xs font-semibold flex items-center justify-center shadow">
-              {unread > 99 ? "99+" : unread}
-            </span>
-          )}
-        </button>
-      </Popover.Trigger>
+      {slot ? createPortal(trigger, slot) : trigger}
       <Popover.Portal>
         <Popover.Content
           side="bottom" align="end" sideOffset={8}

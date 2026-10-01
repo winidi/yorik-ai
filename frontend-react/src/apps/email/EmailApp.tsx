@@ -34,6 +34,7 @@ import { Composer, type ComposeDraft } from "./Composer";
 import { HtmlBody } from "./HtmlBody";
 import { SuggestionPanel } from "./SuggestionPanel";
 import { Dock } from "@/components/Dock";
+import { MobileTopBar } from "@/components/MobileShell";
 import { PersonHover } from "@/components/PersonCard";
 import { toast } from "@/components/Toast";
 
@@ -752,32 +753,50 @@ export function EmailApp() {
           selectedId ? "hidden" : "flex flex-1",
         )}
       >
-        {/* Mobile top bar: hamburger + folder/account label. Above the
-            search bar so the user can always escape to the drawer. */}
-        <div className="md:hidden h-12 px-3 flex items-center gap-2 border-b border-border">
-          <button
-            type="button"
-            onClick={() => setMobileDrawerOpen(true)}
-            className="w-10 h-10 -ml-1 rounded-md hover:bg-muted flex items-center justify-center text-muted-foreground"
-            aria-label="Open folder menu"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold truncate">
-              {folderSel.starredOnly ? "Starred"
-                : folderSel.snoozedView ? "Snoozed"
-                : folderSel.unreadOnly ? "Unread"
-                : folderSel.categories?.length
-                  ? (findCategoryNav(folderSel.categories)?.label || "Filtered")
-                : folderSel.semantic === "inbox" ? "Inbox"
-                : folderSel.semantic === "sent" ? "Sent"
-                : folderSel.semantic === "all" ? "All mail"
-                : "Mail"}
+        {/* Phone: the shared app bar (folder name, refresh, bell) with
+            the search as a slim pill under it — one block, not two bars. */}
+        <MobileTopBar
+          title={folderSel.starredOnly ? "Starred"
+            : folderSel.snoozedView ? "Snoozed"
+            : folderSel.unreadOnly ? "Unread"
+            : folderSel.categories?.length
+              ? (findCategoryNav(folderSel.categories)?.label || "Filtered")
+            : folderSel.semantic === "inbox" ? "Inbox"
+            : folderSel.semantic === "sent" ? "Sent"
+            : folderSel.semantic === "all" ? "All mail"
+            : "Mail"}
+          onMenuClick={() => setMobileDrawerOpen(true)}
+          rightAction={
+            <button
+              onClick={() => (search ? searchApi.refetch() : listApi.refetch())}
+              disabled={listApi.loading || searchApi.loading}
+              className="w-11 h-11 rounded-md flex items-center justify-center text-muted-foreground"
+              aria-label="Refresh"
+            >
+              <RefreshCw className={cn("w-5 h-5", (listApi.loading || searchApi.loading) && "animate-spin")} />
+            </button>
+          }
+          below={
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search…"
+                aria-label="Search across all email"
+                className="w-full h-8 pl-9 pr-8 rounded-full bg-muted text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
+              />
+              {search && (
+                <button onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search">
+                  ✕
+                </button>
+              )}
             </div>
-          </div>
-        </div>
-        <div className="h-14 px-4 flex items-center gap-3 border-b border-border">
+          }
+        />
+        <div className="hidden md:flex h-14 px-4 items-center gap-3 border-b border-border">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input

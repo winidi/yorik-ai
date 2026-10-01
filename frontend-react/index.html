@@ -12,7 +12,10 @@
          standalone window mode (no browser chrome). Without it the
          home-screen icon is just a bookmark that opens in Chrome. -->
     <link rel="manifest" href="/r/manifest.webmanifest" />
-    <meta name="theme-color" content="#7c3aed" />
+    <!-- The status bar takes the app's background, not the brand violet:
+         a violet strip over the dark bar made the top look twice as tall. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0a0a" />
 
     <!-- Apple-specific PWA tags. Safari ignores the W3C manifest and
          needs its own bag of meta tags + apple-touch-icon to install

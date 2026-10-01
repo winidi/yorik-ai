@@ -44,7 +44,7 @@ export function FamilyRow() {
 
   return (
     <section className="mb-8" data-tour="family">
-      <div className="flex gap-5 overflow-x-auto pb-1">
+      <div className="flex gap-5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {rows.map(({ p, line }) => (
           <button
             key={p.id}

@@ -102,7 +102,7 @@ export function FocusCard() {
         "fixed z-[45] left-1/2 -translate-x-1/2",
         // Below the mobile top bar; on desktop in the empty middle of
         // the app headers.
-        "top-[calc(env(safe-area-inset-top)+3.75rem)] md:top-3",
+        "top-[calc(env(safe-area-inset-top)+3rem)] md:top-3",
         "max-w-[calc(100vw-2rem)] md:max-w-md",
         "flex items-center gap-2 rounded-full border border-emerald-500/40 bg-card/95 backdrop-blur",
         "pl-3 pr-1.5 py-1.5 shadow-lg shadow-emerald-500/10",

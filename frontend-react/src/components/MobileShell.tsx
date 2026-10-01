@@ -95,38 +95,65 @@ export function mobileAsideRight(open: boolean): string {
 
 interface MobileTopBarProps {
   title?: React.ReactNode;
-  onMenuClick: () => void;
+  /** Opens the left drawer; apps without one (Home, Tasks) leave it out. */
+  onMenuClick?: () => void;
   onContextClick?: () => void;
   contextLabel?: string;
+  /** One app action at the right, e.g. the calendar's quick-add. */
+  rightAction?: React.ReactNode;
+  /** A thin row under the bar (a search pill, the calendar's day/week
+   *  switch): part of the same sticky block, 36 px, no second "bar". */
+  below?: React.ReactNode;
 }
 
+/** The id NotificationBell portals its button into on a phone, so the
+ *  bell sits in the bar instead of floating over the content. */
+export const MOBILE_BELL_SLOT_ID = "yorik-mobile-bell-slot";
+
+/** The one app bar every screen shares on a phone: 44 px (plus the
+ *  status bar), menu or nothing at the left, the title in the middle,
+ *  at most one app action and the bell at the right. Before 2026-10-01
+ *  every app stacked its own header under this one (the calendar had
+ *  170 px of chrome before the first appointment) and the bell floated
+ *  as a separate circle. */
 export function MobileTopBar({
-  title, onMenuClick, onContextClick, contextLabel = "Details",
+  title, onMenuClick, onContextClick, contextLabel = "Details", rightAction, below,
 }: MobileTopBarProps) {
   return (
-    // The notification bell floats at the right end of this bar on a
-    // phone (NotificationBell), so the bar keeps that corner free.
-    <div className="md:hidden min-h-12 pt-[env(safe-area-inset-top)] pl-[max(0.5rem,env(safe-area-inset-left))] pr-[calc(max(0.75rem,env(safe-area-inset-right))+2.75rem)] border-b border-border bg-background/85 backdrop-blur flex items-center gap-1 shrink-0 sticky top-0 z-30">
-      <button
-        onClick={onMenuClick}
-        aria-label="Open menu"
-        className="w-11 h-11 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition flex items-center justify-center shrink-0"
-      >
-        <Menu className="w-5 h-5" />
-      </button>
-      <div className="flex-1 min-w-0 text-sm font-medium truncate text-center">
-        {title}
+    <div className="md:hidden sticky top-0 z-30 shrink-0 border-b border-border bg-background/90 backdrop-blur pt-[env(safe-area-inset-top)]">
+      <div className="h-11 pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.25rem,env(safe-area-inset-right))] flex items-center gap-0.5">
+        {onMenuClick ? (
+          <button
+            onClick={onMenuClick}
+            aria-label="Open menu"
+            className="w-11 h-11 rounded-md text-muted-foreground hover:text-foreground flex items-center justify-center shrink-0"
+          >
+            <Menu className="w-[22px] h-[22px]" />
+          </button>
+        ) : (
+          <span className="w-2 shrink-0" />
+        )}
+        <div className="flex-1 min-w-0 text-[17px] font-semibold tracking-tight truncate text-center">
+          {title}
+        </div>
+        <div className="flex items-center shrink-0">
+          {rightAction}
+          {onContextClick && (
+            <button
+              onClick={onContextClick}
+              aria-label={contextLabel}
+              className="w-11 h-11 rounded-md text-muted-foreground hover:text-foreground flex items-center justify-center shrink-0"
+            >
+              <PanelRight className="w-[22px] h-[22px]" />
+            </button>
+          )}
+          <span id={MOBILE_BELL_SLOT_ID} className="flex items-center shrink-0" />
+        </div>
       </div>
-      {onContextClick ? (
-        <button
-          onClick={onContextClick}
-          aria-label={contextLabel}
-          className="w-11 h-11 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition flex items-center justify-center shrink-0"
-        >
-          <PanelRight className="w-5 h-5" />
-        </button>
-      ) : (
-        <span className="w-11 shrink-0" />
+      {below && (
+        <div className="h-9 px-3 pb-1 flex items-center gap-2">
+          {below}
+        </div>
       )}
     </div>
   );

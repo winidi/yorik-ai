@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { MobileTopBar } from "@/components/MobileShell";
 import {
   Sparkles, Calendar, MessageSquare, FolderOpen, FilePlus,
   MessageCircle, Inbox, Newspaper, Settings as Cog,
@@ -128,11 +129,30 @@ export function HomeApp() {
 
   return (
     <div className="h-screen overflow-y-auto bg-background text-foreground pb-24 home-bg">
-      <div className="max-w-5xl mx-auto px-4 sm:px-8 pt-8 sm:pt-12 pb-8">
+      {/* Phone: the shared app bar — search at the right, the bell in its
+          slot. Help lives in the Dock's "?" and a pull on the page reloads
+          it, so the desktop's Help/Refresh pair stays desktop-only. */}
+      <MobileTopBar
+        title={<span className="inline-flex items-center gap-2"><img src="/r/butler-mark.png" alt="" className="w-6 h-6 object-contain dark:invert" />Yorik</span>}
+        rightAction={
+          <button
+            onClick={() => {
+              window.dispatchEvent(new KeyboardEvent("keydown", {
+                key: "k", ctrlKey: true, metaKey: navigator.platform.includes("Mac"),
+              }));
+            }}
+            className="w-11 h-11 rounded-md flex items-center justify-center text-muted-foreground"
+            aria-label="Search everything"
+          >
+            <Search className="w-[22px] h-[22px]" />
+          </button>
+        }
+      />
+      <div className="max-w-5xl mx-auto px-4 sm:px-8 pt-4 sm:pt-12 pb-8">
         {/* Hero */}
-        <header className="flex items-start justify-between gap-6 mb-6 sm:mb-8">
+        <header className="flex items-start justify-between gap-6 mb-5 sm:mb-8">
           <div className="min-w-0">
-            <div className="flex items-center gap-3 mb-2">
+            <div className="hidden md:flex items-center gap-3 mb-2">
               <img
                 src="/r/butler-mark.png"
                 alt="Yorik"
@@ -147,7 +167,7 @@ export function HomeApp() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0 max-md:mr-12">
+          <div className="hidden md:flex items-center gap-3 shrink-0">
             <button
               onClick={() => {
                 window.dispatchEvent(new KeyboardEvent("keydown", {
