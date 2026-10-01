@@ -13,6 +13,7 @@ encrypted with the operator's passphrase. They contain:
   permanently undecryptable.
 - `data/documents/` — locally-uploaded Yorik documents.
 - `briefings/` — generated PDFs + the source tree.
+- `whatsapp_media/` — the photos from WhatsApp chats that Yorik keeps itself.
 
 With "include photos" / "include documents" switched on it also holds
 the photo originals (`immich_library`) and Paperless's files

@@ -446,3 +446,38 @@ def test_two_invoices_at_once_get_two_numbers(fresh_app):
     [t.start() for t in ts]; [t.join() for t in ts]
     assert not errors, errors
     assert sorted(got) == list(range(min(got), min(got) + 4))
+
+
+def test_whatsapp_photos_survive_a_bridge_restart(fresh_app, monkeypatch, tmp_path):
+    """Photo (unavailable) after every bridge restart: the bridge keeps
+    bytes only in memory. Yorik now keeps its own copy at ingest and the
+    media route serves it before asking the bridge."""
+    import asyncio
+    from tests.conftest import login_client
+    from backend import whatsapp_media as WM
+    monkeypatch.setattr(WM, "MEDIA_DIR", str(tmp_path / "wa"))
+    client, uid = login_client(fresh_app, role="admin", name="Dirk", email="d14@example.com")
+
+    class FakeResp:
+        status_code = 200
+        content = b"\xff\xd8JPEGBYTES"
+        headers = {"content-type": "image/jpeg"}
+    class FakeClient:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url, **k): return FakeResp()
+    monkeypatch.setattr(WM.httpx, "AsyncClient", FakeClient)
+    assert asyncio.run(WM.keep_local_copy("ABC123", str(uid), "image"))
+    path, mime = WM.local_media_file(str(uid), "ABC123")
+    assert path.endswith(".jpg") and mime == "image/jpeg"
+    assert not asyncio.run(WM.keep_local_copy("VID1", str(uid), "video"))   # videos are not kept
+
+    # the route serves the copy even when the bridge is gone
+    from backend import whatsapp as W
+    class DeadClient(FakeClient):
+        async def get(self, url, **k): raise W.httpx.RequestError("down")
+    monkeypatch.setattr(W.httpx, "AsyncClient", DeadClient)
+    r = client.get("/api/whatsapp/media/ABC123")
+    assert r.status_code == 200 and r.content == FakeResp.content and r.headers["content-type"].startswith("image/jpeg")
+    assert client.get("/api/whatsapp/media/NOPE").status_code == 404

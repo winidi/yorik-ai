@@ -319,6 +319,17 @@ def _bundle(opts: dict[str, Any], staging: Path) -> tuple[Path, list[str]]:
         shutil.copytree(BRIEFINGS_DIR, staging / "briefings", dirs_exist_ok=False)
         includes.append("briefings")
 
+    # 4b. WhatsApp photos Yorik kept itself (whatsapp_media.MEDIA_DIR) —
+    #     the chat's pictures, independent of the photo library.
+    try:
+        from .whatsapp_media import MEDIA_DIR as _WA_MEDIA
+        wa_media = Path(_WA_MEDIA)
+        if wa_media.exists():
+            _copy_tree(wa_media, staging / "whatsapp_media")
+            includes.append("whatsapp_media")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("backup: whatsapp media skipped: %s", exc)
+
     # 5. Optional heavy dirs. In the Docker stack the photos and the
     #    documents live in the Immich / Paperless volumes, mounted
     #    read-only into Yorik's container (YORIK_PHOTOS_DIR, …); on a
@@ -752,6 +763,7 @@ def verify_snapshot(snapshot_path: Path, passphrase: str) -> dict[str, Any]:
         "credential_key":      ".credential_key",
         "documents":           "documents",
         "briefings":           "briefings",
+        "whatsapp_media":      "whatsapp_media",
         "immich_library":      "immich_library",
         "paperless_data":      "paperless_data",
         "paperless_media":     "paperless_media",
@@ -1160,6 +1172,17 @@ def restore_snapshot(snapshot_path: Path, passphrase: str, *,
                     _shutil.rmtree(dst)
                 _shutil.copytree(src, dst)
                 _step("briefings_dir", True, f"{sum(1 for _ in dst.rglob('*'))} entries")
+
+        # whatsapp_media/ — the chat's photos Yorik kept itself
+        if "whatsapp_media" in includes:
+            from .whatsapp_media import MEDIA_DIR as _WA_MEDIA
+            src = extracted_root / "whatsapp_media"
+            dst = Path(_WA_MEDIA)
+            if src.exists():
+                if dst.exists():
+                    _shutil.rmtree(dst)
+                _shutil.copytree(src, dst)
+                _step("whatsapp_media_dir", True, f"{sum(1 for _ in dst.rglob('*'))} entries")
 
         # Per-tenant manifest.env + bearer token — needed for systemctl
         # restart to find the tenant's port + DB name + host RPC bearer.

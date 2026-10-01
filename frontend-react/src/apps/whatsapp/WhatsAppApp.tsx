@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { formatTime } from "@/i18n/format";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { Dock } from "@/components/Dock";
@@ -175,6 +176,9 @@ export function WhatsAppApp() {
   );
 
   const tri = useTriPane();
+  // A chat is "open" on a phone when it exists (or the list is still
+  // loading); a stale ?chat= for a chat that is gone shows the list.
+  const chatOpen = !!activeJid && (!!activeChat || !chatsApi.data);
 
   return (
     <div className="flex h-screen bg-background text-foreground relative">
@@ -184,9 +188,9 @@ export function WhatsAppApp() {
         "md:w-[330px] md:border-r border-border flex flex-col bg-sidebar shrink-0",
         // Phone: the list IS the screen while no chat is open; with a
         // chat open it is the drawer behind the ☰ (unchanged).
-        activeJid ? mobileAsideLeft(tri.leftOpen) : "max-md:w-full max-md:flex-1 max-md:min-w-0",
+        chatOpen ? mobileAsideLeft(tri.leftOpen) : "max-md:w-full max-md:flex-1 max-md:min-w-0",
       )}>
-        {!activeJid && (
+        {!chatOpen && (
           <MobileTopBar
             title="WhatsApp"
             rightAction={
@@ -258,7 +262,7 @@ export function WhatsAppApp() {
       </aside>
 
       {/* ── Thread ──────────────────────────────────────────── */}
-      <section className={cn("flex-1 flex-col bg-background min-w-0 thread-bg md:flex", activeJid ? "flex" : "hidden")}>
+      <section className={cn("flex-1 flex-col bg-background min-w-0 thread-bg md:flex", chatOpen ? "flex" : "hidden")}>
         <MobileTopBar
           title={activeChat?.name || (activeJid ? activeJid.split("@")[0] : "WhatsApp")}
           onBack={backToList}
@@ -609,7 +613,7 @@ function Thread({ jid, chat, onSent }:
           {msgsApi.loading && messages.length === 0 && (
             <div className="text-center text-xs text-muted-foreground py-12">Loading…</div>
           )}
-          <MessageStream messages={messages} contactName={name} />
+          <MessageStream messages={messages} contactName={name} isGroup={!!chat.is_group} />
         </div>
       </div>
 
@@ -667,8 +671,8 @@ function Thread({ jid, chat, onSent }:
  * spacing within a group). This is the single biggest visual win
  * over the previous "every message is its own card" rendering.
  */
-function MessageStream({ messages, contactName }:
-  { messages: WaMessage[]; contactName: string }) {
+function MessageStream({ messages, contactName, isGroup = false }:
+  { messages: WaMessage[]; contactName: string; isGroup?: boolean }) {
   const grouped: React.ReactNode[] = [];
   let lastDateKey = "";
   let lastSender: string | null = null;
@@ -703,6 +707,7 @@ function MessageStream({ messages, contactName }:
         key={`m-${m.msg_id}-${i}`}
         m={m}
         contactName={contactName}
+        isGroup={isGroup}
         isFirstInGroup={isNewGroup}
         isLastInGroup={isLastInGroup}
       />,
@@ -726,13 +731,13 @@ function DateSeparator({ date }: { date: Date }) {
   } else {
     label = date.toLocaleDateString([], { day: "numeric", month: "long", year: "numeric" });
   }
+  // A centred pill, the way messengers mark a day — not a rule across
+  // the screen.
   return (
-    <div className="flex items-center gap-3 my-5">
-      <div className="flex-1 h-px bg-border" />
-      <span className="text-2xs font-medium text-muted-foreground">
+    <div className="flex justify-center my-4">
+      <span className="px-3 py-1 rounded-full bg-muted/80 text-2xs font-medium text-muted-foreground shadow-sm">
         {label}
       </span>
-      <div className="flex-1 h-px bg-border" />
     </div>
   );
 }
@@ -750,7 +755,7 @@ function ImageBubble({ msgId }: { msgId: string }) {
   const [errored, setErrored] = useState(false);
   if (errored) {
     return (
-      <span className="opacity-80 italic flex items-center gap-1.5">
+      <span className="opacity-80 italic flex items-center gap-1.5 text-sm px-2 py-1">
         <ImageIcon className="w-3.5 h-3.5" /> Photo (unavailable)
       </span>
     );
@@ -761,14 +766,14 @@ function ImageBubble({ msgId }: { msgId: string }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="block -m-1"
+      className="block"
       onClick={(e) => e.stopPropagation()}
     >
       <img
         src={url}
         alt="Photo"
         loading="lazy"
-        className="rounded-lg max-w-full max-h-[420px] object-cover cursor-zoom-in"
+        className="rounded-xl max-w-full max-h-[420px] object-cover cursor-zoom-in"
         onError={() => setErrored(true)}
       />
     </a>
@@ -776,83 +781,117 @@ function ImageBubble({ msgId }: { msgId: string }) {
 }
 
 
-function Bubble({ m, contactName, isFirstInGroup, isLastInGroup }:
-  { m: WaMessage; contactName: string; isFirstInGroup: boolean; isLastInGroup: boolean }) {
+function Bubble({ m, contactName, isGroup, isFirstInGroup, isLastInGroup }:
+  { m: WaMessage; contactName: string; isGroup: boolean; isFirstInGroup: boolean; isLastInGroup: boolean }) {
   const out = !!m.from_me;
-  let body: React.ReactNode = null;
-  if (m.text) {
-    body = <span className="whitespace-pre-wrap break-words">{m.text}</span>;
-  } else if (m.media_kind === "image") {
-    body = <ImageBubble msgId={m.msg_id} />;
+  const mediaUrl = `/api/whatsapp/media/${encodeURIComponent(m.msg_id)}`;
+  // Media first, the caption (m.text) under it — a photo with a caption
+  // used to show the caption only.
+  let media: React.ReactNode = null;
+  if (m.media_kind === "image" || m.media_kind === "sticker") {
+    media = <ImageBubble msgId={m.msg_id} />;
   } else if (m.media_kind === "video") {
-    body = <span className="opacity-80 italic">Video</span>;
+    media = <VideoBubble url={mediaUrl} />;
   } else if (m.media_kind === "document") {
-    body = <span className="opacity-80 italic flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" />{m.filename || "Document"}</span>;
-  } else if (m.media_kind === "audio") {
-    body = (
-      <div>
-        <div className="opacity-80 italic flex items-center gap-1.5"><Mic className="w-3.5 h-3.5" /> Voice message</div>
-        {m.transcript && (
-          <div className={cn(
-            "mt-1.5 pl-2 border-l-2 text-xs italic leading-relaxed",
-            out ? "border-white/40 text-white/90" : "border-emerald-500/40 text-foreground/80"
-          )}>{m.transcript}</div>
-        )}
-      </div>
+    media = (
+      <a href={mediaUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+         className="flex items-center gap-2 rounded-lg bg-black/10 dark:bg-white/10 px-2.5 py-2 hover:bg-black/15 dark:hover:bg-white/15">
+        <FileText className="w-5 h-5 shrink-0" />
+        <span className="truncate text-sm">{m.filename || "Document"}</span>
+      </a>
     );
-  } else {
-    body = <span className="opacity-70 italic">[{m.media_kind || "media"}]</span>;
+  } else if (m.media_kind === "audio") {
+    media = <AudioBubble url={mediaUrl} transcript={m.transcript} out={out} />;
+  } else if (m.media_kind && !m.text) {
+    media = <span className="opacity-70 italic">[{m.media_kind}]</span>;
   }
-  const ts = new Date(m.timestamp * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const text = m.text ? <span className="whitespace-pre-wrap break-words">{m.text}</span> : null;
+  const ts = formatTime(new Date(m.timestamp * 1000));
 
-  // Group-aware bubble corner shaping for the WhatsApp/iMessage tail effect.
+  // Group-aware corners for the tail effect.
   const cornerClass = out
-    ? cn(
-        "rounded-2xl",
-        !isLastInGroup && "rounded-br-md",
-        !isFirstInGroup && "rounded-tr-md",
-      )
-    : cn(
-        "rounded-2xl",
-        !isLastInGroup && "rounded-bl-md",
-        !isFirstInGroup && "rounded-tl-md",
-      );
+    ? cn("rounded-2xl", !isLastInGroup && "rounded-br-md", !isFirstInGroup && "rounded-tr-md")
+    : cn("rounded-2xl", !isLastInGroup && "rounded-bl-md", !isFirstInGroup && "rounded-tl-md");
+  const mediaOnly = !!media && !text;
 
   return (
     <div className={cn(
-      "flex group",
+      "flex",
       out ? "justify-end" : "justify-start",
-      // Tighter spacing within a group, looser between groups.
-      isFirstInGroup ? "mt-3" : "mt-0.5",
+      isFirstInGroup ? "mt-2.5" : "mt-0.5",
     )}>
       <div className={cn(
-        "max-w-[72%] px-3.5 py-2 text-sm shadow-sm",
+        "max-w-[82%] md:max-w-[70%] text-[15px] md:text-sm leading-snug shadow-sm",
+        mediaOnly ? "p-1" : "px-3 pt-1.5 pb-1",
         cornerClass,
+        // Flat, like a messenger: a quiet green for mine, the surface
+        // colour for theirs, no borders.
         out
-          ? "bg-emerald-500 text-white"
-          : "bg-card border border-border"
+          ? "bg-emerald-200 text-emerald-950 dark:bg-emerald-800/80 dark:text-emerald-50"
+          : "bg-muted text-foreground",
       )}>
-        {!out && isFirstInGroup && m.push_name && (
-          <div className="text-2xs font-semibold text-emerald-500 mb-0.5">{m.push_name}</div>
+        {/* Who wrote it: only in groups, only at the top of a run — in a
+            1:1 chat the name is the chat's title. */}
+        {!out && isGroup && isFirstInGroup && m.push_name && (
+          <div className={cn("text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-0.5", mediaOnly && "px-2 pt-1")}>
+            {m.push_name}
+          </div>
         )}
-        {body}
+        {media}
+        {text && <div className={cn(media && "mt-1.5")}>{text}</div>}
+        {/* Time on every bubble (phones have no hover), small, at the end. */}
         <div className={cn(
-          "text-2xs mt-1 tabular-nums flex items-center gap-1 justify-end",
-          out ? "text-white/70" : "text-muted-foreground",
-          // Only the last message in a group always shows time;
-          // earlier ones show on hover.
-          !isLastInGroup && "opacity-0 group-hover:opacity-100 transition-opacity",
+          "text-[11px] tabular-nums flex items-center gap-1 justify-end leading-none",
+          mediaOnly ? "px-1.5 pt-1 pb-0.5" : "mt-0.5 -mb-0.5",
+          out ? "text-emerald-900/60 dark:text-emerald-100/60" : "text-muted-foreground",
         )}>
+          {m.media_paperless_id != null && <FileText className="w-3 h-3 opacity-70" aria-label="Filed in Documents" />}
+          {m.media_immich_id && <ImageIcon className="w-3 h-3 opacity-70" aria-label="In Photos" />}
           {ts}
-          {out && <CheckCheck className="w-3 h-3 opacity-80" />}
-          {(m.media_paperless_id !== null && m.media_paperless_id !== undefined) && (
-            <span className="ml-1">· Filed</span>
-          )}
-          {m.media_immich_id && (
-            <span className="ml-1">· Photos</span>
-          )}
+          {out && <CheckCheck className="w-3.5 h-3.5 opacity-80" />}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** A video from the chat — the browser streams it from the media route
+ *  (bridge or the photo library); a faded label when it is gone. */
+function VideoBubble({ url }: { url: string }) {
+  const [errored, setErrored] = useState(false);
+  if (errored) {
+    return <span className="opacity-80 italic text-sm px-2 py-1 inline-block">Video (unavailable)</span>;
+  }
+  return (
+    <video
+      src={url}
+      controls
+      preload="metadata"
+      playsInline
+      className="rounded-xl max-w-full max-h-[420px] bg-black/40"
+      onError={() => setErrored(true)}
+      onClick={(e) => e.stopPropagation()}
+    />
+  );
+}
+
+/** A voice note: a player, and under it what was said (the transcript). */
+function AudioBubble({ url, transcript, out }: { url: string; transcript?: string | null; out: boolean }) {
+  const [errored, setErrored] = useState(false);
+  return (
+    <div className="min-w-[200px]">
+      {errored ? (
+        <div className="opacity-80 italic flex items-center gap-1.5 text-sm"><Mic className="w-3.5 h-3.5" /> Voice message (unavailable)</div>
+      ) : (
+        <audio src={url} controls preload="none" className="w-full h-9" onError={() => setErrored(true)}
+               onClick={(e) => e.stopPropagation()} />
+      )}
+      {transcript && (
+        <div className={cn(
+          "mt-1.5 pl-2 border-l-2 text-xs italic leading-relaxed",
+          out ? "border-emerald-900/30 dark:border-emerald-100/30" : "border-emerald-500/40 text-foreground/80",
+        )}>{transcript}</div>
+      )}
     </div>
   );
 }

@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from backend.database import get_conn
@@ -647,6 +648,10 @@ def start_background(loop: asyncio.AbstractEventLoop) -> None:
     if _ws_task and not _ws_task.done():
         return
     _ws_task = loop.create_task(_ws_subscriber(), name="yorik-wa-subscriber")
+    # Photos the bridge still holds in memory get Yorik's own copy now,
+    # before the next bridge restart loses them.
+    from . import whatsapp_media as _wm
+    loop.create_task(_wm.backfill_local_copies(), name="yorik-wa-media-backfill")
 
 
 async def stop_background() -> None:
@@ -922,20 +927,47 @@ async def get_media(
     is safe (1 day).
     """
     uid = user["id"]
+    from . import whatsapp_media as _wm
+    # 1. Yorik's own copy (kept at ingest since 2026-10-01).
+    local = _wm.local_media_file(str(uid), msg_id)
+    if local:
+        return FileResponse(local[0], media_type=local[1], headers={"Cache-Control": "private, max-age=86400"})
+    # 2. The bridge, while it still has the message in memory — and keep
+    #    a copy for next time.
     try:
         async with httpx.AsyncClient(timeout=30.0, headers=_bridge_headers()) as c:
             r = await c.get(_bridge_url(f"/media/{msg_id}", uid))
-            if r.status_code == 404:
-                raise HTTPException(404, "media not found — may have expired on WhatsApp's servers")
-            if r.status_code != 200:
-                raise HTTPException(r.status_code, f"bridge error: {r.text[:200]}")
-            return Response(
-                content=r.content,
-                media_type=r.headers.get("content-type", "application/octet-stream"),
-                headers={"Cache-Control": "private, max-age=86400"},
-            )
+        if r.status_code == 200:
+            mime = r.headers.get("content-type", "application/octet-stream")
+            if mime.startswith("image/") or mime.startswith("audio/"):
+                asyncio.create_task(_wm.keep_local_copy(msg_id, str(uid), "image" if mime.startswith("image/") else "audio"))
+            return Response(content=r.content, media_type=mime,
+                            headers={"Cache-Control": "private, max-age=86400"})
+        if r.status_code != 404:
+            raise HTTPException(r.status_code, f"bridge error: {r.text[:200]}")
     except httpx.RequestError as e:
-        raise HTTPException(502, f"bridge unreachable: {e}")
+        log.info("whatsapp media %s: bridge unreachable (%s), trying the photo library", msg_id, e)
+    # 3. The copy the photo library (Immich) got at ingest, if any.
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT media_immich_id FROM wa_messages WHERE msg_id = ? AND owner_user_id = ?",
+            (msg_id, uid)).fetchone()
+    asset_id = row["media_immich_id"] if row else None
+    if asset_id:
+        from . import external_users as _eu
+        creds = _eu.get_user_immich_creds(str(uid)) or {}
+        base, key = (creds.get("base_url") or "").rstrip("/"), creds.get("api_key") or ""
+        if base and key and re.fullmatch(r"[A-Za-z0-9._-]+", str(asset_id)):
+            try:
+                async with httpx.AsyncClient(timeout=20.0) as c:
+                    r2 = await c.get(f"{base}/api/assets/{asset_id}/original", headers={"x-api-key": key})
+                if r2.status_code == 200:
+                    return Response(content=r2.content,
+                                    media_type=r2.headers.get("content-type", "application/octet-stream"),
+                                    headers={"Cache-Control": "private, max-age=86400"})
+            except httpx.RequestError:
+                pass
+    raise HTTPException(404, "media not found — it is no longer on WhatsApp's servers and Yorik has no copy")
 
 
 @router.get("/qr")

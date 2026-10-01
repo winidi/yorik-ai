@@ -52,6 +52,95 @@ log = logging.getLogger("yorik.whatsapp.media")
 
 BRIDGE_URL = os.getenv("YORIK_WA_BRIDGE_URL", "http://127.0.0.1:3015")
 
+# Yorik's own copy of incoming photos. The bridge keeps a message's bytes
+# only in memory (last 1000 messages), so after every bridge restart the
+# chat said "Photo (unavailable)" for everything older (2026-10-01).
+# Images (and stickers) are kept here per WhatsApp owner; videos and
+# documents are not (size; documents go to Paperless anyway).
+MEDIA_DIR = os.getenv("YORIK_WA_MEDIA_DIR") or os.path.join(
+    os.path.dirname(os.getenv("HOMEOS_DB_PATH", "data/family.db")) or "data", "whatsapp_media")
+LOCAL_COPY_KINDS = {"image", "sticker", "audio"}   # voice notes are small
+LOCAL_COPY_MAX_BYTES = 15 * 1024 * 1024
+_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif",
+        "audio/ogg": ".ogg", "audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/aac": ".aac"}
+
+
+def _safe_id(msg_id: str) -> str:
+    return "".join(ch for ch in str(msg_id) if ch.isalnum() or ch in "-_")[:120]
+
+
+def local_media_file(owner_user_id: str, msg_id: str) -> tuple[str, str] | None:
+    """(path, mime) of the stored copy, or None."""
+    d = os.path.join(MEDIA_DIR, _safe_id(owner_user_id))
+    if not os.path.isdir(d):
+        return None
+    stem = _safe_id(msg_id)
+    for mime, ext in _EXT.items():
+        path = os.path.join(d, stem + ext)
+        if os.path.isfile(path):
+            return path, mime
+    path = os.path.join(d, stem + ".bin")
+    return (path, "application/octet-stream") if os.path.isfile(path) else None
+
+
+async def backfill_local_copies(limit_per_owner: int = 1000) -> int:
+    """At start-up: fetch a copy of the newest photos that have none yet.
+    The bridge answers only for what is still in its memory (its last
+    1000 messages), so this is bounded and quiet; evicted ones are
+    skipped. Returns how many copies were made."""
+    await asyncio.sleep(20)                      # let the bridge connection settle
+    made = 0
+    try:
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT msg_id, owner_user_id, media_kind FROM wa_messages "
+                "WHERE media_kind IN ('image', 'sticker', 'audio') AND chat_jid <> 'status@broadcast' "
+                "ORDER BY timestamp DESC LIMIT ?", (limit_per_owner * 4,)).fetchall()
+    except Exception as exc:  # noqa: BLE001
+        log.debug("whatsapp_media: backfill skipped: %s", exc)
+        return 0
+    seen: dict[str, int] = {}
+    for r in rows:
+        owner = str(r["owner_user_id"] or "")
+        if not owner or seen.get(owner, 0) >= limit_per_owner:
+            continue
+        seen[owner] = seen.get(owner, 0) + 1
+        if local_media_file(owner, r["msg_id"]):
+            continue
+        if await keep_local_copy(r["msg_id"], owner, str(r["media_kind"] or "image")):
+            made += 1
+        await asyncio.sleep(0.05)
+    if made:
+        log.info("whatsapp_media: kept %d photos the bridge still had", made)
+    return made
+
+
+async def keep_local_copy(msg_id: str, owner_user_id: str, kind: str) -> bool:
+    """Download an incoming photo from the bridge while it still has it
+    and keep it under MEDIA_DIR. Idempotent, size-capped, never raises."""
+    if kind not in LOCAL_COPY_KINDS or not msg_id or not owner_user_id:
+        return False
+    if local_media_file(owner_user_id, msg_id):
+        return True
+    try:
+        from .whatsapp import _bridge_headers, _bridge_url
+        async with httpx.AsyncClient(timeout=120.0, headers=_bridge_headers()) as c:
+            r = await c.get(_bridge_url(f"/media/{msg_id}", owner_user_id))
+        if r.status_code != 200 or len(r.content) > LOCAL_COPY_MAX_BYTES:
+            return False
+        mime = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
+        ext = _EXT.get(mime, ".bin")
+        d = os.path.join(MEDIA_DIR, _safe_id(owner_user_id))
+        os.makedirs(d, exist_ok=True)
+        tmp = os.path.join(d, f".{_safe_id(msg_id)}{ext}.part")
+        with open(tmp, "wb") as f:
+            f.write(r.content)
+        os.replace(tmp, os.path.join(d, _safe_id(msg_id) + ext))
+        return True
+    except Exception as exc:  # noqa: BLE001
+        log.debug("whatsapp_media: no local copy of %s: %s", msg_id, exc)
+        return False
+
 # Document-style mimetypes route to Paperless. Everything else with
 # mediaKind=="document" still routes there (Paperless OCR's images too)
 # but at least these are the ones we expect.
@@ -130,6 +219,11 @@ async def _process_media_locked(msg: dict[str, Any], owner_user_id: str, *, forc
     chat_jid = msg.get("jid")
     if not kind or not msg_id or not chat_jid:
         return
+
+    # Yorik's own copy first — before any gate, because the chat has to
+    # show a photo whoever sent it (status broadcasts excluded below).
+    if chat_jid != "status@broadcast":
+        await keep_local_copy(str(msg_id), owner_user_id, str(kind))
 
     # WhatsApp Status broadcasts are basically Stories — 24h ephemeral
     # photos/videos from contacts. Almost no one wants them
