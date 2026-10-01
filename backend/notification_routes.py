@@ -73,7 +73,7 @@ async def accept_proposal(notification_id: int, user: dict = Depends(current_use
         ).fetchone()
     if not row:
         raise HTTPException(404, "notification not found")
-    if row["kind"] != "email_proposal":
+    if row["kind"] not in ("email_proposal", "document_proposal"):
         raise HTTPException(400, f"notification kind '{row['kind']}' is not acceptable")
     try:
         payload = json.loads(row["payload_json"] or "{}")
@@ -89,12 +89,19 @@ async def accept_proposal(notification_id: int, user: dict = Depends(current_use
         # the user fix it (or cancel) before it sticks.
         from datetime import date as _date, timedelta as _td
         due = extracted.get("due_date") or (_date.today() + _td(days=30)).isoformat()
+        from_document = payload.get("source") == "paperless" or bool(payload.get("paperless_doc_id"))
+        source = "paperless" if from_document else "email"
+        source_ref = payload.get("paperless_doc_id") if from_document else payload.get("message_id")
         skill_args = {
             "name":             payload.get("subject") or f"Bill from {payload.get('vendor', 'unknown')}",
             "amount":           extracted.get("amount") or 0,
             "currency":         extracted.get("currency") or _household_currency(),
             "due_date":         due,
-            "notes":            f"Auto-imported from email (notif #{notification_id})",
+            "payee":            payload.get("vendor"),
+            "number":           payload.get("number"),
+            "notes":            f"From {'document' if from_document else 'email'} (notification #{notification_id})",
+            "source":           source,
+            "source_ref":       source_ref,
             "email_message_id": payload.get("message_id"),
             "document_id":      payload.get("document_id"),
         }

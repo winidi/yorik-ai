@@ -135,6 +135,10 @@ app.include_router(_email_routes.router)
 from . import bank_accounts as _bank_accounts
 app.include_router(_bank_accounts.router)
 
+# Bills — what is still to pay, ticked off by hand or by the bank.
+from . import bill_routes as _bill_routes
+app.include_router(_bill_routes.router)
+
 # Pipelines — Yorik follows a matter until it is done (follow-ups first).
 from .pipelines import routes as _pipeline_routes
 app.include_router(_pipeline_routes.router)
@@ -2902,6 +2906,9 @@ def _startup() -> None:
     # queries never hit FinTS live (TAN friction, latency).
     from . import bank_sync as _bank_sync
     _bank_sync.start_scheduler(_aio.get_event_loop())
+    # Bills: hourly, the bank ticks off what it paid; due-soon reminders.
+    from . import bills as _bills
+    _bills.start_scheduler(_aio.get_event_loop())
     # Pipelines: the planner that waits, checks and asks (never sends by
     # itself in stage 1).
     from .pipelines import engine as _pipeline_engine
@@ -4886,62 +4893,7 @@ async def immich_person_thumbnail_proxy(
     )
 
 
-@app.get("/api/bills")
-def list_bills(
-    role: str = Depends(_auth.current_role),
-    user: dict[str, Any] = Depends(_auth.current_user_optional),
-) -> List[Dict[str, Any]]:
-    require_role(role, "bills")
-    # Phase B: filter to bills in spaces the user can see (admins see
-    # all). Bills land in Finance by default; non-admins only see them
-    # when they're explicitly added to Finance (or a custom shared
-    # space holding bills).
-    from . import spaces as _sp
-    uid = user.get("id") if user else None
-    frag, params = _sp.row_filter(uid, role, "bills")
-    sql = f"SELECT * FROM bills WHERE {frag} ORDER BY due_date ASC"
-    with conn_ctx(DB_PATH) as conn:
-        rows = conn.execute(sql, params).fetchall()
-    return _rows_to_dicts(rows)
-
-
-class BillPatch(BaseModel):
-    """Partial update for a bill. Currently the only writable field from
-    the UI is `paid` (Mark paid / Mark unpaid on the home-screen bill
-    modal). Schema is open-ended so we can add notes/amount/due_date
-    edits later without a second endpoint."""
-    paid: Optional[bool] = None
-    notes: Optional[str] = None
-
-
-@app.patch("/api/bills/{bill_id}")
-def patch_bill(
-    bill_id: int,
-    body: BillPatch,
-    role: str = Depends(_auth.current_role),
-    user: dict[str, Any] = Depends(_auth.current_user),
-) -> Dict[str, Any]:
-    _ensure_row_writable("bills", bill_id, role, user)       # the person's own or a space they may write to
-    updates: List[str] = []
-    params: List[Any] = []
-    if body.paid is not None:
-        updates.append("paid = ?")
-        params.append(1 if body.paid else 0)
-    if body.notes is not None:
-        updates.append("notes = ?")
-        params.append(body.notes)
-    if not updates:
-        raise HTTPException(status_code=400, detail="no fields to update")
-    params.append(bill_id)
-    with conn_ctx(DB_PATH) as conn:
-        cur = conn.execute(
-            f"UPDATE bills SET {', '.join(updates)} WHERE id = ?", params,
-        )
-        if cur.rowcount == 0:
-            raise HTTPException(status_code=404, detail=f"bill {bill_id} not found")
-        conn.commit()
-        row = conn.execute("SELECT * FROM bills WHERE id = ?", (bill_id,)).fetchone()
-    return dict(row)
+# Bills live in backend/bill_routes.py (Finance → Bills tab).
 
 
 # ── Contacts (identity hub) ────────────────────────────────────────────────
@@ -12632,8 +12584,11 @@ async def upload_document(
 
     # ── MIME allowlist: refuse anything we can't index. Browser-supplied
     # content_type is informational; we also re-check by extension below.
+    # A photo (a letter snapped with the phone) is welcome: it becomes a
+    # PDF below, after the size check.
     supplied_mime = (file.content_type or "").lower().strip()
-    if supplied_mime and supplied_mime not in documents_mod.SUPPORTED_MIME:
+    photo = documents_mod.is_photo(supplied_mime, safe_name)
+    if supplied_mime and not photo and supplied_mime not in documents_mod.SUPPORTED_MIME:
         raise HTTPException(
             status_code=415,
             detail=f"unsupported file type '{supplied_mime}' — allowed: {sorted(documents_mod.SUPPORTED_MIME)}",
@@ -12658,6 +12613,14 @@ async def upload_document(
             )
         chunks.append(chunk)
     raw_bytes = b"".join(chunks)
+    if photo:
+        try:
+            raw_bytes = documents_mod.photo_to_pdf(raw_bytes)
+        except ValueError as exc:
+            raise HTTPException(status_code=415, detail=str(exc))
+        safe_name = Path(safe_name).stem + ".pdf"
+        suffix = ".pdf"
+        supplied_mime = "application/pdf"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(raw_bytes)
         tmp_path = Path(tmp.name)

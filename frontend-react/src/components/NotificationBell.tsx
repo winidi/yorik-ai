@@ -136,6 +136,7 @@ export function NotificationBell() {
       await api.post(`/api/notifications/${n.id}/accept`);
       setList(l => l ? l.filter(x => x.id !== n.id) : l);
       setUnread(c => Math.max(0, c - 1));
+      if (n.payload?.category === "bill") toast("Added to Finance → Bills.");
     } catch (e: any) {
       toast(`Couldn't accept: ${e?.message || e}`);
     } finally {
@@ -288,7 +289,9 @@ export function NotificationBell() {
             )}
             {list?.map(n => {
               const isAgentPending = n.kind === "agent_pending";
-              const isProposal = n.kind === "email_proposal" || isAgentPending;
+              // A bill or appointment read from a mail (email_proposal) or
+              // from a filed document (document_proposal): same buttons.
+              const isProposal = n.kind === "email_proposal" || n.kind === "document_proposal" || isAgentPending;
               const proposalKind = n.payload?.category as ("bill" | "appointment" | undefined);
               return (
                 <div
@@ -391,7 +394,7 @@ export function NotificationBell() {
                             onClick={(e) => { e.stopPropagation(); setOpen(false); window.location.assign(n.navigate_to!); }}
                             className="text-xs text-primary hover:underline ml-auto"
                           >
-                            view email
+                            {n.kind === "document_proposal" ? "view document" : "view email"}
                           </button>
                         )}
                       </div>

@@ -45,23 +45,26 @@ async def execute(
     if not updates:
         raise ValueError("nothing to update — pass at least one field")
 
-    from backend.database import get_conn
-    with get_conn() as conn:
-        before = conn.execute(
-            "SELECT id, name, amount, currency, due_date, recurring, paid, notes, document_id "
-            "FROM bills WHERE id=?", (bill_id,)).fetchone()
-    if not before:
+    from backend import bills, spaces
+    before = bills.get_bill(bill_id)
+    if not before or not spaces.can_write_row(getattr(ctx, "user_id", None), getattr(ctx, "role", None),
+                                              "bills", before):
         raise ValueError(f"bill {bill_id} not found")
     before_dict = dict(before)
 
-    set_clause = ", ".join(f"{k}=?" for k in updates)
-    params = list(updates.values()) + [bill_id]
-    with get_conn() as conn:
-        conn.execute(f"UPDATE bills SET {set_clause} WHERE id=?", params)
-        row = conn.execute(
-            "SELECT id, name, amount, currency, due_date, recurring, paid, notes, document_id "
-            "FROM bills WHERE id=?", (bill_id,)).fetchone()
-        conn.commit()
+    paid_flag = updates.pop("paid", None)
+    doc_id = updates.pop("document_id", None)
+    row = bills.update_bill(bill_id, **updates) if updates else before
+    if doc_id is not None:
+        from backend.database import get_conn
+        with get_conn() as conn:
+            conn.execute("UPDATE bills SET document_id=? WHERE id=?", (doc_id, bill_id))
+            conn.commit()
+        updates["document_id"] = doc_id
+    if paid_flag is not None:
+        row = bills.set_paid(bill_id, bool(paid_flag))
+        updates["paid"] = paid_flag
+    row = bills.get_bill(bill_id) or row
 
     from backend.ui_tools import _append
     _append({"type": "refresh_data", "table": "bills", "highlight_id": bill_id,

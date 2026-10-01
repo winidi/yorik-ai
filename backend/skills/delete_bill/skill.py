@@ -9,6 +9,13 @@ async def execute(ctx, bill_id: int) -> dict[str, Any]:
     if bill_id <= 0:
         raise ValueError(f"bill_id must be positive, got {bill_id}")
 
+    from backend import bills, spaces
+    row = bills.get_bill(bill_id)
+    if not row or not spaces.can_write_row(getattr(ctx, "user_id", None), getattr(ctx, "role", None),
+                                           "bills", row):
+        raise ValueError(f"bill {bill_id} not found (already deleted?)")
+    bill_dict = {k: v for k, v in row.items() if k not in ("overdue", "days_left", "link")}
+
     # Bulk-delete guardrail — same rationale as delete_calendar_event.
     from backend.ask import _deletes_this_turn, DELETE_TURN_LIMIT
     n_so_far = _deletes_this_turn.get()
@@ -22,20 +29,8 @@ async def execute(ctx, bill_id: int) -> dict[str, Any]:
         )
     _deletes_this_turn.set(n_so_far + 1)
 
-    from backend.database import get_conn
-    with get_conn() as conn:
-        row = conn.execute(
-            "SELECT id, name, amount, currency, due_date, recurring, paid, notes "
-            "FROM bills WHERE id=?", (bill_id,)).fetchone()
-    if not row:
-        raise ValueError(f"bill {bill_id} not found (already deleted?)")
-    bill_dict = dict(row)
-
-    with get_conn() as conn:
-        cur = conn.execute("DELETE FROM bills WHERE id=?", (bill_id,))
-        if cur.rowcount != 1:
-            raise RuntimeError(f"expected to delete 1 row, deleted {cur.rowcount}")
-        conn.commit()
+    if not bills.delete_bill(bill_id):
+        raise RuntimeError("expected to delete 1 row, deleted 0")
 
     from backend.ui_tools import _append
     _append({"type": "refresh_data", "table": "bills",

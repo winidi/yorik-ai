@@ -1,4 +1,4 @@
-"""check_bills skill — date-bounded read of the bills table."""
+"""check_bills skill — date-bounded read of the bills the person may see."""
 
 from __future__ import annotations
 
@@ -11,28 +11,23 @@ async def execute(
     end_iso: Optional[str] = None,
     include_paid: bool = False,
 ) -> dict[str, Any]:
-    from backend.database import get_conn
+    from backend import bills
 
     start_date = (start_iso or "")[:10] or None
     end_date   = (end_iso   or "")[:10] or None
 
-    where: list[str] = []
-    params: list[Any] = []
-    if not include_paid:
-        where.append("paid = 0")
+    # Own bills and the Finance space's, like the Finance tab — never
+    # the whole table (chat visibility audit 2026-09-25).
+    rows = bills.list_bills(getattr(ctx, "user_id", None), getattr(ctx, "role", None),
+                            "all" if include_paid else "open", limit=200)
     if start_date:
-        where.append("due_date >= ?"); params.append(start_date)
+        rows = [r for r in rows if (r.get("due_date") or "") >= start_date]
     if end_date:
-        where.append("due_date <= ?"); params.append(end_date)
-
-    sql = ("SELECT id, name, amount, currency, due_date, recurring, paid, "
-           "       email_message_id, document_id FROM bills")
-    if where:
-        sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY due_date ASC LIMIT 25"
-
-    with get_conn() as conn:
-        rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
+        rows = [r for r in rows if (r.get("due_date") or "") <= end_date]
+    rows = rows[:25]
+    keep = ("id", "name", "payee", "amount", "currency", "due_date", "recurring", "paid", "paid_at",
+            "paid_by", "overdue", "days_left", "source", "source_ref", "email_message_id", "document_id", "link")
+    rows = [{k: r.get(k) for k in keep} for r in rows]
 
     out: dict[str, Any] = {
         "bills":  rows,

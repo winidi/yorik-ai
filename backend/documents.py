@@ -97,6 +97,40 @@ def detect_mime(path: Path) -> str:
     }.get(ext, "application/octet-stream")
 
 
+# A photo of a letter (phone camera) becomes a one-page PDF before it
+# is filed: the local index has no OCR, Paperless does (on PDFs and
+# images alike), and one format keeps the preview, the download and the
+# search the same for every document.
+PHOTO_MIME = {"image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
+PHOTO_EXT = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
+PHOTO_MAX_SIDE = 2600          # enough for OCR at 300 dpi on A4, small enough to upload
+
+
+def is_photo(mime: Optional[str], filename: str = "") -> bool:
+    m = (mime or "").lower().split(";")[0].strip()
+    return m in PHOTO_MIME or Path(filename or "").suffix.lower() in PHOTO_EXT
+
+
+def photo_to_pdf(raw: bytes) -> bytes:
+    """One page per photo, upright (EXIF orientation applied), scaled to
+    PHOTO_MAX_SIDE. Raises ValueError for an image Pillow cannot read
+    (HEIC without the codec, a corrupt file)."""
+    import io
+    from PIL import Image, ImageOps
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img = ImageOps.exif_transpose(img) or img
+        img.load()
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"could not read the photo: {exc}") from exc
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+    img.thumbnail((PHOTO_MAX_SIDE, PHOTO_MAX_SIDE))
+    out = io.BytesIO()
+    img.save(out, format="PDF", resolution=200.0)
+    return out.getvalue()
+
+
 def extract_text(path: Path, mime: Optional[str] = None) -> str:
     """Best-effort text extraction. Returns a single string; chunking happens next."""
     mime = mime or detect_mime(path)

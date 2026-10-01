@@ -18,7 +18,8 @@
     "overview": "Overview",
     "accounts": "Accounts",
     "transactions": "Transactions",
-    "contracts": "Contracts"
+    "contracts": "Contracts",
+    "bills": "Bills"
   },
   "allAccounts": "All accounts",
   "noAccount": "No account connected yet. Read-only — Yorik can't transfer any money.",
@@ -60,5 +61,38 @@
     "connect": "Connect",
     "searchPlaceholder": "e.g. Sparkasse Peine, ING",
     "blzShort": "BLZ {{blz}}"
+  },
+  "bills": {
+    "heading": "Open bills",
+    "openCount_one": "{{count}} open",
+    "openCount_other": "{{count}} open",
+    "overdueCount_one": "{{count}} overdue",
+    "overdueCount_other": "{{count}} overdue",
+    "none": "Nothing to pay right now.",
+    "add": "Add bill",
+    "paidHeading_one": "Paid ({{count}})",
+    "paidHeading_other": "Paid ({{count}})",
+    "paidOn": "Paid {{date}}",
+    "paid": "Paid",
+    "overdueSince": "Overdue since {{date}}",
+    "dueToday": "Due today",
+    "dueTomorrow": "Due tomorrow",
+    "dueIn_one": "Due in {{count}} day",
+    "dueIn_other": "Due in {{count}} days",
+    "dueOn": "Due {{date}}",
+    "byBank": "bank",
+    "openDocument": "document",
+    "openEmail": "email",
+    "markPaid": "Mark paid",
+    "markUnpaid": "Mark unpaid",
+    "delete": "Delete bill",
+    "howItWorks": "Bills arrive from your mail and from photographed letters: Yorik suggests them in the bell, you accept with one tap. A bill whose amount and payee show up on a connected bank account is ticked off by itself. Three days before the due date you get a reminder.",
+    "fieldName": "What for",
+    "fieldNameHint": "Electricity March",
+    "fieldAmount": "Amount ({{currency}})",
+    "fieldDue": "Due date",
+    "fieldPayee": "Payee (optional)",
+    "fieldPayeeHint": "Stadtwerke",
+    "formInvalid": "Name and an amount above zero are needed."
   }
 }

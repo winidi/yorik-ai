@@ -26,6 +26,14 @@ inputs:
     type: string
     required: false
     description: "monthly | yearly | weekly — set only when the user said the bill repeats ('jeden Monat', 'monthly', 'jährlich', 'every week'); omit otherwise."
+  payee:
+    type: string
+    required: false
+    description: Who is paid ("Stadtwerke Peine", "Netflix") when it differs from the name. Used to pair the bill with the bank booking.
+  number:
+    type: string
+    required: false
+    description: Invoice or reference number as written on the bill, when the user gives one.
   notes:
     type: string
     required: false
@@ -39,7 +47,7 @@ outputs:
   bill:
     type: object
 tags: [bills, mutation]
-permissions: [admin, member, restricted]
+permissions: [admin, member]
 ---
 # add_bill
 Apply-then-confirm. Cancel/test deletes the row.

@@ -270,7 +270,7 @@ def test_country_sets_currency_and_survives_in_the_database(fresh_app, monkeypat
 def test_a_bill_without_currency_takes_the_households(fresh_app, monkeypatch, tmp_path):
     import asyncio
     from backend import locale as L
-    from backend.skills._add_bill.skill import execute
+    from backend.skills.add_bill.skill import execute
     from backend.skills.registry import Registry, SkillContext
     from backend.database import get_conn
     from tests.conftest import seed_user

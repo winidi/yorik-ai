@@ -97,11 +97,14 @@ def digest(user: dict = Depends(current_user)) -> dict[str, Any]:
             (tomorrow_start, tomorrow_end),
         ).fetchall()]
 
+        # Own bills and the Finance space's, like the Finance tab.
+        from . import spaces as _spaces
+        _frag, _params = _spaces.row_filter(str(user["id"]), user.get("role"), "bills")
         bills_week = [dict(r) for r in conn.execute(
-            "SELECT id, name, amount, currency, due_date, recurring, notes, "
-            "email_message_id, document_id FROM bills WHERE paid = 0 AND due_date >= ? "
+            "SELECT id, name, payee, amount, currency, due_date, recurring, notes, "
+            f"email_message_id, document_id FROM bills WHERE {_frag} AND paid = 0 AND due_date >= ? "
             "AND due_date <= ? ORDER BY due_date ASC LIMIT 10",
-            (today.isoformat(), week_end.isoformat()),
+            (*_params, today.isoformat(), week_end.isoformat()),
         ).fetchall()]
 
         # Priority tasks: open + due in next 7 days OR no due date.

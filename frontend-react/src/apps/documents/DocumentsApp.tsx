@@ -17,7 +17,7 @@ import {
   Loader2, Upload, Search, RefreshCw, RotateCw, Download, FileText,
   X, ExternalLink, Eye, FolderOpen, Sparkles, FileImage, FileCode,
   File as FileIcon, AlertCircle, Plus, Check, Bookmark, BookmarkCheck,
-  Type, CheckCircle2, XCircle, Info, Mail,
+  Type, CheckCircle2, XCircle, Info, Mail, Camera,
   ArrowLeft, Tag as TagIcon, User as UserIcon2, Files as FilesIcon, Calendar as CalIcon, ChevronRight, Lock, UsersRound, Briefcase, House,
 } from "lucide-react";
 import { useDocBucket } from "./DocBucketContext";
@@ -2151,6 +2151,7 @@ function UploadDialog({
   uploading: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const [picked, setPicked] = useState<File[]>([]);
 
   useEffect(() => {
@@ -2197,14 +2198,37 @@ function UploadDialog({
               or drop them anywhere on this page
             </div>
           </button>
+          {/* Phone: a letter photographed with the camera. The backend
+              turns the photo into a PDF; Paperless reads it (OCR) and,
+              if it is a bill, Yorik proposes it in the bell. */}
+          <button
+            onClick={() => cameraRef.current?.click()}
+            disabled={uploading}
+            className="md:hidden mt-3 w-full border border-border rounded-xl py-3 px-4 text-sm font-medium inline-flex items-center justify-center gap-2 hover:bg-muted/50 transition disabled:opacity-50"
+          >
+            <Camera className="w-4 h-4 text-amber-500" /> Take a photo of a letter
+          </button>
           <input
             ref={inputRef}
             type="file"
             multiple
+            accept=".pdf,.docx,.txt,.md,image/*"
             className="hidden"
             onChange={e => {
               const files = Array.from(e.target.files || []);
               if (files.length) setPicked(files);
+            }}
+          />
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={e => {
+              const files = Array.from(e.target.files || []);
+              if (files.length) setPicked(p => [...p, ...files]);
+              e.target.value = "";
             }}
           />
           {picked.length > 0 && (
@@ -2215,6 +2239,11 @@ function UploadDialog({
                   <span className="text-muted-foreground shrink-0 ml-2">{fmtBytes(f.size)}</span>
                 </div>
               ))}
+              {picked.some(f => f.type.startsWith("image/")) && (
+                <div className="text-2xs text-muted-foreground pt-1">
+                  Photos are filed as PDFs. If one is a bill, Yorik suggests adding it to Finance.
+                </div>
+              )}
             </div>
           )}
         </div>

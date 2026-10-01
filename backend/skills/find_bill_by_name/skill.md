@@ -42,7 +42,7 @@ outputs:
     type: integer
 side_effects: None.
 cost: One indexed SQLite LIKE query.
-permissions: ["*"]
+permissions: [admin, member]
 tags: [bills, finance, resolver, internal]
 ---
 

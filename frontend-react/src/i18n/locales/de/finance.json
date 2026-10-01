@@ -18,7 +18,8 @@
     "overview": "Übersicht",
     "accounts": "Konten",
     "transactions": "Umsätze",
-    "contracts": "Verträge"
+    "contracts": "Verträge",
+    "bills": "Rechnungen"
   },
   "allAccounts": "Alle Konten",
   "noAccount": "Noch kein Konto verbunden. Nur lesend — Yorik kann nichts überweisen.",
@@ -60,5 +61,38 @@
     "connect": "Verbinden",
     "searchPlaceholder": "z. B. Sparkasse Peine, ING",
     "blzShort": "BLZ {{blz}}"
+  },
+  "bills": {
+    "heading": "Offene Rechnungen",
+    "openCount_one": "{{count}} offen",
+    "openCount_other": "{{count}} offen",
+    "overdueCount_one": "{{count}} überfällig",
+    "overdueCount_other": "{{count}} überfällig",
+    "none": "Gerade nichts zu zahlen.",
+    "add": "Rechnung eintragen",
+    "paidHeading_one": "Bezahlt ({{count}})",
+    "paidHeading_other": "Bezahlt ({{count}})",
+    "paidOn": "Bezahlt am {{date}}",
+    "paid": "Bezahlt",
+    "overdueSince": "Überfällig seit {{date}}",
+    "dueToday": "Heute fällig",
+    "dueTomorrow": "Morgen fällig",
+    "dueIn_one": "Fällig in {{count}} Tag",
+    "dueIn_other": "Fällig in {{count}} Tagen",
+    "dueOn": "Fällig am {{date}}",
+    "byBank": "Bank",
+    "openDocument": "Dokument",
+    "openEmail": "E-Mail",
+    "markPaid": "Als bezahlt markieren",
+    "markUnpaid": "Als offen markieren",
+    "delete": "Rechnung löschen",
+    "howItWorks": "Rechnungen kommen aus deinen Mails und aus fotografierten Briefen: Yorik schlägt sie in der Glocke vor, du nimmst sie mit einem Tipp an. Eine Rechnung, deren Betrag und Empfänger auf einem verbundenen Konto auftauchen, hakt sich von selbst ab. Drei Tage vor Fälligkeit erinnert Yorik dich.",
+    "fieldName": "Wofür",
+    "fieldNameHint": "Strom März",
+    "fieldAmount": "Betrag ({{currency}})",
+    "fieldDue": "Fällig am",
+    "fieldPayee": "Empfänger (optional)",
+    "fieldPayeeHint": "Stadtwerke",
+    "formInvalid": "Name und ein Betrag über null werden gebraucht."
   }
 }

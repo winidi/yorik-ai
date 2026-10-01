@@ -400,6 +400,7 @@ def _resolve_time_vars(args: dict, for_date: Optional[str] = None) -> dict:
     Vocabulary (all resolve to local-time ISO strings):
         {today_start}       midnight today (or for_date)
         {today_end}         23:59:59 today (or for_date)
+        {week_end}          23:59:59 seven days on (bills due this week)
         {yesterday_start}   midnight day before
         {yesterday_end}     23:59:59 day before
         {tomorrow_start}    midnight day after
@@ -443,6 +444,7 @@ def _resolve_time_vars(args: dict, for_date: Optional[str] = None) -> dict:
         "{today_date}":      today.isoformat(),
         "{yesterday_date}":  yest.isoformat(),
         "{tomorrow_date}":   tom.isoformat(),
+        "{week_end}":        _iso_end(today + timedelta(days=7)),
     }
 
     out: dict = {}

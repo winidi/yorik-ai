@@ -21,6 +21,8 @@ interface Institute {
   url: string;
 }
 import { Dock } from "@/components/Dock";
+import { MobileTopBar } from "@/components/MobileShell";
+import { BillsTab } from "./BillsTab";
 
 interface BankAccount {
   id: number;
@@ -76,7 +78,7 @@ function catLabel(cat: string): string {
   return key ? i18n.t(`finance.categories.${key}`) : cat;
 }
 
-type Tab = "uebersicht" | "konten" | "umsaetze" | "vertraege";
+type Tab = "uebersicht" | "konten" | "umsaetze" | "vertraege" | "bills";
 
 function money(n: number, currency?: string | null): string {
   return formatMoney(n, currency);
@@ -100,8 +102,13 @@ export function FinanceApp() {
   const [showForm, setShowForm] = useState(false);
   const [days, setDays] = useState(30);
   const [syncingId, setSyncingId] = useState<number | null>(null);
-  const [tab, setTab] = useState<Tab>("uebersicht");
+  // ?tab=bills opens the bills (the bell's "due soon" leads here).
+  const [tab, setTab] = useState<Tab>(() =>
+    new URLSearchParams(window.location.search).get("tab") === "bills" ? "bills" : "uebersicht");
   const [selectedAccount, setSelectedAccount] = useState<number | "all">("all");
+  // On a phone the tab row scrolls; the active tab stays in view.
+  const activeTabRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { activeTabRef.current?.scrollIntoView({ inline: "nearest", block: "nearest" }); }, [tab]);
   const [editingFocus, setEditingFocus] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
 
@@ -194,8 +201,20 @@ export function FinanceApp() {
 
   return (
     <div className="h-screen overflow-y-auto bg-background">
-    <div className="px-6 pt-6 pb-24 max-w-2xl lg:max-w-4xl mx-auto w-full">
-      <div className="flex items-center justify-between mb-6">
+    <MobileTopBar
+      title={t("finance.title")}
+      rightAction={
+        <button
+          onClick={() => setShowForm(true)}
+          className="w-11 h-11 rounded-md flex items-center justify-center text-violet-600 dark:text-violet-400"
+          aria-label={t("finance.connectAccount")}
+        >
+          <Plus className="w-[22px] h-[22px]" />
+        </button>
+      }
+    />
+    <div className="px-4 md:px-6 pt-3 md:pt-6 pb-24 max-w-2xl lg:max-w-4xl mx-auto w-full">
+      <div className="hidden md:flex items-center justify-between mb-6">
         <div className="flex items-center gap-2.5">
           <Landmark className="w-5 h-5 text-muted-foreground" />
           <h1 className="text-lg font-semibold">{t("finance.title")}</h1>
@@ -215,18 +234,20 @@ export function FinanceApp() {
         />
       )}
 
-      {hasAccounts && (
+      {(hasAccounts || !loading) && (
         <>
-          <div className="flex border-b border-border mb-6">
+          <div className="flex border-b border-border mb-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {([
               ["uebersicht", t("finance.tabs.overview")], ["konten", t("finance.tabs.accounts")],
               ["umsaetze", t("finance.tabs.transactions")], ["vertraege", t("finance.tabs.contracts")],
-            ] as const).map(([id, label]) => (
+              ["bills", t("finance.tabs.bills")],
+            ] as const).filter(([id]) => hasAccounts || id === "bills" || id === "uebersicht").map(([id, label]) => (
               <button
                 key={id}
+                ref={tab === id ? activeTabRef : undefined}
                 onClick={() => setTab(id)}
                 className={cn(
-                  "px-3.5 py-2 text-sm border-b-2 -mb-px transition-colors",
+                  "px-3.5 py-2 text-sm border-b-2 -mb-px transition-colors whitespace-nowrap",
                   tab === id
                     ? "border-foreground font-medium text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground",
@@ -269,8 +290,8 @@ export function FinanceApp() {
         </>
       )}
 
-      {!hasAccounts && !loading && (
-        <p className="text-sm text-muted-foreground pt-8">
+      {!hasAccounts && !loading && tab !== "bills" && (
+        <p className="text-sm text-muted-foreground pt-2">
           {t("finance.noAccount")}
         </p>
       )}
@@ -388,6 +409,8 @@ export function FinanceApp() {
               </section>
             </>
           )}
+
+          {tab === "bills" && <BillsTab />}
 
           {tab === "vertraege" && (
             <section className="pt-2">

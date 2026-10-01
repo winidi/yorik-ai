@@ -36,7 +36,7 @@ outputs:
   count:
     type: integer
 tags: [bills, list, read]
-permissions: [admin, member, restricted]
+permissions: [admin, member]
 ---
 # check_bills
 

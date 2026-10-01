@@ -14,7 +14,7 @@ outputs:
   bill:
     type: object
 tags: [bills, mutation, destructive]
-permissions: [admin, member, restricted]
+permissions: [admin, member]
 ---
 # delete_bill
 Hard 1-row cap. Cancel/test re-inserts.

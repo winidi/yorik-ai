@@ -497,9 +497,9 @@ function BillsList({ bills }: { bills: any[] }) {
   return (
     <ul className="space-y-1 text-sm">
       {bills.map(b => {
-        const href = b.email_message_id
+        const href = b.link || (b.email_message_id
           ? `/r/email?msg=${encodeURIComponent(b.email_message_id)}`
-          : "/r/email";
+          : "/r/finance?tab=bills");
         return (
           <li key={b.id}>
             <a

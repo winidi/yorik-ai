@@ -77,7 +77,7 @@ AREAS = ("tasks", "calendar", "contacts", "documents")
 # reached through an unscoped membership (the whole space).
 TABLE_AREA = {"tasks": "tasks", "events": "calendar", "calendars": "calendar",
               "contacts": "contacts", "documents": "documents", "paperless_docs": "documents",
-              "bank_accounts": "finance"}
+              "bank_accounts": "finance", "bills": "finance"}
 
 
 def _membership_space_ids(c, user_id, area: Optional[str]) -> list[int]:
@@ -367,9 +367,9 @@ def row_filter(
     parts: list[str] = []
     params: list[Any] = []
 
-    # Owner column varies per table. Tables without an owner column at
-    # all (e.g. bills today) skip the owner clause — visibility is
-    # purely space-membership + row_shares for those.
+    # Owner column varies per table. Tables without an owner column
+    # skip the owner clause — visibility is purely space-membership +
+    # row_shares for those.
     owner_col = {
         "tasks":    "created_by_user_id",
         "contacts": "created_by_user_id",
@@ -377,6 +377,7 @@ def row_filter(
         "calendars": "owner_user_id",
         "recordings": "owner_user_id",
         "bank_accounts": "owner_user_id",
+        "bills": "owner_user_id",
     }.get(table)
     if owner_col:
         parts.append(f"{t}.{owner_col} = ?")

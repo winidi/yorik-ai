@@ -40,7 +40,7 @@ outputs:
   bill:
     type: object
 tags: [bills, mutation]
-permissions: [admin, member, restricted]
+permissions: [admin, member]
 ---
 # update_bill
 Apply-then-confirm. Cancel/test restores pre-update values.

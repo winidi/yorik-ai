@@ -382,15 +382,15 @@ def rollback(pending_id: str) -> Dict[str, Any]:
         if not bill_row.get("id"):
             raise ValueError("restore_bill needs bill_row with id")
         from .database import get_conn as _get_conn
+        cols = [c for c in ("id", "name", "amount", "currency", "due_date", "recurring", "paid", "notes",
+                            "space_id", "owner_user_id", "payee", "number", "source", "source_ref",
+                            "paid_at", "paid_by", "bank_transaction_id", "email_message_id", "document_id",
+                            "created_at") if c in bill_row]
+        vals = [(1 if bill_row.get(c) else 0) if c == "paid" else bill_row.get(c) for c in cols]
         with _get_conn() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO bills "
-                "(id, name, amount, currency, due_date, recurring, paid, notes, space_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (bill_row["id"], bill_row.get("name"), bill_row.get("amount"),
-                 bill_row.get("currency", "EUR"), bill_row.get("due_date"),
-                 bill_row.get("recurring"), 1 if bill_row.get("paid") else 0,
-                 bill_row.get("notes"), bill_row.get("space_id")),
+                f"INSERT OR REPLACE INTO bills ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
+                vals,
             )
             conn.commit()
         from .ui_tools import _append
@@ -403,7 +403,8 @@ def rollback(pending_id: str) -> Dict[str, Any]:
         before = args.get("before") or {}
         if not bill_id or not before:
             raise ValueError("revert_bill_fields needs bill_id + before")
-        cols = [c for c in before if c in ("name", "amount", "currency", "due_date", "recurring", "paid", "notes")]
+        cols = [c for c in before if c in ("name", "amount", "currency", "due_date", "recurring", "paid", "notes",
+                                           "payee", "number", "document_id")]
         if not cols:
             return {"undone": "revert_bill_fields", "no_fields": True}
         from .database import get_conn as _get_conn

@@ -306,8 +306,17 @@ def ingest_one(paperless_doc_id: int) -> Dict[str, Any]:
                  _name_of("document_types", doc.get("document_type")),
                  str(doc.get("created_date") or doc.get("created") or "")[:10], content),
             )
+    # A new letter that asks for money is proposed as a bill to its
+    # owner (bell: "New bill from …?"). Never fails the ingest.
+    proposed = None
+    try:
+        from . import bills as _bills
+        proposed = _bills.consider_paperless_document(paperless_doc_id, doc)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("paperless_ingest: bill check for doc %s failed: %s", paperless_doc_id, exc)
     return {"ok": True, "id": paperless_doc_id, "chunks": n_ok,
-            "embed_failures": n_fail, "title": doc.get("title", "")}
+            "embed_failures": n_fail, "title": doc.get("title", ""),
+            **({"bill_proposal": proposed} if proposed else {})}
 
 
 
