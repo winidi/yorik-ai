@@ -2,7 +2,7 @@
 
 Complement to check_bills (which renders cards but hides names + IDs
 from the LLM). Returns minimal rows for the LLM to act on with
-update_bill / delete_bill / mark_bill_paid.
+update_bill / delete_bill.
 """
 
 from __future__ import annotations

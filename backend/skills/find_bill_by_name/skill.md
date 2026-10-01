@@ -49,5 +49,5 @@ tags: [bills, finance, resolver, internal]
 # find_bill_by_name
 
 Name resolver for the bills table. LLM-internal — no cards. Use
-BEFORE update_bill / delete_bill / mark_bill_paid when the user
+BEFORE update_bill / delete_bill when the user
 names the bill rather than passing an ID.
