@@ -12,6 +12,7 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Bills: a "Bills" tab in Finance with what is still to pay. A bill comes from a mail or a photographed letter (Yorik proposes it in the bell), from the chat or from the form; a booking on a connected bank account with the same amount and payee ticks it off by itself; a reminder three days before the due date and one when it is overdue; a "Bills due this week" section in the morning briefing.
 - Documents: photograph a letter with the phone (Take a photo) or upload a JPEG/PNG — it is filed as a PDF and read by Paperless.
 - Phone: the Dock is a tab bar at the bottom edge — Home, Chat, Calendar, Tasks and More.
+- WhatsApp: send a photo, a video or a PDF with a caption (paperclip, or paste a picture into the composer). Photos go out at the size the WhatsApp app uses; a .mov or .webm video is re-encoded to MP4 when ffmpeg is installed.
 
 ### Fixed
 

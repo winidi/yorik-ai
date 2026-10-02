@@ -1656,6 +1656,30 @@ def list_draft_states(
     ]
 
 
+def _after_outbound(jid: str, uid: str) -> None:
+    """Auto-promote: replying to someone is the strongest "this is a real
+    person" signal. If the recipient was still pending (shouldn't be,
+    post-migration 015 + active-by-default autocapture, but defensive),
+    flip them to active so they surface in autocomplete and Pending
+    count drops. Mirror of the email-side promote-on-reply hook."""
+    if jid.endswith("@g.us"):
+        return
+    try:
+        from . import contacts as _contacts_mod
+        from . import contact_autocapture
+        existing = _contacts_mod.find_by_channel("whatsapp", jid)
+        if existing and existing.get("status") == "pending":
+            _contacts_mod.promote_pending(int(existing["id"]))
+            log.info("WA outbound: auto-promoted contact %s to active", existing["id"])
+        elif not existing:
+            # Brand-new recipient — autocapture them on the outbound
+            # side too. Uses the same active-by-default policy.
+            contact_autocapture.on_inbound_whatsapp(
+                from_jid=jid, from_name="", owner_user_id=uid)
+    except Exception as exc:
+        log.debug("WA outbound promote hook failed: %s", exc)
+
+
 @router.post("/chats/{jid:path}/send")
 async def send_message(
     jid: str,
@@ -1687,26 +1711,7 @@ async def send_message(
         "text":      body.text,
     }, owner_user_id=uid)
 
-    # Auto-promote: replying to someone is the strongest "this is a real
-    # person" signal. If the recipient was still pending (shouldn't be,
-    # post-migration 015 + active-by-default autocapture, but defensive),
-    # flip them to active so they surface in autocomplete and Pending
-    # count drops. Mirror of the email-side promote-on-reply hook.
-    if not jid.endswith("@g.us"):
-        try:
-            from . import contacts as _contacts_mod
-            from . import contact_autocapture
-            existing = _contacts_mod.find_by_channel("whatsapp", jid)
-            if existing and existing.get("status") == "pending":
-                _contacts_mod.promote_pending(int(existing["id"]))
-                log.info("WA outbound: auto-promoted contact %s to active", existing["id"])
-            elif not existing:
-                # Brand-new recipient — autocapture them on the outbound
-                # side too. Uses the same active-by-default policy.
-                contact_autocapture.on_inbound_whatsapp(
-                    from_jid=jid, from_name="", owner_user_id=uid)
-        except Exception as exc:
-            log.debug("WA outbound promote hook failed: %s", exc)
+    _after_outbound(jid, uid)
     # Mark the source draft (and its siblings) as resolved. The chosen
     # one becomes status='used'; sibling variants in the same group
     # become status='discarded' (reason: user picked another option).
@@ -1730,6 +1735,124 @@ async def send_message(
                     )
                 conn.commit()
     return out
+
+
+# ───────────────────────── photos, videos, files ───────────────────────
+
+# What the WhatsApp app itself accepts from the picker. HEIC from an
+# iPhone is converted by the phone when the page asks for image/jpeg;
+# when it still arrives, the person gets a clear answer instead of a
+# picture nobody can open.
+SEND_MEDIA_MAX_BYTES = int(os.getenv("YORIK_MAX_UPLOAD_MB", "50")) * 1024 * 1024
+_SEND_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+_SEND_VIDEO_MIMES = {"video/mp4", "video/quicktime", "video/3gpp", "video/webm", "video/x-matroska"}
+_SEND_DOC_MIMES = {"application/pdf"}
+PHOTO_MAX_EDGE = 1600            # the app sends photos at about this size
+
+
+def _shrink_photo(data: bytes, mime: str) -> tuple[bytes, str]:
+    """A photo the way the app sends it: at most 1600 px on the long
+    edge, JPEG. GIFs and small PNGs/WebPs pass unchanged."""
+    if mime == "image/gif":
+        return data, mime
+    try:
+        from PIL import Image, ImageOps
+        im = Image.open(io.BytesIO(data))
+        im = ImageOps.exif_transpose(im)
+        w, h = im.size
+        if max(w, h) <= PHOTO_MAX_EDGE and len(data) <= 2 * 1024 * 1024:
+            return data, mime
+        im.thumbnail((PHOTO_MAX_EDGE, PHOTO_MAX_EDGE))
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        out = io.BytesIO()
+        im.save(out, "JPEG", quality=82, optimize=True)
+        return out.getvalue(), "image/jpeg"
+    except Exception as exc:  # noqa: BLE001
+        log.info("wa send: photo not shrunk (%s), sent as is", exc)
+        return data, mime
+
+
+def _video_as_mp4(data: bytes, mime: str) -> tuple[bytes, str]:
+    """WhatsApp plays MP4/H.264 everywhere; a .mov from an iPhone or a
+    .webm from a browser is re-encoded when ffmpeg is on the box,
+    otherwise sent as is."""
+    if mime == "video/mp4":
+        return data, mime
+    import shutil
+    import subprocess
+    import tempfile
+    if not shutil.which("ffmpeg"):
+        return data, mime
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            src = os.path.join(d, "in"); dst = os.path.join(d, "out.mp4")
+            with open(src, "wb") as f:
+                f.write(data)
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-c:v", "libx264", "-preset", "veryfast",
+                            "-crf", "26", "-vf", "scale='min(1280,iw)':-2", "-c:a", "aac", "-b:a", "96k",
+                            "-movflags", "+faststart", dst], capture_output=True, timeout=240, check=True)
+            with open(dst, "rb") as f:
+                return f.read(), "video/mp4"
+    except Exception as exc:  # noqa: BLE001
+        log.info("wa send: video not re-encoded (%s), sent as is", exc)
+        return data, mime
+
+
+@router.post("/chats/{jid:path}/send-media")
+async def send_media(
+    jid: str,
+    file: UploadFile = File(...),
+    caption: str = Form(""),
+    user: dict[str, Any] = Depends(_auth.current_user),
+) -> dict[str, Any]:
+    """Send a photo, a video or a PDF with an optional caption over THIS
+    user's WhatsApp session. Photos are shrunk the way the app does it;
+    Yorik keeps its own copy so the thread shows it at once."""
+    uid = user["id"]
+    mime = (file.content_type or "").split(";")[0].strip().lower()
+    filename = os.path.basename(file.filename or "") or "file"
+    if mime in _SEND_IMAGE_MIMES:
+        kind = "image"
+    elif mime in _SEND_VIDEO_MIMES:
+        kind = "video"
+    elif mime in _SEND_DOC_MIMES:
+        kind = "document"
+    elif mime in ("image/heic", "image/heif"):
+        raise HTTPException(415, "HEIC photos cannot be sent — choose JPEG in the phone's camera settings (Most compatible)")
+    else:
+        raise HTTPException(415, f"{mime or 'this file type'} cannot be sent — a photo (JPEG, PNG), a video (MP4) or a PDF")
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "empty file")
+    if len(data) > SEND_MEDIA_MAX_BYTES:
+        raise HTTPException(413, f"file is larger than {SEND_MEDIA_MAX_BYTES // (1024 * 1024)} MB")
+    if kind == "image":
+        data, mime = await asyncio.to_thread(_shrink_photo, data, mime)
+    elif kind == "video":
+        data, mime = await asyncio.to_thread(_video_as_mp4, data, mime)
+    caption = (caption or "").strip()
+    import base64 as _b64
+    payload = {"kind": kind, "mimetype": mime, "filename": filename, "caption": caption,
+               "data": _b64.b64encode(data).decode("ascii")}
+    try:
+        async with httpx.AsyncClient(timeout=180.0, headers=_bridge_headers()) as c:
+            r = await c.post(_bridge_url(f"/chats/{jid}/send-media", uid), json=payload)
+            if r.status_code != 200:
+                raise HTTPException(r.status_code, r.text)
+            out = r.json()
+    except httpx.RequestError as e:
+        raise HTTPException(502, f"WhatsApp bridge unreachable — start yorik-whatsapp-bridge ({e})")
+    msg_id = out.get("msgId")
+    _insert_message({
+        "id": msg_id, "jid": jid, "fromMe": True, "pushName": None,
+        "timestamp": out.get("ts"), "text": caption or None,
+        "mediaKind": kind, "mimetype": mime, "filename": filename if kind == "document" else None,
+    }, owner_user_id=uid)
+    from . import whatsapp_media as _wm
+    _wm.store_local_copy(str(uid), str(msg_id or ""), mime, data)
+    _after_outbound(jid, uid)
+    return {**out, "kind": kind, "mimetype": mime, "bytes": len(data)}
 
 
 # ─────────────────────────── draft generation ──────────────────────────

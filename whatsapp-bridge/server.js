@@ -1123,6 +1123,36 @@ app.post("/users/:userId/chats/:jid/send", async (req, res) => {
   }
 });
 
+// A photo, a video or a file, the way the WhatsApp app sends them:
+// the picture inline with its caption, a document with its file name.
+// The bytes arrive base64 in JSON — the backend has already shrunk a
+// photo to WhatsApp's size, so 80 MB covers a short video too.
+app.post("/users/:userId/chats/:jid/send-media", express.json({ limit: "80mb" }), async (req, res) => {
+  const s = sessions.get(req.params.userId);
+  if (!s || !s.connected) return res.status(503).json({ error: "not_connected" });
+  const { jid } = req.params;
+  const kind = String(req.body?.kind || "");
+  const mimetype = String(req.body?.mimetype || "application/octet-stream");
+  const caption = String(req.body?.caption || "").trim() || undefined;
+  const fileName = String(req.body?.filename || "file");
+  let buf;
+  try { buf = Buffer.from(String(req.body?.data || ""), "base64"); } catch { buf = null; }
+  if (!buf || !buf.length) return res.status(400).json({ error: "empty_media" });
+  let content;
+  if (kind === "image")         content = { image: buf, caption, mimetype };
+  else if (kind === "video")    content = { video: buf, caption, mimetype };
+  else if (kind === "document") content = { document: buf, mimetype, fileName, caption };
+  else return res.status(400).json({ error: "bad_kind", detail: "image, video or document" });
+  try {
+    const sent = await s.sock.sendMessage(jid, content);
+    cacheMessage(s, sent);
+    res.json({ msgId: sent.key?.id, ts: Math.floor(Date.now() / 1000) });
+  } catch (e) {
+    console.error(`[bridge] media send failed for ${req.params.userId}:`, e);
+    res.status(500).json({ error: "send_failed", detail: String(e) });
+  }
+});
+
 app.post("/users/:userId/chats/:jid/typing", async (req, res) => {
   const s = sessions.get(req.params.userId);
   if (!s || !s.connected) return res.status(503).json({ error: "not_connected" });

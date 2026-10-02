@@ -62,7 +62,8 @@ MEDIA_DIR = os.getenv("YORIK_WA_MEDIA_DIR") or os.path.join(
 LOCAL_COPY_KINDS = {"image", "sticker", "audio"}   # voice notes are small
 LOCAL_COPY_MAX_BYTES = 15 * 1024 * 1024
 _EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif",
-        "audio/ogg": ".ogg", "audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/aac": ".aac"}
+        "audio/ogg": ".ogg", "audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/aac": ".aac",
+        "video/mp4": ".mp4", "video/3gpp": ".3gp", "video/quicktime": ".mov", "application/pdf": ".pdf"}
 
 
 def _safe_id(msg_id: str) -> str:
@@ -81,6 +82,27 @@ def local_media_file(owner_user_id: str, msg_id: str) -> tuple[str, str] | None:
             return path, mime
     path = os.path.join(d, stem + ".bin")
     return (path, "application/octet-stream") if os.path.isfile(path) else None
+
+
+def store_local_copy(owner_user_id: str, msg_id: str, mime: str, data: bytes) -> str | None:
+    """Keep bytes Yorik already holds (something the person sent from
+    Yorik) under MEDIA_DIR, so the thread shows it without asking the
+    bridge. Returns the path, or None when nothing could be written."""
+    if not msg_id or not owner_user_id or not data:
+        return None
+    try:
+        ext = _EXT.get((mime or "").split(";")[0].strip().lower(), ".bin")
+        d = os.path.join(MEDIA_DIR, _safe_id(owner_user_id))
+        os.makedirs(d, exist_ok=True)
+        path = os.path.join(d, _safe_id(msg_id) + ext)
+        tmp = path + ".part"
+        with open(tmp, "wb") as f:
+            f.write(data)
+        os.replace(tmp, path)
+        return path
+    except Exception as exc:  # noqa: BLE001
+        log.debug("whatsapp_media: could not keep a copy of %s: %s", msg_id, exc)
+        return None
 
 
 async def backfill_local_copies(limit_per_owner: int = 1000) -> int:

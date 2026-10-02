@@ -17,7 +17,7 @@ import {
   Loader2, Search, RefreshCw, Plus, Send, Sparkles,
   MessageSquare, Newspaper, Trash2, Download, X, Mic, FileText,
   Image as ImageIcon, CircleDot, CheckCheck, UsersRound, ShieldAlert, Check,
-  Power,
+  Power, Paperclip, Film,
 } from "lucide-react";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -512,6 +512,12 @@ function Thread({ jid, chat, onSent }:
   const messages = msgsApi.data || [];
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  // A photo, a video or a PDF waiting in the composer; the text becomes
+  // its caption. One at a time, like the WhatsApp app's picker.
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const attachmentUrl = useMemo(() => attachment ? URL.createObjectURL(attachment) : null, [attachment]);
+  useEffect(() => () => { if (attachmentUrl) URL.revokeObjectURL(attachmentUrl); }, [attachmentUrl]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
@@ -560,15 +566,32 @@ function Thread({ jid, chat, onSent }:
       sessionStorage.removeItem(WA_PREFILL_KEY(jid));
     } catch { /* storage blocked — plain reset */ }
     setText(prefill);
+    setAttachment(null);
     if (prefill) composerRef.current?.focus();
   }, [jid]);
 
+  function pickFile(f: File | null | undefined) {
+    if (!f) return;
+    const ok = f.type.startsWith("image/") || f.type.startsWith("video/") || f.type === "application/pdf";
+    if (!ok) { toast("A photo, a video or a PDF"); return; }
+    setAttachment(f);
+    composerRef.current?.focus();
+  }
+
   async function send() {
     const t = text.trim();
-    if (!t) return;
+    if (!t && !attachment) return;
     setSending(true);
     try {
-      await api.post(`/api/whatsapp/chats/${encodeURIComponent(jid)}/send`, { text: t });
+      if (attachment) {
+        const fd = new FormData();
+        fd.append("file", attachment, attachment.name);
+        fd.append("caption", t);
+        await api.postForm(`/api/whatsapp/chats/${encodeURIComponent(jid)}/send-media`, fd);
+        setAttachment(null);
+      } else {
+        await api.post(`/api/whatsapp/chats/${encodeURIComponent(jid)}/send`, { text: t });
+      }
       setText("");
       await msgsApi.refetch();
       onSent();
@@ -622,13 +645,59 @@ function Thread({ jid, chat, onSent }:
           the textarea + send button. */}
       <form
         onSubmit={(e) => { e.preventDefault(); send(); }}
-        className="border-t border-border bg-card/40 backdrop-blur-sm px-6 pt-3 pb-20 flex items-end gap-3"
+        className="border-t border-border bg-card/40 backdrop-blur-sm px-6 pt-3 pb-20"
       >
+        {attachment && (
+          <div className="mb-2 flex items-center gap-3 rounded-xl bg-muted/70 p-2 pr-3 max-w-md">
+            {attachment.type.startsWith("image/") && attachmentUrl ? (
+              <img src={attachmentUrl} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
+            ) : attachment.type.startsWith("video/") && attachmentUrl ? (
+              <video src={attachmentUrl} muted playsInline className="w-16 h-16 rounded-lg object-cover bg-black/40 shrink-0" />
+            ) : (
+              <div className="w-16 h-16 rounded-lg bg-black/10 dark:bg-white/10 flex items-center justify-center shrink-0">
+                {attachment.type.startsWith("video/") ? <Film className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="text-sm truncate">{attachment.name}</div>
+              <div className="text-xs text-muted-foreground">
+                {attachment.type.startsWith("image/") ? "Photo" : attachment.type.startsWith("video/") ? "Video" : "PDF"}
+                {" · "}{(attachment.size / (1024 * 1024)).toFixed(attachment.size > 10 * 1024 * 1024 ? 0 : 1)} MB
+              </div>
+            </div>
+            <button type="button" aria-label="Remove attachment" onClick={() => setAttachment(null)}
+                    className="p-1.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        <div className="flex items-end gap-3">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/3gpp,video/webm,application/pdf"
+          className="hidden"
+          onChange={(e) => { pickFile(e.target.files?.[0]); e.target.value = ""; }}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={sending}
+          aria-label="Attach a photo, a video or a PDF"
+          title="Photo, video or PDF"
+          className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground transition"
+        >
+          <Paperclip className="w-5 h-5" />
+        </button>
         <div className="flex-1 relative">
           <textarea
             ref={composerRef}
             value={text}
             onChange={e => setText(e.target.value)}
+            onPaste={(e) => {
+              const f = Array.from(e.clipboardData?.files || []).find(x => x.type.startsWith("image/") || x.type.startsWith("video/") || x.type === "application/pdf");
+              if (f) { e.preventDefault(); pickFile(f); }
+            }}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                 e.preventDefault(); send();
@@ -636,7 +705,7 @@ function Thread({ jid, chat, onSent }:
                 e.preventDefault(); send();
               }
             }}
-            placeholder="Type a message…"
+            placeholder={attachment ? "Add a caption…" : "Type a message…"}
             rows={1}
             className="w-full px-4 py-2.5 rounded-2xl bg-muted/70 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 resize-none min-h-[42px] max-h-32 leading-relaxed"
             style={{ height: "auto" }}
@@ -649,17 +718,18 @@ function Thread({ jid, chat, onSent }:
         </div>
         <button
           type="submit"
-          disabled={!text.trim() || sending}
+          disabled={(!text.trim() && !attachment) || sending}
           aria-label="Send"
           className={cn(
             "w-11 h-11 rounded-full flex items-center justify-center transition shrink-0",
-            text.trim() && !sending
+            (text.trim() || attachment) && !sending
               ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-md hover:shadow-lg"
               : "bg-muted text-muted-foreground"
           )}
         >
           {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 -translate-x-px translate-y-px" />}
         </button>
+        </div>
       </form>
     </>
   );
