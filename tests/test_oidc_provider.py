@@ -105,3 +105,20 @@ def test_pkce_and_disabled_accounts(provider, fresh_app):
     assert r.status_code in (302, 401, 403)
     if r.status_code == 302:
         assert "error=access_denied" in r.headers["location"] or "oidc_next" in r.headers["location"]
+
+
+def test_the_setup_script_registers_the_phone_apps_way_back():
+    """Immich's phone app does not come back on its own app.immich://
+    address: with mobileOverrideEnabled the server swaps it for
+    <immich>/api/oauth/mobile-redirect, and Yorik refused that one as an
+    unknown redirect_uri (Beate's phone, 2026-10-02). The script sets the
+    override, so it must register that address too."""
+    import re
+    from pathlib import Path
+    src = Path(__file__).resolve().parents[1] / "scripts" / "configure_immich_oauth.py"
+    text = src.read_text(encoding="utf-8")
+    call = re.search(r"oidc\.ensure_client\((.*?)issuer_url=", text, re.S).group(1)
+    assert "/auth/login" in call
+    assert "/api/oauth/mobile-redirect" in call
+    assert "app.immich:///oauth-callback" in call
+    assert '"mobileOverrideEnabled": True' in text

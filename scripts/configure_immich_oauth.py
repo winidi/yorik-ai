@@ -51,7 +51,13 @@ def main() -> int:
             ap.error("--issuer and --immich are required (or --off)")
         issuer = args.issuer.rstrip("/")
         immich = args.immich.rstrip("/")
-        client = oidc.ensure_client("immich", [f"{immich}/auth/login", "app.immich:///oauth-callback"], issuer_url=issuer)
+        # Three ways back: the web login, the phone app through Immich's
+        # mobile redirect (the app's own app.immich:// address is swapped
+        # for it when mobileOverrideEnabled is on), and the app's address
+        # itself for an Immich without the override.
+        client = oidc.ensure_client("immich", [f"{immich}/auth/login",
+                                               f"{immich}/api/oauth/mobile-redirect",
+                                               "app.immich:///oauth-callback"], issuer_url=issuer)
         config["oauth"].update({
             "enabled": True,
             "issuerUrl": f"{issuer}/.well-known/openid-configuration",
