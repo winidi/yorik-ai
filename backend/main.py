@@ -11580,6 +11580,18 @@ def feedback_turn(
     skill itself is broken'."""
     model = body.llm_model or vanna_agent.LLM_MODEL
     with conn_ctx(DB_PATH) as conn:
+        # One vote per person and reply: changing 👍 to 👎, or voting
+        # again after a reload, changes the earlier vote instead of
+        # counting a second one.
+        if body.conversation_id is not None and body.message_idx is not None:
+            prev = conn.execute(
+                "SELECT id FROM turn_feedback WHERE conversation_id = ? AND message_idx = ? AND user_id = ? "
+                "ORDER BY id DESC LIMIT 1",
+                (body.conversation_id, body.message_idx, user.get("id"))).fetchone()
+            if prev:
+                conn.execute("UPDATE turn_feedback SET rating = ?, note = ?, llm_model = ? WHERE id = ?",
+                             (body.rating, body.note, model, prev["id"]))
+                return {"ok": True, "id": prev["id"]}
         cur = conn.execute(
             "INSERT INTO turn_feedback (conversation_id, message_idx, rating, note, llm_model, user_id) "
             "VALUES (?, ?, ?, ?, ?, ?)",

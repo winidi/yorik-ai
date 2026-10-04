@@ -751,6 +751,14 @@ def apply(pending_id: str) -> Dict[str, Any]:
                  "reason": f"deleted task: {args.get('title') or task_id}"})
         return {"applied": kind, "task_id": task_id, "deleted": deleted}
 
+    if kind == "delete_bill":
+        from . import bills as B
+        bill_id = int(args["bill_id"])
+        deleted = 1 if B.delete_bill(bill_id) else 0
+        _append({"type": "refresh_data", "table": "bills",
+                 "reason": f"deleted bill: {args.get('name') or bill_id}"})
+        return {"applied": kind, "bill_id": bill_id, "deleted": deleted}
+
     if kind == "delete_contact":
         from . import contacts as C
         contact_id = int(args["contact_id"])

@@ -266,8 +266,11 @@ def test_chat_skills_see_only_the_persons_bills(house):
         assert upd["bill"]["paid"] is True and upd["bill"]["paid_by"] == "hand"
         with pytest.raises(Exception):
             await reg.invoke("delete_bill", ctx=_ctx(house["beate"], "member"), bill_id=out["bill_id"])
-        gone = await reg.invoke("delete_bill", ctx=_ctx(house["dirk"]), bill_id=out["bill_id"])
-        assert gone["deleted_bill_id"] == out["bill_id"]
+        staged = await reg.invoke("delete_bill", ctx=_ctx(house["dirk"]), bill_id=out["bill_id"])
+        assert staged["pending"] is True
+        assert bills.get_bill(out["bill_id"]) is not None          # nothing gone before the tap
+        from backend import pending_actions as pa
+        pa.apply(staged["pending_id"])                             # "Delete" on the card
         assert bills.get_bill(out["bill_id"]) is None
     asyncio.run(run())
 

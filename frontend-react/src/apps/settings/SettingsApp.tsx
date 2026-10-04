@@ -4540,6 +4540,7 @@ const ROLE_HINT: Record<string, string> = {
 };
 /** QR-invited people get a placeholder address nobody reads. */
 const isPlaceholderEmail = (e: string | null) => !!e && e.endsWith("@members.yorik.invalid");
+const isChildRole = (r: string) => ["restricted", "child", "employee", "viewer"].includes(r);
 
 function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
   const auth = useAuth();
@@ -4547,6 +4548,9 @@ function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" |
   const [showAdd, setShowAdd] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [resetting, setResetting] = useState<YorikUserRow | null>(null);
+  // A child's sharing is set by the parents (the backend allows admins
+  // exactly this, for restricted accounts).
+  const [sharingFor, setSharingFor] = useState<YorikUserRow | null>(null);
   const [credentialsHandoff, setCredentialsHandoff] = useState<{
     name: string; email: string; password: string;
   } | null>(null);
@@ -4616,6 +4620,25 @@ function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" |
         </div>
       </header>
       {showInvite && <InviteDialog onClose={() => { setShowInvite(false); load(); }} />}
+      {sharingFor && (
+        <div className="fixed inset-0 z-[850] flex items-start justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" onClick={() => setSharingFor(null)}>
+          <div className="w-full max-w-2xl my-8 bg-background border border-border rounded-2xl shadow-2xl p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h2 className="text-lg font-semibold">Sharing for {sharingFor.name}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Children don't set this themselves. Here you decide who in the family sees
+                  {" "}{sharingFor.name}'s to-dos, appointments, contacts and documents.
+                </p>
+              </div>
+              <button onClick={() => setSharingFor(null)} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Close">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <SharingCard toast={toast} ownerId={String(sharingFor.id)} title={`What ${sharingFor.name} shares`} />
+          </div>
+        </div>
+      )}
 
       {users === null && (
         <div className="text-sm text-muted-foreground">Loading…</div>
@@ -4636,6 +4659,7 @@ function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" |
               onToggleDisabled={() => toggleDisabled(u)}
               onChangeRole={(r) => changeRole(u, r)}
               onResetPassword={() => setResetting(u)}
+              onSharing={isChildRole(u.role) ? () => setSharingFor(u) : undefined}
               onDelete={() => deleteUser(u)}
             />
           ))}
@@ -4684,13 +4708,15 @@ function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" |
   );
 }
 
-function UserRow({ user: u, isSelf, onToggleDisabled, onChangeRole, onResetPassword, onDelete }: {
+function UserRow({ user: u, isSelf, onToggleDisabled, onChangeRole, onResetPassword, onDelete, onSharing }: {
   user: YorikUserRow;
   isSelf: boolean;
   onToggleDisabled: () => void;
   onChangeRole: (role: Role) => void;
   onResetPassword: () => void;
   onDelete: () => void;
+  /** Only for a child: open what they share and see. */
+  onSharing?: () => void;
 }) {
   return (
     <div className={cn(
@@ -4735,6 +4761,15 @@ function UserRow({ user: u, isSelf, onToggleDisabled, onChangeRole, onResetPassw
         {u.role === "platform_admin" && <option value="platform_admin">{ROLE_LABEL.platform_admin}</option>}
         {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
       </select>
+      {onSharing && (
+        <button
+          onClick={onSharing}
+          title="What this child shares and sees"
+          className="h-8 px-2 rounded-md hover:bg-muted text-xs text-muted-foreground hover:text-foreground transition inline-flex items-center gap-1"
+        >
+          <Shield className="w-3.5 h-3.5" /> Sharing
+        </button>
+      )}
       <button
         onClick={onResetPassword}
         title="Reset password"

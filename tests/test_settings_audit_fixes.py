@@ -157,3 +157,14 @@ def test_an_api_token_cannot_change_house_settings(fresh_app):
         auth_sessions.reject_api_token({"id": "x", "role": "admin", "auth": "api_token"})
     assert e.value.status_code == 403
     auth_sessions.reject_api_token({"id": "x", "role": "admin"})    # a browser session passes
+
+
+def test_a_changed_thumb_replaces_the_earlier_vote(fresh_app):
+    from backend.database import get_conn
+    c, uid = login_client(fresh_app, role="member", name="Beate")
+    for rating in (1, -1, -1):
+        assert c.post("/api/feedback/turn", json={"conversation_id": "c1", "message_idx": 3, "rating": rating}).status_code == 201
+    with get_conn() as conn:
+        rows = conn.execute("SELECT rating FROM turn_feedback WHERE user_id = ?", (uid,)).fetchall()
+    assert [r["rating"] for r in rows] == [-1]
+

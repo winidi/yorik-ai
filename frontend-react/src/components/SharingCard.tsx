@@ -80,7 +80,7 @@ export function SharingCard({ toast, ownerId, title }: {
 
       {status.members.length === 0 && <p className="text-xs text-muted-foreground">No other members yet.</p>}
 
-      {status.can_set_family_default && status.members.length > 0 && (
+      {!ownerId && status.can_set_family_default && status.members.length > 0 && (
         <div className="mb-4 rounded-lg border border-border bg-muted/30 p-3">
           <div className="text-sm font-medium">Family calendars</div>
           <p className="text-xs text-muted-foreground mt-0.5">

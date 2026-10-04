@@ -1,4 +1,9 @@
-"""delete_bill skill — single-row DELETE, apply-then-confirm."""
+"""delete_bill skill — stage ONE bill for deletion (confirm-before-apply).
+
+Nothing is deleted when this returns; the DELETE runs when the user taps
+"Delete" on the pending_confirmation card (pending_actions.apply), the
+same as tasks, appointments and contacts. "Keep" discards it.
+"""
 from __future__ import annotations
 from typing import Any
 
@@ -29,19 +34,13 @@ async def execute(ctx, bill_id: int) -> dict[str, Any]:
         )
     _deletes_this_turn.set(n_so_far + 1)
 
-    if not bills.delete_bill(bill_id):
-        raise RuntimeError("expected to delete 1 row, deleted 0")
-
-    from backend.ui_tools import _append
-    _append({"type": "refresh_data", "table": "bills",
-             "reason": f"deleted bill: {bill_dict.get('name')}"})
-
     from backend import pending_actions as pa
-    pa.confirm_then_apply(
+    pending_id = pa.stage_before_apply(
         skill="delete_bill",
         ctx=ctx,
-        rollback_kind="restore_bill",
-        rollback_args={"bill_row": bill_dict},
+        apply_kind="delete_bill",
+        apply_args={"bill_id": bill_id, "name": bill_dict.get("name")},
+        params={"bill_id": bill_id},
         preview={
             "action":   "delete",
             "bill_id":  bill_id,
@@ -55,4 +54,14 @@ async def execute(ctx, bill_id: int) -> dict[str, Any]:
         },
     )
 
-    return {"deleted_bill_id": bill_id, "bill": bill_dict}
+    name = bill_dict.get("name") or f"bill {bill_id}"
+    return {
+        "pending":    True,
+        "pending_id": pending_id,
+        "bill":       bill_dict,
+        "_llm_hint": (
+            f"shown_to_user: a confirmation card for deleting the bill '{name}' is on screen. "
+            "NOTHING is deleted yet — it happens only when the user taps Delete on the card. "
+            "Tell the user the card is waiting for their confirmation; do not claim the bill is deleted."
+        ),
+    }
