@@ -13,10 +13,15 @@ home, and the Windows PC then uses Yorik in the browser.
 ## Install
 
 1. From the [latest release](https://github.com/winidi/yorik-ai/releases/latest)
-   download `Yorik-Setup-Windows.zip` and unzip it.
-2. Double-click `Yorik-Setup.cmd`, allow administrator rights.
+   download `Yorik-Setup-Windows.zip` and unzip it (right-click →
+   "Extract All…"; don't start it from inside the zip).
+2. Double-click `Yorik-Setup.cmd`, allow administrator rights. If
+   SmartScreen says "Windows protected your PC": "More info" → "Run
+   anyway".
 
-Windows 10 22H2 or Windows 11. What it does:
+Windows 10 22H2 or Windows 11, 64-bit, with virtualisation on in the
+BIOS/UEFI (Task Manager → Performance → CPU shows "Virtualization:
+Enabled"; WSL2 and Docker need it). What it does:
 
 - turns on WSL2 and installs Docker Desktop with winget, if missing.
   Windows then restarts **once**; after you sign in again the setup

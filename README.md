@@ -103,7 +103,7 @@ Is your install healthy? `bash scripts/smoke-check.sh` walks health, login, a ta
 
 ## Architecture
 
-Python FastAPI backend on `:8000`, React 19 frontend, Postgres for everything personal (the bundled Supabase stack — one database, schemas `public` and `docs`), pgvector for document and message embeddings. An in-tree agent loop wraps the LLM with ~80 role-gated skills it can call as tools. Docker Compose orchestrates the optional bundled Immich + Paperless + WhatsApp bridge; each is BYO-aware.
+Python FastAPI backend on `:8000`, React 19 frontend, PostgreSQL with pgvector for everything personal and for search (one database, schemas `public` and `docs`; the Docker install runs Postgres 16, the classic developer setup the Supabase stack). An in-tree agent loop wraps the LLM with ~80 role-gated skills it can call as tools; the LLM never writes SQL. One Docker Compose stack brings Immich, Paperless, the WhatsApp bridge, Ollama and Tailscale; each is BYO-aware.
 
 Deeper: [ARCHITECTURE.md](ARCHITECTURE.md). Security stance: [THREAT_MODEL.md](THREAT_MODEL.md).
 

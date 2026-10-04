@@ -48,6 +48,9 @@ def test_one_late_source_does_not_drop_the_others(fresh_app, monkeypatch):
     from tests.conftest import seed_user
     uid = seed_user(name="Beate", role="member", email="b@example.com")
     monkeypatch.setattr(search_routes, "TOTAL_BUDGET_S", 0.5)
+    # As on the reference machine: a slow CI runner would stretch 0.5 s past the 2 s sleep.
+    from backend import speed
+    monkeypatch.setattr(speed, "factor", lambda kind: 1.0)
     monkeypatch.setattr(search_routes, "_search_email",
                         lambda q, u, v: [{"source": "email", "id": 1, "title": "Rechnung"}])
     def slow(q, u):

@@ -256,7 +256,7 @@ For built-in skills (shipped with Yorik), we look for:
 | File | Pattern |
 |---|---|
 | `backend/skills/find_photo/skill.py` | Read-only, calls a connector |
-| `backend/skills/check_calendar/skill.py` | Read-only, SQLite query |
+| `backend/skills/check_calendar/skill.py` | Read-only, Postgres query |
 | `backend/skills/add_calendar_event/skill.py` | Apply-then-rollback (canonical) |
 | `backend/skills/compose_draft/skill.py` | Mutates + emits UI action |
 | `backend/skills/email_briefing/skill.py` | Calls the LLM as part of the work |
@@ -451,7 +451,7 @@ browse `backend/skills/` for the full list. Each has a `skill.md` at
 | Skill | What it does |
 |---|---|
 | `find_photo` | Immich CLIP search / recent / by-person / stats. |
-| `find_document` | Paperless semantic search (sqlite-vec mirror). |
+| `find_document` | Paperless semantic search (pgvector mirror). |
 | `find_provider_nearby` | Overpass POI search (dentists / pharmacies / restaurants / …). |
 | `calculate_travel_time` | Driving/cycling/walking time from A to B (defaults A to home). |
 | `compute_group_price` | Deterministic arithmetic + receipt-style chat card. |
