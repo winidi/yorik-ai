@@ -159,7 +159,7 @@ def _llm_json(messages: List[Dict[str, str]]) -> Dict[str, Any]:
         body["chat_template_kwargs"] = {"enable_thinking": on}
         body["reasoning_effort"] = REASONING if on else "none"
     with httpx.Client(timeout=TIMEOUT_S) as c:
-        r = c.post(f"{base}/chat/completions", json=body, headers={"Authorization": "Bearer not-used"})
+        r = c.post(f"{base}/chat/completions", json=body, headers=_agent_llm.household_auth_header(base))
     if r.status_code != 200:
         raise RuntimeError(f"LLM error {r.status_code}: {r.text[:200]}")
     msg = (r.json().get("choices") or [{}])[0].get("message") or {}

@@ -107,9 +107,40 @@ def _from_profile(user_id: str) -> Dict[str, Any]:
     return clean({
         "sender_name": full, "signature_name": full, "business_name": r["business_name"] or "",
         "street": r["address_street"] or "", "postcode": r["address_postcode"] or "", "city": r["address_city"] or "",
-        "country": r["country"] or "DE", "phone": r["phone"] or "", "email": r["email"] or "",
+        "country": r["country"] or "DE", "phone": r["phone"] or "",
+        # QR-invited people carry a placeholder address; it must not
+        # end up on a letter.
+        "email": "" if (r["email"] or "").endswith("@members.yorik.invalid") else (r["email"] or ""),
         "tax_id": r["tax_id"] or "", "iban": r["iban"] or "",
     })
+
+
+def profile_snapshot(user_id: str) -> Dict[str, Any]:
+    """What a letterhead made from the profile right now would say."""
+    return _from_profile(str(user_id))
+
+
+def follow_profile(user_id: str, before: Dict[str, Any]) -> int:
+    """The profile changed: carry the change into the person's
+    letterheads, field by field, wherever the letterhead still says
+    what the profile said before (so nothing typed into the letterhead
+    by hand is overwritten). Returns how many letterheads changed."""
+    after = _from_profile(str(user_id))
+    changed_keys = [k for k in after if before.get(k) != after.get(k)]
+    if not changed_keys:
+        return 0
+    n = 0
+    for lh in list_for(user_id):
+        data = dict(lh["data"])
+        touched = False
+        for k in changed_keys:
+            if (data.get(k) or "") == (before.get(k) or ""):
+                data[k] = after[k]
+                touched = True
+        if touched:
+            update(lh["id"], user_id, data=data)
+            n += 1
+    return n
 
 
 def _row(r) -> Dict[str, Any]:

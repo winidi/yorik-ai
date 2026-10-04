@@ -1098,6 +1098,7 @@ def auth_reset_password_via_invite(body: _ResetViaInviteBody, request: Request):
 @app.post("/api/auth/change-password", tags=["auth"])
 def auth_change_password(
     body: _PasswordChangeBody,
+    request: Request,
     user: Dict[str, Any] = Depends(_auth.current_user),
 ):
     """Self-service password change. Requires current_password. Admin
@@ -1107,7 +1108,9 @@ def auth_change_password(
         raise HTTPException(401, "current password incorrect")
     if len(body.new_password) < 8:
         raise HTTPException(400, "new password must be at least 8 characters")
-    _auth.set_password(user["id"], body.new_password)
+    # This browser stays signed in; every other device signs in again.
+    _auth.set_password(user["id"], body.new_password,
+                       keep_sid=request.cookies.get(_auth.COOKIE_NAME) or None)
     return {"ok": True}
 
 
@@ -1129,7 +1132,7 @@ class _PinSwitchBody(BaseModel):
 
 class _VoiceLoginBody(BaseModel):
     swap_token: str
-    profile_id: int
+    profile_id: str   # UUID
 
 
 @app.post("/api/profile/pin", tags=["auth"])
@@ -1155,7 +1158,19 @@ def profile_clear_pin(
     """Remove the current user's PIN. Kiosk fallbacks for this user
     will then skip the PIN prompt — fine on a single-family device,
     less fine on a shared one. Settings → Devices surfaces a warning
-    when this happens on a kiosk."""
+    when this happens on a kiosk.
+
+    Refused while a phone signs in with this PIN (QR-invited people
+    have no password they know): removing it would lock them out."""
+    try:
+        with conn_ctx(DB_PATH) as conn:
+            phone = conn.execute(
+                "SELECT 1 FROM member_devices WHERE user_id = ? AND revoked_at IS NULL LIMIT 1",
+                (user["id"],)).fetchone()
+    except Exception:  # noqa: BLE001 — older schema without member_devices
+        phone = None
+    if phone:
+        raise HTTPException(409, "Your phone signs in with this PIN. Choose a new PIN instead of removing it.")
     _auth.clear_pin(user["id"])
     return Response(status_code=204)
 
@@ -1326,18 +1341,18 @@ def auth_voice_login(
                              headers={"Retry-After": str(retry or 60)})
     payload = _vtoken.verify(
         body.swap_token,
-        expected_profile_id=int(body.profile_id),
+        expected_profile_id=body.profile_id,
         expected_device_uuid=device_id,
         expected_source_sid=request.cookies.get(_auth.COOKIE_NAME) or "",
     )
     if not payload:
         _throttle.record_login_failure(voice_key, client_ip)
         raise HTTPException(401, "voice-login token invalid or expired")
-    target = _auth.get_user_by_id(int(body.profile_id))
+    target = _auth.get_user_by_id(body.profile_id)
     if not target or target.get("disabled"):
         raise HTTPException(404, "user not found")
     new_sid = _auth.create_session(
-        int(body.profile_id),
+        body.profile_id,
         user_agent=request.headers.get("user-agent", "") + " (voice-login)",
         ip=client_ip,
         wall_device_id=device_id or None,
@@ -1347,7 +1362,7 @@ def auth_voice_login(
         samesite="lax", secure=(request.url.scheme == "https"),
         max_age=_auth.SESSION_TTL_DAYS * 24 * 3600, path="/",
     )
-    _auth.touch_login(int(body.profile_id))
+    _auth.touch_login(body.profile_id)
     return {"ok": True, "user": {"id": target["id"], "name": target["name"],
                                    "role": target["role"]}}
 
@@ -1874,9 +1889,13 @@ def ambient_agenda(request: Request) -> Dict[str, Any]:
     from . import people as _people_mod
     _agenda_looks = {p["id"]: p for p in _people_mod.household()}
     out: list[dict[str, Any]] = []
+    # Today as a text range, like the board: `date('now', 'localtime')`
+    # is SQLite and failed on Postgres.
+    from datetime import timedelta as _td
+    _today = datetime.now().date()
     with conn_ctx(DB_PATH) as conn:
         rows = conn.execute(
-            "SELECT e.id, e.title, e.starts_at, e.ends_at, e.location, "
+            "SELECT e.id, e.title, e.starts_at, e.ends_at, e.location, e.visibility, "
             "       u.id   AS owner_user_id, "
             "       u.name AS owner_name, "
             "       COALESCE(u.first_name, '') AS owner_first_name "
@@ -1884,19 +1903,24 @@ def ambient_agenda(request: Request) -> Dict[str, Any]:
             "JOIN user_profiles u ON u.id = e.owner_user_id "
             "WHERE u.kiosk_agenda_consent = 1 "
             "  AND (u.disabled = 0 OR u.disabled IS NULL) "
-            "  AND date(e.starts_at) = date('now', 'localtime') "
-            "ORDER BY e.starts_at ASC"
+            "  AND e.starts_at >= ? AND e.starts_at < ? "
+            "ORDER BY e.starts_at ASC",
+            (_today.isoformat(), (_today + _td(days=1)).isoformat()),
         ).fetchall()
+    from . import calendars as _cal_mod
     for r in rows:
         owner_first = r["owner_first_name"] or (
             r["owner_name"].split(" ")[0] if r["owner_name"] else ""
         )
+        # A private appointment shows as "Busy" on the wall, the same
+        # as on the family board.
+        ev = _cal_mod._busy_only(dict(r)) if r["visibility"] == "private" else dict(r)
         out.append({
             "id":         int(r["id"]),
-            "title":      r["title"],
+            "title":      ev["title"],
             "starts_at":  r["starts_at"],
             "ends_at":    r["ends_at"],
-            "location":   r["location"],
+            "location":   ev["location"],
             "owner": {
                 "id":         str(r["owner_user_id"]),
                 "name":       r["owner_name"],
@@ -1960,7 +1984,14 @@ def list_devices(
             (user["id"],),
         ).fetchall()
     out: List[Dict[str, Any]] = []
+    # Expired sessions are only deleted when their cookie comes back, so
+    # they piled up here as "currently signed in" (the wall adds one per
+    # cold start). Leave them out.
+    _now_iso = datetime.utcnow().isoformat(timespec="seconds")
     for r in rows:
+        _exp = str(r["expires_at"] or "").replace(" ", "T")
+        if _exp and _exp < _now_iso and r["id"] != current_sid:
+            continue
         # Decode JSON blob → list[str]; malformed / NULL → [].
         phrases_blob = r["kiosk_block_phrases"] or ""
         phrases: List[str] = []
@@ -6984,6 +7015,7 @@ def storage_move_route(
     photo libraries; client should show a spinner + disable navigation."""
     if (user.get("role") or "").lower() not in ("admin", "platform_admin"):
         raise HTTPException(403, "admin only")
+    _auth.reject_api_token(user)
     from . import storage as _st
     try:
         return _st.move_to(body.target_root)
@@ -7032,6 +7064,7 @@ def storage_restore_route(
     deleting it manually."""
     if (user.get("role") or "").lower() not in ("admin", "platform_admin"):
         raise HTTPException(403, "admin only")
+    _auth.reject_api_token(user)
     from . import storage as _st
     return _st.restore()
 
@@ -7744,8 +7777,10 @@ def create_tenant_endpoint(
     Refuses when this Yorik is itself a tenant (YORIK_DB_NAME != 'postgres');
     nested multi-tenancy is out of scope.
     """
-    if normalize_role(role) not in ("admin", "platform_admin"):
-        raise HTTPException(403, "role required: admin")
+    if normalize_role(role) != "platform_admin":
+        # Other families' databases are the operator's, not any
+        # household admin's (a family admin could drop a neighbour).
+        raise HTTPException(403, "only the owner of this Yorik can manage hosted families")
     if os.getenv("YORIK_IS_TENANT", "").strip() in ("1", "true", "yes", "on") \
        or (os.getenv("YORIK_DB_NAME") or "").startswith("yorik_tenant_"):
         raise HTTPException(
@@ -7955,8 +7990,8 @@ def issue_tenant_reset_invite_endpoint(
     setup because reset capability is destructive (replaces an
     existing password without knowledge of the old one).
     """
-    if normalize_role(role) not in ("admin", "platform_admin"):
-        raise HTTPException(403, "role required: admin")
+    if normalize_role(role) != "platform_admin":
+        raise HTTPException(403, "only the owner of this Yorik can manage hosted families")
     if os.getenv("YORIK_IS_TENANT", "").strip() in ("1", "true", "yes", "on") \
        or (os.getenv("YORIK_DB_NAME") or "").startswith("yorik_tenant_"):
         raise HTTPException(400, "this Yorik is itself a tenant — only the host can issue resets")
@@ -8064,8 +8099,10 @@ def drop_tenant_endpoint(
     handles upstream cleanup + systemd stop + DB drop + dir removal.
     The --yes flag suppresses the interactive confirm — caller already
     decided via the UI/API."""
-    if normalize_role(role) not in ("admin", "platform_admin"):
-        raise HTTPException(403, "role required: admin")
+    if normalize_role(role) != "platform_admin":
+        # Other families' databases are the operator's, not any
+        # household admin's (a family admin could drop a neighbour).
+        raise HTTPException(403, "only the owner of this Yorik can manage hosted families")
     # Refuse on tenant Yoriks (same reason as list_tenants_endpoint —
     # tenant admin must not be able to drop other tenants by addressing
     # them by name through the host endpoint replicated to each
@@ -10536,11 +10573,12 @@ def install_extension(extension_id: str, role: str = Depends(_auth.current_role)
 # Order matters only insofar as the response renders in this order.
 _LLM_DETECT_CANDIDATES: Final[List[Dict[str, str]]] = [
     {"label": "Yorik llama-server (chat)",  "base_url": "http://127.0.0.1:8082/v1"},
-    {"label": "Yorik llama-server (embed)", "base_url": "http://127.0.0.1:8083/v1"},
+    # 8083 is Yorik's embedding server: its models can't chat, and
+    # picking one from the scan broke the chat. Not offered.
     {"label": "llama-swap",                 "base_url": "http://127.0.0.1:8080/v1"},
     {"label": "llama.cpp (custom)",         "base_url": "http://127.0.0.1:8081/v1"},
     {"label": "LM Studio",                  "base_url": "http://127.0.0.1:1234/v1"},
-    {"label": "Ollama (legacy)",            "base_url": "http://127.0.0.1:11434/v1"},
+    {"label": "Ollama",                     "base_url": "http://127.0.0.1:11434/v1"},
     {"label": "vLLM",                       "base_url": "http://127.0.0.1:8001/v1"},
 ]
 
@@ -10620,6 +10658,13 @@ async def pending_confirm(
         raise HTTPException(status_code=404, detail="pending action not found or expired")
     if not _user_owns_pending(user, row):
         raise HTTPException(status_code=403, detail="not your pending action")
+    # Same rule as the MCP tool: an outside agent with an API token may
+    # stage a deletion but not carry it out, unless the owner allowed it
+    # (Settings → "Let agents confirm deletions").
+    if (user.get("auth") == "api_token" and _pa.is_deferred(row)
+            and not user.get("agent_may_confirm_deletes")):
+        raise HTTPException(status_code=403,
+                            detail="Deletions wait for the owner's tap in Yorik; this token may not confirm them.")
     applied: Dict[str, Any] = {}
     ui_actions: list[Any] = []
     if _pa.is_deferred(row):
@@ -10806,7 +10851,7 @@ def voice_parakeet_download(
 @app.patch("/api/voice/config")
 def voice_config_patch(
     body: Dict[str, Any] = Body(...),
-    user: dict[str, Any] = Depends(_auth.require_admin),
+    user: dict[str, Any] = Depends(_auth.require_admin_session),
 ) -> Dict[str, Any]:
     """Switch the Whisper model and/or STT engine at runtime. Admin
     only — these are global backend settings, not per-user. All
@@ -10838,6 +10883,12 @@ def voice_config_patch(
                 status_code=400,
                 detail=f"unknown Parakeet model {new_variant!r}; valid: {sorted(_pk.VALID_VARIANTS)}",
             )
+        if not _pk.installed(new_variant):
+            # Switching first and downloading later left voice input and
+            # Recordings dead in between (no Whisper to fall back to).
+            raise HTTPException(
+                status_code=409,
+                detail="Download this model first; Yorik switches to it when the download is done.")
         _pk.set_variant(new_variant)
         persist_keys.append(("HOMEOS_PARAKEET_MODEL", new_variant))
 
@@ -10882,7 +10933,13 @@ def voice_config_patch(
         if new_url is not None:
             persist_keys.append(("HOMEOS_STT_URL", new_url))
         if new_key is not None:
-            persist_keys.append(("HOMEOS_STT_API_KEY", new_key))
+            # Encrypted store, not config.env; an old plain-text line in
+            # config.env is emptied so it can't shadow the new key.
+            try:
+                _voice.store_stt_key(new_key)
+                persist_keys.append(("HOMEOS_STT_API_KEY", ""))
+            except Exception as exc:  # noqa: BLE001
+                log.warning("couldn't store the speech key encrypted: %s", exc)
         if new_model_name is not None:
             persist_keys.append(("HOMEOS_STT_MODEL_NAME", new_model_name))
 
@@ -10987,18 +11044,18 @@ def voice_test_connection(
         (_voice.STT_BACKEND, _voice.STT_URL, _voice.STT_API_KEY, _voice.STT_MODEL_NAME) = prev
 
 
-# Voice ack helper — reads the per-user toggle. We can't reliably
-# identify the speaker until AFTER the speaker-ID step (which is too
-# slow for the ack to fire before it). So for the ack-enabled check
-# we use the role-derived admin user as a proxy. Good enough — if the
-# admin disables acks, the household stays quiet.
-def _voice_ack_enabled_for_role(role: str) -> bool:
+# Voice ack helper — reads the toggle of the person whose session is
+# talking (Settings → "Instant confirmation sound"). Speaker-ID comes
+# too late for the ack, but the session already says who this is on a
+# phone or laptop; on a shared wall it is whoever is signed in there.
+# It used to read the first user with the same *role*, so only the
+# oldest admin's switch did anything.
+def _voice_ack_enabled_for_user(user_id: Optional[str]) -> bool:
     try:
         with conn_ctx(DB_PATH) as conn:
             row = conn.execute(
-                "SELECT voice_ack_enabled FROM user_profiles "
-                "WHERE role = ? ORDER BY id ASC LIMIT 1",
-                (role or "admin",),
+                "SELECT voice_ack_enabled FROM user_profiles WHERE id = ?",
+                (user_id,),
             ).fetchone()
         if not row:
             return True
@@ -11230,7 +11287,7 @@ def llm_config_detect(_user: dict[str, Any] = Depends(_auth.require_admin)) -> D
 @app.patch("/api/llm/config")
 def llm_config_patch(
     body: LlmConfigIn,
-    _user: dict[str, Any] = Depends(_auth.require_admin),
+    _user: dict[str, Any] = Depends(_auth.require_admin_session),
 ) -> Dict[str, Any]:
     """Save base_url + model into config.env on disk and update the
     running process's in-memory references. The OpenAI SDK client is
@@ -11244,14 +11301,13 @@ def llm_config_patch(
     with the model id you picked from served_models so this is a
     self-consistent flow.
     """
-    # If api_key was provided in the body, persist it BEFORE the probe so
-    # the probe can authenticate against cloud endpoints. Empty string
-    # clears the stored key (revert to local-style "not-used").
+    # The key to test with: the one in the body (empty string = remove),
+    # else the stored one. It is stored only after the probe passed; a
+    # failed save used to have replaced the working key already.
     if body.api_key is not None:
-        vanna_agent.set_stored_llm_api_key(body.api_key or None)
-
-    # Validate the target (uses the just-stored or previously-stored key).
-    effective_key = vanna_agent.get_stored_llm_api_key()
+        effective_key = (body.api_key or "").strip() or None
+    else:
+        effective_key = vanna_agent.get_stored_llm_api_key()
     probe = _probe_url_for_models(body.base_url, timeout=2.0, api_key=effective_key)
     if not probe["ok"]:
         raise HTTPException(
@@ -11281,6 +11337,8 @@ def llm_config_patch(
         config_path.write_text(text)
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"couldn't write config.env: {exc}")
+    if body.api_key is not None:
+        vanna_agent.set_stored_llm_api_key(effective_key)
 
     # Live-reload: rebuild both the legacy LLM client AND the new agent
     # backend's LlmClient. Pre-2026-06-01 only the legacy path was
@@ -11421,17 +11479,19 @@ def system_status(
         "url":             _p_settings.get("base_url"),
     }
 
-    # Backup
+    # Backup: "configured" = it will run on its own (passphrase + a
+    # daily time, the same test as the Home checklist), or it has run.
+    # `last` carries its `status`, so a failed run shows as failed.
     backup = {"last": None, "configured": False}
     try:
         from . import backup as _backup_mod
         history = _backup_mod.list_history(limit=1)
+        cfg = _backup_mod.get_config()
         if history:
             backup["last"] = history[0]
-            backup["configured"] = True
-        else:
-            # Even with no runs yet, if a target path is set in env, treat as configured.
-            backup["configured"] = bool(os.getenv("HOMEOS_BACKUP_TARGET"))
+        backup["configured"] = bool(
+            (cfg.get("passphrase_set") and cfg.get("schedule"))
+            or history or os.getenv("HOMEOS_BACKUP_TARGET"))
     except Exception:  # noqa: BLE001
         pass
 
@@ -11473,13 +11533,26 @@ def system_status(
     except Exception:  # noqa: BLE001
         counts["numbering_series"] = 0
 
+    me = {"name": user.get("name"), "role": user.get("role"), "language": user.get("language")}
+    if (user.get("role") or "").lower() not in ("admin", "platform_admin"):
+        # Members' Home only needs "can Yorik think" and the tile counts;
+        # the model address, connectors and backup are the admin's.
+        return {
+            "llm":       {"reachable": llm["reachable"], **({"download": llm["download"]} if "download" in llm else {})},
+            "email":     None,
+            "paperless": None,
+            "backup":    None,
+            "counts":    counts,
+            "user":      me,
+            "configured_connectors": [],
+        }
     return {
         "llm":       llm,
         "email":     email,
         "paperless": paperless,
         "backup":    backup,
         "counts":    counts,
-        "user":      {"name": user.get("name"), "role": user.get("role"), "language": user.get("language")},
+        "user":      me,
         "configured_connectors": sorted(connector_names),
     }
 
@@ -11543,9 +11616,10 @@ def quality_summary(
 ) -> Dict[str, Any]:
     """Aggregated quality metrics for the local dashboard. Per-skill /
     per-template / per-turn, broken down by LLM model so qwen-vs-claude
-    differences become obvious. Anyone with a Yorik account can view —
-    this is the user's own data."""
-    normalize_role(role)
+    differences become obvious. Admin only: "recent failures" carries
+    the error text of everyone's skill calls."""
+    if normalize_role(role) not in ("admin", "platform_admin"):
+        raise HTTPException(status_code=403, detail="admin only")
     # Pre-compute the cutoff timestamp in Python so the SQL is portable
     # across SQLite and Postgres — the previous datetime('now', '-N days')
     # form is SQLite-only and crashed on the Postgres backend with
@@ -11631,6 +11705,25 @@ class SeriesPresetIn(BaseModel):
     preset: str  # 'de' | 'us' | 'pl'
 
 
+def _own_series(series_id: int, user: Dict[str, Any]) -> Dict[str, Any]:
+    """Number series are per person (Write makes one on the first
+    invoice). The owner manages theirs; a series without an owner (an
+    old install) is the admins'. Anyone else gets a 404, like a series
+    that doesn't exist; the history used to be readable by id."""
+    from .compose import series as ser
+    s = ser.get_series(series_id)
+    is_admin = (user.get("role") or "").lower() in ("admin", "platform_admin")
+    owner = s.get("owner_user_id") if s else None
+    if not s or (owner and str(owner) != str(user.get("id"))) or (not owner and not is_admin):
+        raise HTTPException(404, f"series {series_id} not found")
+    return s
+
+
+def _may_number(user: Dict[str, Any]) -> None:
+    if (user.get("role") or "").lower() == "restricted":
+        raise HTTPException(403, "children can't set up invoice numbers")
+
+
 @app.get("/api/compose/series/presets")
 def compose_series_presets(role: str = Depends(_auth.current_role)) -> Dict[str, Any]:
     """List regional presets the first-run wizard can offer."""
@@ -11671,8 +11764,8 @@ def compose_series_create(
     role: str = Depends(_auth.current_role),
     user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
-    if normalize_role(role) not in ("admin", "platform_admin"):
-        raise HTTPException(403, "role required: admin")
+    normalize_role(role)
+    _may_number(user)
     from .compose import series as ser
     try:
         return ser.create_series(
@@ -11690,9 +11783,10 @@ def compose_series_patch(
     series_id: int,
     body: SeriesPatchIn,
     role: str = Depends(_auth.current_role),
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
-    if normalize_role(role) not in ("admin", "platform_admin"):
-        raise HTTPException(403, "role required: admin")
+    normalize_role(role)
+    _own_series(series_id, user)
     from .compose import series as ser
     try:
         return ser.update_series(
@@ -11706,9 +11800,10 @@ def compose_series_patch(
 
 
 @app.delete("/api/compose/series/{series_id}", status_code=204, response_class=Response)
-def compose_series_delete(series_id: int, role: str = Depends(_auth.current_role)) -> Response:
-    if normalize_role(role) not in ("admin", "platform_admin"):
-        raise HTTPException(403, "role required: admin")
+def compose_series_delete(series_id: int, role: str = Depends(_auth.current_role),
+                          user: dict[str, Any] = Depends(_auth.current_user)) -> Response:
+    normalize_role(role)
+    _own_series(series_id, user)
     from .compose import series as ser
     try:
         if not ser.delete_series(series_id):
@@ -11719,8 +11814,10 @@ def compose_series_delete(series_id: int, role: str = Depends(_auth.current_role
 
 
 @app.get("/api/compose/series/{series_id}/preview")
-def compose_series_preview(series_id: int, role: str = Depends(_auth.current_role)) -> Dict[str, Any]:
+def compose_series_preview(series_id: int, role: str = Depends(_auth.current_role),
+                           user: dict[str, Any] = Depends(_auth.current_user)) -> Dict[str, Any]:
     normalize_role(role)
+    _own_series(series_id, user)
     from .compose import series as ser
     try:
         return ser.preview_next(series_id)
@@ -11733,8 +11830,10 @@ def compose_series_allocations(
     series_id: int,
     role: str = Depends(_auth.current_role),
     limit: int = Query(50, ge=1, le=500),
+    user: dict[str, Any] = Depends(_auth.current_user),
 ) -> List[Dict[str, Any]]:
     normalize_role(role)
+    _own_series(series_id, user)
     from .compose import series as ser
     return ser.list_allocations(series_id, limit=limit)
 
@@ -11748,8 +11847,8 @@ def compose_series_install_preset(
     """First-run wizard: install a regional preset (creates the relevant
     series in one click). Idempotent — skips series whose kind already
     has a default."""
-    if normalize_role(role) not in ("admin", "platform_admin"):
-        raise HTTPException(403, "role required: admin")
+    normalize_role(role)
+    _may_number(user)
     from .compose import series as ser
     try:
         created = ser.install_preset(body.preset, owner_user_id=user.get("id"))
@@ -13409,20 +13508,24 @@ def put_setting(key: str, body: SettingPut, role: str = Depends(_auth.current_ro
 
 
 @app.get("/api/voice-profiles")
-def list_voice_profiles() -> List[Dict[str, Any]]:
-    """List user_profiles with their enrollment + language state."""
+def list_voice_profiles(user: Dict[str, Any] = Depends(_auth.current_user)) -> List[Dict[str, Any]]:
+    """List user_profiles with their enrollment + language state.
+    Admins get everyone (they may enroll someone else); others get
+    only themselves — the list carried every email and role."""
+    is_admin = normalize_role(user.get("role") or "") in ("admin", "platform_admin")
     with conn_ctx(DB_PATH) as conn:
         rows = conn.execute(
             "SELECT id, name, email, role, language, "
             "(voice_embedding IS NOT NULL AND voice_embedding != '') AS enrolled "
-            "FROM user_profiles ORDER BY id"
+            "FROM user_profiles " + ("" if is_admin else "WHERE id = ? ") + "ORDER BY id",
+            () if is_admin else (user.get("id"),),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
 @app.post("/api/voice-profile/{profile_id}/enroll")
 async def enroll_voice(
-    profile_id: int,
+    profile_id: str,
     audio: UploadFile = File(...),
     user: Dict[str, Any] = Depends(_auth.current_user),
 ) -> Dict[str, Any]:
@@ -13433,8 +13536,11 @@ async def enroll_voice(
     family member who can't / won't drive Settings themselves.
     Anyone else gets 403.
     """
-    is_admin = normalize_role(user.get("role") or "") == "admin"
-    is_self  = user.get("id") or 0 == int(profile_id)
+    # User ids are UUIDs. The old `user.get("id") or 0 == int(...)` was
+    # always true for a signed-in user (operator precedence), which
+    # would have let anyone enroll anyone's voice.
+    is_admin = normalize_role(user.get("role") or "") in ("admin", "platform_admin")
+    is_self  = str(user.get("id") or "") == str(profile_id)
     if not (is_admin or is_self):
         raise HTTPException(status_code=403, detail="can only enroll your own voice")
     suffix = Path(audio.filename or "voice.webm").suffix or ".webm"
@@ -13457,7 +13563,7 @@ async def enroll_voice(
 
 
 @app.patch("/api/voice-profile/{profile_id}/language")
-def set_profile_language(profile_id: int, body: LanguagePatch, role: str = Depends(_auth.current_role)) -> Dict[str, Any]:
+def set_profile_language(profile_id: str, body: LanguagePatch, role: str = Depends(_auth.current_role)) -> Dict[str, Any]:
     if normalize_role(role) not in ("admin", "platform_admin"):
         raise HTTPException(status_code=403, detail="role required: admin")
     lang = (body.language or "en").lower().strip()
@@ -13473,11 +13579,14 @@ def set_profile_language(profile_id: int, body: LanguagePatch, role: str = Depen
 
 @app.delete("/api/voice-profile/{profile_id}/enrollment", status_code=204, response_class=Response)
 def clear_enrollment(
-    profile_id: int,
+    profile_id: str,
     user: Dict[str, Any] = Depends(_auth.current_user),
 ) -> Response:
-    is_admin = normalize_role(user.get("role") or "") == "admin"
-    is_self  = user.get("id") or 0 == int(profile_id)
+    # User ids are UUIDs. The old `user.get("id") or 0 == int(...)` was
+    # always true for a signed-in user (operator precedence), which
+    # would have let anyone enroll anyone's voice.
+    is_admin = normalize_role(user.get("role") or "") in ("admin", "platform_admin")
+    is_self  = str(user.get("id") or "") == str(profile_id)
     if not (is_admin or is_self):
         raise HTTPException(status_code=403, detail="can only clear your own voice enrollment")
     with conn_ctx(DB_PATH) as conn:
@@ -13794,7 +13903,7 @@ async def ask_voice_stream(
             #      due to HTTP/1.1 head-of-line / connection-pool effects;
             #      inlining means the audio plays the millisecond the JSON
             #      line is parsed. Acks are tiny (~50KB) so this is fine.
-            ack_enabled = _voice_ack_enabled_for_role(role)
+            ack_enabled = _voice_ack_enabled_for_user(user.get("id"))
             if ack_enabled:
                 from . import voice_acks
                 import base64 as _b64
@@ -13846,7 +13955,7 @@ async def ask_voice_stream(
                         identified = {
                             **match,
                             "swap_token": _vtoken.mint(
-                                profile_id=int(match["profile_id"]),
+                                profile_id=str(match["profile_id"]),
                                 device_uuid=wall_device_id,
                                 source_sid=_sid,
                             ),

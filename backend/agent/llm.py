@@ -97,6 +97,27 @@ def _thinking_kwargs_enabled() -> bool:
     return os.getenv("YORIK_LLM_THINKING_KWARGS", "inject").lower() != "off"
 
 
+def household_key_for(base_url: Optional[str]) -> str:
+    """The cloud key saved under Settings → AI, for calls to that same
+    endpoint. Only the chat used to get it: mail sorting, bills, the
+    autotagger, writing and the rest called a cloud model with
+    "not-used" and got 401. Any other address gets "not-used", so the
+    key never travels to a host it wasn't entered for."""
+    try:
+        configured = (os.getenv("HOMEOS_LLM_BASE_URL") or "").rstrip("/")
+        if not configured or (base_url or "").rstrip("/") != configured:
+            return "not-used"
+        from backend import credential_store as _cs
+        key = (_cs.get("_global_llm") or {}).get("api_key")
+        return key.strip() if isinstance(key, str) and key.strip() else "not-used"
+    except Exception:  # noqa: BLE001 — a local endpoint needs no key anyway
+        return "not-used"
+
+
+def household_auth_header(base_url: Optional[str]) -> dict:
+    return {"Authorization": f"Bearer {household_key_for(base_url)}"}
+
+
 class LlmClient:
     """Thin async-friendly wrapper around openai.OpenAI for Yorik.
 
@@ -109,13 +130,13 @@ class LlmClient:
         *,
         model: str,
         base_url: str,
-        api_key: str = "not-used",
+        api_key: Optional[str] = None,
         max_retries: int = 1,
         request_timeout: float = 120.0,
     ) -> None:
         self.model = model
         self.base_url = base_url
-        self.api_key = api_key
+        self.api_key = api_key if api_key is not None else household_key_for(base_url)
         self.max_retries = max_retries
         self.request_timeout = request_timeout
         self._sdk_client: Any = None  # lazily built

@@ -630,6 +630,16 @@ def uninstall_app(app_id: str, *, wipe_data: bool = True) -> bool:
     if wipe_data and data_dir.exists():
         shutil.rmtree(data_dir)
         log.info("app data wiped: %s", data_dir)
+    # The copy an install made under data/apps-src/ goes too, or the
+    # next start's scan_and_load_all brings the app back (without its
+    # data). Only that folder: a dev install from elsewhere stays put.
+    src_copy = APPS_INSTALLED_DIR / app_id
+    try:
+        if src_copy.resolve().parent == APPS_INSTALLED_DIR.resolve() and src_copy.is_dir():
+            shutil.rmtree(src_copy)
+            log.info("app source removed: %s", src_copy)
+    except OSError as e:
+        log.warning("app source %s not removed: %s", src_copy, e)
     return True
 
 

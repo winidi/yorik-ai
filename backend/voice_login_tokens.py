@@ -92,7 +92,7 @@ def _b64decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + pad)
 
 
-def mint(*, profile_id: int, device_uuid: str, source_sid: str) -> str:
+def mint(*, profile_id: str, device_uuid: str, source_sid: str) -> str:
     """Issue a single-use token good for ~60 seconds.
 
     Bound to the device UUID so the same token can't redeem from
@@ -100,7 +100,7 @@ def mint(*, profile_id: int, device_uuid: str, source_sid: str) -> str:
     its origin session.
     """
     payload = {
-        "p": int(profile_id),
+        "p": str(profile_id),   # user ids are UUIDs since Phase E
         "d": device_uuid,
         "s": source_sid or "",
         "t": int(time.time()),
@@ -114,7 +114,7 @@ def mint(*, profile_id: int, device_uuid: str, source_sid: str) -> str:
 def verify(
     token: str,
     *,
-    expected_profile_id: int,
+    expected_profile_id: str,
     expected_device_uuid: str,
     expected_source_sid: str,
 ) -> Optional[dict]:
@@ -137,7 +137,7 @@ def verify(
             return None
         if (time.time() - int(payload.get("t") or 0)) > TOKEN_TTL_SECONDS:
             return None
-        if int(payload.get("p") or 0) != int(expected_profile_id):
+        if str(payload.get("p") or "") != str(expected_profile_id):
             return None
         if (payload.get("d") or "") != expected_device_uuid:
             return None

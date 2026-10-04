@@ -2193,7 +2193,7 @@ async def _call_llm(prompt: str, max_tokens: int = 400) -> str:
                     else {}
                 ),
             },
-            headers={"Authorization": "Bearer not-used"},
+            headers=_agent_llm.household_auth_header(base),
         )
         if r.status_code != 200:
             raise HTTPException(502, f"LLM error: {r.status_code} {r.text}")

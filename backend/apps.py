@@ -70,10 +70,12 @@ def _is_opt_in_enabled(app_id: str) -> bool:
     """Check whether an opt-in app has been enabled by the user.
 
     Order of precedence:
-      1. `YORIK_ENABLE_<ID>=1` env var (set in config.env). Wins because
-         a user who explicitly set this expects the app to be on even if
-         the DB row is missing or stale.
-      2. `app_settings.app_enabled_<id> = '1'` (set by the Settings UI).
+      1. `app_settings.app_enabled_<id>` (set by the Settings UI). Once
+         someone has flipped the switch, the switch is what counts.
+      2. `YORIK_ENABLE_<ID>=1` env var (config.env) as the install's
+         default while nobody has touched the switch. It used to win
+         over the switch, so "WhatsApp off" said done and did nothing
+         (start.sh sets YORIK_ENABLE_WHATSAPP=1 to bundle the bridge).
       3. No row yet, and the app's `in_use_table` has rows: on (and
          recorded as on).
       4. Default off.
@@ -82,8 +84,7 @@ def _is_opt_in_enabled(app_id: str) -> bool:
     early-boot /api/apps call doesn't 500.
     """
     env_key = f"YORIK_ENABLE_{app_id.upper()}"
-    if os.getenv(env_key, "").strip().lower() in ("1", "true", "yes", "on"):
-        return True
+    env_on = os.getenv(env_key, "").strip().lower() in ("1", "true", "yes", "on")
     try:
         from . import database  # local import to avoid circular at module load
         with database.get_conn() as conn:
@@ -94,7 +95,9 @@ def _is_opt_in_enabled(app_id: str) -> bool:
         if row is not None:
             return str(row[0]).strip() == "1"
     except Exception:  # noqa: BLE001 — see docstring
-        return False
+        return env_on
+    if env_on:
+        return True
     return _keep_on_if_in_use(app_id)
 
 

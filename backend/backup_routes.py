@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .auth_sessions import require_admin
+from .auth_sessions import require_admin, require_admin_session
 from . import backup
 
 router = APIRouter(prefix="/api/backup", tags=["backup"])
@@ -28,7 +28,7 @@ def get_config():
     return backup.get_config()
 
 
-@router.patch("/config", dependencies=[Depends(require_admin)])
+@router.patch("/config", dependencies=[Depends(require_admin_session)])
 def patch_config(body: ConfigPatch):
     try:
         return backup.set_config(

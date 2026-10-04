@@ -741,7 +741,7 @@ export function VoiceFab() {
                     "/api/auth/voice-login",
                     {
                       swap_token: String(evt.identified.swap_token),
-                      profile_id: Number(evt.identified.profile_id),
+                      profile_id: String(evt.identified.profile_id),
                     },
                   ).then(r => {
                     if (r?.ok && r?.user) {

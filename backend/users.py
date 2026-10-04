@@ -9,6 +9,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 
 from .auth_sessions import (
+    require_admin_session,
     current_user,
     get_user_by_email,
     hash_password,
@@ -84,7 +85,9 @@ class SelfProfile(BaseModel):
     onboarded_at: Optional[str] = None  # accept ISO; usually set via /onboarding/complete
     # Scanned handwritten signature as a data URL (e.g. "data:image/png;base64,…").
     # Used by compose templates above the typed name. Pass null to clear.
-    signature_data_url: Optional[str] = None
+    # ~200 KB image as base64 plus the data: prefix; the browser checks
+    # the same, but the server must not take a 50 MB "signature".
+    signature_data_url: Optional[str] = Field(default=None, max_length=300_000)
 
 
 # ───────────────────────── admin: list / create / patch / delete ───────
@@ -125,7 +128,7 @@ def list_users() -> list[dict[str, Any]]:
     return [_user_row_to_dict(r) for r in rows]
 
 
-@router.post("/users", status_code=201, dependencies=[Depends(require_admin)])
+@router.post("/users", status_code=201, dependencies=[Depends(require_admin_session)])
 def create_user(body: UserCreate) -> dict[str, Any]:
     if get_user_by_email(body.email):
         raise HTTPException(409, "email already in use")
@@ -330,7 +333,7 @@ def provision_user(user_id: str, service: str, body: ProvisionBody) -> dict[str,
     return {"ok": True, **out}
 
 
-@router.patch("/users/{user_id}", dependencies=[Depends(require_admin)])
+@router.patch("/users/{user_id}", dependencies=[Depends(require_admin_session)])
 def patch_user(user_id: str, body: UserPatch,
                actor: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
     """Admin updates someone's profile. Safety net: admin can't disable
@@ -352,12 +355,25 @@ def patch_user(user_id: str, body: UserPatch,
             if count <= 1:
                 raise HTTPException(400, "cannot demote the only active platform_admin")
 
+    # The same four roles as create (restricted = child). The legacy
+    # child/employee/viewer names are folded into restricted, like
+    # create_user does; storing them literally made a "child" that
+    # could not write and counted as a parent for Paperless.
+    new_role: Optional[str] = None
+    if body.role is not None:
+        if body.role not in ("admin", "member", "restricted", "child", "employee", "viewer"):
+            raise HTTPException(400, f"unknown role: {body.role}")
+        new_role = "restricted" if body.role in ("child", "employee", "viewer") else body.role
+        if user_id != actor["id"] and actor.get("role") != "platform_admin":
+            with get_conn() as conn:
+                target = conn.execute(
+                    "SELECT role FROM user_profiles WHERE id=?", (user_id,)).fetchone()
+            if target and target["role"] == "platform_admin":
+                raise HTTPException(403, "only a platform admin can change a platform admin's role")
+
     fields, params = [], []
     if body.name is not None:     fields.append("name=?");     params.append(body.name)
-    if body.role is not None:
-        if body.role not in ("admin", "member", "child", "employee", "viewer"):
-            raise HTTPException(400, f"unknown role: {body.role}")
-        fields.append("role=?"); params.append(body.role)
+    if new_role is not None:      fields.append("role=?");     params.append(new_role)
     if body.language is not None: fields.append("language=?"); params.append(body.language)
     if body.disabled is not None: fields.append("disabled=?"); params.append(1 if body.disabled else 0)
     if not fields:
@@ -374,10 +390,44 @@ def patch_user(user_id: str, body: UserPatch,
     # If we just disabled the user, kick their sessions.
     if body.disabled:
         revoke_all_sessions(user_id)
+    if new_role is not None:
+        _apply_role_side_effects(user_id, new_role)
     return _user_row_to_dict(row)
 
 
-@router.post("/users/{user_id}/reset-password", dependencies=[Depends(require_admin)])
+def _apply_role_side_effects(user_id: str, role: str) -> None:
+    """What a role means outside user_profiles: a child sees the
+    Household at read level, an adult at write level (create_user sets
+    it once; a later role change has to move it too), and the Paperless
+    "parents" group follows the role. Best-effort: the role change
+    itself has already been saved."""
+    import logging as _log
+    import threading
+    from . import spaces as _sp
+    level = "read" if role == "restricted" else "write"
+    try:
+        with get_conn() as conn:
+            hh = conn.execute("SELECT id FROM spaces WHERE slug='household' LIMIT 1").fetchone()
+            if hh:
+                cur = conn.execute(
+                    "UPDATE space_members SET level=? WHERE space_id=? AND user_id=?",
+                    (level, int(hh["id"]), user_id))
+                conn.commit()
+                if getattr(cur, "rowcount", 0):
+                    _sp.on_space_member_added(int(hh["id"]), user_id, level)
+    except Exception as e:  # noqa: BLE001
+        _log.getLogger("yorik.users").warning("role change: household level for %s: %s", user_id, e)
+
+    def _parents() -> None:
+        try:
+            from . import paperless_visibility
+            paperless_visibility.sync_parents_group()
+        except Exception as e:  # noqa: BLE001
+            _log.getLogger("yorik.users").warning("role change: parents group sync: %s", e)
+    threading.Thread(target=_parents, daemon=True).start()
+
+
+@router.post("/users/{user_id}/reset-password", dependencies=[Depends(require_admin_session)])
 def admin_reset_password(user_id: str, body: PasswordReset) -> dict[str, Any]:
     """Admin overrides a user's password (no current-password check)."""
     with get_conn() as conn:
@@ -388,7 +438,7 @@ def admin_reset_password(user_id: str, body: PasswordReset) -> dict[str, Any]:
     return {"ok": True, "sessions_revoked": True}
 
 
-@router.delete("/users/{user_id}", dependencies=[Depends(require_admin)])
+@router.delete("/users/{user_id}", dependencies=[Depends(require_admin_session)])
 def delete_user(user_id: str, actor: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
     if user_id == actor["id"]:
         raise HTTPException(400, "cannot delete yourself")
@@ -398,15 +448,20 @@ def delete_user(user_id: str, actor: dict[str, Any] = Depends(current_user)) -> 
         ).fetchone()
         if not row:
             raise HTTPException(404, "user not found")
-        if row["role"] == "admin":
+        if row["role"] == "platform_admin" and actor.get("role") != "platform_admin":
+            raise HTTPException(403, "only a platform admin can remove a platform admin")
+        if row["role"] in ("admin", "platform_admin"):
             others = conn.execute(
-                "SELECT COUNT(*) FROM user_profiles WHERE role='admin' AND disabled=0 AND id != ?",
+                "SELECT COUNT(*) FROM user_profiles WHERE role IN ('admin', 'platform_admin') "
+                "AND disabled=0 AND id != ?",
                 (user_id,),
             ).fetchone()[0]
             if others == 0:
                 raise HTTPException(400, "cannot delete the only active admin")
         conn.execute("DELETE FROM user_profiles WHERE id=?", (user_id,))
-        # ON DELETE CASCADE on sessions takes care of the rest.
+        # sessions.user_id has no foreign key: remove them here. (They
+        # stopped working anyway, the lookup joins user_profiles.)
+        conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
         conn.commit()
     return {"ok": True}
 
@@ -441,7 +496,14 @@ def update_self_profile(body: SelfProfile,
     if not fields:
         raise HTTPException(400, "no fields to update")
     params.append(user["id"])
+    from .writing import letterhead as _lh
+    try:
+        lh_before = _lh.profile_snapshot(user["id"])
+    except Exception:  # noqa: BLE001 — letters are a bonus, the profile isn't
+        lh_before = None
     with conn_ctx(DEFAULT_DB_PATH) as conn:
+        old_country = (conn.execute("SELECT country FROM user_profiles WHERE id=?",
+                                    (user["id"],)).fetchone() or {"country": None})["country"]
         conn.execute(f"UPDATE user_profiles SET {', '.join(fields)} WHERE id=?", params)
         row = conn.execute(
             "SELECT id, name, first_name, last_name, email, role, language, "
@@ -452,13 +514,25 @@ def update_self_profile(body: SelfProfile,
             (user["id"],),
         ).fetchone()
     result = _user_row_to_dict(row)
+    # Letters and invoices are written from the letterhead, which was
+    # copied from the profile once. Carry changes over where the
+    # letterhead hadn't been edited by hand.
+    if lh_before is not None:
+        try:
+            result["letterheads_updated"] = _lh.follow_profile(user["id"], lh_before)
+        except Exception:  # noqa: BLE001
+            pass
 
     # Apply server-wide locale derived from country (admin only). Skip
     # on tenants — apply_country writes to the HOST's config.env and
     # restarts the HOST's bundled Paperless, which would clobber shared
     # state across all tenants. Country stays saved on user_profiles
     # for the tenant; only the host-wide side effects are suppressed.
-    if user.get("role") in ("admin", "platform_admin") and payload.get("country"):
+    # Only when the country actually changed: the profile form sends it
+    # on every save, and each apply reset the time zone (US = New York)
+    # and, on the classic install, restarted Paperless.
+    if (user.get("role") in ("admin", "platform_admin") and payload.get("country")
+            and (payload.get("country") or "").upper() != (old_country or "").upper()):
         from . import external_users as _eu
         if _eu._is_tenant_mode():
             result["locale_applied"] = {"applied": False, "note": "tenant mode — host locale unchanged"}

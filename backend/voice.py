@@ -60,7 +60,30 @@ def _default_backend() -> str:
 STT_BACKEND = (os.getenv("HOMEOS_STT_BACKEND") or _default_backend()).strip().lower()
 LOCAL_STT_BACKENDS = {"parakeet", "whisper"}
 STT_URL = (os.getenv("HOMEOS_STT_URL") or "").strip()
-STT_API_KEY = os.getenv("HOMEOS_STT_API_KEY") or ""
+_CRED_NAME_STT = "_global_stt"
+
+
+def _stored_stt_key() -> str:
+    """The cloud speech key lives in the encrypted credential store,
+    like the AI model's key (it used to be written to config.env in
+    plain text). A key still in config.env keeps working."""
+    try:
+        from . import credential_store as _cs
+        key = (_cs.get(_CRED_NAME_STT) or {}).get("api_key")
+        return key.strip() if isinstance(key, str) else ""
+    except Exception:  # noqa: BLE001 — store not ready: no key
+        return ""
+
+
+def store_stt_key(api_key: str) -> None:
+    from . import credential_store as _cs
+    if api_key and api_key.strip():
+        _cs.put(_CRED_NAME_STT, {"api_key": api_key.strip()})
+    else:
+        _cs.delete(_CRED_NAME_STT)
+
+
+STT_API_KEY = os.getenv("HOMEOS_STT_API_KEY") or _stored_stt_key()
 STT_MODEL_NAME = (os.getenv("HOMEOS_STT_MODEL_NAME") or "").strip()
 
 # Catalogue rendered by Settings UI. `default_url` and `default_model`

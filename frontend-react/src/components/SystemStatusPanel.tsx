@@ -1,12 +1,12 @@
 /**
- * System status for the admin: service chips (LLM, email, Paperless,
- * backup, numbering) and the background workers. Lives in
+ * System status for the admin: service chips (AI model, email,
+ * documents, backup) and the background workers. Lives in
  * Settings → System; Home only shows the one-line summary from
  * `useHouseHealth`, so the family never sees model names or worker ids.
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { Server, Mail, FileText, Database, Hash, RefreshCw } from "lucide-react";
+import { Server, Mail, FileText, Database, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { WorkersStatus } from "@/components/WorkersStatus";
@@ -19,9 +19,10 @@ export interface SystemStatus {
     /** First start of the Docker install: the model is still downloading. */
     download?: { model: string; status: "downloading" | "failed"; percent: number | null };
   };
-  email: { configured: boolean; kinds: string[] };
-  paperless: { admin_token_set: boolean; url: string | null };
-  backup: { last: any; configured: boolean };
+  /** null for members: the server only gives them what Home needs. */
+  email: { configured: boolean; kinds: string[] } | null;
+  paperless: { admin_token_set: boolean; url: string | null } | null;
+  backup: { last: { status?: "ok" | "failed" | "running"; error?: string | null; finished_at?: string; started_at?: string } | null; configured: boolean } | null;
   counts: Record<string, number>;
   user: { name: string; role: string; language: string };
   configured_connectors: string[];
@@ -49,8 +50,10 @@ export function healthIssues(status: SystemStatus | null, workers: WorkerLite[])
     if (w.name.startsWith("backup_")) continue;
     if (w.status === "error") out.push({ tone: "error", text: `${workerLabel(w.name)} stopped` });
   }
-  if (status && !status.backup.configured) {
+  if (status?.backup && !status.backup.configured) {
     out.push({ tone: "warn", text: "Backup isn't set up yet" });
+  } else if (status?.backup?.last?.status === "failed") {
+    out.push({ tone: "error", text: "The last backup failed" });
   }
   for (const w of workers) {
     if (w.name.startsWith("backup_")) continue;
@@ -154,7 +157,7 @@ export function SystemStatusPanel() {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
           <StatusChip
             icon={Server}
-            label="LLM"
+            label="AI model"
             detail={status?.llm.model || "—"}
             tone={!status ? "loading" : status.llm.reachable ? "ok" : "error"}
             hint={status?.llm.reachable ? "Reachable" : "Unreachable"}
@@ -162,30 +165,23 @@ export function SystemStatusPanel() {
           <StatusChip
             icon={Mail}
             label="Email"
-            detail={status?.email.kinds?.[0] || "Not configured"}
-            tone={!status ? "loading" : status.email.configured ? "ok" : "off"}
-            hint={status?.email.configured ? "Ready" : "Optional"}
+            detail={status?.email?.kinds?.[0] || "Not configured"}
+            tone={!status ? "loading" : status.email?.configured ? "ok" : "off"}
+            hint={status?.email?.configured ? "Ready" : "Optional"}
           />
           <StatusChip
             icon={FileText}
-            label="Paperless"
-            detail={status?.paperless.admin_token_set ? "Linked" : "Not linked"}
-            tone={!status ? "loading" : status?.paperless.admin_token_set ? "ok" : "off"}
-            hint={status?.paperless.admin_token_set ? "Token set" : "Optional"}
+            label="Documents"
+            detail={status?.paperless?.admin_token_set ? "Linked" : "Not linked"}
+            tone={!status ? "loading" : status?.paperless?.admin_token_set ? "ok" : "off"}
+            hint={status?.paperless?.admin_token_set ? "Connected to the document archive" : "Optional"}
           />
           <StatusChip
             icon={Database}
             label="Backup"
             detail={backupSummary(status)}
-            tone={!status ? "loading" : status.backup.configured ? "ok" : "off"}
-            hint={status?.backup.last?.finished_at || ""}
-          />
-          <StatusChip
-            icon={Hash}
-            label="Numbering"
-            detail={status ? `${status.counts.numbering_series || 0} series` : "—"}
-            tone={!status ? "loading" : (status.counts.numbering_series || 0) > 0 ? "ok" : "off"}
-            hint={(status?.counts.numbering_series || 0) > 0 ? "Configured" : "Optional"}
+            tone={!status ? "loading" : status.backup?.last?.status === "failed" ? "error" : status.backup?.configured ? "ok" : "off"}
+            hint={status?.backup?.last?.status === "failed" ? (status.backup.last.error || "Last run failed") : (status?.backup?.last?.finished_at || "")}
           />
         </div>
       </section>
@@ -246,9 +242,11 @@ function StatusChip({ icon: Icon, label, detail, tone, hint }: {
 }
 
 function backupSummary(s: SystemStatus | null): string {
-  if (!s) return "—";
+  if (!s || !s.backup) return "—";
   if (!s.backup.configured) return "Not set up";
   if (!s.backup.last) return "No runs yet";
+  if (s.backup.last.status === "failed") return "Last run failed";
+  if (s.backup.last.status === "running") return "Running now";
   const ts = s.backup.last?.finished_at || s.backup.last?.started_at;
   if (!ts) return "Configured";
   const d = new Date(ts.replace(" ", "T") + (ts.includes("T") ? "" : "Z"));

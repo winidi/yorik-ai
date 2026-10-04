@@ -99,8 +99,9 @@ async def _chat_json(prompt: str, max_tokens: int = 200) -> Optional[Dict[str, A
     try:
         from . import speed
         async with httpx.AsyncClient(timeout=speed.budget(EXTRACT_TIMEOUT_S, "llm")) as client:
+            from .agent.llm import household_auth_header
             r = await client.post(f"{base}/chat/completions", json=body,
-                                  headers={"Authorization": "Bearer not-used"})
+                                  headers=household_auth_header(base))
         r.raise_for_status()
         raw = (r.json().get("choices") or [{}])[0].get("message", {}).get("content") or ""
         found = re.search(r"\{.*\}", raw, re.S)

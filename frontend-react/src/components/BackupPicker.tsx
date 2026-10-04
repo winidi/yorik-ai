@@ -40,7 +40,7 @@ interface BackupStatus {
   target: { available: boolean; reason?: string; free_bytes?: number; on_same_filesystem?: boolean };
   history: Array<{
     id: number; started_at: string; finished_at?: string;
-    ok: boolean; size_bytes?: number; error?: string;
+    status: "ok" | "failed" | "running"; size_bytes?: number; error?: string;
   }>;
   snapshots: Array<{ name: string; size_bytes: number; mtime: string }>;
 }
@@ -205,7 +205,7 @@ export function BackupPicker({
             {status.history.length > 0 && (
               <div className="text-xs text-muted-foreground mt-0.5">
                 Last run: {fmtDateRel(status.history[0].started_at)}
-                {status.history[0].ok ? " ✓" : " — failed"}
+                {status.history[0].status === "ok" ? " ✓" : status.history[0].status === "running" ? " — running" : " — failed"}
               </div>
             )}
           </div>
@@ -394,7 +394,7 @@ export function BackupPicker({
           <div className="space-y-1">
             {status.history.slice(0, 5).map(h => (
               <div key={h.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded bg-muted/30">
-                {h.ok ? <Check className="w-3 h-3 text-emerald-500" /> : <AlertTriangle className="w-3 h-3 text-red-500" />}
+                {h.status === "ok" ? <Check className="w-3 h-3 text-emerald-500" /> : h.status === "running" ? <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" /> : <AlertTriangle className="w-3 h-3 text-red-500" />}
                 <span>{new Date(h.started_at).toLocaleString()}</span>
                 {h.size_bytes && <span className="text-muted-foreground">· {fmtBytes(h.size_bytes)}</span>}
                 {h.error && <span className="text-red-500 truncate">· {h.error}</span>}

@@ -47,8 +47,9 @@ def _complete(prompt: str, max_tokens: int = 1800) -> str:
     if _thinking_kwargs_enabled():
         body["chat_template_kwargs"] = {"enable_thinking": False}
         body["reasoning_effort"] = "none"
+    from ..agent.llm import household_auth_header
     r = httpx.post(f"{base}/chat/completions", json=body, timeout=TIMEOUT_S,
-                   headers={"Authorization": "Bearer not-used"})
+                   headers=household_auth_header(base))
     r.raise_for_status()
     return ((r.json().get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
 

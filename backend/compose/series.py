@@ -241,8 +241,15 @@ def update_series(
         raise ValueError(f"series {series_id} not found")
     if scheme is not None and not _scheme_is_valid(scheme):
         raise ValueError(f"scheme must include {{seq}}; got '{scheme}'")
+    year_now = datetime.now().year
+    resets = bool(current.get("year_reset")) if year_reset is None else bool(year_reset)
+    # A changed next_number on a yearly series means "this year from N":
+    # it is checked against this year's numbers only (all years made
+    # every edit fail after the first reset), and the series is marked
+    # as being in this year so the reset doesn't throw N away again.
+    number_changed = next_number is not None and next_number != current.get("next_number")
     if next_number is not None:
-        max_used = _highest_used(series_id)
+        max_used = _highest_used(series_id, year=year_now if resets else None)
         if max_used is not None and next_number <= max_used:
             raise ValueError(
                 f"next_number={next_number} would collide with an already-consumed "
@@ -260,6 +267,7 @@ def update_series(
     if prefix      is not None: _set("prefix", prefix)
     if seq_padding is not None: _set("seq_padding", seq_padding)
     if next_number is not None: _set("next_number", next_number)
+    if number_changed and resets: _set("current_year", year_now)
     if year_reset  is not None: _set("year_reset", 1 if year_reset else 0)
     if notes       is not None: _set("notes", notes)
     if not fields and is_default is None:
@@ -320,13 +328,20 @@ def _format_number(scheme: str, number: int, year: int, seq_padding: int, prefix
             .replace("{seq}", seq_str))
 
 
-def _highest_used(series_id: int) -> Optional[int]:
-    """Highest `number` ever allocated from this series across all years."""
+def _highest_used(series_id: int, *, year: Optional[int] = None) -> Optional[int]:
+    """Highest `number` allocated from this series, in `year` when
+    given (a yearly series starts at 1 again), else across all years."""
     with get_conn() as conn:
-        row = conn.execute(
-            "SELECT MAX(number) FROM document_series_allocations WHERE series_id = ?",
-            (series_id,),
-        ).fetchone()
+        if year is not None:
+            row = conn.execute(
+                "SELECT MAX(number) FROM document_series_allocations WHERE series_id = ? AND year = ?",
+                (series_id, year),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT MAX(number) FROM document_series_allocations WHERE series_id = ?",
+                (series_id,),
+            ).fetchone()
     return row[0] if row and row[0] is not None else None
 
 

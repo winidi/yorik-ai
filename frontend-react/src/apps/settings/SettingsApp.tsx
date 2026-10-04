@@ -831,7 +831,7 @@ function ChangePasswordCard({ toast }: {
         new_password:     newPw,
       });
       setCurrentPw(""); setNewPw(""); setConfirmPw("");
-      toast("Password changed. Your other sessions stay active.", "success");
+      toast("Password changed. Your other devices have been signed out and need the new password.", "success");
     } catch (e: any) {
       // 401 = current password wrong; 400 = new too short / other validation
       const msg = e?.message || "Couldn't change password";
@@ -1200,12 +1200,9 @@ function VoiceEnrollmentCard({ toast }: {
       });
       if (!r.ok) {
         const text = await r.text();
-        try {
-          const j = JSON.parse(text);
-          throw new Error(j.detail || j.message || text);
-        } catch {
-          throw new Error(text || `HTTP ${r.status}`);
-        }
+        let msg = text || `HTTP ${r.status}`;
+        try { const j = JSON.parse(text); msg = j.detail || j.message || msg; } catch { /* plain text */ }
+        throw new Error(msg);
       }
       toast("Voice enrolled — Yorik will recognise you on the kiosk now", "success");
       await refresh();
@@ -1414,29 +1411,45 @@ function STTConfigCard({ toast }: {
     loadConfig().catch((e: any) => toast(`Couldn't load voice config: ${e.message}`, "error"));
   }, [loadConfig, toast]);
 
+  // A model picked before it was downloaded: switch once it's there.
+  const switchAfterRef = useRef<ParakeetVariant["id"] | null>(null);
+
   // While a download runs, poll every 3 s until it settles.
   const downloading = parakeet?.download.state === "running";
   useEffect(() => {
     if (!downloading) return;
     const t = setInterval(() => {
       loadConfig().then(r => {
-        if (r.parakeet?.download.state === "done") toast("Parakeet model downloaded.", "success");
-        if (r.parakeet?.download.state === "error") toast(`Download failed: ${r.parakeet.download.message}`, "error");
+        if (r.parakeet?.download.state === "done") {
+          const next = switchAfterRef.current;
+          switchAfterRef.current = null;
+          if (next) void pickVariant(next);
+          else toast("Speech model downloaded.", "success");
+        }
+        if (r.parakeet?.download.state === "error") {
+          switchAfterRef.current = null;
+          toast(`Download failed: ${r.parakeet.download.message}`, "error");
+        }
       }).catch(() => {});
     }, 3000);
     return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [downloading, loadConfig, toast]);
 
   async function pickVariant(id: ParakeetVariant["id"]) {
     if (!parakeet || id === parakeet.model || busyVariant) return;
+    const meta = parakeet.variants.find(v => v.id === id);
+    if (meta && !meta.installed) {
+      // Download first; the current model keeps working meanwhile.
+      switchAfterRef.current = id;
+      await downloadVariant(id);
+      return;
+    }
     setBusyVariant(id);
     try {
       const r = await api.patch<STTConfigResponse>("/api/voice/config", { parakeet_model: id });
       setParakeet(r.parakeet);
-      const meta = parakeet.variants.find(v => v.id === id);
-      toast(meta?.installed
-        ? `Switched to ${meta.label}.`
-        : `Switched to ${meta?.label || id}. Download the model to use it.`, "success");
+      toast(`Switched to ${meta?.label || id}.`, "success");
     } catch (e: any) {
       toast(e.message || "Switch failed", "error");
     } finally {
@@ -1450,7 +1463,9 @@ function STTConfigCard({ toast }: {
         "/api/voice/parakeet/download", { model: id },
       );
       setParakeet(p => p ? { ...p, download: r.download } : p);
-      if (!r.installed) toast("Downloading in the background (~600 MB, one-time).", "info");
+      if (!r.installed) toast(switchAfterRef.current === id
+        ? "Downloading (~600 MB, one-time). Yorik switches to it when it's done; until then the current model keeps working."
+        : "Downloading in the background (~600 MB, one-time).", "info");
     } catch (e: any) {
       toast(e.message || "Download failed to start", "error");
     }
@@ -1480,11 +1495,18 @@ function STTConfigCard({ toast }: {
   // from the catalogue so the user only has to paste a key.
   function selectBackend(id: STTBackend["id"]) {
     if (id === backend) return;
+    const prev = backends.find(b => b.id === backend);
+    const wasLocal = backend === "whisper" || backend === "parakeet";
     setBackend(id);
     const meta = backends.find(b => b.id === id);
     if (meta) {
-      if (!url || backend === "whisper") setUrl(meta.default_url);
-      if (!modelName || backend === "whisper") setModelName(meta.default_model);
+      // Take the new engine's address and model unless the user typed
+      // their own (Groq → OpenAI-compatible kept Groq's address).
+      if (!url || wasLocal || url === prev?.default_url) setUrl(meta.default_url);
+      if (!modelName || wasLocal || modelName === prev?.default_model) setModelName(meta.default_model);
+      // A key belongs to one provider: switching providers asks for a
+      // new one instead of quietly sending the old one elsewhere.
+      if (!wasLocal && meta.requires_key && prev && prev.id !== id) setApiKeySet(false);
     }
     // Don't auto-save yet — wait for the user to paste a key and
     // click Save. This avoids switching the active backend before
@@ -4221,7 +4243,7 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
 // yet; that's a bigger feature.
 
 interface YorikUserRow {
-  id: number;
+  id: string;
   name: string;
   email: string | null;
   role: string;
@@ -4233,8 +4255,23 @@ interface YorikUserRow {
   has_password: number | boolean;
 }
 
-const ROLES = ["admin", "member", "child", "employee", "viewer"] as const;
+// What the household picks from. The backend stores restricted for a
+// child (child/employee/viewer are old names for the same thing, folded
+// into restricted on save); platform_admin is the install's owner and
+// can't be picked here.
+const ROLES = ["member", "restricted", "admin"] as const;
 type Role = typeof ROLES[number];
+const ROLE_LABEL: Record<string, string> = {
+  member: "Adult", restricted: "Child", admin: "Admin", platform_admin: "Owner",
+  child: "Child", employee: "Child", viewer: "Child",
+};
+const ROLE_HINT: Record<string, string> = {
+  member: "Uses every app, can't change household settings",
+  restricted: "Board, tasks, calendar, photos and chat; sees the household read-only",
+  admin: "Can also add people and change household settings",
+};
+/** QR-invited people get a placeholder address nobody reads. */
+const isPlaceholderEmail = (e: string | null) => !!e && e.endsWith("@members.yorik.invalid");
 
 function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
   const auth = useAuth();
@@ -4261,7 +4298,7 @@ function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" |
   async function toggleDisabled(u: YorikUserRow) {
     try {
       await api.patch(`/api/users/${u.id}`, { disabled: !u.disabled });
-      toast(`${u.name} ${u.disabled ? "enabled" : "disabled"}`, "success");
+      toast(u.disabled ? `${u.name} can sign in again` : `${u.name} is paused and signed out`, "success");
       await load();
     } catch (e: any) { toast(e?.message || "Failed", "error"); }
   }
@@ -4270,13 +4307,13 @@ function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" |
     if (role === u.role) return;
     try {
       await api.patch(`/api/users/${u.id}`, { role });
-      toast(`${u.name} role → ${role}`, "success");
+      toast(`${u.name} is now ${ROLE_LABEL[role]}`, "success");
       await load();
     } catch (e: any) { toast(e?.message || "Failed", "error"); }
   }
 
   async function deleteUser(u: YorikUserRow) {
-    if (!confirm(`Delete user "${u.name}"? This removes their profile and active sessions. Their data in shared tables (events, tasks) stays.`)) return;
+    if (!confirm(`Remove ${u.name} from Yorik?\n\nThey can no longer sign in. Their private to-dos, appointments and notes stay in the database but nobody can open them any more.\n\nTo stop someone signing in for a while, use "Pause access" (the power button) instead.`)) return;
     try {
       await api.delete(`/api/users/${u.id}`);
       toast(`${u.name} deleted`, "success");
@@ -4327,7 +4364,7 @@ function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" |
             <UserRow
               key={u.id}
               user={u}
-              isSelf={u.id === auth.user.id}
+              isSelf={String(u.id) === String(auth.user.id)}
               onToggleDisabled={() => toggleDisabled(u)}
               onChangeRole={(r) => changeRole(u, r)}
               onResetPassword={() => setResetting(u)}
@@ -4405,7 +4442,7 @@ function UserRow({ user: u, isSelf, onToggleDisabled, onChangeRole, onResetPassw
           )}
           {u.disabled && (
             <span className="text-2xs px-1.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400">
-              disabled
+              paused
             </span>
           )}
           {!u.has_password && (
@@ -4415,19 +4452,20 @@ function UserRow({ user: u, isSelf, onToggleDisabled, onChangeRole, onResetPassw
           )}
         </div>
         <div className="text-xs text-muted-foreground truncate mt-0.5">
-          {u.email || <em>no email</em>}
+          {isPlaceholderEmail(u.email) ? "signs in with a PIN on their phone" : (u.email || <em>no email</em>)}
           {u.last_login_at && <span className="ml-2 opacity-70">· last login {formatRelativeShort(u.last_login_at)}</span>}
           {u.active_sessions > 0 && <span className="ml-2 opacity-70">· {u.active_sessions} session{u.active_sessions === 1 ? "" : "s"}</span>}
         </div>
       </div>
       <select
-        value={u.role}
+        value={(ROLES as readonly string[]).includes(u.role) ? u.role : u.role === "platform_admin" ? "platform_admin" : "restricted"}
         onChange={e => onChangeRole(e.target.value as Role)}
-        disabled={isSelf}
+        disabled={isSelf || u.role === "platform_admin"}
         className="h-8 px-2 rounded bg-muted text-xs focus:outline-none disabled:opacity-50"
-        title={isSelf ? "Can't change your own role" : "Change role"}
+        title={isSelf ? "Can't change your own role" : u.role === "platform_admin" ? "The owner of this Yorik" : ROLE_HINT[u.role] || "Change role"}
       >
-        {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+        {u.role === "platform_admin" && <option value="platform_admin">{ROLE_LABEL.platform_admin}</option>}
+        {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
       </select>
       <button
         onClick={onResetPassword}
@@ -4439,7 +4477,7 @@ function UserRow({ user: u, isSelf, onToggleDisabled, onChangeRole, onResetPassw
       <button
         onClick={onToggleDisabled}
         disabled={isSelf}
-        title={isSelf ? "Can't disable yourself" : (u.disabled ? "Enable" : "Disable")}
+        title={isSelf ? "Can't pause yourself" : (u.disabled ? "Allow access again" : "Pause access (can be undone)")}
         className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition disabled:opacity-30 disabled:cursor-not-allowed"
       >
         <Power className="w-4 h-4" />
@@ -4447,7 +4485,7 @@ function UserRow({ user: u, isSelf, onToggleDisabled, onChangeRole, onResetPassw
       <button
         onClick={onDelete}
         disabled={isSelf}
-        title={isSelf ? "Can't delete yourself" : "Delete user"}
+        title={isSelf ? "Can't remove yourself" : "Remove from Yorik"}
         className="p-1.5 rounded-md hover:bg-rose-500/10 text-muted-foreground hover:text-rose-600 transition disabled:opacity-30 disabled:cursor-not-allowed"
       >
         <Trash2 className="w-4 h-4" />
@@ -4554,8 +4592,9 @@ function AddUserModal({ onClose, onCreated, toast }: {
           </Field>
           <Field label="Role">
             <select value={role} onChange={e => setRole(e.target.value as Role)} className={inputClass}>
-              {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+              {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
             </select>
+            <p className="text-xs text-muted-foreground mt-1">{ROLE_HINT[role]}</p>
           </Field>
           <Field label="Initial password">
             <div className="flex gap-1.5">
@@ -6032,7 +6071,7 @@ function EmptyMetric({ icon: Icon, label }:
 // UI also drives the bundled-service ACL sync.
 
 interface SpaceMember {
-  user_id: number;
+  user_id: string;   // UUID
   name: string;
   email: string;
   level: "read" | "write" | "admin";
@@ -6045,13 +6084,13 @@ interface Space {
   name: string;
   kind: "personal" | "shared";
   slug: string | null;
-  owner_user_id: number | null;
+  owner_user_id: string | null;
   members_count: number;
   your_level: "read" | "write" | "admin" | null;
 }
 interface SpaceDetail extends Space { members: SpaceMember[] }
-interface UserRow { id: number; name: string; email: string; role: string }
-interface Workspace { id: number; name: string; kind: "family" | "business"; owner_user_id: number }
+interface UserRow { id: string; name: string; email: string; role: string }
+interface Workspace { id: number; name: string; kind: "family" | "business"; owner_user_id: string }
 
 function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
   const auth = useAuth();
@@ -6144,7 +6183,7 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
     }
   }
 
-  async function addMember(user_id: number, level: "read" | "write" | "admin") {
+  async function addMember(user_id: string, level: "read" | "write" | "admin") {
     if (!isAdmin || !detail) return;
     try {
       const d = await api.post<SpaceDetail>(`/api/spaces/${detail.id}/members`,
@@ -6157,7 +6196,7 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
     }
   }
 
-  async function patchMemberLevel(user_id: number, level: "read" | "write" | "admin") {
+  async function patchMemberLevel(user_id: string, level: "read" | "write" | "admin") {
     if (!isAdmin || !detail) return;
     try {
       const d = await api.patch<SpaceDetail>(
@@ -6168,7 +6207,7 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
     }
   }
 
-  async function removeMember(user_id: number) {
+  async function removeMember(user_id: string) {
     if (!isAdmin || !detail) return;
     try {
       await api.delete(`/api/spaces/${detail.id}/members/${user_id}`);
@@ -6331,13 +6370,13 @@ function SpaceDetailPanel({
   isAdmin: boolean;
   allUsers: UserRow[];
   ensureUsers: () => Promise<void>;
-  onAddMember: (uid: number, level: "read" | "write" | "admin") => void;
-  onPatchLevel: (uid: number, level: "read" | "write" | "admin") => void;
-  onRemoveMember: (uid: number) => void;
+  onAddMember: (uid: string, level: "read" | "write" | "admin") => void;
+  onPatchLevel: (uid: string, level: "read" | "write" | "admin") => void;
+  onRemoveMember: (uid: string) => void;
   onDelete: () => void;
 }) {
   const [adding, setAdding] = useState(false);
-  const [pickUserId, setPickUserId] = useState<number | "">("");
+  const [pickUserId, setPickUserId] = useState<string>("");
   const [pickLevel, setPickLevel] = useState<"read" | "write" | "admin">("write");
 
   const isPersonal = detail.kind === "personal";
@@ -6428,7 +6467,7 @@ function SpaceDetailPanel({
             <div className="flex items-center gap-2">
               <select
                 value={pickUserId}
-                onChange={e => setPickUserId(e.target.value ? parseInt(e.target.value, 10) : "")}
+                onChange={e => setPickUserId(e.target.value)}
                 className="flex-1 px-2 py-1.5 rounded border border-border bg-background text-sm"
               >
                 <option value="">— pick user —</option>

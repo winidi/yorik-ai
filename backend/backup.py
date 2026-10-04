@@ -1270,6 +1270,21 @@ def _run_backup_sync() -> dict[str, Any]:
             shutil.move(str(encrypted_local), str(final))
 
         duration = (datetime.now() - started_at).total_seconds()
+        if "yorik_postgres_main" not in includes:
+            # The archive exists, but without the database it brings back
+            # no calendar, no tasks, no contacts. That is not a backup
+            # anyone should rely on, so it is recorded as failed (the
+            # file stays; photos and documents in it are still worth
+            # something). Not pruned against: it doesn't count as good.
+            error = ("The database could not be copied into the backup "
+                     "(see Settings → Logs). The file was written, but it "
+                     "would not bring back calendars, tasks or contacts.")
+            _finish_history(history_id, "failed", error, duration,
+                            size_bytes, filename, includes)
+            return {"ok": False, "error": error,
+                    "snapshot_path": str(target_dir / filename),
+                    "size_bytes": size_bytes, "duration_s": duration,
+                    "includes": includes}
         _retain_prune(cfg["target_path"], cfg["retain_count"])
         _finish_history(history_id, "ok", None, duration, size_bytes, filename, includes)
         return {
@@ -1423,9 +1438,14 @@ async def _scheduler_loop() -> None:
                     _last_triggered_minute = hhmm
                     log.info("backup scheduler: triggering scheduled run (%s)", hhmm)
                     try:
-                        await run_backup()
-                        workers.heartbeat("backup_scheduler", "ok",
-                                          f"last run {hhmm} ok")
+                        res = await run_backup()
+                        if res.get("ok"):
+                            workers.heartbeat("backup_scheduler", "ok",
+                                              f"last run {hhmm} ok")
+                        else:
+                            workers.report_error(
+                                "backup_scheduler",
+                                f"run @ {hhmm} failed: {str(res.get('error') or '')[:60]}")
                     except Exception as e:
                         log.exception("scheduled backup failed: %s", e)
                         workers.report_error("backup_scheduler",

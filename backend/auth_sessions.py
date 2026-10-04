@@ -200,10 +200,15 @@ def delete_session(sid: str) -> None:
         conn.commit()
 
 
-def revoke_all_sessions(user_id: str) -> int:
-    """Used when password is reset or admin disables a user."""
+def revoke_all_sessions(user_id: str, keep_sid: Optional[str] = None) -> int:
+    """Used when password is reset or admin disables a user. `keep_sid`
+    spares one session: the one changing its own password."""
     with get_conn() as conn:
-        cur = conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+        if keep_sid:
+            cur = conn.execute("DELETE FROM sessions WHERE user_id=? AND id<>?",
+                               (user_id, keep_sid))
+        else:
+            cur = conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
         conn.commit()
         return cur.rowcount or 0
 
@@ -326,10 +331,11 @@ def get_user_by_id(user_id: str) -> Optional[dict[str, Any]]:
     return dict(row) if row else None
 
 
-def set_password(user_id: str, new_password: str) -> None:
+def set_password(user_id: str, new_password: str, keep_sid: Optional[str] = None) -> None:
     """Set or reset a user's password. Also kicks every existing session
     for this user (forces re-login everywhere) — standard security
-    hygiene on password change."""
+    hygiene on password change. `keep_sid` keeps the session that made
+    the change, so changing your own password doesn't sign you out."""
     h = hash_password(new_password)
     now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds")
     with get_conn() as conn:
@@ -338,7 +344,7 @@ def set_password(user_id: str, new_password: str) -> None:
             (h, now, user_id),
         )
         conn.commit()
-    revoke_all_sessions(user_id)
+    revoke_all_sessions(user_id, keep_sid=keep_sid)
 
 
 def has_any_password() -> bool:
@@ -649,6 +655,21 @@ def require_admin(request: Request, user: dict[str, Any] = Depends(current_user)
                           extra={"event": "deny_not_admin", "user_id": user.get("id"),
                                  "role": user.get("role"), "path": request.url.path})
         raise HTTPException(status_code=403, detail="admin only")
+    return user
+
+
+def reject_api_token(user: dict[str, Any]) -> None:
+    """House settings (AI endpoint, backup passphrase, storage, people,
+    add-ons) change only from a signed-in browser. An admin's personal
+    API token is handed to outside agents; it may use Yorik's skills,
+    not rewire the install."""
+    if user.get("auth") == "api_token":
+        raise HTTPException(status_code=403,
+                            detail="This setting can only be changed in Yorik itself, not with an API token.")
+
+
+def require_admin_session(request: Request, user: dict[str, Any] = Depends(require_admin)) -> dict[str, Any]:
+    reject_api_token(user)
     return user
 
 
