@@ -95,7 +95,7 @@ def _unauthorized() -> JSONResponse:
     return JSONResponse(
         {"error": "unauthorized",
          "detail": "send a personal API token as 'Authorization: Bearer yk_…' "
-                   "(create one under Settings → API tokens)"},
+                   "(create one in Yorik under Settings › Assistant & alerts › Your own AI agent)"},
         status_code=401,
         headers={"WWW-Authenticate": 'Bearer realm="yorik-mcp"'},
     )

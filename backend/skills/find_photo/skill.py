@@ -241,9 +241,8 @@ async def execute(
                 "ok":       False,
                 "op":       op,
                 "photos":   [],
-                "error":    "No Immich account is connected for you yet. "
-                            "Ask your admin to provision your Immich access "
-                            "in Settings → Users.",
+                "error":    "No photo access is connected for you yet. "
+                            "Ask your admin to connect your photo access.",
                 "degraded": True,
             }
     else:

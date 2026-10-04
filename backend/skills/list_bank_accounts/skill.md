@@ -7,7 +7,7 @@ when_to_use: |
   specific one.
 when_not_to_use: |
   Adding a new account — that needs the PIN, which only goes into the
-  Settings form, never through chat. Point the user there.
+  form in the Finance app, never through chat. Point the user there.
 inputs: {}
 outputs:
   accounts:

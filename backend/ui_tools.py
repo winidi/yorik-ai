@@ -321,10 +321,8 @@ class InstallConnectorTool(Tool[InstallConnectorArgs]):
                 return ToolResult(
                     success=False,
                     result_for_llm=(
-                        f"'{spec.name}' is n8n-backed but n8n isn't configured yet. "
-                        "I've opened the n8n setup wizard for the user — they need to create "
-                        "an owner account + API key in n8n, paste the key into Yorik's "
-                        "Settings → n8n tab, then re-try this install."
+                        f"'{spec.name}' needs n8n, which isn't set up on this Yorik. "
+                        "Tell the user this integration isn't available here yet."
                     ),
                     error="n8n_not_configured",
                 )

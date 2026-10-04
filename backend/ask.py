@@ -713,7 +713,7 @@ The index rows below show only `name — description` — enough to pick the rig
 
 1. `show_calendar(view, anchor_date, highlight_event_ids, reason)` — switches the dashboard to a specific view AND highlights events. Call whenever the user wants to *see* something visually, not just hear an answer. When you add/modify events, ALSO call this so the user sees what changed.
 
-2. `trigger_connector(name, params)` — call an external integration (currently `weather`; more via Settings → Connectors). Use whenever the user asks about something outside the DB.
+2. `trigger_connector(name, params)` — call an external integration (currently `weather`). Use whenever the user asks about something outside the DB.
 
 3. `list_connectors(query)` / `install_connector(name)` — inspect / add integrations. install_connector is admin-only.
 

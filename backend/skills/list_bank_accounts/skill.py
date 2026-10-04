@@ -26,7 +26,7 @@ async def execute(ctx) -> dict[str, Any]:
     accounts = [dict(r) for r in rows]
     if not accounts:
         return {"accounts": [], "_llm_hint": "No bank account connected yet. Point the user at "
-                                              "Settings → Finance to add one — the PIN goes "
+                                              "the Finance app (Add account) to add one — the PIN goes "
                                               "directly into that form, never through chat."}
     hint = f"{len(accounts)} account(s). Mention which are shared (space_id set) vs private."
     return {"accounts": accounts, "_llm_hint": hint}

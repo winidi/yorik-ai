@@ -80,7 +80,7 @@ async def execute(
                 "No `from` address given and the user's profile doesn't "
                 "have a home address yet. Either ask the user where they "
                 "want to start from, or tell them to fill their address "
-                "in Settings → Profile."
+                "in Settings › Profile."
             ),
             "ok": False,
         }

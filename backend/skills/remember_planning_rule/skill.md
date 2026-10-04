@@ -18,7 +18,7 @@ outputs:
     description: All rules now stored, one per line.
 cost: instant
 permissions: [admin, member]
-side_effects: Appends a line to the person's planning rules (Settings > You > Planning rules).
+side_effects: Appends a line to the person's planning rules (Settings › Assistant & alerts › Planning rules).
 tags: [planning, write]
 category: planning
 ---
@@ -27,4 +27,4 @@ category: planning
 
 The rules are free text on the profile (`user_profiles.planning_rules`)
 and go into every plan_my_day run as `rules`. Editing or deleting them
-happens in Settings; this skill only appends.
+happens there; this skill only appends.
