@@ -40,6 +40,17 @@ interface Props {
   inline?: boolean;
 }
 
+/** Series kinds are stored as German or English words (the presets
+ *  predate the English UI); show them in plain English. */
+const KIND_LABEL: Record<string, string> = {
+  rechnung: "Invoices", invoice: "Invoices", faktura: "Invoices",
+  angebot: "Quotes", quote: "Quotes", gutschrift: "Credit notes", credit_note: "Credit notes",
+  mahnung: "Payment reminders", reminder: "Payment reminders",
+};
+function kindLabel(kind: string): string {
+  return KIND_LABEL[(kind || "").toLowerCase()] || kind;
+}
+
 export function SeriesManager({ onClose, onChanged, toast, initialKind, inline = false }: Props) {
   const [series, setSeries] = useState<DocumentSeries[] | null>(null);
   const [presets, setPresets] = useState<Record<string, SeriesPreset>>({});
@@ -180,7 +191,7 @@ export function SeriesManager({ onClose, onChanged, toast, initialKind, inline =
         <footer className="px-5 py-3 border-t border-border bg-muted/20 text-xs text-muted-foreground flex items-center justify-between">
           <span className="flex items-center gap-1.5">
             <AlertCircle className="w-3 h-3" />
-            Numbers are consumed only when you Save to Paperless or Send — drafts never burn a number.
+            A number is used only when you finish an invoice in Write; drafts never use one up.
           </span>
           <button
             onClick={refresh}
@@ -285,7 +296,7 @@ function WizardView({
                   key={s.kind}
                   className="text-2xs px-1.5 py-0.5 rounded-full bg-muted/60 text-foreground/70"
                 >
-                  {s.kind}
+                  {kindLabel(s.kind)}
                 </span>
               ))}
             </div>
@@ -352,7 +363,7 @@ function ListView({
       {groups.map(([kind, group]) => (
         <section key={kind}>
           <h4 className="text-2xs text-muted-foreground font-semibold mb-2">
-            {kind}
+            {kindLabel(kind)}
           </h4>
           <div className="space-y-2">
             {group.map(s => (
@@ -543,17 +554,19 @@ function SeriesEditor({
 
         <div className="p-5 space-y-3">
           {mode === "create" && (
-            <Field label="Kind">
-              <input
+            <Field label="For">
+              <select
                 autoFocus
                 value={kind}
                 onChange={e => setKind(e.target.value)}
-                placeholder="rechnung · angebot · invoice · quote · faktura"
                 className="w-full h-9 px-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
-              />
+              >
+                <option value="">— pick one —</option>
+                <option value="invoice">Invoices</option>
+                <option value="quote">Quotes</option>
+              </select>
               <div className="text-2xs text-muted-foreground mt-1">
-                The category. Templates whose args use names like <code>rechnungsnummer</code> /
-                <code> invoice_number</code> will auto-pick the matching kind's default series.
+                Write numbers your invoices and quotes from the default series of that kind.
               </div>
             </Field>
           )}
@@ -562,7 +575,7 @@ function SeriesEditor({
             <input
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="Rechnungen"
+              placeholder="Invoices"
               className="w-full h-9 px-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
             />
           </Field>
@@ -709,9 +722,8 @@ function AllocationsView({
       </div>
 
       <div className="text-xs text-muted-foreground bg-muted/30 border border-border rounded-md px-3 py-2 leading-relaxed">
-        Audit trail of every number consumed from this series. Each row links to the
-        Paperless document it was used for (when applicable), with a PDF SHA-256
-        hash for Steuerprüfungs proof.
+        Every number used from this series, with a fingerprint (SHA-256) of the
+        finished PDF, so a tax audit can see that nothing was changed or skipped.
       </div>
 
       {loading && (
@@ -722,7 +734,7 @@ function AllocationsView({
       {!loading && (allocs?.length || 0) === 0 && (
         <div className="text-center py-10 text-muted-foreground text-sm">
           <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-30" />
-          No numbers consumed yet. They'll appear here after you Save to Paperless or Send.
+          No numbers used yet. They appear here when you finish an invoice in Write.
         </div>
       )}
       {(allocs || []).map(a => (

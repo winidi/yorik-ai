@@ -1,5 +1,6 @@
 /**
- * StoragePicker — the "where do photos + documents live?" widget.
+ * StoragePicker — the "where do the photos live?" widget. (Only the
+ * photo library moves; documents stay inside the archive's own folder.)
  * Used by both Settings → Storage AND the onboarding wizard.
  *
  * Shows current state, detected external volumes, and the
@@ -29,6 +30,8 @@ export interface StorageStatus {
   storage_root: string | null;
   all_healthy: boolean;
   subtrees: SubtreeStatus[];
+  /** classic | docker | container — only the classic install can move. */
+  runtime?: string;
 }
 
 interface Volume {
@@ -88,15 +91,15 @@ export function StoragePicker({
   async function moveToExternal() {
     if (!targetPath) return;
     if (!confirm(
-      `Move documents + photos to ${targetPath}?\n\n` +
+      `Move the photo library to ${targetPath}?\n\n` +
       `This may take a while for large libraries (a 50 GB photo library typically takes 5–15 min on USB-C). ` +
-      `Yorik will stay responsive but uploads/photo imports are paused during the move.`
+      `Photos, documents and the other bundled services are stopped during the move and start again afterwards.`
     )) return;
     setBusy("moving");
     try {
       await api.post("/api/storage/move", { target_root: targetPath });
       await refresh();
-      toast(`✓ Moved. Documents + photos now live on ${targetPath}.`);
+      toast(`✓ Moved. Your photos now live on ${targetPath}.`);
     } catch (e: any) {
       toast(`Move failed: ${e?.message || e}`);
     } finally { setBusy(null); }
@@ -104,8 +107,8 @@ export function StoragePicker({
 
   async function restoreToInternal() {
     if (!confirm(
-      "Move documents + photos BACK to the internal disk?\n\n" +
-      "The copy on the external SSD stays put — you can delete it manually after verifying everything works internally."
+      "Move the photo library BACK to the internal disk?\n\n" +
+      "Make sure the internal disk has room for it. The copy on the external drive stays put — you can delete it yourself once everything works."
     )) return;
     setBusy("restoring");
     try {
@@ -122,6 +125,15 @@ export function StoragePicker({
       <div className="flex items-center gap-2 text-sm text-muted-foreground py-6 justify-center">
         <Loader2 className="w-4 h-4 animate-spin" /> Loading storage status…
       </div>
+    );
+  }
+
+  if (status?.runtime && status.runtime !== "classic") {
+    return (
+      <p className="text-sm text-muted-foreground">
+        In this install the photos live in a Docker volume, which Yorik can't move from here.
+        To use another drive, move Docker's own storage there (Docker Desktop: Settings › Resources).
+      </p>
     );
   }
 

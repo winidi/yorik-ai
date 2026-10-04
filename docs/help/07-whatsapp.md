@@ -46,7 +46,7 @@ address book again and renames what it can.
 
 ## Unpairing
 
-WhatsApp → Settings → Linked Devices → tap the Yorik entry → **Log out from this device**. Bridge becomes inactive. Yorik's stored history stays in the local DB until you clear it (Settings → Privacy → Clear WhatsApp history).
+WhatsApp → Settings → Linked Devices → tap the Yorik entry → **Log out from this device**. Bridge becomes inactive. Yorik's stored history stays in the local DB. To unpair from Yorik's side, open the WhatsApp app in Yorik and press **Disconnect**; tick **Also delete all message history from Yorik** there if you want the stored messages gone too.
 
 ## Troubleshooting
 

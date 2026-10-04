@@ -187,15 +187,15 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
             {field("phone", "Phone")}
             {field("email", "Email")}
             {field("website", "Website")}
-            {field("country", "Country (DE, AT, …)")}
+            {field("country", "Country code (DE, AT, US …)")}
           </Section>
 
           <Section title="Footer: bank and tax">
             {field("bank_name", "Bank")}
             {field("iban", "IBAN")}
             {field("bic", "BIC")}
-            {field("vat_id", "VAT ID (USt-IdNr.)")}
-            {field("tax_id", "Tax number (Steuernummer)")}
+            {field("vat_id", "VAT ID")}
+            {field("tax_id", "Tax number")}
             {field("register", "Register (e.g. Amtsgericht, HRB)")}
           </Section>
 
@@ -209,7 +209,7 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
             </label>
             <label className="flex items-center gap-2 text-xs text-foreground self-end pb-1.5">
               <input type="checkbox" checked={!!form.small_business} onChange={e => set("small_business", e.target.checked)} />
-              Small business (§ 19 UStG, no VAT)
+              Small business, no VAT charged (in Germany: § 19 UStG)
             </label>
             <label className="col-span-2 grid gap-1 text-xs text-muted-foreground">
               Payment sentence — {"{faellig}"} becomes the due date, {"{betrag}"} the amount

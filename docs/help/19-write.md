@@ -4,13 +4,15 @@ nav_app: write
 summary: Yorik writes a letter, an invoice or a quote as a draft and never asks back; you correct it on the sheet, finalise, send or file it. The look is your letterhead, the same every time; invoices are checked e-invoices.
 ---
 
-# Schreiben — letters, invoices and quotes
+# Write — letters, invoices and quotes
 
-Schreiben is the small app for letters, invoices and quotes. It is switched on under **Settings → Apps → Schreiben**. While it is on, the chat writes with it and Compose's chat skills rest, so that Yorik does not have two tools for the same thing; the Compose app itself stays where it is.
+Write (Schreiben in German) is the small app for letters, invoices and quotes. An admin switches it on under **Settings › Apps & accounts**. While it is on, the chat writes with it and Compose's chat skills rest, so that Yorik does not have two tools for the same thing; the Compose app itself stays where it is.
 
 ## Your letterhead
 
-**Settings → Profile → Your letterhead**: logo, accent colour, font, sender, the footer with bank and tax numbers, the closing. It starts from your profile. Every letter you write looks like this, whoever wrote the text. Everyone in the household has their own.
+**Settings › Letters & invoices › Your letterhead**: logo, accent colour, font, sender, the footer with bank and tax numbers, the closing. It starts from your profile and from **Business details** on the same page (business name, tax number, IBAN). Every letter you write looks like this, whoever wrote the text. Everyone in the household has their own.
+
+**Settings › Letters & invoices › Signature**: scan your handwritten signature once and it is printed above your name on your letters.
 
 ## Let Yorik write
 
@@ -34,11 +36,11 @@ A letter that was sent or filed is **final**: it stays what its PDF says. **Als 
 
 An invoice needs what § 14 UStG asks for; the box above the sheet lists what is still missing (the customer's address, the date of the service, your tax number in the letterhead …). A quote needs only a customer and a line.
 
-**Fertigstellen** is a step of its own. Only then the document gets its number (invoices 2026-001, 2026-002 …, quotes A-2026-001 …, per person, restarting every year; the series is made the first time you need it) and today's date, the PDF is kept, and nothing changes any more. A number is taken only when everything else has worked, so a failure never leaves a gap. A draft invoice cannot be sent or filed. A finished quote has **In Rechnung umwandeln**: a draft invoice with the same customer and lines.
+**Fertigstellen** is a step of its own. Only then the document gets its number (invoices 2026-001, 2026-002 …, quotes A-2026-001 …, per person, restarting every year; the series is made the first time you need it, and **Settings › Letters & invoices › Invoice and quote numbers** changes it if you continue a numbering you started elsewhere) and today's date, the PDF is kept, and nothing changes any more. A number is taken only when everything else has worked, so a failure never leaves a gap. A draft invoice cannot be sent or filed. A finished quote has **In Rechnung umwandeln**: a draft invoice with the same customer and lines.
 
 ### E-invoice (Germany)
 
-An invoice from a German letterhead becomes an e-invoice (ZUGFeRD / Factur-X, profile EN 16931): a PDF/A-3 that carries the invoice data inside, built from the very figures on the page and checked before you get it (schema, and every sum added up again from the finished XML). This needs the extension **ZUGFeRD** (Settings → Extensions → Install). Without it, or if the check fails, Yorik says so when you finalise and you decide whether a plain PDF will do — nothing falls back silently, and the finished invoice shows which of the two it is. Private customers need no e-invoice; business customers in Germany will from 2027/2028.
+An invoice from a German letterhead becomes an e-invoice (ZUGFeRD / Factur-X, profile EN 16931): a PDF/A-3 that carries the invoice data inside, built from the very figures on the page and checked before you get it (schema, and every sum added up again from the finished XML). This needs the extension **ZUGFeRD**, which an admin installs under **Settings › Letters & invoices › E-invoices and other extras** (works right away, no restart). Without it, or if the check fails, Yorik says so when you finalise and you decide whether a plain PDF will do — nothing falls back silently, and the finished invoice shows which of the two it is. Private customers need no e-invoice; business customers in Germany will from 2027/2028.
 
 ## Who sees what
 

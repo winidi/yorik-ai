@@ -1,64 +1,50 @@
 ---
 title: First run — what to do after install
 nav_app: home
-summary: What a new user should do after Yorik finishes installing and the LLM is connected. Five-minute starting walk-through.
+summary: What happens the first time you open Yorik — setup screen, short welcome, the "Set up Yorik" checklist on Home and "Start here" in Settings — and how Settings is organised.
 ---
 
 # First run — what to do after install
 
-Yorik is installed and your LLM responds to chat. You've seen the welcome screen. Here's the recommended next 5–10 minutes.
+## 1. The setup screen
 
-## 1. Set your name + address
+The very first time Yorik opens, nobody has an account yet. The setup screen creates the first one: your name, email and a password. That account is the admin of the household.
 
-Go to **Settings → Profile**. Fill in:
+## 2. A short welcome
 
-- Your name (and business name if you invoice as a business)
-- Your address — street, postcode, city
-- IBAN if you'll generate invoices
-- USt-IdNr / Steuernr if you have them
+Next comes a short welcome with one real question: the language Yorik replies in (English or Deutsch) and your country. The country sets dates, currency and invoice numbering. You can change both later under **Settings › Profile**.
 
-Why first: every letter, invoice, and email Yorik composes pulls the sender block from here. Fill it once and every document is correct.
+Address, business details and backups are not asked here. They come later, when you need them.
 
-## 2. Pick a few demo entries
+## 3. "Set up Yorik" on Home
 
-On the **Home** dashboard, click **"Seed demo data"** (or run `curl -X POST http://localhost:8000/api/demo/seed -b cookies.txt`).
+Home shows a **Set up Yorik** list. Each line opens the place where it is done and ticks itself off once it is done, wherever you did it:
 
-You'll get a week of fictional events, a few tasks, a couple of bills, and a welcome notification. Date-shifted around today so nothing feels stale. Removable in one click: while example data is loaded, Home shows a small "Demo data loaded — remove?" banner.
+- Your colour and photo
+- Ask Yorik something
+- Yorik on your phone
+- Connect your email
+- Bring in your calendar
+- Invite your family (admins)
+- Turn on backups (admins)
 
-If you'd rather not see anyone else's data: skip this. Yorik works fine empty.
+Children see a shorter list. You can hide the list; it also disappears when everything is done. A few small notes point at the main buttons on Home the first time; Help → "Show the tour again" brings them back.
 
-## 3. Try the chat
+## 4. "Start here" in Settings
 
-The chat is your main interaction surface — keyboard or voice. Try:
+Admins find the same steps, and a few more, at the top of Settings under **Start here**: whether the AI model is running, inviting the family, backups, which extra apps to switch on (Write, WhatsApp, Finance, Recordings, Pipelines), reaching Yorik from outside the house, and your letterhead. Each line opens the right page. Everything else in Settings can wait until you need it.
 
-- *"Was steht heute an?"* — Yorik reads the calendar + tasks + bills and gives you the day at a glance.
-- *"Trag einen Zahnarzttermin für Donnerstag 14 Uhr ein"* — adds an event. (Yes, it asks for confirmation before mutating anything.)
-- *"Wer ist [name]?"* — looks up the contact.
+## How Settings is organised
 
-If a chat answer goes wrong, click the message → **debug bundle**. Shares the tool trace so you can file a useful issue.
+Settings has three groups. **You** holds your own things: profile, sign-in and devices, privacy, and how the assistant works with you. **Household** is for the whole family: people, apps and accounts, letters and invoices, backups. **Maintenance** (admins, folded away) has health and updates, the AI models and the developer tools. See `settings` for a page-by-page overview.
 
-## 4. Connect the services you'll use
+## Nothing is mandatory
 
-Most are optional, but if you want full Yorik:
+Yorik works one feature at a time. Start with chat and the calendar, add the rest when you want it. There is no gate you have to clear first.
 
-- **Paperless** for documents — see `paperless`
-- **Immich** for photos — see `immich`
-- **Tailscale** for remote phone access — see `tailscale`
-- **WhatsApp bridge** if you want chat ingestion — see `whatsapp`
-- **Email IMAP/SMTP** for inbox features — see `email`
+## Where to go next
 
-Each connector self-checks on launch. The **Home** dashboard shows green/yellow/red dots so you can see at a glance what's up.
+- `next-steps` — email, documents and photos, the three things that make Yorik useful fastest.
+- `paperless`, `immich`, `tailscale`, `whatsapp`, `email` — one page each.
 
-## 5. Skip onboarding overall?
-
-That's fine. Yorik works one feature at a time — start with chat + calendar, add the rest later as needed. There's no "complete the setup" gate you have to clear.
-
-## What to ask the chat next
-
-Ask Yorik directly for any of the topics above. Examples:
-
-- *"Wie verbinde ich Paperless?"*
-- *"Wie richte ich Tailscale ein?"*
-- *"Wie hänge ich Fotos aus meinem Handy in Yorik ein?"*
-
-Yorik calls the `yorik_help` skill internally and reads from these docs. So whatever you ask about, the answer is grounded in shipped instructions — not a guess.
+Or ask Yorik in chat, for example *"How do I get my photos in?"*. It answers from these help pages.

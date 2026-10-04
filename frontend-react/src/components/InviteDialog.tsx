@@ -98,7 +98,7 @@ export function InviteDialog({ onClose }: { onClose: () => void }) {
                 <p className="text-sm text-muted-foreground">
                   Works once, for 24 hours.{" "}
                   {made.home_only
-                    ? "This code works on your home Wi-Fi. For Yorik on the go, connect Tailscale under Settings → System → Phones."
+                    ? "This code works on your home Wi-Fi. For Yorik on the go, connect Tailscale under Settings › Health & updates › Phones."
                     : made.join_page
                     ? (made.tailscale_invite_url
                         ? "The page walks them through Tailscale first."

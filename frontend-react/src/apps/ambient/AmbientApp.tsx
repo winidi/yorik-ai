@@ -450,7 +450,7 @@ export function AmbientApp() {
         {(auth.user?.role === "admin" || auth.user?.role === "platform_admin") && (
           <button
             type="button"
-            onClick={() => navigate("/settings")}
+            onClick={() => navigate("/settings?tab=signin")}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 hover:bg-white/25"
           >
             <SettingsIcon className="w-4 h-4" />

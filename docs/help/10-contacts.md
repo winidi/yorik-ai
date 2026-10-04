@@ -28,9 +28,9 @@ When you pick a contact for a letter, Yorik uses the highest-priority address (h
 
 ## Sharing with household members
 
-Settings → Users → enable sharing. Contacts have `allowed_roles` — by default the owner sees them only. To share a contact with your partner: edit contact → permissions → add their role.
+By default only you see the contacts you add. To let someone see all of them, tick **Contacts** for that person under **Settings › Privacy & safety › Sharing** (add **Can edit** if they may change them too).
 
-You can also share specific contacts via the `share_contact` skill in chat: *"teile den kontakt von [name] mit [user]"*.
+To share a single contact, ask in chat: *"teile den kontakt von [name] mit [user]"*.
 
 ## Avoiding duplicates
 

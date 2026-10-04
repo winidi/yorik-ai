@@ -111,7 +111,7 @@ export function WriteApp() {
             {drafts.length > 0 && <section><h2 className="px-3 mb-1 text-xs font-semibold text-muted-foreground">{t("write.drafts")}</h2>{drafts.map(r => <Row key={r.id} r={r} />)}</section>}
             {finals.length > 0 && <section><h2 className="px-3 mb-1 text-xs font-semibold text-muted-foreground">{t("write.finished")}</h2>{finals.map(r => <Row key={r.id} r={r} />)}</section>}
           </div>
-          <button onClick={() => navigate("/settings?tab=profile")} className="m-3 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted text-left">
+          <button onClick={() => navigate("/settings?tab=letters")} className="m-3 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted text-left">
             {t("write.changeLook")}
           </button>
         </aside>

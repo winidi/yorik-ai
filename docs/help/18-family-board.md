@@ -2,7 +2,7 @@
 title: Family board — the wall tablet
 nav_app: settings
 nav_query:
-  tab: devices
+  tab: signin
 summary: The kiosk tablet shows the week in everyone's colour and today's tasks per person, tap to tick. Photos, board, calendar or tasks per device; each person decides whether they appear on the wall.
 ---
 
@@ -22,15 +22,23 @@ Tap the small button bottom right on the tablet. It cycles through five modes an
 
 ## Who appears on the wall
 
-Nobody by default. Each person switches themselves on under **Settings → Profile → "Show me on the household wall"**. Then their appointments and their tasks appear in their colour. For children, an admin sets it in their account. Shared calendar entries appear in grey for everyone.
+Nobody by default. Each adult switches themselves on under **Settings › Privacy & safety › Family wall: your day** ("Show my appointments and to-dos on the family wall"). Then their appointments and their tasks appear in their colour. Children don't have that page; they tap **Show me** at the top of the board on their own phone (see below). Shared calendar entries appear in grey for everyone.
+
+Whether what you photographed today rolls past in the wall's slideshow is a separate switch: **Settings › Privacy & safety › Family wall: your photos** (the wall itself must have today's photos on).
 
 ## Colour and photo
 
-Under **Settings → You → Your colour and photo** each person picks a colour and adds a photo. The colour is used on the wall, in the calendar and wherever a person is shown; the photo replaces the initials.
+Under **Settings › Profile › Your colour and photo** each person picks a colour and adds a photo. The colour is used on the wall, in the calendar and wherever a person is shown; the photo replaces the initials.
 
 ## Ticking tasks
 
-Reading needs nobody signed in. To tick a task, tap your own circle; the tablet asks for your kiosk PIN (Settings → You → Kiosk PIN) and then your tiles react to a tap. Routines (recurring tasks or tasks in the category "Routine") have their own row per person.
+Reading needs nobody signed in. To tick a task, tap your own circle; the tablet asks for your PIN (Settings › Sign-in & devices › Your PIN, four digits) and then your tiles react to a tap. Routines (recurring tasks or tasks in the category "Routine") have their own row per person.
+
+## Setting up the tablet
+
+An admin signs in on the tablet once, opens **Settings › Sign-in & devices › Where you're signed in** and presses **Make this device the family wall** next to it. The same place sets the wall's photo album and whether it shows today's photos.
+
+If your household records voice samples (**Settings › Sign-in & devices › Your voice on the family wall**), the wall recognises who is speaking without a PIN. Only the wall listens for voices.
 
 ## Good to know
 
@@ -40,8 +48,8 @@ Reading needs nobody signed in. To tick a task, tap your own circle; the tablet 
 
 ## Parents and children
 
-Whoever is signed in ticks their own tiles. A parent — any account that
-is not a restricted (child) account — also ticks the children's tiles,
+Whoever is signed in ticks their own tiles. A parent — any account with the
+role Adult or Admin — also ticks the children's tiles,
 and the **+ Aufgabe** button under each person adds a to-do for today
 to that person's column: for a child, for the partner, for yourself.
 Children add to their own column only, and cannot delete a to-do
@@ -49,8 +57,8 @@ someone else gave them. On the wall tablet the same applies after the
 parent's PIN sign-in.
 
 If you open /board and are not on it yet, a line at the top offers
-**Mich anzeigen**; it is the same switch as Settings → Profile →
-"Show me on the household wall", and only you can set it.
+**Show me**; it is the same switch as Settings › Privacy & safety ›
+Family wall: your day, and only you can set it.
 
 ## Whose calendar
 

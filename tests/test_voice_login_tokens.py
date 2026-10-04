@@ -27,13 +27,14 @@ def store(monkeypatch):
 
 
 def test_token_is_bound_to_the_session_that_asked(store):
-    tok = T.mint(profile_id=7, device_uuid="wall-1", source_sid="sid-A")
-    assert T.verify(tok, expected_profile_id=7, expected_device_uuid="wall-1", expected_source_sid="sid-B") is None
-    assert T.verify(tok, expected_profile_id=7, expected_device_uuid="wall-1", expected_source_sid="") is None
-    assert T.verify(tok, expected_profile_id=8, expected_device_uuid="wall-1", expected_source_sid="sid-A") is None
-    assert T.verify(tok, expected_profile_id=7, expected_device_uuid="wall-2", expected_source_sid="sid-A") is None
-    assert T.verify(tok, expected_profile_id=7, expected_device_uuid="wall-1", expected_source_sid="sid-A")["p"] == 7
-    assert T.verify(tok, expected_profile_id=7, expected_device_uuid="wall-1", expected_source_sid="sid-A") is None   # single use
+    me, other = "0b5e4c1a-0000-4000-8000-000000000007", "0b5e4c1a-0000-4000-8000-000000000008"   # user ids are UUIDs
+    tok = T.mint(profile_id=me, device_uuid="wall-1", source_sid="sid-A")
+    assert T.verify(tok, expected_profile_id=me, expected_device_uuid="wall-1", expected_source_sid="sid-B") is None
+    assert T.verify(tok, expected_profile_id=me, expected_device_uuid="wall-1", expected_source_sid="") is None
+    assert T.verify(tok, expected_profile_id=other, expected_device_uuid="wall-1", expected_source_sid="sid-A") is None
+    assert T.verify(tok, expected_profile_id=me, expected_device_uuid="wall-2", expected_source_sid="sid-A") is None
+    assert T.verify(tok, expected_profile_id=me, expected_device_uuid="wall-1", expected_source_sid="sid-A")["p"] == me
+    assert T.verify(tok, expected_profile_id=me, expected_device_uuid="wall-1", expected_source_sid="sid-A") is None   # single use
 
 
 def test_the_secret_is_per_install_and_kept(store, monkeypatch):

@@ -1,10 +1,12 @@
 /**
- * Settings — the hub. Tabs:
- *   - Profile        : edit your address / business / IBAN / language
- *   - Numbering      : opens the SeriesManager (already lives in Compose)
- *   - Quality        : per-LLM success rates for skills/templates/turns
- *   - Connectors     : deep-link to the vanilla connectors page until we
- *                      finish porting it; better than a dead link.
+ * Settings — the hub. Three groups (settings audit 2026-10-04):
+ *   - You: Profile, Sign-in & devices, Privacy & safety, Assistant & alerts
+ *   - Household (admin, Letters for every adult): People, Apps &
+ *     accounts, Letters & invoices, Backup & storage
+ *   - Maintenance (admin, folded): Health & updates, AI, Developer,
+ *     Hosted families (owner)
+ * plus "Start here" for the admin. The pages below are made of the
+ * cards that used to be tabs of their own.
  *
  * Three-pane shell to match the rest of the React apps.
  */
@@ -12,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 import { locale } from "@/i18n";
 import {
   Loader2, Settings as Cog, User as UserIcon, Hash, BarChart3,
@@ -39,6 +42,8 @@ import { EasyBackup } from "@/components/EasyBackup";
 import { SeriesManager } from "@/apps/compose/SeriesManager";
 import { DevicesTab } from "./DevicesTab";
 import { HouseholdsTab } from "./HouseholdsTab";
+import { StartHereTab } from "./StartHereTab";
+import { ConnectionsCard } from "./ConnectionsCard";
 import { PushCard } from "@/components/PushCard";
 import { AgentCard } from "@/components/AgentCard";
 import { PlanningRulesCard } from "@/components/PlanningRulesCard";
@@ -46,69 +51,78 @@ import { ProfileLookCard } from "@/components/ProfileLookCard";
 import { SharingCard } from "@/components/SharingCard";
 import { LetterheadCard } from "@/components/LetterheadCard";
 
-type Tab = "profile" | "system" | "llm" | "users" | "spaces" | "households" | "apps" | "marketplace" | "installed" | "skills" | "numbering" | "quality" | "connectors" | "extensions" | "storage" | "embeddings" | "backup" | "logs" | "devices";
+type Tab = "start" | "profile" | "signin" | "privacy" | "assistant" | "people" | "apps" | "letters" | "backup" | "system" | "ai" | "developer" | "households";
+type Group = "start" | "you" | "household" | "maintenance";
 
-// `adminOnly: true` hides the tab from non-admin users in the sidebar.
-// The corresponding backend endpoints already 403 for non-admins, so
-// this is purely a UX fix — members were seeing tabs that would show
-// errors / blanks when they clicked through. Storage and Embeddings
-// are the clearest cases (host-level filesystem + global embedder
-// config) where the panel is meaningless to a member.
-// hostOnly = tab manages state shared across all tenants (host
-// filesystem, host config.env, bundled LLM/embedder, install-wide
-// registries). Tenant Yoriks hide these because changes there would
-// either clobber other tenants or have no effect inside the tenant's
-// own DB. adminOnly = member/child users hide it; orthogonal axis.
-// advanced = technical settings a household rarely needs; they sit
-// folded under "Advanced" so the list starts with the everyday ones
-// (19 entries read as "this is not for me" in the 2026-09-29 test).
-const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }>; color: string; adminOnly?: boolean; hostOnly?: boolean; advanced?: boolean }[] = [
-  { id: "profile",    label: "Profile",     icon: UserIcon, color: "text-violet-500 bg-violet-500/10" },
-  { id: "devices",    label: "Devices",     icon: MonitorSmartphone, color: "text-blue-500 bg-blue-500/10" },
-  { id: "system",     label: "System",      icon: Activity, color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, hostOnly: true },
-  { id: "llm",        label: "LLM",         icon: Cpu,      color: "text-blue-500 bg-blue-500/10",     adminOnly: true, hostOnly: true, advanced: true },
-  { id: "users",      label: "Users",       icon: Users,    color: "text-cyan-500 bg-cyan-500/10" },
-  { id: "households", label: "Hosted families", icon: Home,     color: "text-orange-500 bg-orange-500/10", adminOnly: true, hostOnly: true, advanced: true },
-  { id: "spaces",     label: "Spaces",      icon: Shield,   color: "text-teal-500 bg-teal-500/10" },
-  { id: "apps",       label: "Apps",        icon: Grid3x3,  color: "text-fuchsia-500 bg-fuchsia-500/10" },
-  { id: "marketplace",label: "Marketplace", icon: Store,    color: "text-pink-500 bg-pink-500/10",     adminOnly: true, hostOnly: true, advanced: true },
-  { id: "installed",  label: "Installed",   icon: Package,  color: "text-pink-500 bg-pink-500/10",     adminOnly: true, hostOnly: true, advanced: true },
-  { id: "skills",     label: "Skills",      icon: Lightbulb,color: "text-yellow-500 bg-yellow-500/10", adminOnly: true, hostOnly: true, advanced: true },
-  { id: "numbering",  label: "Numbering",   icon: Hash,     color: "text-rose-500 bg-rose-500/10", advanced: true },
-  { id: "quality",    label: "Quality",     icon: BarChart3,color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, advanced: true },
-  { id: "connectors", label: "Connectors",  icon: Plug,     color: "text-amber-500 bg-amber-500/10",   adminOnly: true, hostOnly: true, advanced: true },
-  { id: "extensions", label: "Extensions",  icon: Puzzle,   color: "text-indigo-500 bg-indigo-500/10", adminOnly: true, hostOnly: true, advanced: true },
-  { id: "storage",    label: "Storage",     icon: HardDrive,color: "text-sky-500 bg-sky-500/10",     adminOnly: true, hostOnly: true, advanced: true },
-  { id: "embeddings", label: "Embeddings",  icon: Sparkles, color: "text-violet-500 bg-violet-500/10", adminOnly: true, hostOnly: true, advanced: true },
-  { id: "backup",     label: "Backup",      icon: Shield,   color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, hostOnly: true },
-  { id: "logs",       label: "Logs",        icon: ScrollText,color: "text-orange-500 bg-orange-500/10", adminOnly: true, advanced: true },
+// The sidebar in three groups a newcomer can place (settings audit,
+// 2026-10-04): You (my own things), Household (what the admin sets up
+// for everyone), Maintenance (the technical side, folded away). Start
+// here leads a new admin through the rest.
+//   adminOnly  = admins only (admin, platform_admin)
+//   ownerOnly  = platform_admin only (the install's owner)
+//   hostOnly   = hidden on a tenant Yorik (state shared by all tenants)
+//   adults     = hidden for children
+//   kids       = shown to children too
+const TABS: { id: Tab; label: string; group: Group; icon: React.ComponentType<{ className?: string }>; color: string;
+              adminOnly?: boolean; ownerOnly?: boolean; hostOnly?: boolean; adults?: boolean; kids?: boolean }[] = [
+  { id: "start",      label: "Start here",          group: "start",       icon: Sparkles,  color: "text-violet-500 bg-violet-500/10", adminOnly: true },
+  { id: "profile",    label: "Profile",             group: "you",         icon: UserIcon,  color: "text-violet-500 bg-violet-500/10", kids: true },
+  { id: "signin",     label: "Sign-in & devices",   group: "you",         icon: KeyRound,  color: "text-blue-500 bg-blue-500/10", kids: true },
+  { id: "privacy",    label: "Privacy & safety",    group: "you",         icon: Shield,    color: "text-teal-500 bg-teal-500/10", adults: true },
+  { id: "assistant",  label: "Assistant & alerts",  group: "you",         icon: Lightbulb, color: "text-yellow-500 bg-yellow-500/10", adults: true },
+  { id: "people",     label: "People",              group: "household",   icon: Users,     color: "text-cyan-500 bg-cyan-500/10", adminOnly: true },
+  { id: "apps",       label: "Apps & accounts",     group: "household",   icon: Grid3x3,   color: "text-fuchsia-500 bg-fuchsia-500/10", adminOnly: true },
+  { id: "letters",    label: "Letters & invoices",  group: "household",   icon: FileText,  color: "text-rose-500 bg-rose-500/10", adults: true },
+  { id: "backup",     label: "Backup & storage",    group: "household",   icon: HardDrive, color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, hostOnly: true },
+  { id: "system",     label: "Health & updates",    group: "maintenance", icon: Activity,  color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, hostOnly: true },
+  { id: "ai",         label: "AI",                  group: "maintenance", icon: Cpu,       color: "text-blue-500 bg-blue-500/10", adminOnly: true, hostOnly: true },
+  { id: "developer",  label: "Developer",           group: "maintenance", icon: ScrollText,color: "text-orange-500 bg-orange-500/10", adminOnly: true },
+  { id: "households", label: "Hosted families",     group: "maintenance", icon: Home,      color: "text-orange-500 bg-orange-500/10", ownerOnly: true, hostOnly: true },
 ];
+
+const GROUP_LABEL: Record<Group, string> = { start: "", you: "You", household: "Household", maintenance: "Maintenance" };
+
+// Old tab names (bookmarks, links in help pages and other apps) → the
+// page that holds that setting now; a few open a section inside it.
+const LEGACY_TAB: Record<string, { tab: Tab; section?: string }> = {
+  devices: { tab: "signin" }, llm: { tab: "ai" }, embeddings: { tab: "ai" },
+  users: { tab: "people" }, spaces: { tab: "people" }, connectors: { tab: "apps" },
+  numbering: { tab: "letters" }, extensions: { tab: "letters" }, storage: { tab: "backup" },
+  logs: { tab: "developer", section: "logs" }, quality: { tab: "developer", section: "quality" },
+  skills: { tab: "developer", section: "skills" }, marketplace: { tab: "developer", section: "addons" },
+  installed: { tab: "developer", section: "addons" },
+};
+
+function resolveTab(want: string | null): { tab: Tab | null; section?: string } {
+  if (!want) return { tab: null };
+  if (TABS.some(t => t.id === want)) return { tab: want as Tab };
+  return LEGACY_TAB[want] || { tab: null };
+}
 
 export function SettingsApp() {
   const auth = useAuth();
-  const isAdmin = auth.user.role === "admin" || auth.user.role === "platform_admin";
-  // Filter once per render — cheap, and lets the sidebar map + the
-  // selected-tab guard read the same list. hostOnly hides tabs whose
-  // panels manage host-shared state (LLM, storage, marketplace etc.)
-  // when this Yorik is a tenant.
-  // A child manages only their own profile (name, colour, photo).
-  const kid = isKid(auth.user.role);
+  const role = auth.user.role;
+  const isAdmin = role === "admin" || role === "platform_admin";
+  const kid = isKid(role);
   const visibleTabs = TABS.filter(t =>
-    (isAdmin || !t.adminOnly) && (!auth.isTenant || !t.hostOnly) && (!kid || t.id === "profile")
+    (!t.adminOnly || isAdmin) && (!t.ownerOnly || role === "platform_admin") &&
+    (!auth.isTenant || !t.hostOnly) && (!kid || t.kids) && (!t.adults || !kid)
   );
-  // ?tab=system etc. — Home's health line links straight to a tab.
-  const [tab, setTab] = useState<Tab>(() => {
-    const want = new URLSearchParams(window.location.search).get("tab");
-    return (TABS.some(t => t.id === want) ? want : "profile") as Tab;
-  });
-  // If the persisted/current tab is admin-only and the user isn't an
-  // admin (e.g., a role downgrade happened, or stale local state),
-  // fall back to Profile rather than rendering an empty pane.
-  const activeTab: Tab = visibleTabs.some(t => t.id === tab) ? tab : "profile";
-  const [showAdvanced, setShowAdvanced] = useState<boolean>(() => {
-    if (TABS.find(t => t.id === tab)?.advanced) return true;   // deep-linked into one
+  // The tab lives in the URL (?tab=…), so a reload, the back button and
+  // links from Home or other apps land on the right page.
+  const [params, setParams] = useSearchParams();
+  const wanted = resolveTab(params.get("tab"));
+  const fallback: Tab = isAdmin && !auth.isTenant ? "start" : "profile";
+  const activeTab: Tab = wanted.tab && visibleTabs.some(t => t.id === wanted.tab) ? wanted.tab
+    : visibleTabs.some(t => t.id === fallback) ? fallback : "profile";
+  const section = wanted.section || params.get("section") || undefined;
+  const setTab = useCallback((id: Tab, sec?: string) => {
+    setParams(sec ? { tab: id, section: sec } : { tab: id }, { replace: false });
+  }, [setParams]);
+  const [showMaintenance, setShowMaintenance] = useState<boolean>(() => {
     try { return localStorage.getItem("yorik_settings_advanced") === "1"; } catch { return false; }
   });
+  const maintenanceOpen = showMaintenance || TABS.find(t => t.id === activeTab)?.group === "maintenance";
   const [toasts, setToasts] = useState<Array<{ id: number; kind: "info" | "success" | "error"; text: string }>>([]);
 
   // Memoise — every child tab depends on `toast` in its useEffect
@@ -130,6 +144,25 @@ export function SettingsApp() {
 
   const tri = useTriPane();
 
+  const tabButton = (t: typeof TABS[number]) => (
+    <button
+      key={t.id}
+      onClick={() => { setTab(t.id); tri.closeAll(); }}
+      className={cn(
+        "w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 transition",
+        activeTab === t.id
+          ? "bg-sidebar-accent shadow-sm"
+          : "hover:bg-sidebar-accent/50",
+      )}
+    >
+      <div className={cn("w-7 h-7 rounded-md flex items-center justify-center shrink-0", t.color)}>
+        <t.icon className="w-3.5 h-3.5" />
+      </div>
+      <span className="text-sm font-medium">{t.label}</span>
+    </button>
+  );
+  const groupTabs = (g: Group) => visibleTabs.filter(t => t.group === g);
+
   return (
     <div className="flex h-screen bg-background text-foreground pb-16 relative">
       <MobileBackdrop show={tri.leftOpen} onClick={tri.closeAll} />
@@ -149,40 +182,29 @@ export function SettingsApp() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {[...visibleTabs.filter(t => !t.advanced),
-            ...(showAdvanced ? visibleTabs.filter(t => t.advanced) : [])].map(t => (
-            <button
-              key={t.id}
-              onClick={() => { setTab(t.id); tri.closeAll(); }}
-              className={cn(
-                "w-full text-left px-3 py-2 rounded-lg flex items-center gap-2.5 transition",
-                activeTab === t.id
-                  ? "bg-sidebar-accent shadow-sm"
-                  : "hover:bg-sidebar-accent/50",
-              )}
-            >
-              <div className={cn("w-7 h-7 rounded-md flex items-center justify-center shrink-0", t.color)}>
-                <t.icon className="w-3.5 h-3.5" />
+        <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+          {groupTabs("start").map(tabButton)}
+          {(["you", "household"] as Group[]).map(g => groupTabs(g).length > 0 && (
+            <div key={g} className="pt-2 space-y-1">
+              <div className="px-3 pt-1 pb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {GROUP_LABEL[g]}
               </div>
-              <span className="text-sm font-medium">{t.label}</span>
-            </button>
-          )).flatMap((el, i, all) => {
-            // The "Advanced" switch sits between the everyday tabs and the rest.
-            const everyday = visibleTabs.filter(t => !t.advanced).length;
-            if (i !== everyday - 1 || !visibleTabs.some(t => t.advanced)) return [el];
-            return [el, (
+              {groupTabs(g).map(tabButton)}
+            </div>
+          ))}
+          {groupTabs("maintenance").length > 0 && (
+            <div className="pt-2 space-y-1">
               <button
-                key="__advanced"
-                onClick={() => setShowAdvanced(v => { try { localStorage.setItem("yorik_settings_advanced", v ? "0" : "1"); } catch {} return !v; })}
-                className="w-full text-left px-3 pt-3 pb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground flex items-center gap-1"
-                aria-expanded={showAdvanced}
+                onClick={() => setShowMaintenance(v => { try { localStorage.setItem("yorik_settings_advanced", v ? "0" : "1"); } catch {} return !v; })}
+                className="w-full text-left px-3 pt-1 pb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground flex items-center gap-1"
+                aria-expanded={maintenanceOpen}
               >
-                <ChevronRight className={cn("w-3 h-3 transition", showAdvanced && "rotate-90")} /> Advanced
+                <ChevronRight className={cn("w-3 h-3 transition", maintenanceOpen && "rotate-90")} /> {GROUP_LABEL.maintenance}
               </button>
-            )];
-          })}
-        </div>
+              {maintenanceOpen && groupTabs("maintenance").map(tabButton)}
+            </div>
+          )}
+        </nav>
 
         <footer className="border-t border-border px-4 py-3 text-xs space-y-2">
           <button
@@ -214,25 +236,19 @@ export function SettingsApp() {
           </div>
         </div>
         <div className="max-w-3xl mx-auto px-4 sm:px-8 py-6 sm:py-8">
+          {activeTab === "start"      && <StartHereTab onOpen={setTab} available={visibleTabs.map(t => t.id)} />}
           {activeTab === "profile"    && <ProfileTab toast={toast} />}
+          {activeTab === "signin"     && <SignInPage toast={toast} />}
+          {activeTab === "privacy"    && <PrivacyPage toast={toast} />}
+          {activeTab === "assistant"  && <AssistantPage toast={toast} />}
+          {activeTab === "people"     && <PeoplePage toast={toast} openGroups={section === "groups"} />}
+          {activeTab === "apps"       && <AppsAccountsPage toast={toast} />}
+          {activeTab === "letters"    && <LettersPage toast={toast} isAdmin={isAdmin && !auth.isTenant} />}
+          {activeTab === "backup"     && <BackupStoragePage toast={toast} />}
           {activeTab === "system"     && <SystemStatusPanel />}
-          {activeTab === "devices"    && <DevicesTab toast={toast} />}
-          {activeTab === "llm"        && <LlmTab toast={toast} />}
-          {activeTab === "users"      && <UsersTab toast={toast} />}
+          {activeTab === "ai"         && <AiPage toast={toast} />}
+          {activeTab === "developer"  && <DeveloperPage toast={toast} section={section} onSection={sec => setTab("developer", sec)} hostOnlyHidden={auth.isTenant} />}
           {activeTab === "households" && <HouseholdsTab toast={toast} />}
-          {activeTab === "spaces"     && <SpacesTab toast={toast} />}
-          {activeTab === "apps"       && <AppsTab toast={toast} />}
-          {activeTab === "marketplace"&& <MarketplaceTab toast={toast} />}
-          {activeTab === "installed"  && <InstalledAppsTab toast={toast} />}
-          {activeTab === "skills"     && <SkillsTab toast={toast} />}
-          {activeTab === "numbering"  && <NumberingTab toast={toast} />}
-          {activeTab === "quality"    && <QualityTab toast={toast} />}
-          {activeTab === "connectors" && <ConnectorsTab />}
-          {activeTab === "extensions" && <ExtensionsTab toast={toast} />}
-          {activeTab === "storage"    && <StorageTab toast={toast} />}
-          {activeTab === "embeddings" && <EmbeddingsTab toast={toast} />}
-          {activeTab === "backup"     && <BackupTab toast={toast} />}
-          {activeTab === "logs"       && <LogsTab toast={toast} />}
         </div>
       </section>
 
@@ -262,16 +278,210 @@ export function SettingsApp() {
   );
 }
 
+// ─── Pages ────────────────────────────────────────────────────────────
+// Each page is a short header plus the cards that belong to it.
+
+type ToastFn = (text: string, kind?: "info" | "success" | "error") => void;
+
+function PageHeader({ title, children }: { title: string; children?: React.ReactNode }) {
+  return (
+    <header className="mb-6">
+      <h1 className="text-2xl font-semibold">{title}</h1>
+      {children && <p className="text-sm text-muted-foreground mt-1">{children}</p>}
+    </header>
+  );
+}
+
+/** A folded section for the rarely needed parts of a page. */
+function MoreSection({ title, hint, open, children }: { title: string; hint?: string; open?: boolean; children: React.ReactNode }) {
+  return (
+    <details className="group rounded-xl border border-border bg-card/40" open={open || undefined}>
+      <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium flex items-center gap-2">
+        <ChevronRight className="w-4 h-4 transition group-open:rotate-90" />
+        {title}
+        {hint && <span className="text-xs font-normal text-muted-foreground">{hint}</span>}
+      </summary>
+      <div className="px-4 pb-4 space-y-5">{children}</div>
+    </details>
+  );
+}
+
+function SignInPage({ toast }: { toast: ToastFn }) {
+  return (
+    <div>
+      <PageHeader title="Sign-in & devices">
+        How you get into Yorik, and where you are signed in right now.
+      </PageHeader>
+      <div className="space-y-5">
+        <ChangePasswordCard toast={toast} />
+        <KioskPinCard toast={toast} />
+        <VoiceEnrollmentCard toast={toast} />
+        <DevicesTab toast={toast} />
+      </div>
+    </div>
+  );
+}
+
+function PrivacyPage({ toast }: { toast: ToastFn }) {
+  return (
+    <div>
+      <PageHeader title="Privacy & safety">
+        Who sees what of yours, what the family wall may show, and what
+        happens in an emergency.
+      </PageHeader>
+      <div className="space-y-5">
+        <SharingCard toast={toast} />
+        <DefaultDocVisibilityChips toast={toast} />
+        <KioskAgendaConsentCard toast={toast} />
+        <KioskPhotosConsentCard toast={toast} />
+        <EmergencyAccessCard toast={toast} />
+      </div>
+    </div>
+  );
+}
+
+function AssistantPage({ toast }: { toast: ToastFn }) {
+  return (
+    <div>
+      <PageHeader title="Assistant & alerts">
+        How Yorik works with you: notifications, undo, suggestions and planning.
+      </PageHeader>
+      <div className="space-y-5">
+        <PushCard toast={toast} />
+        <ConfirmMutationsToggle toast={toast} part="undo" />
+        <SuggestionEngineCard toast={toast} />
+        <PlanningRulesCard toast={toast} />
+        <Card title="Voice">
+          <VoiceAckToggle toast={toast} />
+        </Card>
+        <MoreSection title="Your own AI agent" hint="(for people who use Hermes, Claude or scripts)">
+          <AgentCard toast={toast} />
+          <ApiTokensCard toast={toast} />
+          <ConfirmMutationsToggle toast={toast} part="agents" />
+          <DevModeToggle toast={toast} />
+        </MoreSection>
+      </div>
+    </div>
+  );
+}
+
+function PeoplePage({ toast, openGroups }: { toast: ToastFn; openGroups?: boolean }) {
+  return (
+    <div className="space-y-6">
+      <UsersTab toast={toast} />
+      <MoreSection title="Groups" hint="(advanced: extra shared spaces, e.g. for a business)" open={openGroups}>
+        <SpacesTab toast={toast} />
+      </MoreSection>
+    </div>
+  );
+}
+
+function AppsAccountsPage({ toast }: { toast: ToastFn }) {
+  return (
+    <div className="space-y-8">
+      <AppsTab toast={toast} />
+      <ConnectionsCard />
+      <MapsConnectorCard />
+    </div>
+  );
+}
+
+function LettersPage({ toast, isAdmin }: { toast: ToastFn; isAdmin: boolean }) {
+  return (
+    <div>
+      <PageHeader title="Letters & invoices">
+        What your letters, invoices and quotes from the Write app look like,
+        and how invoices are numbered.
+      </PageHeader>
+      <div className="space-y-5">
+        <BusinessCard toast={toast} />
+        <SignatureUpload toast={toast} />
+        <LetterheadCard toast={toast} />
+        <NumberingTab toast={toast} />
+        {isAdmin && <ExtensionsTab toast={toast} />}
+      </div>
+    </div>
+  );
+}
+
+function BackupStoragePage({ toast }: { toast: ToastFn }) {
+  return (
+    <div>
+      <PageHeader title="Backup & storage">
+        Copies of everything on a second drive, and where the photos live.
+      </PageHeader>
+      <div className="space-y-5">
+        <BackupTab toast={toast} />
+        <StorageTab toast={toast} />
+      </div>
+    </div>
+  );
+}
+
+function AiPage({ toast }: { toast: ToastFn }) {
+  return (
+    <div className="space-y-8">
+      <LlmTab toast={toast} />
+      <EmbeddingsTab toast={toast} />
+    </div>
+  );
+}
+
+const DEV_SECTIONS: { id: string; label: string; hostOnly?: boolean }[] = [
+  { id: "logs", label: "Logs" },
+  { id: "quality", label: "Quality" },
+  { id: "skills", label: "Skills", hostOnly: true },
+  { id: "addons", label: "Add-ons", hostOnly: true },
+];
+
+function DeveloperPage({ toast, section, onSection, hostOnlyHidden }: {
+  toast: ToastFn; section?: string; onSection: (s: string) => void; hostOnlyHidden: boolean;
+}) {
+  const sections = DEV_SECTIONS.filter(d => !(d.hostOnly && hostOnlyHidden));
+  const active = sections.some(d => d.id === section) ? section! : "logs";
+  return (
+    <div>
+      <p className="text-sm text-muted-foreground mb-4">
+        For finding out what went wrong, and for extending Yorik. Nothing here
+        is needed for everyday use.
+      </p>
+      <div className="flex flex-wrap gap-1.5 mb-6">
+        {sections.map(d => (
+          <button
+            key={d.id}
+            onClick={() => onSection(d.id)}
+            className={cn("px-3 py-1.5 rounded-full text-sm border transition",
+              active === d.id ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted")}
+          >
+            {d.label}
+          </button>
+        ))}
+      </div>
+      {active === "logs"    && <LogsTab toast={toast} />}
+      {active === "quality" && <QualityTab toast={toast} />}
+      {active === "skills"  && <SkillsTab toast={toast} />}
+      {active === "addons"  && (
+        <div className="space-y-10">
+          <MarketplaceTab toast={toast} />
+          <InstalledAppsTab toast={toast} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Profile tab ──────────────────────────────────────────────────────
 
 function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
   const auth = useAuth();
   const u = auth.user;
+  const kid = isKid(u.role);
+  const isAdmin = u.role === "admin" || u.role === "platform_admin";
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({
+  const initial = {
     name:             u.name || "",
-    // First + last split — used by Compose for letterheads. Fall back
-    // to splitting `name` on the first space when these aren't set
+    // First + last split — the letterhead signs with the full name. Fall
+    // back to splitting `name` on the first space when these aren't set
     // yet (pre-migration-017 sessions).
     first_name:       u.first_name || (u.name || "").split(" ")[0] || "",
     last_name:        u.last_name  || (u.name || "").split(" ").slice(1).join(" ") || "",
@@ -281,14 +491,21 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
     address_postcode: u.address_postcode || "",
     address_city:     u.address_city || "",
     phone:            u.phone || "",
-    business_name:    u.business_name || "",
-    tax_id:           u.tax_id || "",
-    iban:             u.iban || "",
-  });
+  };
+  const [form, setForm] = useState(initial);
+  const dirty = (Object.keys(form) as (keyof typeof form)[]).some(k => form[k] !== initial[k]);
 
   function set<K extends keyof typeof form>(k: K, v: typeof form[K]) {
     setForm(p => ({ ...p, [k]: v }));
   }
+
+  // Leaving the page with unsaved edits asks first (they used to vanish).
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   async function save() {
     setBusy(true);
@@ -313,8 +530,7 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Profile</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Your address and business info. Used as the sender on the letters and
-          invoices you write.
+          Who you are in Yorik. {kid ? "" : "Your name and address also start your letterhead (Letters & invoices)."}
         </p>
       </header>
 
@@ -329,115 +545,143 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3">
-            <Field label="Display name (login + autocomplete)">
+            <Field label="What the family calls you">
               <input value={form.name} onChange={e => set("name", e.target.value)} className={inputClass} />
             </Field>
-            <Field label="Email">
-              <input value={u.email} disabled className={cn(inputClass, "opacity-60 cursor-not-allowed")} />
-            </Field>
+            {!isPlaceholderEmail(u.email) && (
+              <Field label="Email (you sign in with it)">
+                <input value={u.email} disabled className={cn(inputClass, "opacity-60 cursor-not-allowed")} />
+              </Field>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3">
             <Field label="Language">
               <select value={form.language} onChange={e => set("language", e.target.value)} className={inputClass}>
                 <option value="en">English</option>
                 <option value="de">Deutsch</option>
-                <option value="fr">Français</option>
-                <option value="es">Español</option>
-                <option value="it">Italiano</option>
-                <option value="pl">Polski</option>
               </select>
             </Field>
-            <Field label="Country">
-              <select value={form.country} onChange={e => set("country", e.target.value)} className={inputClass}>
-                <option value="">—</option>
-                <option value="DE">🇩🇪 Germany</option>
-                <option value="AT">🇦🇹 Austria</option>
-                <option value="CH">🇨🇭 Switzerland</option>
-                <option value="US">🇺🇸 United States</option>
-                <option value="GB">🇬🇧 United Kingdom</option>
-                <option value="PL">🇵🇱 Poland</option>
-                <option value="FR">🇫🇷 France</option>
-                <option value="ES">🇪🇸 Spain</option>
-                <option value="IT">🇮🇹 Italy</option>
-              </select>
-            </Field>
+            {!kid && (
+              <Field label="Country">
+                <select value={form.country} onChange={e => set("country", e.target.value)} className={inputClass}>
+                  <option value="">—</option>
+                  <option value="DE">🇩🇪 Germany</option>
+                  <option value="AT">🇦🇹 Austria</option>
+                  <option value="CH">🇨🇭 Switzerland</option>
+                  <option value="US">🇺🇸 United States</option>
+                  <option value="GB">🇬🇧 United Kingdom</option>
+                  <option value="PL">🇵🇱 Poland</option>
+                  <option value="FR">🇫🇷 France</option>
+                  <option value="ES">🇪🇸 Spain</option>
+                  <option value="IT">🇮🇹 Italy</option>
+                </select>
+              </Field>
+            )}
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Yorik answers you in this language.
+            {isAdmin && " As an admin, changing the country also sets the household's time zone, currency and the language documents are read in."}
+          </p>
         </Card>
 
-        <Card title="Address">
-          <Field label="Street and number">
-            <input value={form.address_street} onChange={e => set("address_street", e.target.value)} className={inputClass} />
-          </Field>
-          <div className="grid grid-cols-3 gap-3 mt-3">
-            <Field label="Postal code">
-              <input value={form.address_postcode} onChange={e => set("address_postcode", e.target.value)} className={inputClass} />
+        {!kid && (
+          <Card title="Address">
+            <Field label="Street and number">
+              <input value={form.address_street} onChange={e => set("address_street", e.target.value)} className={inputClass} />
             </Field>
-            <div className="col-span-2">
-              <Field label="City">
-                <input value={form.address_city} onChange={e => set("address_city", e.target.value)} className={inputClass} />
+            <div className="grid grid-cols-3 gap-3 mt-3">
+              <Field label="Postal code">
+                <input value={form.address_postcode} onChange={e => set("address_postcode", e.target.value)} className={inputClass} />
+              </Field>
+              <div className="col-span-2">
+                <Field label="City">
+                  <input value={form.address_city} onChange={e => set("address_city", e.target.value)} className={inputClass} />
+                </Field>
+              </div>
+            </div>
+            <div className="mt-3">
+              <Field label="Phone">
+                <input value={form.phone} onChange={e => set("phone", e.target.value)} className={inputClass} />
               </Field>
             </div>
-          </div>
-          <div className="mt-3">
-            <Field label="Phone">
-              <input value={form.phone} onChange={e => set("phone", e.target.value)} className={inputClass} />
-            </Field>
-          </div>
-        </Card>
+          </Card>
+        )}
 
-        <Card title="Business">
-          <Field label="Business name (leave blank for personal use)">
-            <input value={form.business_name} onChange={e => set("business_name", e.target.value)} className={inputClass} />
-          </Field>
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <Field label="Tax ID / USt-IdNr / EIN">
-              <input value={form.tax_id} onChange={e => set("tax_id", e.target.value)} className={inputClass} />
-            </Field>
-            <Field label="IBAN">
-              <input value={form.iban} onChange={e => set("iban", e.target.value)} className={cn(inputClass, "font-mono")} />
-            </Field>
-          </div>
-        </Card>
-
-        <ProfileLookCard toast={toast} />
-        <SignatureUpload toast={toast} />
-        <LetterheadCard toast={toast} />
-        <ThemeToggle />
-        <Card title="Voice">
-          <VoiceAckToggle toast={toast} />
-        </Card>
-        <ChangePasswordCard toast={toast} />
-        <SharingCard toast={toast} />
-        <AgentCard toast={toast} />
-        <PlanningRulesCard toast={toast} />
-        <PushCard toast={toast} />
-        <ApiTokensCard toast={toast} />
-        <VoiceEnrollmentCard toast={toast} />
-        <KioskPinCard toast={toast} />
-        <KioskAgendaConsentCard toast={toast} />
-        <KioskPhotosConsentCard toast={toast} />
-        <EmergencyAccessCard toast={toast} />
-        <ConfirmMutationsToggle toast={toast} />
-        <DevModeToggle toast={toast} />
-        <DefaultDocVisibilityChips toast={toast} />
-        <SuggestionEngineCard toast={toast} />
-
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-3">
+          {dirty && <span className="text-xs text-amber-600">Not saved yet</span>}
           <button
             onClick={save}
-            disabled={busy}
+            disabled={busy || !dirty}
             className={cn(
               "px-4 py-2 rounded-md font-medium text-sm inline-flex items-center gap-1.5 transition",
               "bg-gradient-to-r from-violet-500 to-blue-500 hover:from-violet-600 hover:to-blue-600 text-white shadow-md",
-              busy && "opacity-60 cursor-wait",
+              (busy || !dirty) && "opacity-60",
+              busy && "cursor-wait",
             )}
           >
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Save changes
           </button>
         </div>
+
+        <ProfileLookCard toast={toast} />
+        <ThemeToggle />
       </div>
     </div>
+  );
+}
+
+/** Business name, tax number and bank account: what forms and invoices
+ *  need. Saved on the profile; the letterhead below takes them over
+ *  where it hasn't been changed by hand. */
+function BusinessCard({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const auth = useAuth();
+  const u = auth.user;
+  const initial = { business_name: u.business_name || "", tax_id: u.tax_id || "", iban: u.iban || "" };
+  const [form, setForm] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const dirty = form.business_name !== initial.business_name || form.tax_id !== initial.tax_id || form.iban !== initial.iban;
+
+  async function save() {
+    setBusy(true);
+    try {
+      await api.patch("/api/profile", {
+        business_name: form.business_name || null, tax_id: form.tax_id || null, iban: form.iban || null,
+      });
+      await auth.refresh();
+      toast("Saved", "success");
+    } catch (e: any) {
+      toast(`Save failed: ${e.message}`, "error");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <Card title="Business details">
+      <p className="text-xs text-muted-foreground mb-3">
+        Only if you write invoices. Yorik uses these on forms it fills in for you and in your letterhead below.
+      </p>
+      <Field label="Business name (leave blank for personal use)">
+        <input value={form.business_name} onChange={e => setForm(f => ({ ...f, business_name: e.target.value }))} className={inputClass} />
+      </Field>
+      <div className="grid grid-cols-2 gap-3 mt-3">
+        <Field label="Tax number">
+          <input value={form.tax_id} onChange={e => setForm(f => ({ ...f, tax_id: e.target.value }))} className={inputClass} />
+        </Field>
+        <Field label="IBAN">
+          <input value={form.iban} onChange={e => setForm(f => ({ ...f, iban: e.target.value }))} className={cn(inputClass, "font-mono")} />
+        </Field>
+      </div>
+      <div className="flex justify-end mt-3">
+        <button
+          onClick={save}
+          disabled={busy || !dirty}
+          className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition disabled:opacity-50 inline-flex items-center gap-1.5"
+        >
+          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+          Save
+        </button>
+      </div>
+    </Card>
   );
 }
 
@@ -967,7 +1211,7 @@ function KioskPinCard({ toast }: {
       setPin(""); setPin2("");
       setMeHasPin(true);
       setPinSetAt(new Date().toISOString());
-      toast("Kiosk PIN set", "success");
+      toast("PIN saved", "success");
     } catch (e: any) {
       toast(e?.message || "Couldn't set PIN", "error");
     } finally {
@@ -976,13 +1220,13 @@ function KioskPinCard({ toast }: {
   }
 
   async function clear() {
-    if (!confirm("Remove your kiosk PIN? You won't be able to identify yourself on a kiosk until you set a new one.")) return;
+    if (!confirm("Remove your PIN? You can't sign in on the family wall with it any more until you set a new one.")) return;
     setSaving(true);
     try {
       await api.delete("/api/profile/pin");
       setMeHasPin(false);
       setPinSetAt(null);
-      toast("Kiosk PIN cleared", "success");
+      toast("PIN removed", "success");
     } catch (e: any) {
       toast(e?.message || "Couldn't clear PIN", "error");
     } finally {
@@ -991,15 +1235,15 @@ function KioskPinCard({ toast }: {
   }
 
   return (
-    <Card title="Kiosk PIN">
+    <Card title="Your PIN">
       <div className="mb-3 flex items-start gap-2">
         <KeyRound className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
         <div className="flex-1">
-          <div className="text-sm font-medium">4-digit PIN for the household wall</div>
+          <div className="text-sm font-medium">4 digits to sign in on your phone and on the family wall</div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Used on kiosk tablets when voice ID can't match you. Never
-            used on regular browser logins (your password stays the
-            only way in there).
+            If you joined with a QR code, this PIN is how your phone signs you in.
+            On the family wall it tells Yorik who is standing there. On a computer's
+            browser you still sign in with your email and password.
           </p>
         </div>
       </div>
@@ -1234,16 +1478,15 @@ function VoiceEnrollmentCard({ toast }: {
   }
 
   return (
-    <Card title="Kiosk voice">
+    <Card title="Your voice on the family wall">
       <div className="mb-3 flex items-start gap-2">
         <Mic className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
         <div className="flex-1">
-          <div className="text-sm font-medium">Enroll your voice for the household wall</div>
+          <div className="text-sm font-medium">Let the wall recognise you when you speak</div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Records a short sample so Yorik can recognise you on a
-            kiosk tablet without you typing your PIN. Used ONLY on
-            kiosks — regular browser sessions never run voice
-            recognition.
+            Records a short sample so the family wall knows it's you without
+            your PIN. Only the wall listens for voices; phones and computers
+            never do. Skip this if you have no wall tablet.
           </p>
         </div>
       </div>
@@ -1585,15 +1828,17 @@ function STTConfigCard({ toast }: {
   const isCloud = backend !== "whisper" && backend !== "parakeet";
 
   return (
-    <Card title="Speech-to-text">
+    <Card title="Speech recognition">
       <div className="mb-3 flex items-start gap-2">
         <Mic className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
         <div className="flex-1">
-          <div className="text-sm font-medium">Transcription engine</div>
+          <div className="text-sm font-medium">How Yorik turns speech into text</div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Applies to every user — global backend setting.
-            Local engines keep your audio on this machine; Parakeet does that on
-            the CPU in well under a second. Cloud engines send audio to the provider.
+            For everyone in the household: the microphone in the chat, the wall
+            and WhatsApp voice notes. <strong>Parakeet</strong> (recommended) runs on
+            this computer and keeps the audio at home. A cloud service is faster on
+            weak machines, but then the audio, including voice notes other people
+            sent you, goes to that provider. Recordings always use Parakeet.
           </p>
         </div>
       </div>
@@ -1699,7 +1944,7 @@ function STTConfigCard({ toast }: {
             <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
             <p className="text-xs text-muted-foreground">
               Audio is uploaded to <span className="font-mono">{currentBackendMeta.label}</span> for transcription.
-              Yorik falls back to local Whisper automatically if the cloud is unreachable.
+              If the service can't be reached, Yorik falls back to the speech recognition on this computer.
             </p>
           </div>
 
@@ -1972,7 +2217,7 @@ function KioskPhotosConsentCard({ toast }: {
       await api.patch("/api/users/me/kiosk-photos-consent", { consent: next });
       setEnabled(next);
       toast(next
-        ? "Your photos of the day will roll past on the household wall."
+        ? "Your photos of the day will roll past on the family wall."
         : "Your photos are no longer on the wall.",
         "success");
     } catch (e: any) {
@@ -1983,15 +2228,15 @@ function KioskPhotosConsentCard({ toast }: {
   }
 
   return (
-    <Card title="Household wall · photos">
+    <Card title="Family wall: your photos">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="text-sm font-medium">Show my photos of the day on the household wall</div>
+          <div className="text-sm font-medium">Show my photos of the day on the family wall</div>
           <p className="text-xs text-muted-foreground mt-1">
-            When ON, what you photographed today rolls past in the kitchen
-            tablet's slideshow together with everyone else who opted in. A
-            separate switch from the agenda: your calendar on the wall does
-            not put your camera roll there. Off by default.
+            What you photographed today rolls past in the wall tablet's slideshow,
+            with everyone else who said yes (the wall itself must have "today's
+            photos" on). Separate from the calendar switch above. Off by default;
+            only matters if your household has a wall tablet.
           </p>
         </div>
         <button
@@ -2043,7 +2288,7 @@ function KioskAgendaConsentCard({ toast }: {
       await api.patch("/api/users/me/kiosk-agenda-consent", { consent: next });
       setEnabled(next);
       toast(next
-        ? "Your appointments will appear on the household wall."
+        ? "Your appointments and to-dos now show on the family wall."
         : "Your appointments are no longer on the wall.",
         "success");
     } catch (e: any) {
@@ -2054,16 +2299,15 @@ function KioskAgendaConsentCard({ toast }: {
   }
 
   return (
-    <Card title="Household wall">
+    <Card title="Family wall: your day">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="text-sm font-medium">Show me on the household wall (my appointments and my tasks on the family board)</div>
+          <div className="text-sm font-medium">Show my appointments and to-dos on the family wall</div>
           <p className="text-xs text-muted-foreground mt-1">
-            When ON, swiping right on the kitchen tablet's photo wall reveals
-            today's agenda — including YOUR events alongside everyone else
-            who opted in. Each event is labeled with the owner's name. Off
-            by default; nobody can see your appointments on the wall without
-            this toggle.
+            You get a column on the family board, next to everyone else who said
+            yes. Private appointments show only as "Busy". Off by default; nobody
+            sees your day on the wall without this switch. Only matters if your
+            household has a wall tablet.
           </p>
         </div>
         <button
@@ -2089,8 +2333,11 @@ function KioskAgendaConsentCard({ toast }: {
 }
 
 
-function ConfirmMutationsToggle({ toast }: {
+function ConfirmMutationsToggle({ toast, part }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
+  /** "undo": the Undo card after Yorik's changes (everyone).
+   *  "agents": whether an outside agent may confirm deletions. */
+  part: "undo" | "agents";
 }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
@@ -2136,8 +2383,8 @@ function ConfirmMutationsToggle({ toast }: {
       await api.patch("/api/profile/confirm-mutations", { enabled: next });
       setEnabled(next);
       toast(next
-        ? "Confirmations ON — LLM actions will show a modal"
-        : "Confirmations OFF — LLM actions run immediately",
+        ? "Yorik shows an Undo card after each change"
+        : "No more Undo cards. Most deletions still wait for your tap.",
         "success");
     } catch (e: any) {
       toast(e.message || "Failed to save", "error");
@@ -2147,15 +2394,15 @@ function ConfirmMutationsToggle({ toast }: {
   }
 
   return (
-    <Card title="Beta safety">
+    part === "undo" ? (
+    <Card title="Undo">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="text-sm font-medium">Confirm LLM actions before they happen</div>
+          <div className="text-sm font-medium">Show an Undo card when Yorik changes something</div>
           <p className="text-xs text-muted-foreground mt-1">
-            When ON, the assistant shows a modal before creating, updating, or deleting
-            anything. Your click also feeds the per-model success rate in{" "}
-            <strong>Quality</strong> — so we know which LLMs are reliable. We recommend
-            keeping this ON during beta. Turn off once you trust the model.
+            When Yorik adds or changes a to-do, appointment, contact or bill for you,
+            a card under its answer lets you take it back. Most deletions wait for
+            your tap anyway, whatever this switch says.
           </p>
         </div>
         <button
@@ -2167,6 +2414,7 @@ function ConfirmMutationsToggle({ toast }: {
             (enabled === null || saving) && "opacity-60 cursor-wait",
           )}
           aria-pressed={!!enabled}
+          aria-label="Show an Undo card"
         >
           <span
             className={cn(
@@ -2176,13 +2424,17 @@ function ConfirmMutationsToggle({ toast }: {
           />
         </button>
       </div>
-      <div className="flex items-start justify-between gap-3 mt-4 pt-4 border-t border-border">
+    </Card>
+    ) : (
+    <Card title="Deletions by your agent">
+      <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
           <div className="text-sm font-medium">Let agents confirm deletions</div>
           <p className="text-xs text-muted-foreground mt-1">
-            An outside agent using your API token (Hermes, Claude, a script) can stage a
-            deletion but not run it. When OFF, it waits as a card in your notification bell
-            and only your tap deletes. Turn ON only if you trust the agent to ask you first.
+            An outside agent using your API token (Hermes, Claude, a script) can ask to
+            delete something but not do it. When OFF, the request waits in your
+            notification bell and only your tap deletes. Turn ON only if you trust the
+            agent to ask you first.
           </p>
         </div>
         <button
@@ -2194,6 +2446,7 @@ function ConfirmMutationsToggle({ toast }: {
             (agentDeletes === null || savingAgent) && "opacity-60 cursor-wait",
           )}
           aria-pressed={!!agentDeletes}
+          aria-label="Let agents confirm deletions"
         >
           <span
             className={cn(
@@ -2204,6 +2457,7 @@ function ConfirmMutationsToggle({ toast }: {
         </button>
       </div>
     </Card>
+    )
   );
 }
 
@@ -2335,6 +2589,7 @@ function SuggestionEngineCard({ toast }: {
 function DevModeToggle({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const auth = useAuth();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -2355,6 +2610,7 @@ function DevModeToggle({ toast }: {
     setSaving(true);
     try {
       await api.patch("/api/profile/dev-mode", { enabled: next });
+      await auth.refresh();   // the chat reads it from the signed-in user
       setEnabled(next);
       toast(next
         ? "Dev mode ON — agent trace will appear under each reply"
@@ -2371,7 +2627,7 @@ function DevModeToggle({ toast }: {
     <Card title="Developer mode">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="text-sm font-medium">Show agent trace under each reply</div>
+          <div className="text-sm font-medium">Show how Yorik got to each answer</div>
           <p className="text-xs text-muted-foreground mt-1">
             Adds a collapsible <span className="font-mono opacity-80">▼ Debug</span> caret below every Yorik reply.
             Expand it to see iterations, tool calls (with arguments + result snippets),
@@ -2433,7 +2689,7 @@ function DefaultDocVisibilityChips({ toast }: {
     setSaving(true);
     try {
       await api.patch("/api/profile/default-doc-visibility", { visibility: v });
-      toast(`Default upload visibility: ${v}`, "success");
+      toast("Saved: new documents start with this visibility", "success");
     } catch (e: any) {
       setValue(prev);
       toast(e.message || "Failed to save", "error");
@@ -2590,9 +2846,9 @@ function SignatureUpload({ toast }: {
   return (
     <Card title="Signature">
       <p className="text-xs text-muted-foreground mb-3">
-        Scan your handwritten signature once and Yorik puts it above your name on every letter
-        you compose. PNG, JPEG, GIF, WebP or SVG — ≤200 KB. Transparent or white background works
-        best. SVG (e.g. exported from an iPad drawing app) scales sharply at any size.
+        Scan your handwritten signature once and Yorik puts it above your name on the letters
+        you write. PNG, JPEG, GIF, WebP or SVG, up to 200 KB. A transparent or white background
+        works best; an SVG (e.g. from an iPad drawing app) stays sharp at any size.
       </p>
       {dataUrl ? (
         <div className="flex items-start gap-4">
@@ -2646,12 +2902,11 @@ function SignatureUpload({ toast }: {
 function StorageTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
   return (
     <div className="space-y-4">
-      <Card title="Where photos + documents live">
+      <Card title="Where the photos live">
         <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-          Yorik's databases stay on the internal disk (small, hot). Photos and document originals
-          can be huge — relocate them to an external SSD to keep your laptop's main disk happy.
-          The relocation is transparent: code keeps reading from <code className="font-mono">data/</code> via
-          symlinks, so nothing else needs to change. Pull the SSD and Yorik refuses to start (loud, not silent).
+          A photo library grows big. You can move it to an external drive to keep
+          this computer's disk free; everything keeps working as before. The drive
+          must then stay plugged in: without it Yorik won't start until it is back.
         </p>
         {/* Imported lazily to keep the bundle from including it on tabs that don't need it. */}
         <StoragePicker />
@@ -2705,7 +2960,7 @@ type SearchIndexStatus = {
 const SEARCH_SOURCE_LABEL: Record<string, string> = {
   email: "Email", whatsapp: "WhatsApp", tasks: "Tasks", contacts: "Contacts",
   events: "Calendar", recordings: "Recordings", drafts: "Letters & drafts",
-  bank: "Bank", letters: "Write",
+  bank: "Bank", letters: "Write", paperless: "Documents",
 };
 
 /** Settings → Embeddings: search by meaning on/off, which model, how
@@ -2753,8 +3008,9 @@ function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | 
       <div className="flex items-start justify-between gap-4">
         <p className="text-xs text-muted-foreground">
           The search (Ctrl+K, chat, agents) also finds mail, WhatsApp, tasks, contacts, calendar, recordings
-          and letters when the words differ: "Stromrechnung" finds the mail from the Stadtwerke. Off means
-          keyword search only; the index stays and is current again shortly after switching back on.
+          and letters when the words differ: "electricity bill" finds the mail from your power company. Off means
+          those are found by their words only (documents keep a simpler search by meaning); the index stays and
+          is current again shortly after switching back on.
         </p>
         <label className="flex items-center gap-2 text-sm shrink-0">
           <input
@@ -2938,11 +3194,9 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
     <div>
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Embeddings</h1>
+          <h2 className="text-lg font-semibold">Search</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Search by meaning runs on vector indexes: one over mail, messages, tasks, contacts,
-            calendar, recordings and letters, one over the filed documents. Switch it, pick the
-            model and watch the indexes here.
+            How Yorik finds things by what they mean, and how it tags your documents.
           </p>
         </div>
         <button
@@ -2958,6 +3212,14 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
       <div className="space-y-4">
 
         <SearchByMeaningCard toast={toast} />
+
+        <details className="group rounded-xl border border-border bg-card/40">
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium flex items-center gap-2">
+            <ChevronRight className="w-4 h-4 transition group-open:rotate-90" />
+            Document index and tags
+            <span className="text-xs font-normal text-muted-foreground">(technical details, repairs)</span>
+          </summary>
+          <div className="px-4 pb-4 space-y-4">
 
         {/* Index population */}
         <Card title="Documents: index population">
@@ -3102,11 +3364,10 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
         {/* Autotagger */}
         <Card title="Autotagger">
           <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-            The LLM picks 0–3 tags per document from Yorik's curated taxonomy
-            (~66 tags, German + English, across categories like Finanzen, Versicherung,
-            Wohnen, Gesundheit…). Tags appear in Paperless's UI <strong>and</strong> in
-            the folder tree on the /documents page. Safety: only ever ADDs tags
-            (never deletes), preserves any user-added tags, never invents new ones.
+            The AI gives each document 0–3 tags from Yorik's list of about 66
+            (finance, insurance, home, health …). They show as folders in the
+            Documents app. It only ever adds tags: yours stay, and it never
+            invents new ones.
           </p>
 
           {status.autotagger ? (
@@ -3200,10 +3461,10 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
               {status.taxonomy_tag_counts.slice(0, 80).map(tc => (
                 <span
                   key={tc.id}
-                  title={`${tc.label_de} / ${tc.label_en} · category: ${tc.category_id}`}
+                  title={`${tc.label_en} / ${tc.label_de} · category: ${tc.category_id}`}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20"
                 >
-                  <span>{tc.label_de}</span>
+                  <span>{locale().startsWith("de") ? tc.label_de : tc.label_en}</span>
                   <span className="opacity-60">·</span>
                   <span className="tabular-nums">{tc.count}</span>
                 </span>
@@ -3216,6 +3477,8 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
             )}
           </Card>
         )}
+          </div>
+        </details>
 
       </div>
     </div>
@@ -3232,17 +3495,39 @@ function formatAge(seconds: number): string {
 
 // ─── Backup tab ──────────────────────────────────────────────────────
 
+/** The easy first-time setup while backups aren't on yet; once they
+ *  are, only the status and the details (running it again would quietly
+ *  replace the passphrase older copies need). */
+function BackupSetup() {
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  // Bumped when the easy setup saved: the details below reload, while
+  // the setup stays on screen to show the passphrase to write down.
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    api.get<{ config: { passphrase_set: boolean; schedule: string } }>("/api/backup/status")
+      .then(r => setConfigured(!!(r.config?.passphrase_set && r.config?.schedule)))
+      .catch(() => setConfigured(false));
+  }, []);
+  if (configured === null) return null;
+  return (
+    <>
+      {!configured && <div className="mb-6"><EasyBackup onDone={() => setVersion(v => v + 1)} /></div>}
+      <BackupPicker key={version} />
+    </>
+  );
+}
+
 function BackupTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
   return (
     <div className="space-y-4">
-      <Card title="Encrypted backups">
+      <Card title="Backups">
         <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-          Snapshots are tar+gzip+age-encrypted with a passphrase only you know.
-          Calendars, contacts, tasks and the encryption key are always included.
-          Photos, Paperless and the WhatsApp session are opt-in (they're heavy).
+          Every night Yorik copies everything to a second drive, locked with a
+          passphrase only you have. Calendars, contacts, to-dos, chats and settings
+          are always in it; photos, documents and the WhatsApp link are extra
+          switches below (they are big).
         </p>
-        <div className="mb-6"><EasyBackup /></div>
-        <BackupPicker />
+        <BackupSetup />
       </Card>
     </div>
   );
@@ -3381,22 +3666,10 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
   return (
     <div>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold">LLM endpoint</h1>
+        <h1 className="text-2xl font-semibold">AI</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Yorik talks to any OpenAI-compatible local LLM — Ollama, LM
-          Studio, llama.cpp, vLLM. Changes take effect on the next chat
-          turn without a restart.
-        </p>
-        <p className="text-xs text-muted-foreground mt-3">
-          <strong>Don't have one yet?</strong> Fastest path is Ollama:
-        </p>
-        <pre className="text-xs bg-muted/40 border border-border rounded-md px-3 py-2 mt-1 font-mono whitespace-pre overflow-x-auto">{`curl -fsSL https://ollama.com/install.sh | sh
-ollama serve &`}</pre>
-        <p className="text-xs text-muted-foreground mt-2">
-          Then <code className="font-mono text-xs">ollama pull</code> a
-          tool-calling chat model (Yorik is tested with Qwen 3.5 9B,
-          standard and MTP variants), click <strong>Scan now</strong> below,
-          and pick the endpoint.
+          The model Yorik thinks with, how it understands speech, and how it
+          searches by meaning. Everything here applies to the whole household.
         </p>
       </header>
 
@@ -3406,7 +3679,7 @@ ollama serve &`}</pre>
             <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                LLM connected.
+                The AI model is connected.
               </div>
               <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                 Open the chat and ask <em>"what should I do next?"</em> — Yorik will walk you through
@@ -3439,13 +3712,18 @@ ollama serve &`}</pre>
 
       {cfg && (
         <div className="space-y-5">
-          <Card title="Current">
+          <Card title="Chat model">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <div className="text-xs text-muted-foreground">Endpoint</div>
-                <div className="font-mono text-sm truncate">{cfg.base_url}</div>
+                <div className="text-sm">
+                  {cfg.reachable
+                    ? "Yorik's model is running and answering."
+                    : "Yorik can't reach its model right now, so the chat can't answer."}
+                </div>
                 <div className="text-xs text-muted-foreground mt-2">Model</div>
                 <div className="font-mono text-sm truncate">{cfg.model}</div>
+                <div className="text-xs text-muted-foreground mt-2">Address</div>
+                <div className="font-mono text-xs truncate text-muted-foreground">{cfg.base_url}</div>
               </div>
               <div className="shrink-0 text-right">
                 {cfg.reachable
@@ -3464,11 +3742,26 @@ ollama serve &`}</pre>
             </div>
           </Card>
 
-          <Card title="Detect local endpoints">
+          <details className="group rounded-xl border border-border bg-card/40" open={!cfg.reachable || undefined}>
+            <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 transition group-open:rotate-90" />
+              Use a different model
+              <span className="text-xs font-normal text-muted-foreground">(for people who run their own AI server)</span>
+            </summary>
+            <div className="px-4 pb-4 space-y-5">
+          <p className="text-xs text-muted-foreground">
+            Yorik works with any server that speaks the OpenAI API: Ollama, LM Studio,
+            llama.cpp, vLLM, or a cloud provider. Changes apply to the next question,
+            no restart needed. No server yet? The quickest is Ollama
+            (<code className="font-mono">curl -fsSL https://ollama.com/install.sh | sh</code>),
+            then <code className="font-mono">ollama pull</code> a chat model that can call tools
+            (Yorik is tested with Qwen 3.5 9B) and press <strong>Scan now</strong>.
+          </p>
+          <Card title="Find a server on this computer">
             <p className="text-xs text-muted-foreground mb-3">
-              Quick scan of common ports — Ollama (11434), llama-swap (8080),
-              LM Studio (1234), vLLM (8001), llama.cpp (8081). Click a found
-              endpoint to use it.
+              Looks on the usual ports (Yorik's own server 8082, llama-swap 8080,
+              llama.cpp 8081, LM Studio 1234, Ollama 11434, vLLM 8001). Click a
+              model to use it.
             </p>
             <button
               onClick={detect}
@@ -3521,8 +3814,8 @@ ollama serve &`}</pre>
             )}
           </Card>
 
-          <Card title="Change endpoint">
-            <Field label="Endpoint URL (must end with /v1)">
+          <Card title="Enter an address">
+            <Field label="Server address (ends with /v1)">
               <div className="flex gap-2">
                 <input
                   value={draftUrl}
@@ -3613,11 +3906,11 @@ ollama serve &`}</pre>
                   >
                     {showApiKey ? "Hide" : "Show"}
                   </button>
-                  {cfg.has_api_key && (
+                  {cfg.has_api_key && draftApiKey !== "" && (
                     <button
                       type="button"
                       onClick={() => setDraftApiKey("")}
-                      title="Clear the stored key on save"
+                      title="Remove the stored key when you save"
                       className={cn(
                         "px-3 py-1.5 text-xs rounded-md font-medium transition shrink-0",
                         "bg-red-500/10 hover:bg-red-500/20 text-red-600 border border-red-500/20",
@@ -3628,19 +3921,18 @@ ollama serve &`}</pre>
                   )}
                 </div>
               </Field>
+              {cfg.has_api_key && draftApiKey === "" && (
+                <div className="text-2xs text-amber-600 mt-1">The stored key will be removed when you save.</div>
+              )}
               <div className="text-2xs text-muted-foreground mt-1">
-                Local servers (Ollama, llama-swap, LM Studio, vLLM) don't
-                need a key. Required for OpenAI / Anthropic / similar cloud
-                endpoints — prompts and chat content WILL leave the machine
-                if you point Yorik at one. Stored encrypted with Fernet,
-                never written to logs or config.env.
+                Servers on this computer don't need a key. A cloud provider
+                (OpenAI, Anthropic and the like) does, and then <strong>what the
+                family asks Yorik leaves the house</strong>. The key is stored
+                encrypted and used only for this address.
               </div>
             </div>
 
             {(() => {
-              const draftMatchesProbe = probeResult?.ok
-                && probeResult.models.includes(draftModel)
-                && draftUrl === (probeResult as any)._probedUrl;
               const probeOkForDraft = probeResult?.ok
                 && probeResult.models.includes(draftModel);
               const probeFailed = probeResult && !probeResult.ok;
@@ -3685,15 +3977,10 @@ ollama serve &`}</pre>
               );
             })()}
           </Card>
+            </div>
+          </details>
 
           <STTConfigCard toast={toast} />
-
-          <div className="text-xs text-muted-foreground leading-relaxed">
-            <strong className="text-foreground/70">Tips:</strong> Ollama serves at <code>http://127.0.0.1:11434/v1</code>.
-            LM Studio at <code>http://127.0.0.1:1234/v1</code>. vLLM is whatever <code>--port</code> you started it with.
-            Whichever backend, it needs to expose an OpenAI-compatible
-            <code>/v1/chat/completions</code> + <code>/v1/models</code>.
-          </div>
         </div>
       )}
     </div>
@@ -3705,11 +3992,11 @@ function NumberingTab({ toast }: { toast: (text: string, kind?: "info" | "succes
   return (
     <div>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Document numbering</h1>
+        <h2 className="text-lg font-semibold">Invoice and quote numbers</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Sequential numbers for invoices, quotes, and other legal documents — with
-          a tax-audit-proof audit trail. Required by law in Germany and Poland,
-          best-practice everywhere else.
+          Every invoice needs its own number, without gaps; the law requires it
+          in Germany and Poland. Write sets this up by itself with your first
+          invoice. Change it here if you continue a numbering you started elsewhere.
         </p>
       </header>
       <SeriesManager
@@ -4100,10 +4387,10 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
     <div>
       <header className="mb-6 flex items-baseline justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Quality dashboard</h1>
+          <h1 className="text-2xl font-semibold">Quality</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Per-LLM success rates for skills, chat turns, and templates. The
-            same data the community marketplace will rank by — when you opt in.
+            How often Yorik's actions worked and how the family rated its answers
+            (the thumbs under each reply), per AI model. It stays on this machine.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -4142,7 +4429,7 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
               </div>
               <div className="font-mono text-sm">{data.current_model}</div>
               <div className="ml-auto text-xs text-muted-foreground">
-                Switch models in <code>HOMEOS_MODEL</code> env var
+                Change the model under Maintenance › AI
               </div>
             </div>
           </Card>
@@ -4196,23 +4483,6 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
             )}
           </Card>
 
-          <Card title={`Templates (${data.templates.length})`}>
-            {data.templates.length === 0 ? (
-              <EmptyMetric icon={FileText} label="No template ratings yet." />
-            ) : (
-              <div className="space-y-2">
-                {data.templates.map((t, i) => (
-                  <div key={i} className="flex items-center gap-3 text-sm">
-                    <div className="font-mono flex-1 min-w-0 truncate">{t.template_id}</div>
-                    <span className="text-2xs text-muted-foreground">{t.llm_model || "—"}</span>
-                    <span className="inline-flex items-center gap-0.5 text-emerald-500"><ThumbsUp className="w-3 h-3" />{t.up}</span>
-                    <span className="inline-flex items-center gap-0.5 text-red-500"><ThumbsDown className="w-3 h-3" />{t.down}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-
           {data.recent_failures.length > 0 && (
             <Card title="Recent failures">
               <div className="space-y-1.5">
@@ -4233,8 +4503,6 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
     </div>
   );
 }
-
-// ─── Connectors tab — deep-links to per-app management UIs ──────────
 
 // ─── Users tab ────────────────────────────────────────────────────────
 // Admin-only CRUD over user_profiles. Backed by /api/users
@@ -4325,11 +4593,11 @@ function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" |
     <div>
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Users</h1>
+          <h1 className="text-2xl font-semibold">People</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Everyone in the household. The easiest way in is a QR code: the person
-            scans it with their phone and picks a PIN. "Add by hand" is for accounts
-            with an email and password.
+            scans it with their phone and picks a PIN. "Add by hand" is for someone
+            who signs in on a computer with an email and password.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 shrink-0">
@@ -4512,12 +4780,15 @@ function generatePassword(): string {
   // of base64 random strings — the admin can read it over the phone if
   // they have to.
   const words = [
-    "anker", "biber", "delta", "echo", "feder", "geist", "hafen", "iglu",
-    "jade", "kran", "loro", "moos", "nebel", "ozean", "pinsel", "quark",
-    "rabe", "salbei", "tundra", "ulme", "viper", "wolke", "xenon", "ypsilon", "zelle",
+    "anchor", "beaver", "delta", "echo", "feather", "ghost", "harbor", "igloo",
+    "jade", "kettle", "lemon", "maple", "nectar", "ocean", "pebble", "quartz",
+    "raven", "sage", "tundra", "umber", "violet", "willow", "xenon", "yarrow", "zephyr",
+    "amber", "birch", "cedar", "dune", "ember", "fjord", "glade",
   ];
-  const pick = () => words[Math.floor(Math.random() * words.length)];
-  const digits = String(Math.floor(100 + Math.random() * 900));
+  // crypto, not Math.random: these are real passwords.
+  const rand = (n: number) => { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; };
+  const pick = () => words[rand(words.length)];
+  const digits = String(100 + rand(900));
   return `${pick()}-${pick()}-${pick()}-${digits}`;
 }
 
@@ -4850,7 +5121,9 @@ function AppsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
     try {
       await api.post(`/api/apps/${appId}/${next ? "enable" : "disable"}`);
       setApps(curr => curr?.map(a => a.id === appId ? { ...a, enabled: next } : a) ?? curr);
-      toast(`${appId} ${next ? "enabled" : "disabled"} — refresh the dock to see the change`, "success");
+      window.dispatchEvent(new Event("yorik:apps-changed"));
+      const name = apps?.find(a => a.id === appId)?.name || appId;
+      toast(next ? `${name} is on: it's in the dock now` : `${name} is off and hidden`, "success");
     } catch {
       toast(`Failed to ${next ? "enable" : "disable"} ${appId}`, "error");
     } finally {
@@ -4861,11 +5134,10 @@ function AppsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
   return (
     <div>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Apps</h1>
+        <h1 className="text-2xl font-semibold">Apps & accounts</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Optional apps that ship with Yorik but stay hidden until you turn
-          them on. They depend on external services you set up yourself
-          (e.g. WhatsApp needs the Baileys bridge container running).
+          Extra apps that come with Yorik but stay hidden until you turn them on,
+          and the accounts Yorik gets your mail, dates and photos from.
         </p>
       </header>
 
@@ -4875,7 +5147,7 @@ function AppsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
 
       {apps && apps.length === 0 && (
         <div className="bg-card border border-border rounded-xl p-5 text-sm text-muted-foreground">
-          No optional apps available. (Admin role required to manage these.)
+          No extra apps available.
         </div>
       )}
 
@@ -5025,12 +5297,13 @@ function MarketplaceTab({ toast }: { toast: (text: string, kind?: "info" | "succ
       <div className="mb-5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex gap-3">
         <Shield className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
         <div className="text-[13px] leading-relaxed">
-          <div className="font-medium text-foreground">Apps run sandboxed.</div>
+          <div className="font-medium text-foreground">Only install apps you trust.</div>
           <div className="text-muted-foreground mt-0.5">
-            Each app gets its own private database and a sandboxed iframe with no
-            network access. It cannot read your other Yorik data unless its
-            manifest declares it and you approve at install. <span className="inline-flex items-center gap-1"><BadgeCheck className="w-3 h-3 text-emerald-600 inline" /> Verified</span> apps
-            are first-party and reviewed by the Yorik maintainers.
+            Each app gets its own database, and its screen runs walled off from the
+            rest of Yorik. Its server part, though, runs inside Yorik with full
+            access, so an app from a stranger could read everything.{" "}
+            <span className="inline-flex items-center gap-1"><BadgeCheck className="w-3 h-3 text-emerald-600 inline" /> Verified</span> apps
+            come from the Yorik maintainers.
           </div>
         </div>
       </div>
@@ -5237,24 +5510,22 @@ function InstallConfirmModal({ app, verified, onClose, onConfirm }: {
 
           <div className="border-t border-border pt-4">
             <div className="text-2xs font-semibold text-muted-foreground mb-2">
-              Sandboxed away from
+              What the app's screen can't do
             </div>
             <ul className="space-y-1 text-[13px] text-muted-foreground">
-              {tables.length === 0 && (
-                <li className="flex items-center gap-2">
-                  <Lock className="w-3 h-3 shrink-0" />
-                  Your calendar, tasks, bills, contacts, emails, documents
-                </li>
-              )}
               <li className="flex items-center gap-2">
                 <Globe className="w-3 h-3 shrink-0" />
-                Outbound network — the iframe has CSP <code className="font-mono text-2xs">connect-src 'none'</code>
+                Talk to the internet
               </li>
               <li className="flex items-center gap-2">
                 <Lock className="w-3 h-3 shrink-0" />
-                Other apps' data and your session cookie
+                Use your sign-in or see other apps' data
               </li>
             </ul>
+            <p className="text-xs text-muted-foreground mt-2">
+              The app's server part runs inside Yorik and is not walled off: install
+              only apps from people you trust.
+            </p>
           </div>
 
           <div className="flex gap-2 pt-2">
@@ -5362,8 +5633,10 @@ function WhatsAppOptions({ toast }: { toast: (text: string, kind?: "info" | "suc
       <div className="flex-1 text-sm">
         <div className="font-medium">Import Status posts to Photos</div>
         <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-          Off by default. Your contacts' 24-hour Status photos won't be
-          auto-saved to Immich. Direct chats + groups always import as before.
+          {enabled
+            ? "On: your contacts' 24-hour Status photos are saved to Photos too."
+            : "Off: your contacts' 24-hour Status photos are not saved to Photos."}
+          {" "}Photos from chats and groups are always saved.
         </div>
       </div>
       <button
@@ -5388,34 +5661,6 @@ function WhatsAppOptions({ toast }: { toast: (text: string, kind?: "info" | "suc
 }
 
 
-function ConnectorsTab() {
-  return (
-    <div className="space-y-4">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Connectors</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          External services Yorik can call. Most are configured at install
-          time by <code>start.sh</code> (Immich, Paperless, n8n) or per-user
-          via the app that uses them.
-        </p>
-      </header>
-
-      {/* Email is the only one with a real interactive management UI right
-          now, and it lives inside the Email app so add/edit/remove all
-          happen against the multi-account `email_accounts` store — not
-          the old single-credential connector store this tab used to
-          mirror (which would have left the Email app oblivious). */}
-      <DeepLinkCard
-        title="Email accounts"
-        description="Add, edit, or remove IMAP/SMTP accounts (you can have multiple). Managed inside the Email app so the multi-account store stays the single source of truth."
-        href="/r/email"
-        cta="Open Email →"
-      />
-
-      <MapsConnectorCard />
-    </div>
-  );
-}
 
 
 function MapsConnectorCard() {
@@ -5497,7 +5742,7 @@ function MapsConnectorCard() {
         )}
       </div>
 
-      <Field label="OpenRouteService API-Key (optional)">
+      <Field label="OpenRouteService key (optional)">
         <input
           type="password"
           value={apiKey}
@@ -5547,31 +5792,6 @@ function MapsConnectorCard() {
 }
 
 
-function DeepLinkCard({
-  title, description, href, cta,
-}: {
-  title: string;
-  description: string;
-  href: string;
-  cta: string;
-}) {
-  return (
-    <div className="bg-card border border-border rounded-xl p-5 flex items-start gap-4">
-      <div className="flex-1 min-w-0">
-        <div className="font-semibold">{title}</div>
-        <div className="text-sm text-muted-foreground mt-1 leading-relaxed">
-          {description}
-        </div>
-      </div>
-      <a
-        href={href}
-        className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition shrink-0"
-      >
-        {cta}
-      </a>
-    </div>
-  );
-}
 
 // ─── Logs ──────────────────────────────────────────────────────────────
 // Surfaces the persisted WARNING+ error_log table — same data that
@@ -5647,10 +5867,7 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
         `/api/extensions/${extId}/install`, {},
       );
       if (r.ok) {
-        toast(
-          `Installed ${extId} — restart the Yorik backend (Settings → Backup ... → Restart, or rerun start.sh) for the extension to load.`,
-          "success",
-        );
+        toast(`Installed ${extId}. It works right away.`, "success");
       } else {
         toast(`Install failed: ${r.error || `pip exit ${r.returncode}`}`, "error");
       }
@@ -5673,18 +5890,11 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
   return (
     <div>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Extensions</h1>
+        <h2 className="text-lg font-semibold">E-invoices and other extras</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Optional Python modules that add capabilities the base install
-          doesn't carry — typically locale- or compliance-specific (e.g.
-          German e-invoicing). Each one declares its own pip dependencies
-          so the base install stays lean for users who don't need them.
-        </p>
-        <p className="text-xs text-amber-600 mt-2 flex items-start gap-1.5">
-          <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
-          After installing dependencies, the Yorik backend must be
-          restarted (rerun <code className="font-mono">bash start.sh</code>)
-          before the extension's hooks become active.
+          Extras not every household needs, such as German e-invoices
+          (ZUGFeRD / XRechnung) attached to the invoices you write. Installing
+          one downloads it once; no restart needed.
         </p>
       </header>
 
@@ -5788,15 +5998,13 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
 }
 
 
-function ExtField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[80px_1fr] gap-x-3 text-xs">
-      <div className="text-muted-foreground text-2xs pt-0.5">{label}</div>
-      <div>{children}</div>
-    </div>
-  );
-}
 
+
+/** error_log stores UTC without a zone; show it in local time. */
+function fmtLogTime(ts: string): string {
+  const d = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(ts) ? ts : ts.replace(" ", "T") + "Z");
+  return isNaN(d.getTime()) ? ts.replace("T", " ") : d.toLocaleString();
+}
 
 function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
   const [data, setData] = useState<ErrorsResponse | null>(null);
@@ -5862,9 +6070,9 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
         <div>
           <h1 className="text-2xl font-semibold">Logs</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Recent warnings, errors, and unhandled exceptions from the backend.
-            For the full INFO-level stream, tail{" "}
-            <code className="text-xs">data/logs/yorik.log</code> on the host.
+            Recent warnings and errors from Yorik's server, newest first, in your
+            local time. The full log is in the system journal on the host
+            (<code className="text-xs">journalctl -u yorik</code>).
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -5974,7 +6182,7 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline gap-2 flex-wrap">
                             <span className="font-mono text-xs text-muted-foreground tabular-nums shrink-0">
-                              {row.ts.replace("T", " ")}
+                              {fmtLogTime(row.ts)}
                             </span>
                             <span className="font-mono text-xs text-muted-foreground truncate">
                               {row.logger}
@@ -6004,7 +6212,7 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
                               </button>
                               <span className="text-muted-foreground/70 text-2xs">
                                 {" — "}
-                                <code className="font-mono">grep corr={row.corr_id} data/logs/yorik.log</code>
+                                <code className="font-mono">journalctl -u yorik | grep {row.corr_id}</code>
                               </span>
                             </div>
                           )}
@@ -6233,7 +6441,7 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
             <div className="flex-1 min-w-0">
               <div className="font-medium text-base truncate">{workspace.name}</div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                Kind picks default placement for new events / tasks / contacts. You can change a row's space anytime.
+                Family: a new person sees the family calendar and the shared to-dos right away. Business: they start with only their own.
               </div>
             </div>
             <div className="flex gap-1 shrink-0">
@@ -6389,7 +6597,7 @@ function SpaceDetailPanel({
         <div className="flex-1 min-w-0">
           <div className="text-base font-semibold">{detail.name}</div>
           <div className="text-xs text-muted-foreground mt-0.5">
-            {isPersonal ? "Personal space — visible only to its owner." :
+            {isPersonal ? "Personal space: its owner, plus whoever they share something with (listed below)." :
               `Shared space${detail.slug ? ` · slug "${detail.slug}"` : ""} · ${detail.members.length} member${detail.members.length === 1 ? "" : "s"}`}
           </div>
         </div>
@@ -6430,9 +6638,9 @@ function SpaceDetailPanel({
                   onChange={e => onPatchLevel(m.user_id, e.target.value as any)}
                   className="text-xs px-2 py-1 rounded border border-border bg-background"
                 >
-                  <option value="read">read</option>
-                  <option value="write">write</option>
-                  <option value="admin">admin</option>
+                  <option value="read">can see</option>
+                  <option value="write">can edit</option>
+                  <option value="admin">can edit (admin)</option>
                 </select>
                 <button
                   onClick={() => onRemoveMember(m.user_id)}
@@ -6480,9 +6688,9 @@ function SpaceDetailPanel({
                 onChange={e => setPickLevel(e.target.value as any)}
                 className="px-2 py-1.5 rounded border border-border bg-background text-sm"
               >
-                <option value="read">read</option>
-                <option value="write">write</option>
-                <option value="admin">admin</option>
+                <option value="read">can see</option>
+                <option value="write">can edit</option>
+                <option value="admin">can edit (admin)</option>
               </select>
               <button
                 disabled={!pickUserId}
@@ -6609,7 +6817,7 @@ function InstalledAppsTab({ toast }: { toast: (text: string, kind?: "info" | "su
           <Package className="w-6 h-6 mx-auto mb-2 opacity-50" />
           <div>No v2 community apps installed.</div>
           <div className="mt-1 text-xs">
-            Install one from the Marketplace tab, or paste a source directory above.
+            Apps from the catalogue above are listed there; this list shows apps built for the newer app format.
           </div>
         </div>
       )}

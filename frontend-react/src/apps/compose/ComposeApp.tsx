@@ -4536,7 +4536,7 @@ function SignatureUpsellBanner() {
           <span className="text-muted-foreground"> — it then appears automatically in every letter instead of the "_______" line.</span>
         </div>
         <button
-          onClick={() => navigate("/settings")}
+          onClick={() => navigate("/settings?tab=letters")}
           className="text-xs px-2.5 py-1 rounded-md bg-violet-500/15 hover:bg-violet-500/25 text-violet-600 dark:text-violet-300 font-medium transition shrink-0"
         >
           Open in Settings

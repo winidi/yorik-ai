@@ -90,9 +90,13 @@ export function Dock({ activeAppId }: Props) {
   const DOCK_ORDER = dockOrderFor(role);
 
   useEffect(() => {
-    api.get<AppInfo[]>("/api/apps?role=admin")
+    const load = () => api.get<AppInfo[]>("/api/apps?role=admin")
       .then(setApps)
       .catch(() => setApps([]));
+    load();
+    // Settings → Apps & accounts turns an app on or off: show it now.
+    window.addEventListener("yorik:apps-changed", load);
+    return () => window.removeEventListener("yorik:apps-changed", load);
   }, []);
 
   // The "More" sheet closes when you leave the page or press Escape.

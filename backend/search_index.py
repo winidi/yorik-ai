@@ -545,7 +545,7 @@ def start_scheduler(loop: asyncio.AbstractEventLoop) -> None:
                 indexed = sum(n for n in result.values() if n > 0)
                 busy = any(n >= MAX_ROWS_PER_PASS for n in result.values())
                 failed = [k for k, n in result.items() if n < 0]
-                detail = "switched off in Settings → Embeddings" if not result else \
+                detail = "switched off in Settings › AI › Search" if not result else \
                     f"{indexed} rows indexed" + (f", failed: {', '.join(failed)}" if failed else "")
                 workers.heartbeat("search-index", "warn" if failed else "ok", detail)
             except Exception as exc:  # noqa: BLE001

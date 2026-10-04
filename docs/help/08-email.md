@@ -1,8 +1,6 @@
 ---
 title: Email — IMAP / SMTP setup
-nav_app: settings
-nav_query:
-  tab: connectors
+nav_app: email
 summary: Connect your IMAP inbox so Yorik reads + classifies incoming mail. Send drafts via SMTP. Multiple accounts supported.
 ---
 
@@ -56,7 +54,7 @@ Yorik never auto-sends. Drafts always require a "Send" click in the email app or
 
 ## Multiple accounts
 
-Add as many as you want. Each has its own connector entry. The briefing combines all; the email app has a per-account filter.
+Add as many as you want. Each has its own entry in the Email app's account list. The briefing combines all; the email app has a per-account filter.
 
 ## Privacy
 

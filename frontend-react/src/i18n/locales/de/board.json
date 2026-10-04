@@ -57,7 +57,7 @@
   "nextAt": "Um {{time}}: {{title}}.",
   "freeDay": "Ein freier Tag.",
   "doneSection": "Erledigt ({{count}})",
-  "nobodyOnWall": "Noch niemand auf der Wand. Jede Person schaltet sich unter Settings → You → „Show me on the household wall“ frei.",
+  "nobodyOnWall": "Noch niemand auf der Wand. Jede Person schaltet sich unter Einstellungen › Privacy & safety › „Show my appointments and to-dos on the family wall“ frei.",
   "doubleTapEdit": "Doppeltipp: bearbeiten",
   "holdStopTimer": "Lange drücken: Zeit stoppen",
   "holdStartTimer": "Lange drücken: Zeit starten",
@@ -68,7 +68,7 @@
   "dragToReorder": "Ziehen, um die Reihenfolge zu ändern",
   "dragReorderTitle": "Ziehen: Reihenfolge ändern",
   "timetable": {
-    "noneYet": "Noch kein Stundenplan: er ist für die Kinder, die auf der Familientafel stehen (Settings → Profile → „Show me on the household wall“).",
+    "noneYet": "Noch kein Stundenplan: er ist für die Kinder, die auf der Familientafel stehen (Einstellungen › Privacy & safety › „Show my appointments and to-dos on the family wall“).",
     "empty": "Noch kein Stundenplan eingetragen.",
     "startBelow": "Unten legst du einen an.",
     "whoStarts": "Eltern oder das Schulkind selbst legen ihn nach dem Anmelden an.",
@@ -93,7 +93,7 @@
     "tasks": "Aufgaben",
     "timetable": "Stundenplan",
     "noPhotos": "Keine Fotos eingerichtet",
-    "noPhotosHint": "Einstellungen → Geräte → {{device}}: ein Immich-Album wählen oder „Fotos von heute“ einschalten. Der Kalender läuft auch ohne.",
+    "noPhotosHint": "Einstellungen › Sign-in & devices › {{device}}: ein Fotoalbum wählen oder „Fotos von heute“ einschalten. Der Kalender läuft auch ohne.",
     "thisDevice": "dieses Gerät",
     "doneTitle": "Die Wand ist danach wieder nur die Wand",
     "done": "Fertig",
@@ -101,7 +101,7 @@
     "recordDinner": "Essen aufnehmen"
   },
   "pin": {
-    "notKiosk": "Diese Wand darf die Namen gerade nicht laden — sie ist noch kein Kiosk-Gerät. Einstellungen → Geräte → dieses Gerät → Kiosk einschalten.",
-    "noPins": "Niemand im Haushalt hat bisher eine Kiosk-PIN gesetzt. Einstellungen → Profil auf einem beliebigen Gerät, PIN setzen, dann noch einmal tippen."
+    "notKiosk": "Diese Wand darf die Namen gerade nicht laden — sie ist noch kein Kiosk-Gerät. Auf diesem Tablet: Einstellungen › Sign-in & devices › „Make this device the family wall“.",
+    "noPins": "Niemand im Haushalt hat bisher eine Kiosk-PIN gesetzt. Einstellungen › Sign-in & devices auf einem beliebigen Gerät, PIN setzen, dann noch einmal tippen."
   }
 }

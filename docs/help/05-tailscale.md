@@ -1,6 +1,8 @@
 ---
 title: Remote access via Tailscale
 nav_app: settings
+nav_query:
+  tab: system
 summary: Set up Tailscale to access Yorik from your phone, laptop, or any other device. No port-forwarding, no DDNS, no public exposure.
 ---
 
@@ -71,7 +73,9 @@ For most users this is overkill — HTTP-over-WireGuard is already E2E encrypted
 
 Tailscale "Users + Sharing": invite family members to your tailnet, OR create a tailnet per user and share specific machines. Free tier allows both.
 
-Each tailnet member gets their own login to Yorik (Settings → Users → Add user). Roles control who sees what.
+Each person gets their own login to Yorik: an admin invites them with a QR code or adds them by hand under **Settings › People**. The role (Adult, Child or Admin) controls who sees what.
+
+Once Tailscale runs on the Yorik machine, **Settings › Health & updates › Phones** shows the address family phones use from outside, and invites point there.
 
 ## The Immich mobile app needs special handling
 
@@ -86,7 +90,7 @@ The Immich app expects to talk to Immich on port 2283. Over Tailscale: set the s
 
 ## What Tailscale does NOT do for you
 
-- **Encrypted backup**: if you want your data backed up off-machine, that's the Yorik backup connector (Settings → Backup). Tailscale only handles connectivity.
+- **Encrypted backup**: if you want your data backed up off-machine, that's **Settings › Backup & storage › Backups**. Tailscale only handles connectivity.
 - **Wake on LAN**: if your Yorik machine sleeps, Tailscale can't wake it. Disable sleep on the host (or use a NAS / always-on box).
 - **Internet for the host**: Tailscale assumes your Yorik machine has its own internet. It's not a tunnel-out service.
 

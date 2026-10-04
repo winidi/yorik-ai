@@ -103,7 +103,7 @@ immich upload --recursive /path/to/photos
 - *"foto vom letzten Wochenende"* — date-range search.
 - *"finde fotos in Berlin"* — location search if your camera embeds GPS.
 
-See `immich` for face-naming workflow, external SSD relocation, and the GPU-acceleration option.
+See `immich` for the face-naming workflow and the GPU-acceleration option. To move the photo library to an external drive, an admin uses **Settings › Backup & storage › Where the photos live** (classic install only).
 
 ---
 
@@ -111,7 +111,7 @@ See `immich` for face-naming workflow, external SSD relocation, and the GPU-acce
 
 - **Tailscale** (`tailscale`) — remote access to your Yorik from phone/laptop outside the LAN. Free, takes 5 minutes.
 - **WhatsApp** (`whatsapp`) — chat ingestion from your phone via the bundled bridge.
-- **Voice** (`voice`) — speaker enrollment so the FAB knows who said what.
-- **Backups** (`backup`) — schedule encrypted backups to an external drive. **Do this before you ingest 600 documents.**
+- **Voice** (`voice`) — talking to Yorik, and your voice sample for the family wall (Settings › Sign-in & devices).
+- **Backups** — **Settings › Backup & storage › Backups** (admins) sets up encrypted backups to a USB drive. **Do this before you ingest 600 documents.**
 
 For each of these, ask the chat: *"wie richte ich Tailscale ein?"* / *"wie funktioniert WhatsApp Bridge?"* / etc. Yorik reads from the shipped docs — answers are grounded, not guessed.

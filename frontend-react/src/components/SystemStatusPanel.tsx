@@ -136,9 +136,11 @@ export function SystemStatusPanel() {
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">System</h1>
+          <h1 className="text-2xl font-semibold">Health & updates</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            What runs behind Yorik. Only admins see this page; everyone else gets one line on Home when something needs attention.
+            Is everything behind Yorik running, is there a new version, and can the
+            phones reach Yorik from outside. Only admins see this page; everyone
+            else gets one line on Home when something needs attention.
           </p>
         </div>
         <button

@@ -6977,12 +6977,15 @@ class _StorageMoveIn(BaseModel):
 
 @app.get("/api/storage")
 def storage_status_route(
-    user: dict[str, Any] = Depends(_auth.current_user),  # noqa: ARG001
+    user: dict[str, Any] = Depends(_auth.require_admin),
 ) -> Dict[str, Any]:
     """Current location of the heavy data subtrees + health of any
-    relocation. Powers the Settings → Storage card."""
+    relocation. Powers the Settings → Backup & storage card. Admin
+    only: it runs `du` over the photo library. `runtime` tells the page
+    whether moving is possible here (the Docker installs keep photos in
+    a volume this can't move)."""
     from . import storage as _st
-    return _st.status()
+    return {**_st.status(), "runtime": os.getenv("YORIK_RUNTIME") or "classic"}
 
 
 @app.get("/api/storage/volumes")
@@ -12161,7 +12164,7 @@ async def compose_send_email(
             status_code=502,
             detail=(
                 f"email send failed: {err}"
-                + (" — open Settings → Connectors → Email (IMAP) to configure SMTP." if needs_install else "")
+                + (" — check the mailbox's sending settings in the Email app (gear icon)." if needs_install else "")
             ),
         )
     save_result = None

@@ -2,5 +2,5 @@
 {% block body %}
 {% if c.subject %}<h1 class="subject">{{ c.subject }}</h1>{% endif %}
 <div class="text">{{ c.text_html | safe }}</div>
-{% if c.add_closing %}<div class="closing">{{ lh.closing }}<div class="sig">{{ lh.signature_name or lh.sender_name }}</div></div>{% endif %}
+{% if c.add_closing %}<div class="closing">{{ lh.closing }}<div class="sig{% if signature %} with-img{% endif %}">{% if signature %}<img class="sig-img" src="{{ signature }}" alt="">{% endif %}{{ lh.signature_name or lh.sender_name }}</div></div>{% endif %}
 {% endblock %}

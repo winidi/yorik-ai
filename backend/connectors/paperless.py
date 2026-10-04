@@ -94,7 +94,7 @@ def paperless(op: str, query: str = "", limit: int = 10, doc_id: Optional[int] =
     if not s["api_key"]:
         return {"ok": False,
                 "error": "Documents aren't connected yet. An admin can reconnect them "
-                         "under Settings → System ('Reconnect documents')."}
+                         "under Settings › Apps & accounts › Documents ('Reconnect')."}
     try:
         if op == "search":
             if not query.strip():

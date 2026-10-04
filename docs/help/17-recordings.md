@@ -10,7 +10,7 @@ Yorik can listen to a whole conversation at the table and write it down afterwar
 
 ## Switching it on
 
-Recordings is an optional app. An admin switches it on under **Settings → Apps**; until then there is no Record button, no tile on the wall and Yorik does not offer to record in chat. Switch it off again the same way.
+Recordings is an optional app. An admin switches it on under **Settings › Apps & accounts**; until then there is no Record button, no tile on the wall and Yorik does not offer to record in chat. Switch it off again the same way.
 
 ## Starting a recording
 
@@ -30,9 +30,9 @@ Tap **Stop** on the pill, or say **"Yorik, the dinner is over."** Yorik joins th
 
 ## Speakers
 
-Yorik separates the voices and tries to put names on them using the voice profiles people enrolled in **Settings → Voice**. Someone without a profile appears as "Speaker 2" (or "Sprecher 2" if you use Yorik in German). Enrolling takes ten seconds of talking and makes the reports much more useful, because tasks then land on the right name.
+Yorik separates the voices and tries to put names on them using the voice samples people recorded under **Settings › Sign-in & devices › Your voice on the family wall**. Someone without a sample appears as "Speaker 2" (or "Sprecher 2" if you use Yorik in German). Recording one takes ten seconds of talking and makes the reports much more useful, because tasks then land on the right name.
 
-Kids without a profile stay anonymous in the transcript.
+Kids without a voice sample stay anonymous in the transcript.
 
 ## The report
 
@@ -50,7 +50,7 @@ For a plain "conversation" recording there is no automatic report; open it and t
 
 - Only the people ticked at the start can open the recording, its transcript and its report. An admin who was not at the table cannot.
 - The audio is kept for 30 days and then deleted; the transcript and the report stay. Change the period with `HOMEOS_RECORDING_RETENTION_DAYS` in `config.env`, or delete a recording yourself with the bin icon.
-- The speech and speaker models run on the CPU of your Yorik box. The first recording downloads them (about 35 MB).
+- The speech and speaker models run on the CPU of your Yorik box. The transcript always comes from Parakeet on this box, whatever speech engine is picked under Settings › AI › Speech recognition. The first recording downloads the speaker models (about 35 MB).
 
 ## Good to know
 

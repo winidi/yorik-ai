@@ -87,12 +87,16 @@ def _adults(exclude: Any = None) -> List[Dict[str, Any]]:
     return [dict(r) for r in rows if str(r["id"]) != str(exclude)]
 
 
-def _notify_adults(actor: Dict[str, Any], title: str, body: str) -> None:
+def _notify_adults(actor: Dict[str, Any], key: str, **params: Any) -> None:
+    """Tell every other adult, each in their own language."""
     from . import notifications
+    from .messages import tr
     for adult in _adults(exclude=actor["id"]):
         try:
-            notifications.create(user_id=str(adult["id"]), kind="emergency_access", title=title, body=body,
-                                 navigate_to="/r/settings")
+            notifications.create(user_id=str(adult["id"]), kind="emergency_access",
+                                 title=tr(f"{key}.title", user_id=adult["id"], **params),
+                                 body=tr(f"{key}.body", user_id=adult["id"], **params),
+                                 navigate_to="/r/settings?tab=privacy")
         except Exception as exc:  # noqa: BLE001 — the access still counts, the log has it
             log.warning("emergency: could not notify %s: %s", adult.get("name"), exc)
 
@@ -131,8 +135,7 @@ def start(user: Dict[str, Any], *, reason: str, hours: int, password: str) -> Di
     _forget(user["id"])
     name = user.get("name") or "Someone"
     log.warning("EMERGENCY ACCESS ON: %s (%s) until %s — %s", name, user["id"], expires.isoformat(), reason)
-    _notify_adults(user, f"{name} hat den Notfall-Zugriff eingeschaltet",
-                   f"Bis {expires.strftime('%d.%m. %H:%M')} sieht {name} alles im Haushalt. Grund: {reason}")
+    _notify_adults(user, "emergency.on", name=name, until=expires.strftime("%d.%m. %H:%M"), reason=reason)
     return {"id": int(rid), "user_id": str(user["id"]), "reason": reason,
             "started_at": started.isoformat(), "expires_at": expires.isoformat(), "ended_at": None}
 
@@ -150,7 +153,7 @@ def end(user: Dict[str, Any], access_id: int) -> bool:
     _forget(user["id"])
     name = user.get("name") or "Someone"
     log.warning("EMERGENCY ACCESS OFF: %s (%s)", name, user["id"])
-    _notify_adults(user, f"{name} hat den Notfall-Zugriff beendet", "Der Zugriff auf alles ist wieder aus.")
+    _notify_adults(user, "emergency.off", name=name)
     return True
 
 

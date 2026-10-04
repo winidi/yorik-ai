@@ -26,11 +26,11 @@ You can also explicitly request *"ich muss da hinfahren"* in chat — same auto-
 
 ## Sharing calendars
 
-In a family household, everybody sees everybody's calendar, read only. It is ordinary sharing: each person finds the tick under Settings → You → Sharing (area "Calendar") and can take it back; admins see nothing extra. New accounts join automatically; for the accounts that already exist, the operator presses **Share calendars in the family** in the same card once and leaves out accounts that are not family. An event marked private shows to the others as "Busy". The Plan calendar of the day planning is never shared.
+In a family household, everybody sees everybody's calendar, read only. It is ordinary sharing: each person finds the tick under **Settings › Privacy & safety › Sharing** (area "Calendar") and can take it back; admins see nothing extra. New accounts join automatically; for the accounts that already exist, the operator presses **Share calendars in the family** in the same card once and leaves out accounts that are not family. An event marked private shows to the others as "Busy". The Plan calendar of the day planning is never shared.
 
 In the week and day view an event can be dragged to another time or day and resized at its top or bottom edge (15-minute steps, Esc cancels). A recurring event changes its time for the whole series.
 
-Multiple users on the same Yorik instance can share calendars. Settings → Calendars → share → pick which users can see / write. Shared events appear with the calendar's tint colour overlaid on your own day.
+Outside a family, or to let someone also change your appointments, use the same **Sharing** card: tick "Calendar" for that person, and "Can edit" if they may change things.
 
 ## Attendees
 
@@ -46,7 +46,7 @@ Chat: *"Wann ist mein nächster Zahnarzt?"* / *"Was ist nächste Woche Dienstag?
 
 ## Categories + colours
 
-Edit a category → pick a colour. Events from each category get that colour stripe on the left. Settings → Task Categories (categories work for events too).
+Every event can have a category: Family, Work, Travel, Health, Personal or Social. Pick it in the event form. Each category has a fixed colour, shown as a stripe on the left of the event. The categories and their colours can't be changed in the app.
 
 ## Bringing your Google calendar (or iCloud, Outlook, Nextcloud)
 

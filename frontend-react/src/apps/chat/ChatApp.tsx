@@ -2609,7 +2609,7 @@ function TemplatePickerCard({
   if (!templates.length) {
     return (
       <div className="mt-2 px-3 py-2 rounded-xl bg-amber-500/[0.06] border border-amber-500/30 max-w-md text-xs text-foreground">
-        No templates available. Install some under Settings → Compose.
+        No templates available.
       </div>
     );
   }

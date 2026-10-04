@@ -205,7 +205,19 @@ def _clean_content(kind: str, raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 def _render(doc: Dict[str, Any], uid: str, *, preview: bool) -> Dict[str, str]:
     lh = _letterhead_of(doc, uid)
     return layouts.render(doc["kind"], lh["data"], doc["recipient"], doc["content"],
-                          logo=lh_mod.logo_data_uri(lh["id"]), preview=preview)
+                          logo=lh_mod.logo_data_uri(lh["id"]), preview=preview,
+                          signature=_signature_of(uid) if doc["kind"] == "letter" else None)
+
+
+def _signature_of(uid: str) -> Optional[str]:
+    """The scanned signature from the writer's profile, if any."""
+    from ..database import conn_ctx
+    try:
+        with conn_ctx() as conn:
+            r = conn.execute("SELECT signature_data_url FROM user_profiles WHERE id = ?", (str(uid),)).fetchone()
+        return (r["signature_data_url"] or None) if r else None
+    except Exception:  # noqa: BLE001 — a letter without the image is still a letter
+        return None
 
 
 def make_pdf(doc: Dict[str, Any], uid: str) -> bytes:

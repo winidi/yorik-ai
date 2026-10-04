@@ -18,6 +18,15 @@ from typing import Any, Optional
 log = logging.getLogger("yorik.messages")
 
 MESSAGES: dict[str, dict[str, str]] = {
+    # ── Emergency access: told to the other adults ───────────────────
+    "emergency.on.title": {"en": "{{name}} turned on emergency access",
+                           "de": "{{name}} hat den Notfall-Zugriff eingeschaltet"},
+    "emergency.on.body": {"en": "Until {{until}}, {{name}} sees everything in the household. Reason: {{reason}}",
+                          "de": "Bis {{until}} sieht {{name}} alles im Haushalt. Grund: {{reason}}"},
+    "emergency.off.title": {"en": "{{name}} ended emergency access",
+                            "de": "{{name}} hat den Notfall-Zugriff beendet"},
+    "emergency.off.body": {"en": "Access to everything is off again.",
+                           "de": "Der Zugriff auf alles ist wieder aus."},
     # ── Pipelines: what needs the person ─────────────────────────────
     "pipelines.attention.maybe": {"en": "Is this the answer?", "de": "Ist das die Antwort?"},
     "pipelines.attention.cannot_check": {"en": "Yorik can't check reliably right now",
@@ -111,8 +120,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "pipelines.why.number": {"en": "mentions {{n}}", "de": "nennt {{n}}"},
     "pipelines.why.word": {"en": "contains “{{w}}”", "de": "enthält „{{w}}“"},
     # ── Write ──
-    "write.einvoice_missing": {"en": "The e-invoice can't be made here yet: the \"ZUGFeRD\" extension isn't installed (Settings → Extensions).",
-                               "de": "Die E-Rechnung kann hier noch nicht erzeugt werden: die Erweiterung „ZUGFeRD“ ist nicht installiert (Settings → Extensions)."},
+    "write.einvoice_missing": {"en": "The e-invoice can't be made here yet: the \"ZUGFeRD\" extension isn't installed (Settings › Letters & invoices › E-invoices).",
+                               "de": "Die E-Rechnung kann hier noch nicht erzeugt werden: die Erweiterung „ZUGFeRD“ ist nicht installiert (Einstellungen › Letters & invoices › E-invoices)."},
     "write.einvoice_failed": {"en": "The e-invoice did not pass the check; no number was used.",
                               "de": "Die E-Rechnung hat die Prüfung nicht bestanden; es wurde keine Nummer vergeben."},
     # ── Pipelines: more ──

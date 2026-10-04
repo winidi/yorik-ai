@@ -84,7 +84,8 @@ Every document is private, for the parents, shared with the household,
 or shared with the business. Filing always asks who may see it: the
 attachment card in the chat and the mail attachment's preview both
 offer "nur mich / die Eltern / die Familie". Your default from
-Settings → You is the highlighted button, and the one that applies
+Settings › Privacy & safety › Default visibility for new documents is
+the highlighted button, and the one that applies
 when a mail attachment from a trusted sender is filed automatically.
 Only the person who owns a private document sees it, and only their
 Yorik searches it. "Teile den Mietvertrag mit der Familie" in the chat
@@ -96,7 +97,7 @@ and their own, never another member's private documents, tasks or
 calendars, unless that member shares them. Admin rights are for
 settings, users and backups.
 
-The one way past that is the **emergency access** in Settings → You,
+The one way past that is **Settings › Privacy & safety › Emergency access**,
 for the adults of the household: hospital, accident, a death. It needs
 a reason in words, your password again, and lasts at most 24 hours.
 While it runs you see every calendar, task, contact, document, bill
@@ -104,13 +105,13 @@ and recording in the house — not other people's mail, WhatsApp or
 chats with Yorik. Every other adult is notified the moment it starts
 and the moment it ends, and the log stays visible to all adults.
 
-Sharing is per area and per person: Settings → You → **Sharing** shows
+Sharing is per area and per person: **Settings › Privacy & safety › Sharing** shows
 every household member with four boxes — tasks, calendar, contacts,
 documents — and a "can edit" box. Tick tasks and calendar for your
 partner and they see what you are up to, while your documents stay
-yours; they do the same for you. For a child's account the admin sets
-the boxes on the child's behalf.
-\n
+yours; they do the same for you. Children's accounts don't have the
+Privacy & safety page.
+
 
 ## Showing Yorik a file in the chat
 
@@ -125,7 +126,7 @@ see the document: Yorik asks "nur du oder die ganze Familie?", and the
 card under your message has the buttons **nur mich**, **die Eltern**
 and **die Familie**. The file goes into your own Paperless account either way;
 "die Eltern" additionally lets the adults of the household open it
-(every account that is not a restricted child account; the Paperless
+(every account with the role Adult or Admin; the Paperless
 group "parents" is kept in step with the roles), "die Familie" everyone
 in the household group, the children's accounts included. You can change it
 later in the Documents app. Anything you do not file

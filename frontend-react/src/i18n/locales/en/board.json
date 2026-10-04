@@ -57,7 +57,7 @@
   "nextAt": "At {{time}}: {{title}}.",
   "freeDay": "A free day.",
   "doneSection": "Done ({{count}})",
-  "nobodyOnWall": "Nobody on the wall yet. Each person turns this on under Settings → You → “Show me on the household wall”.",
+  "nobodyOnWall": "Nobody on the wall yet. Each person turns this on under Settings › Privacy & safety › “Show my appointments and to-dos on the family wall”.",
   "doubleTapEdit": "Double tap: edit",
   "holdStopTimer": "Press and hold: stop timer",
   "holdStartTimer": "Press and hold: start timer",
@@ -68,7 +68,7 @@
   "dragToReorder": "Drag to change the order",
   "dragReorderTitle": "Drag: change order",
   "timetable": {
-    "noneYet": "No timetable yet: timetables are for the children who are on the family board (Settings → Profile → “Show me on the household wall”).",
+    "noneYet": "No timetable yet: timetables are for the children who are on the family board (Settings › Privacy & safety › “Show my appointments and to-dos on the family wall”).",
     "empty": "No timetable filled in yet.",
     "startBelow": "You can start one below.",
     "whoStarts": "Parents or the school child can start one after signing in.",
@@ -93,7 +93,7 @@
     "tasks": "Tasks",
     "timetable": "Timetable",
     "noPhotos": "No photos set up",
-    "noPhotosHint": "Settings → Devices → {{device}}: pick an Immich album or turn on “Photos from today”. The calendar works without them too.",
+    "noPhotosHint": "Settings › Sign-in & devices › {{device}}: pick a photo album or turn on “Photos from today”. The calendar works without them too.",
     "thisDevice": "this device",
     "doneTitle": "Afterwards the wall is just the wall again",
     "done": "Done",
@@ -101,7 +101,7 @@
     "recordDinner": "Record dinner"
   },
   "pin": {
-    "notKiosk": "This wall isn't allowed to load the names right now — it isn't a kiosk device yet. Settings → Devices → this device → turn on Kiosk.",
-    "noPins": "Nobody in the household has set a kiosk PIN yet. Go to Settings → Profile on any device, set a PIN, then tap again."
+    "notKiosk": "This wall isn't allowed to load the names right now — it isn't a kiosk device yet. On this tablet: Settings › Sign-in & devices › “Make this device the family wall”.",
+    "noPins": "Nobody in the household has set a kiosk PIN yet. Go to Settings › Sign-in & devices on any device, set a PIN, then tap again."
   }
 }

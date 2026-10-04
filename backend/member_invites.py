@@ -125,7 +125,7 @@ def create_invite(body: InviteCreate, request: Request, user: dict = Depends(cur
     if not out["join_url"]:
         out["problem"] = ("Yorik doesn't know an address phones can reach. Open Yorik on this "
                           "computer by its network address (not localhost), or connect "
-                          "Tailscale under Settings → System → Phones.")
+                          "Tailscale under Settings › Health & updates › Phones.")
     return out
 
 

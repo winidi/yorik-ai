@@ -376,7 +376,7 @@ function HealthLine({ issues, isAdmin, onOpen }: {
                        "bg-red-500/10 border border-red-500/25",
   );
   return isAdmin
-    ? <button onClick={onOpen} className={cn(cls, "group hover:border-foreground/20")} title="Open Settings → System">{body}</button>
+    ? <button onClick={onOpen} className={cn(cls, "group hover:border-foreground/20")} title="Open Settings › Health & updates">{body}</button>
     : <div className={cls}>{body}</div>;
 }
 

@@ -1,7 +1,7 @@
 {
   "id": "zugferd",
   "name": "ZUGFeRD / Factur-X (German e-invoice)",
-  "description": "Embeds a CrossIndustryInvoice XML payload into Compose-rendered PDFs, producing a PDF/A-3 hybrid that German accounting software (DATEV, Lexware, sevDesk) can ingest automatically. Required for B2B invoices in Germany 2025–2027. Templates opt in via `\"zugferd\": true` + an `invoice_fields` mapping; templates without those flags render plain PDFs untouched.",
+  "description": "Adds the e-invoice data (ZUGFeRD / Factur-X) to the invoices you write in Yorik, so accounting software such as DATEV, Lexware or sevDesk can read them by itself. Required for business-to-business invoices in Germany from 2025 on.",
   "version": "1.0",
   "author": "yorik-core",
   "license": "Apache-2.0",

@@ -1,6 +1,8 @@
 ---
 title: Themes + visual customisation
 nav_app: settings
+nav_query:
+  tab: profile
 summary: "Light / dark / system mode; future: per-app themes via the yorik-community marketplace. Pre-alpha state — minimal customisation today."
 ---
 
@@ -8,7 +10,7 @@ summary: "Light / dark / system mode; future: per-app themes via the yorik-commu
 
 ## What works today
 
-Settings → Profile → **Theme**: pick **Light**, **Dark**, or **System** (follows OS preference).
+**Settings › Profile › Theme**: pick **Light**, **Dark**, or **System** (follows OS preference). The same page has **Your colour and photo**: the colour that marks you on the family wall, in the calendar and wherever a person is shown.
 
 That's it for alpha. Yorik ships one design system (Tailwind + shadcn/ui primitives) and the theme toggle only swaps the colour palette.
 

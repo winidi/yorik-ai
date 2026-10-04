@@ -1,7 +1,7 @@
 ---
 title: Briefing — your daily summary
 nav_app: briefing
-summary: Morning / evening summary of today's events, tasks, bills, photos, email. Customisable, runs locally, never sends data out.
+summary: Morning / evening summary of today's events, tasks, bills, photos, email. Built from templates, runs locally, never sends data out.
 ---
 
 # Briefing — your daily summary
@@ -25,11 +25,11 @@ The Briefing app is your at-a-glance view: what's coming today, what's overdue, 
 
 ## Generating a briefing on demand
 
-Ask Yorik in chat: *"gib mir einen Überblick über meinen Tag"* — produces the briefing inline. The briefing is also pre-rendered every morning at a fixed hour (Settings → Briefing → wake-up time).
+Ask Yorik in chat: *"give me an overview of my day"* — produces the briefing inline. Every night at 03:00 Yorik also keeps a copy of the day before for each person, so you can page back to earlier days in the Briefing app.
 
 ## Customising
 
-Settings → Briefing → toggle sections on/off, set the wake-up time, add custom sections (community-contributed briefing templates). Each section can be hidden if you find it noisy.
+There is no settings page for the briefing. Its sections come from briefing templates (the `briefings/` folder of your Yorik install), and a section with nothing to show is left out by itself.
 
 ## Voice briefing
 

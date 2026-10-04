@@ -88,6 +88,7 @@ def _load_corpus() -> dict[str, dict[str, Any]]:
 # without a topic. Keep tight — better to return "no match" and let the
 # LLM pick from available_topics than to silently route to the wrong doc.
 _TOPIC_KEYWORDS = {
+    "settings":        ["settings", "einstellungen", "einstellung", "setting", "option", "optionen", "menu", "menü", "sidebar", "seitenleiste"],
     "first-run":       ["start", "first", "begin", "anfang", "anfangen", "neu", "install", "installation", "setup", "onboarding", "loslegen", "erst", "profil"],
     "llm-setup":       ["llm", "ki", "ai", "model", "modell", "ollama", "qwen", "openai", "api", "key", "endpoint", "schluessel", "schlüssel", "anthropic", "cloud", "gpt", "claude", "mistral"],
     "paperless":       ["paperless", "document", "documents", "dokument", "dokumente", "scan", "ocr", "pdf", "rechnung scan", "post"],

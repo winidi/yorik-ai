@@ -33,7 +33,7 @@ export function SetupChecklist() {
 
   function go(step: Step) {
     switch (step.action) {
-      case "profile":  navigate("/settings"); break;
+      case "profile":  navigate("/settings?tab=profile"); break;
       case "chat":     navigate("/chat"); break;
       case "phone":    setModal("phone"); break;
       case "invite":   setModal("invite"); break;

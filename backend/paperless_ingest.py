@@ -863,9 +863,8 @@ def search_hybrid(query: str, k: int = 8,
     creds = creds_override or _paperless_settings()
     if not creds.get("api_key"):
         legs["fts"]["error"] = (
-            "No Paperless API token configured. Visit Settings → Connectors → "
-            "Paperless and paste an admin token, or run onboarding to provision "
-            "a per-user token."
+            "Documents aren't connected for this person yet. An admin can "
+            "reconnect them under Settings › Apps & accounts › Documents."
         )
 
     # ── Fan out — skip a leg if its pre-flight already errored ──────────

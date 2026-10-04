@@ -1237,7 +1237,7 @@ def _run_backup_sync() -> dict[str, Any]:
         creds = credential_store.get("backup_passphrase") or {}
         passphrase = creds.get("passphrase")
         if not passphrase:
-            raise RuntimeError("backup passphrase not set — configure it in Settings → Backup")
+            raise RuntimeError("backup passphrase not set — set it in Settings › Backup & storage")
 
         # Target check.
         avail = target_available(cfg["target_path"])
@@ -1277,7 +1277,7 @@ def _run_backup_sync() -> dict[str, Any]:
             # file stays; photos and documents in it are still worth
             # something). Not pruned against: it doesn't count as good.
             error = ("The database could not be copied into the backup "
-                     "(see Settings → Logs). The file was written, but it "
+                     "(see Settings › Developer › Logs). The file was written, but it "
                      "would not bring back calendars, tasks or contacts.")
             _finish_history(history_id, "failed", error, duration,
                             size_bytes, filename, includes)

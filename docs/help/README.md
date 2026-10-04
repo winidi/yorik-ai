@@ -32,6 +32,7 @@ The skill loads all files at boot, keys them by filename (`01-first-run.md` → 
 | `recordings` | Recording a dinner or meeting, speakers, the report, adopting tasks, privacy | Full |
 | `family-board` | The wall tablet: modes, who appears, colours and photos, ticking tasks | Full |
 | `troubleshooting` | Common errors + fixes | Full |
+| `settings` | Settings at a glance: Start here and the three groups, what is on each page | Full |
 
 ## Authoring style
 

@@ -1,5 +1,5 @@
 /**
- * Settings → Households (host-only).
+ * Settings → Maintenance → Hosted families (the owner only, host only).
  *
  * The operator's "I want to invite my mom" UI. Lists every tenant on
  * this box, surfaces the current invite status per tenant, and lets
@@ -44,6 +44,9 @@ interface CreateResponse {
   invite_token:  string;
   expires_at:    string;
   display_label: string | null;
+  /** false when the family's Yorik didn't start (the link then leads nowhere yet). */
+  unit_started?: boolean;
+  unit_warning?: string | null;
 }
 
 interface Props {
@@ -103,11 +106,12 @@ export function HouseholdsTab({ toast }: Props) {
     <div className="max-w-3xl space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold">Households</h2>
+          <h2 className="text-xl font-semibold">Hosted families</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Each household gets its own isolated Yorik instance sharing this
-            box's Immich + Paperless. Inviting a household creates a fresh
-            tenant database and a one-time invite link.
+            Run a separate Yorik for <strong>another</strong> family on this computer
+            (grandparents, friends): their own data, their own sign-ins, sharing only
+            the photo and document services. To add someone to <em>your</em> family,
+            use Household › People instead.
           </p>
         </div>
         <button
@@ -153,7 +157,11 @@ export function HouseholdsTab({ toast }: Props) {
           onCreated={result => {
             setShowCreate(false);
             setCreatedInvite(result);
-            toast(`Household '${result.tenant_name}' created`, "success");
+            if (result.unit_started === false || result.unit_warning) {
+              toast(`'${result.tenant_name}' was created, but its Yorik didn't start: ${result.unit_warning || "unknown reason"}. The link won't work until it runs.`, "error");
+            } else {
+              toast(`Family '${result.tenant_name}' created`, "success");
+            }
           }}
           toast={toast}
         />

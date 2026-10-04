@@ -18,9 +18,9 @@ Every chat turn carries a correlation ID (`corr`). When something breaks, grab t
 
 ### Chat is silent / spins forever
 
-Almost always the LLM. Check Settings → LLM:
+Almost always the LLM. Check **Settings › AI › Chat model** (admins):
 
-- Is the endpoint reachable? Click **Test**. Red = LLM container down or URL wrong.
+- Does it say the model is running and answering? If not, open **Use a different model** and click **Test**. Red = LLM container down or URL wrong.
 - Is the model name the actual served model? Some endpoints rename quietly.
 - If you swapped LLM recently and the UI says "live-reload": that's the next-chat-turn promise. First fresh turn picks up the change.
 
@@ -36,7 +36,7 @@ Likely a backend startup error. The shell renders even when the API is broken be
 
 ### Paperless / Immich icons yellow
 
-The container couldn't be reached. `docker ps` to see if they're running. `docker logs yorik-paperless-web` / `yorik-immich-server` for what's wrong. Common cause: low memory — Immich's machine-learning container alone wants ~4 GB.
+The container couldn't be reached. Admins see the same at a glance in **Settings › Health & updates** (the Documents chip); if Paperless runs but Yorik lost its connection, press **Repair › Reconnect documents** there. Otherwise `docker ps` to see if they're running. `docker logs yorik-paperless-web` / `yorik-immich-server` for what's wrong. Common cause: low memory — Immich's machine-learning container alone wants ~4 GB.
 
 ### Voice button does nothing
 
@@ -44,7 +44,7 @@ Browser denied microphone access. Re-grant it via the browser's URL-bar permissi
 
 ### Invoice PDF missing the ZUGFeRD XML
 
-Extension not installed OR Yorik wasn't restarted after install. Settings → Extensions: status should be **active**, not **installed, restart pending**. Restart and try again.
+The extension isn't installed. Settings › Letters & invoices › E-invoices and other extras (admins): ZUGFeRD should say **active**. If it doesn't, click **Install**; it works right away, no restart.
 
 ### "Couldn't reach the community catalogue"
 
@@ -52,7 +52,7 @@ The yorik-community repo's catalogue.json — either offline or your `YORIK_COMM
 
 ## Restart sequence
 
-Soft restart (picks up code edits, env changes, extension installs):
+Soft restart (picks up code edits and env changes; extensions don't need one):
 ```bash
 bash scripts/restart-uvicorn.sh
 ```

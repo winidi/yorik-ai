@@ -2,8 +2,8 @@
 title: Connecting / changing the LLM
 nav_app: settings
 nav_query:
-  tab: llm
-summary: How to point Yorik at your LLM — local (Ollama, llama-swap, LM Studio, vLLM) or cloud (OpenAI, Anthropic via litellm). Detect button, API key field, restart-free swap.
+  tab: ai
+summary: How to point Yorik at your LLM — local (Ollama, llama-swap, LM Studio, vLLM) or cloud (OpenAI, Anthropic via litellm). Settings › AI, Scan now button, API key field, restart-free swap.
 ---
 
 # Connecting / changing the LLM
@@ -12,10 +12,11 @@ Yorik talks to any OpenAI-compatible chat-completions endpoint. Local runs the m
 
 ## The fast path — local LLM auto-detect
 
-Settings → **LLM**. Click **Scan now**.
+**Settings › AI › Chat model** shows whether Yorik's model is running and answering. To change it, open **Use a different model** below it (folded; it opens by itself when the model is offline). In **Find a server on this computer**, click **Scan now**.
 
-Yorik probes five common ports in parallel (~1 second total):
+Yorik probes the common ports in parallel (~1 second total):
 
+- `:8082` Yorik's own server
 - `:11434` Ollama
 - `:8080` llama-swap
 - `:1234` LM Studio
@@ -33,7 +34,7 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama pull robit/qwen3.5-9b-r7-research-vision:q4km
 ```
 
-Then in **Settings → LLM**:
+Then in **Settings › AI › Use a different model › Enter an address**:
 
 1. **Endpoint URL**: `http://127.0.0.1:11434/v1`
 2. Click **Test** — green check means it's reachable.
@@ -66,13 +67,13 @@ The key persists across restarts. To clear it: click **Clear** next to the input
 
 Yorik is tuned for Qwen 3.5 9B (and the MTP variant). Other tool-calling chat models work; very small (<3B) models tend to invent tool arguments.
 
-## What `Detect` doesn't find
+## What **Scan now** doesn't find
 
 - Endpoints on non-standard ports (you'll need manual entry)
-- Cloud providers (no port to probe — Detect is local only)
+- Cloud providers (no port to probe — the scan is local only)
 - LM Studio in "server mode disabled" state (start the server first)
-- Anything behind auth — Detect doesn't send the API key
+- Anything behind auth — the scan doesn't send the API key
 
 ## Changing models later
 
-Settings → LLM → **Detect** or **Test** at any time. The change applies on the next chat turn. No restart.
+Settings › AI › Use a different model → **Scan now** or **Test** at any time. The change applies on the next chat turn. No restart.

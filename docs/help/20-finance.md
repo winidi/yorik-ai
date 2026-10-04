@@ -10,7 +10,7 @@ Yorik can connect to a German bank account via FinTS (the standard German banks 
 
 ## Switching it on
 
-Finance is an optional app. An admin switches it on under **Settings → Apps**; until then there is no Finance tile in the dock and Yorik does not offer to look up transactions in chat.
+Finance is an optional app. An admin switches it on under **Settings › Apps & accounts**; until then there is no Finance tile in the dock and Yorik does not offer to look up transactions in chat.
 
 ## Connecting an account
 

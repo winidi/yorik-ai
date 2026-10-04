@@ -162,7 +162,7 @@ export function DevicesTab({ toast }: Props) {
   }
 
   async function revoke(sid: string) {
-    if (!confirm("Revoke this session? The device will be logged out immediately.")) return;
+    if (!confirm("Sign this device out? It needs your password or PIN to get back in.")) return;
     setBusy(b => ({ ...b, [sid]: true }));
     try {
       await api.delete(`/api/devices/${sid}`);
@@ -233,10 +233,11 @@ export function DevicesTab({ toast }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold mb-1">Devices</h2>
+        <h2 className="text-lg font-semibold mb-1">Where you're signed in</h2>
         <p className="text-sm text-muted-foreground">
-          Browsers, tablets, and phones currently signed in as you.
-          Revoke a session to sign that device out instantly.
+          Browsers, tablets and phones signed in as you. Sign one out if you lost
+          it or no longer use it. Admins also set up the family wall tablet here,
+          on the tablet itself.
         </p>
       </div>
 
@@ -358,20 +359,23 @@ function DeviceCard({
             className="h-8 px-2 inline-flex items-center gap-1 rounded-md text-xs text-rose-500 hover:bg-rose-500/10 disabled:opacity-50"
             title="Sign out this device"
           >
-            <Trash2 className="w-3.5 h-3.5" /> Revoke
+            <Trash2 className="w-3.5 h-3.5" /> Sign out
           </button>
         </div>
       </div>
 
-      {/* Kiosk toggle — admin only */}
-      {isAdmin && !editing && (
+      {/* Kiosk toggle — admin only, and only on the device itself: turned
+          on from another computer it never learned the tablet's id, the
+          half state the wall once died of. An existing kiosk can still be
+          edited from anywhere. */}
+      {isAdmin && !editing && (device.is_kiosk || device.is_current) && (
         <div className="flex items-center gap-2">
           <button
             onClick={onStartEdit}
             disabled={busy}
             className="h-7 px-2.5 inline-flex items-center gap-1 rounded-md border border-border text-xs hover:bg-muted disabled:opacity-50"
           >
-            {device.is_kiosk ? "Edit kiosk settings" : "Make this a kiosk"}
+            {device.is_kiosk ? "Edit family wall settings" : "Make this device the family wall"}
           </button>
           {/* Open the kiosk wall — the auto-redirect on cold load only
               fires once per app boot, so this gives a no-fail manual
@@ -463,7 +467,7 @@ function DeviceCard({
             </select>
             {albums.length === 0 && (
               <div className="text-xs text-muted-foreground mt-1">
-                No albums visible. Configure Immich under Settings → Connectors first.
+                No albums visible. Make an album in Photos first, then come back.
               </div>
             )}
           </div>

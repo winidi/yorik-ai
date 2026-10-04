@@ -21,7 +21,7 @@ const TOPIC_FOR_APP: Record<string, string> = {
   docs: "paperless", compose: "write", write: "write", photos: "immich",
   whatsapp: "whatsapp", email: "email", contacts: "contacts", briefing: "briefing",
   board: "family-board", recordings: "recordings", finance: "finance",
-  pipelines: "pipelines", settings: "first-run",
+  pipelines: "pipelines", settings: "settings",
 };
 
 export function openHelp(topic?: string) {

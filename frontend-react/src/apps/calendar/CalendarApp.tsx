@@ -2606,7 +2606,7 @@ function TravelTimeAnnouncement({ events }: { events: CalendarEvent[] }) {
               target="_blank" rel="noopener"
               className="underline hover:text-foreground"
             >OpenRouteService API key</a>{" "}
-            under Settings → Connectors → Maps.
+            under Settings › Apps & accounts (Maps).
           </span>
         </div>
         <button

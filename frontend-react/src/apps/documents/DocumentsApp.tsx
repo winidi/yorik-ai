@@ -305,7 +305,7 @@ export function DocumentsApp() {
         // legitimate "everything in sync" case below.
         toast(
           "No documents came back from the archive. If you expected some, an admin " +
-          "can try 'Reconnect documents' under Settings → System."
+          "can press Reconnect under Settings › Apps & accounts › Documents."
         );
       } else if ((r.ingested ?? 0) === 0 && (r.missing ?? 0) === 0) {
         toast(`Already in sync — Paperless has ${r.checked} document(s), all mirrored locally.`);

@@ -60,7 +60,10 @@ def _date_text(value: Any, country: str) -> str:
 
 
 def render(kind: str, letterhead: Dict[str, Any], recipient: Optional[Dict[str, Any]], content: Optional[Dict[str, Any]], *,
-           logo: Optional[str] = None, preview: bool = False, today: Optional[date] = None) -> Dict[str, str]:
+           logo: Optional[str] = None, preview: bool = False, today: Optional[date] = None,
+           signature: Optional[str] = None) -> Dict[str, str]:
+    """`signature`: the writer's scanned signature (a data:image URL from
+    Settings → Letters & invoices), shown above the typed name."""
     if kind not in KINDS:
         raise ValueError(f"unknown kind {kind!r}")
     lh = clean_letterhead(letterhead)
@@ -116,8 +119,10 @@ def render(kind: str, letterhead: Dict[str, Any], recipient: Optional[Dict[str, 
     # Invoices and quotes always carry the business head; a letter from a
     # person is a private letter (see letterhead.is_private).
     private = kind == "letter" and is_private(lh)
+    if signature and not re.match(r"^data:image/(png|jpeg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$", signature):
+        signature = None
     html = template.render(kind=kind, lh=lh, to=to, c=c, info=[(a, b) for a, b in info if a], css=css, logo=logo,
-                           preview=preview, title=title, private=private)
+                           preview=preview, title=title, private=private, signature=signature)
     cols = _env.get_template("_footer_cols.html.j2").render(lh=lh, private=private)
     footer = _env.get_template("footer.html.j2").render(lh=lh, font_css=font_css, cols=cols)
     return {"html": html, "footer_html": footer, "title": title}
