@@ -441,10 +441,10 @@ function DeveloperPage({ toast, section, onSection, hostOnlyHidden }: {
   const active = sections.some(d => d.id === section) ? section! : "logs";
   return (
     <div>
-      <p className="text-sm text-muted-foreground mb-4">
+      <PageHeader title="Developer">
         For finding out what went wrong, and for extending Yorik. Nothing here
         is needed for everyday use.
-      </p>
+      </PageHeader>
       <div className="flex flex-wrap gap-1.5 mb-6">
         {sections.map(d => (
           <button
@@ -3725,7 +3725,7 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
                 <div className="text-xs text-muted-foreground mt-2">Address</div>
                 <div className="font-mono text-xs truncate text-muted-foreground">{cfg.base_url}</div>
               </div>
-              <div className="shrink-0 text-right">
+              <div className="shrink-0 text-right flex flex-col items-end gap-0.5">
                 {cfg.reachable
                   ? <span className="inline-flex items-center gap-1 text-emerald-600 text-xs"><CheckCircle2 className="w-3.5 h-3.5" /> reachable</span>
                   : <span className="inline-flex items-center gap-1 text-red-500 text-xs"><AlertCircle className="w-3.5 h-3.5" /> offline</span>}
