@@ -522,7 +522,10 @@ def audio_health(audio: np.ndarray) -> Dict[str, Any]:
     out.update(sound_until=sound_until, silent_tail=round(seconds - sound_until, 1),
                silent_share=round(1 - len(sound_seconds) / len(loud), 2))
     if not sound_seconds or out["silent_share"] >= 0.98:
-        out["note"] = "the recording carries no sound — the microphone delivered nothing"
+        m, sec = divmod(int(sound_until), 60)
+        moments = f" apart from a few moments (the last at {m}:{sec:02d})" if sound_seconds else ""
+        out["note"] = (f"the recording carries no sound{moments} — the microphone delivered nothing "
+                       f"(phone locked or switched away, another app took the microphone?)")
     elif out["silent_tail"] >= SILENT_TAIL_S and out["silent_share"] >= 0.5:
         m, sec = divmod(int(sound_until), 60)
         out["note"] = (f"only silence arrived after {m}:{sec:02d} — the microphone stopped delivering "
