@@ -52,6 +52,14 @@ nicht nix kein keine is isses zeig such find weißt sagen sag mal man ne nen uns
 alles alle mail mails email e-mail whatsapp chat chats nachricht nachrichten papier papiere dokument dokumente
 sachen sache ding dinge zeug hallo hi dieses diese dieser geschickt geschrieben bekommen also hab
 what when where who which how is are was were the a an of to for in on at my your did does do show find
+erinnerst erinnere erinnern erinnert zeigen zeigst wurde wurden worden vom ging gegangen gesagt sagt kam kommt
+kommen steht stehen stand lies lesen drin drinnen darin darum dazu davon dabei letzte letzten letztes letzer
+letzes zuletzt neueste neuesten aktuelle aktuellen irgendwer irgendwas irgendwo irgendwann jemand dass muss
+musst müssen jetzt nich nicht wollte wollten will willst habe hatte gibts gabs neues neue neuer schon wieder
+wegen bzw bisschen bissl heut heute gestern vorgestern woche monat jahr tag tage mir mal eben finde finden
+suche suchen gesucht geschaut angesehen kannst könntest würdest wo was wie wer wen wem lief läuft eigentlich
+remember remind showed show tell told sent got get give last latest recent recently someone something
+anything anyone wanted want need needs must should could would please again yesterday week month year
 """.split())
 
 
@@ -63,26 +71,117 @@ def keywords(message: str) -> str:
     return " ".join(kept[:6]) or (message or "").strip()
 
 
-def for_model(raw: Dict[str, Any], query: str, per_source: int = 3) -> Dict[str, Any]:
+_MONTHS = {m: i + 1 for i, m in enumerate(
+    "januar februar märz april mai juni juli august september oktober november dezember".split())}
+_MONTHS.update({m: i + 1 for i, m in enumerate(
+    "january february march april may june july august september october november december".split())})
+_MONTHS.update({"jan": 1, "feb": 2, "mär": 3, "mrz": 3, "mar": 3, "apr": 4, "jun": 6, "jul": 7, "aug": 8,
+                "sep": 9, "sept": 9, "okt": 10, "oct": 10, "nov": 11, "dez": 12, "dec": 12})
+_DAY = re.compile(r"(?<!\d)(\d{1,2})\.(\d{1,2})\.(\d{2,4})?(?!\d)")
+_MONTH_WORD = re.compile(r"\b(?:im|in|vom|von|seit|ab|anfang|ende|mitte)?\s*(" + "|".join(sorted(_MONTHS, key=len, reverse=True))
+                         + r")\b(?:\s+(\d{4}))?", re.I)
+_RECENT = re.compile(r"\b(?:letzte[nrs]?|letzes|neueste[nrs]?|aktuelle[nrs]?|zuletzt|jüngste[nrs]?|"
+                     r"last|latest|most\s+recent|newest)\b", re.I)
+def _days(t, n: int):
+    from datetime import timedelta
+    return t - timedelta(days=n)
+
+
+def _last_month(t):
+    from datetime import date, timedelta
+    end = date(t.year, t.month, 1) - timedelta(days=1)
+    return date(end.year, end.month, 1), end
+
+
+_RELATIVE = [
+    (re.compile(r"\bvorgestern\b|\bday before yesterday\b", re.I), lambda t, n: (_days(t, 2), _days(t, 2))),
+    (re.compile(r"\bgestern\b|\byesterday\b", re.I), lambda t, n: (_days(t, 1), _days(t, 1))),
+    (re.compile(r"\b(?:letzte|vergangene|vorige)\s+woche\b|\blast\s+week\b", re.I),
+     lambda t, n: (_days(t, 7 + t.weekday()), _days(t, 1 + t.weekday()))),
+    (re.compile(r"\b(?:letzten|vergangenen|vorigen)\s+monat\b|\blast\s+month\b", re.I), lambda t, n: _last_month(t)),
+    (re.compile(r"\b(?:letzte[ns]?|vergangene[ns]?)\s+(\d+)\s+tage[n]?\b|\blast\s+(\d+)\s+days\b", re.I),
+     lambda t, n: (_days(t, int(n or 7)), t)),
+]
+
+
+def time_scope(message: str, today=None) -> Dict[str, Any]:
+    """What the question says about *when*, as search filters: a day or
+    month ("die Überweisung vom 2.7.", "im September"), a relative span
+    ("gestern", "letzte Woche"), and whether the newest matching rows are
+    wanted ("die letzten Mails von Beate"). {} when nothing is said.
+    Relative spans need no parser library: the household asks in a
+    handful of ways (search test set 2026-10-05)."""
+    from datetime import date, timedelta
+    t = today or date.today()
+    today = t
+    text = message or ""
+    out: Dict[str, Any] = {}
+    m = _DAY.search(text)
+    if m:
+        d, mo, y = int(m.group(1)), int(m.group(2)), m.group(3)
+        year = int(y) + (2000 if y and len(y) == 2 else 0) if y else today.year
+        try:
+            day = date(year, mo, d)
+            # A day that has not come yet is what the message is about
+            # ("nen Termin am 1.11. geschickt"), not when it was sent.
+            if day <= today + timedelta(days=1):
+                out["date_from"] = out["date_to"] = day.isoformat()
+        except ValueError:
+            pass
+    if "date_from" not in out:
+        for rx, span in _RELATIVE:
+            mm = rx.search(text)
+            if mm:
+                n = next((g for g in mm.groups() if g), None)
+                a, b = span(t, n)
+                out["date_from"], out["date_to"] = a.isoformat(), b.isoformat()
+                break
+    if "date_from" not in out:
+        mm = _MONTH_WORD.search(text)
+        if mm and mm.group(1).lower() in _MONTHS and (mm.group(2) or re.search(
+                r"\b(?:im|vom|von|seit|ab|anfang|ende|mitte)\s+" + re.escape(mm.group(1)), text, re.I)):
+            mo = _MONTHS[mm.group(1).lower()]
+            year = int(mm.group(2)) if mm.group(2) else (today.year if mo <= today.month else today.year - 1)
+            first = date(year, mo, 1)
+            nxt = date(year + (mo == 12), mo % 12 + 1, 1)
+            out["date_from"], out["date_to"] = first.isoformat(), (nxt - timedelta(days=1)).isoformat()
+    if _RECENT.search(text):
+        out["recent"] = True
+    return out
+
+
+PER_SOURCE_FOR_MODEL = 5
+
+
+def for_model(raw: Dict[str, Any], query: str, per_source: int = PER_SOURCE_FOR_MODEL) -> Dict[str, Any]:
     """The search result as the model sees it: at most `per_source` hits
     per source with short snippets, sources whose titles carry a query
-    word first. The whole list overran the 6000-character cut, and the
-    recording "Regeln für Yorik" fell off behind twenty mail and
-    WhatsApp hits (rerun 2026-09-27)."""
+    word first, then the source with the strongest hit. The whole list
+    overran the 6000-character cut, and the recording "Regeln für Yorik"
+    fell off behind twenty mail and WhatsApp hits (rerun 2026-09-27).
+    Five per source since 2026-10-05: with three, a hit on place 4 of
+    its source was lost for good (30 of 100 test questions)."""
     words = [w for w in re.findall(r"\w+", (query or "").lower()) if len(w) > 3]
 
     def title_hits(hits: List[Dict[str, Any]]) -> int:
         return sum(1 for h in hits for w in words if w in str(h.get("title") or "").lower())
 
+    def best(hits: List[Dict[str, Any]]) -> float:
+        return max((float(h.get("_score") or 0) for h in hits), default=0.0)
+
     results = raw.get("results") or {}
-    order = sorted((k for k, v in results.items() if v), key=lambda k: -title_hits(results[k]))
+    if raw.get("reranked"):
+        order = [k for k, v in results.items() if v]       # the reranker's order of sources
+    else:
+        order = sorted((k for k, v in results.items() if v), key=lambda k: (-title_hits(results[k]), -best(results[k])))
     out: Dict[str, Any] = {}
     for k in order:
         out[k] = [{kk: (str(vv)[:160] if kk == "snippet" else vv)
-                   for kk, vv in h.items() if kk != "thumbnail_url" and vv not in (None, "")}
+                   for kk, vv in h.items()
+                   if kk != "thumbnail_url" and not kk.startswith("_") and vv not in (None, "")}
                   for h in results[k][:per_source]]
     shown = sum(len(v) for v in out.values())
-    res = {**{k: v for k, v in raw.items() if k != "results"}, "results": out}
+    res = {**{k: v for k, v in raw.items() if k not in ("results", "reranked")}, "results": out}
     if shown < (raw.get("total") or 0):
         res["more"] = f"{raw['total'] - shown} further hits not shown; search more specifically to see them."
     return res
@@ -147,16 +246,97 @@ async def variants(message: str, query: str, llm: Any = None) -> List[str]:
     return out[:3]
 
 
-def merge(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Several search results as one: the first run's hits first, each
-    hit once per source."""
-    merged: Dict[str, List[Dict[str, Any]]] = {}
-    for run in runs:
+RRF_K = 20
+VARIANT_WEIGHT = 0.9       # a hit for the model's other wording counts a little less than one for the user's words
+EXTRA_VOTE = 0.001         # further runs' votes for the same hit only break ties
+
+
+def _twin_key(h: Dict[str, Any]) -> Any:
+    """Hits that are the same thing again, across runs: a mail by sender
+    and subject (reply prefixes, numbers off), a booking by party, amount
+    and purpose, a WhatsApp line by chat and text."""
+    src = h.get("source")
+    if src == "email":
+        subj = re.sub(r"^(?:(?:re|aw|wg|fwd?|fw|antw|erinnerung|reminder)\s*:\s*)+", "", str(h.get("title") or "").lower())
+        subj = re.sub(r"\s+", " ", re.sub(r"\d+", "#", subj)).strip()
+        body = re.sub(r"\W+", " ", str(h.get("snippet") or "").lower())[:60]
+        return (src, str(h.get("subtitle") or "").lower(), subj, body) if subj else None
+    if src == "bank":
+        return (src, str(h.get("title") or "").lower(), str(h.get("subtitle") or "").split("·")[-1].strip(),
+                re.sub(r"\d+", "#", str(h.get("snippet") or "").lower())[:40])
+    if src == "whatsapp":
+        text = re.sub(r"\s+", " ", str(h.get("snippet") or "").lower())
+        return (src, h.get("chat_jid"), text[:80]) if len(text) > 20 else None
+    return None
+
+
+def merge(runs: List[Dict[str, Any]], weights: Optional[List[float]] = None) -> Dict[str, Any]:
+    """Several search results as one: every run votes for its hits by
+    rank (reciprocal rank fusion, the user's own words weighing most),
+    each hit once per source, twins folded into `duplicates`. Until
+    2026-10-05 the first run's hits simply came first, so a variant's
+    exact hit sat behind five weak ones."""
+    weights = weights or [1.0] + [VARIANT_WEIGHT] * (len(runs) - 1)
+    best: Dict[str, Dict[Any, float]] = {}
+    total: Dict[str, Dict[Any, float]] = {}
+    rows: Dict[str, Dict[Any, Dict[str, Any]]] = {}
+    for run, weight in zip(runs, weights):
         for source, hits in (run.get("results") or {}).items():
-            have = merged.setdefault(source, [])
-            ids = {h.get("id") for h in have}
-            have.extend(h for h in hits if h.get("id") not in ids)
+            b, t, r = best.setdefault(source, {}), total.setdefault(source, {}), rows.setdefault(source, {})
+            for rank, h in enumerate(hits, 1):
+                k = h.get("id")
+                r.setdefault(k, h)
+                vote = weight / (RRF_K + rank)
+                b[k] = max(b.get(k, 0.0), vote)
+                t[k] = t.get(k, 0.0) + vote
+    # The best single placement counts, further votes only break ties: a
+    # plain sum let three paraphrases agreeing on a newsletter outvote
+    # the one run that had the right mail first (GoHighLevel, AfD Peine
+    # cases, 2026-10-05). A variant's first hit lands about fourth.
+    score: Dict[str, Dict[Any, float]] = {
+        src: {k: b[k] + EXTRA_VOTE * (total[src][k] - b[k]) for k in b} for src, b in best.items()}
+    merged: Dict[str, List[Dict[str, Any]]] = {}
+    for source, s in score.items():
+        out: List[Dict[str, Any]] = []
+        seen: Dict[Any, Dict[str, Any]] = {}
+        for k in sorted(s, key=lambda x: -s[x]):
+            h = {**rows[source][k], "_score": round(s[k], 4)}
+            tk = _twin_key(h)
+            if tk is not None and tk in seen:
+                seen[tk]["duplicates"] = seen[tk].get("duplicates", 0) + 1 + h.get("duplicates", 0)
+                continue
+            if tk is not None:
+                seen[tk] = h
+            out.append(h)
+        merged[source] = out
     return {**runs[0], "results": merged, "total": sum(len(v) for v in merged.values())}
+
+
+async def prepare(message: str, user: Dict[str, Any]) -> tuple[str, Dict[str, str]]:
+    """The search words of a question, typos in names corrected against
+    the person's own senders and chats ({typo: word}, empty when none)."""
+    import asyncio
+    from backend import search_vocab
+    query = keywords(message)
+    fixes = await asyncio.to_thread(search_vocab.correct, query.split(), user.get("id"))
+    return search_vocab.apply(query, fixes), fixes
+
+
+async def search(message: str, query: str, also: List[str], user: Dict[str, Any]) -> Dict[str, Any]:
+    """The chat's search for one question: the user's words and the
+    model's other wordings, each across every source, the whole question
+    for the meaning branch, the question's time scope as filter; one
+    merged result. The search test set (search-eval/eval.py) calls this
+    too, so what is measured is what the chat does."""
+    import asyncio
+    from backend.search_routes import universal_search
+    from backend import search_rerank
+    scope = time_scope(message)
+    runs = await asyncio.gather(
+        universal_search(q=query, meaning=message, user=user, **scope),
+        *(universal_search(q=v, user=user, **scope) for v in also))
+    merged = merge(list(runs))
+    return await asyncio.to_thread(search_rerank.rerank, message, merged)
 
 
 def should_search(message: str) -> bool:
@@ -179,16 +359,15 @@ async def run(message: str, *, user_id: Any, role: Optional[str], llm: Any = Non
     eff = "admin" if role == "platform_admin" and "admin" in perms else role
     if skill is None or (perms and eff not in perms and "*" not in perms):
         return None
-    from backend.search_routes import universal_search
-    import asyncio
     user = {"id": user_id, "role": role or "member"}
-    query = keywords(message)
-    also = await variants(message, query, llm)
     try:
-        runs = await asyncio.gather(*(universal_search(q=q, user=user) for q in [query, *also]))
-        raw = merge(list(runs))
+        query, fixes = await prepare(message, user)
+        also = await variants(message, query, llm)
+        raw = await search(message, query, also, user)
     except Exception:  # noqa: BLE001 — a failed prefetch leaves the model to search itself
         return None
+    if fixes:
+        raw["corrected"] = fixes        # "rivertie" → "riverty": the chat can say so
     if not raw or not raw.get("total"):
         return None
     # Photo search has no relevance cut-off — it always returns five
@@ -201,7 +380,7 @@ async def run(message: str, *, user_id: Any, role: Optional[str], llm: Any = Non
     from backend.ui_tools import render_skill_result
     body = render_skill_result({**for_model(raw, " ".join([query, *also])), "_llm_hint": HEADER},
                                skill="universal_search")
-    args: Dict[str, Any] = {"query": query, **({"also": also} if also else {})}
+    args: Dict[str, Any] = {"query": query, **({"also": also} if also else {}), **({"corrected": fixes} if fixes else {})}
     call = {"id": CALL_ID, "type": "function", "function": {
         "name": "invoke_skill",
         "arguments": json.dumps({"name": "universal_search", "args": args}, ensure_ascii=False)}}
