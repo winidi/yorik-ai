@@ -11,6 +11,7 @@ replies ("ja", "ok") are left alone.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -58,6 +59,7 @@ letzes zuletzt neueste neuesten aktuelle aktuellen irgendwer irgendwas irgendwo 
 musst müssen jetzt nich nicht wollte wollten will willst habe hatte gibts gabs neues neue neuer schon wieder
 wegen bzw bisschen bissl heut heute gestern vorgestern woche monat jahr tag tage mir mal eben finde finden
 suche suchen gesucht geschaut angesehen kannst könntest würdest wo was wie wer wen wem lief läuft eigentlich
+siehst sieht sehen seht gesehen schau schaust guck guckst müsste müssten sollte sollten bald demnächst
 remember remind showed show tell told sent got get give last latest recent recently someone something
 anything anyone wanted want need needs must should could would please again yesterday week month year
 """.split())
@@ -257,8 +259,9 @@ def _twin_key(h: Dict[str, Any]) -> Any:
     and purpose, a WhatsApp line by chat and text."""
     src = h.get("source")
     if src == "email":
+        # numbers stay in the subject: order numbers tell two orders apart
         subj = re.sub(r"^(?:(?:re|aw|wg|fwd?|fw|antw|erinnerung|reminder)\s*:\s*)+", "", str(h.get("title") or "").lower())
-        subj = re.sub(r"\s+", " ", re.sub(r"\d+", "#", subj)).strip()
+        subj = re.sub(r"\s+", " ", subj).strip()
         body = re.sub(r"\W+", " ", str(h.get("snippet") or "").lower())[:60]
         return (src, str(h.get("subtitle") or "").lower(), subj, body) if subj else None
     if src == "bank":
@@ -348,9 +351,34 @@ def should_search(message: str) -> bool:
     return bool(_QUESTION.search(text))
 
 
-async def run(message: str, *, user_id: Any, role: Optional[str], llm: Any = None) -> Optional[Dict[str, Any]]:
+_FOLLOW_UP = re.compile(
+    r"\b(?:da|davon|dazu|dafür|dabei|damit|die|das|der|den|dem|es|noch|neue[rsn]?|wieder|dann|also|eine|einer|"
+    r"it|that|this|those|one|another|again|still)\b", re.I)
+
+
+def with_context(message: str, previous: Optional[str]) -> tuple[str, Optional[str]]:
+    """The search words of a question, with the previous question's words
+    when this one leans on it: "Müsste da nicht eine neue ankommen bald?"
+    after "Siehst du meine snooze Bestellung?" searched for "müsste
+    ankommen bald" and found nothing (Dirk, 2026-10-05). Returns (query,
+    the words carried over or None)."""
+    own = keywords(message)
+    if not previous:
+        return own, None
+    short = len((message or "").split()) <= 9
+    if not (short and _FOLLOW_UP.search(message or "")) and len(own.split()) >= 2:
+        return own, None
+    carried = [w for w in keywords(previous).split() if w not in own.split()]
+    if not carried:
+        return own, None
+    return " ".join([*own.split(), *carried][:8]), " ".join(carried)
+
+
+async def run(message: str, *, user_id: Any, role: Optional[str], llm: Any = None,
+              previous: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """The two messages to put before the model (a synthetic tool call and
-    its result) plus the raw hits for source labels, or None."""
+    its result) plus the raw hits for source labels, or None. `previous`
+    is the user's message before this one, for follow-ups."""
     if not user_id or not should_search(message):
         return None
     from backend.skills.registry import get_registry
@@ -362,10 +390,20 @@ async def run(message: str, *, user_id: Any, role: Optional[str], llm: Any = Non
     user = {"id": user_id, "role": role or "member"}
     try:
         query, fixes = await prepare(message, user)
-        also = await variants(message, query, llm)
-        raw = await search(message, query, also, user)
+        query, carried = with_context(message, previous) if previous else (query, None)
+        if carried:
+            from backend import search_vocab
+            fixes = await asyncio.to_thread(search_vocab.correct, query.split(), user_id)
+            query = search_vocab.apply(query, fixes)
+            message_for_meaning = f"{previous.strip()} {message.strip()}"
+        else:
+            message_for_meaning = message
+        also = await variants(message_for_meaning, query, llm)
+        raw = await search(message_for_meaning, query, also, user)
     except Exception:  # noqa: BLE001 — a failed prefetch leaves the model to search itself
         return None
+    if carried:
+        raw["with_previous_question"] = carried
     if fixes:
         raw["corrected"] = fixes        # "rivertie" → "riverty": the chat can say so
     if not raw or not raw.get("total"):
@@ -380,7 +418,8 @@ async def run(message: str, *, user_id: Any, role: Optional[str], llm: Any = Non
     from backend.ui_tools import render_skill_result
     body = render_skill_result({**for_model(raw, " ".join([query, *also])), "_llm_hint": HEADER},
                                skill="universal_search")
-    args: Dict[str, Any] = {"query": query, **({"also": also} if also else {}), **({"corrected": fixes} if fixes else {})}
+    args: Dict[str, Any] = {"query": query, **({"also": also} if also else {}), **({"corrected": fixes} if fixes else {}),
+                            **({"with_previous_question": carried} if carried else {})}
     call = {"id": CALL_ID, "type": "function", "function": {
         "name": "invoke_skill",
         "arguments": json.dumps({"name": "universal_search", "args": args}, ensure_ascii=False)}}

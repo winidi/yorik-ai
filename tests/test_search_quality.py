@@ -36,11 +36,13 @@ def test_rrf_keeps_the_meaning_snippet():
 
 def test_collapse_counts_twins_and_keeps_the_first():
     rows = [{"id": 1, "subject": "Erinnerung: Mit Docusign abschließen: 2026-08-31 x.pdf", "from_email": "d@x", "snippet": "Guten Tag"},
-            {"id": 2, "subject": "Re: Mit Docusign abschließen: 2026-09-02 x.pdf", "from_email": "d@x", "snippet": "Guten Tag"},
-            {"id": 3, "subject": "Mit Docusign abschließen: 2026-09-02 x.pdf", "from_email": "d@x", "snippet": "Hey Dirk, was meinst du"},
-            {"id": 4, "subject": "Other", "from_email": "o@x", "snippet": ""}]
+            {"id": 2, "subject": "Re: Mit Docusign abschließen: 2026-08-31 x.pdf", "from_email": "d@x", "snippet": "Guten Tag"},
+            {"id": 3, "subject": "Mit Docusign abschließen: 2026-08-31 x.pdf", "from_email": "d@x", "snippet": "Hey Dirk, was meinst du"},
+            {"id": 4, "subject": "Other", "from_email": "o@x", "snippet": ""},
+            {"id": 5, "subject": "Deine Bestellung #201684554 ist unterwegs", "from_email": "s@x", "snippet": "Deine Bestellung ist auf dem Weg"},
+            {"id": 6, "subject": "Deine Bestellung #201795790 ist unterwegs", "from_email": "s@x", "snippet": "Deine Bestellung ist auf dem Weg"}]
     out = sr._collapse(rows, sr._email_twin)
-    assert [r["id"] for r in out] == [1, 3, 4]       # 2 is 1 again; 3 is a reply with its own text
+    assert [r["id"] for r in out] == [1, 3, 4, 5, 6]  # 2 is 1 again; 3 is a reply with its own text; two orders stay two
     assert out[0]["_twins"] == 1
 
 
@@ -61,9 +63,11 @@ def test_merge_folds_the_same_mail_sent_six_times():
     hits = [{"source": "email", "id": i, "title": "Erinnerung: Mit Docusign abschließen: 2026-08-31 x.pdf",
              "subtitle": "Docusign", "snippet": "Guten Tag, Dirk"} for i in range(6)]
     hits.append({"source": "email", "id": 99, "title": "Rechnung", "subtitle": "netcup", "snippet": "Ihre Rechnung"})
+    hits.append({"source": "email", "id": 100, "title": "Bestellung #201684554 bestätigt", "subtitle": "snuzone", "snippet": "wir bereiten"})
+    hits.append({"source": "email", "id": 101, "title": "Bestellung #201795790 bestätigt", "subtitle": "snuzone", "snippet": "wir bereiten"})
     merged = prefetch.merge([{"results": {"email": hits}}])
     out = merged["results"]["email"]
-    assert len(out) == 2 and out[0]["duplicates"] == 5 and merged["total"] == 2
+    assert len(out) == 4 and out[0]["duplicates"] == 5 and merged["total"] == 4
 
 
 def test_for_model_shows_five_and_hides_internals():
@@ -250,3 +254,10 @@ def test_stored_css_becomes_readable_text_and_can_be_undone(mailbox):
     assert ef.undo_stored_markup_repair() == 1
     with get_conn() as conn:
         assert conn.execute("SELECT body_text FROM email_messages WHERE id = ?", (bad,)).fetchone()["body_text"].startswith("table{")
+
+
+def test_follow_up_carries_the_previous_questions_words():
+    q, carried = prefetch.with_context("Müsste da nicht eine neue ankommen bald?", "Siehst du meine snooze Bestellung?")
+    assert q == "ankommen snooze bestellung" and carried == "snooze bestellung"
+    assert prefetch.with_context("was kostet netcup im jahr?", "Siehst du meine snooze Bestellung?") == ("kostet netcup", None)
+    assert prefetch.with_context("und die rechnung dazu?", None) == ("rechnung", None)

@@ -380,7 +380,7 @@ def _hybrid(*, source: str, table: str, columns: str, visible: tuple[str, list],
         # ich für Claude bezahlt" showed May's receipt, not September's).
         buckets: dict[int, list] = {}
         for r in sem_rows:
-            buckets.setdefault(round(float(r.get("_distance") or 1) / 0.04), []).append(r)
+            buckets.setdefault(round(float(r.get("_distance") or 1) / 0.06), []).append(r)
         sem_rows = [r for b in sorted(buckets) for r in sorted(buckets[b], key=lambda x: str(x.get(date_key) or ""), reverse=True)]
     fused = _rrf([(rows, weights[0]), (sem_rows, weights[1])])
     return _collapse(fused, twin_key)[:PER_SOURCE_LIMIT]
@@ -390,10 +390,11 @@ _RE_PREFIX = re.compile(r"^(?:(?:re|aw|wg|fwd?|fw|antw|erinnerung|reminder)\s*:\
 
 
 def _norm_subject(s: Any) -> str:
-    """A subject without reply prefixes, numbers and dates — "Erinnerung:
-    Mit Docusign abschließen: 2026-08-31 …" six times is one thing."""
+    """A subject without reply prefixes — "Erinnerung: Mit Docusign
+    abschließen: 2026-08-31 …" six times is one thing. Numbers stay:
+    with them blanked, "Deine Bestellung #201795790 ist unterwegs" folded
+    into August's "#201684554" and the new order vanished (Dirk, 2026-10-05)."""
     t = _RE_PREFIX.sub("", str(s or "").strip().lower())
-    t = re.sub(r"\d+", "#", t)
     return re.sub(r"\s+", " ", t).strip()
 
 
