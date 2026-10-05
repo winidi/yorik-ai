@@ -18,7 +18,7 @@ import {
   Mail, Folder, FileEdit, ShieldAlert, Clock, MessageSquare, Sparkles,
   MailX, Menu, ArrowLeft, Mic, Square, X,
   Bell, Calendar, Newspaper, Receipt, Users, Lock, UserCheck,
-  AlignJustify,
+  AlignJustify, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -1252,6 +1252,10 @@ function MessageList({
               from the list view). */}
           {onQuickAction && (
             <div className="absolute top-2 right-2 flex md:hidden md:group-hover:flex items-center gap-0.5 bg-background border border-border rounded-md shadow-sm">
+              {/* Star and reply-needed only on wide screens: on a phone the
+                  four buttons ate a third of the row and cut the sender
+                  (2026-10-05); both are in the opened mail's toolbar. */}
+              <span className="hidden md:contents">
               <QuickActionBtn
                 icon={Star} label={m.is_starred ? "Unstar" : "Star"}
                 active={m.is_starred}
@@ -1262,6 +1266,7 @@ function MessageList({
                 active={!!m.needs_reply}
                 onClick={(e) => { e.stopPropagation(); onQuickAction(m, m.needs_reply ? "needs_reply_off" : "needs_reply_on"); }}
               />
+              </span>
               <QuickActionBtn
                 icon={Archive} label="Archive"
                 onClick={(e) => { e.stopPropagation(); onQuickAction(m, "archive"); }}
@@ -1278,7 +1283,7 @@ function MessageList({
             <div className="flex-1 min-w-0">
               {/* On a phone the quick actions always show in the row's
                   top-right corner; the sender and date make room. */}
-              <div className={cn("flex items-baseline justify-between gap-2", onQuickAction && "max-md:pr-32")}>
+              <div className={cn("flex items-baseline justify-between gap-2", onQuickAction && "max-md:pr-[4.5rem]")}>
                 <span className={cn(
                   "text-sm truncate",
                   m.is_unread ? "font-semibold text-foreground" : "text-muted-foreground",
@@ -2610,6 +2615,11 @@ function AIDraftPanel({
   // would then crash on `.map`. Array.isArray narrows correctly.
   const states = Array.isArray(statesApi.data) ? statesApi.data : [];
   const [activeState, setActiveState] = useState<string | null>(null);
+  // On a phone the panel took the lower half of the screen and the mail
+  // itself got a small box (Dirk, 2026-10-05: "man sieht kaum die Mails");
+  // there it starts as one bar and opens on tap. Wider screens keep it open.
+  const [open, setOpen] = useState<boolean>(() =>
+    typeof window === "undefined" || !window.matchMedia || window.matchMedia("(min-width: 768px)").matches);
   const [regenerating, setRegenerating] = useState(false);
   const [instructions, setInstructions] = useState("");
 
@@ -2739,16 +2749,33 @@ function AIDraftPanel({
     } catch {}
   };
 
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="md:hidden border-t border-border bg-muted/30 px-4 h-12 mb-24 w-full flex items-center gap-2 text-sm text-foreground/85"
+        title="Reply with Yorik's help"
+      >
+        <span>✨</span>
+        <span className="font-medium">Reply with Yorik</span>
+        {variants.length > 0 && <span className="text-xs text-muted-foreground">· {variants.length} drafts ready</span>}
+        <ChevronUp className="w-4 h-4 ml-auto text-muted-foreground" />
+      </button>
+    );
+  }
   return (
     // mb-24: the global Dock floats fixed at bottom-center (~75px tall);
     // without this gap below the panel the regenerate row + variant
     // cards sit underneath it and the user can't read/click them.
-    <div className="border-t border-border bg-muted/30 p-4 mb-24">
+    <div className="border-t border-border bg-muted/30 p-4 mb-24 max-md:max-h-[60vh] max-md:overflow-y-auto">
       <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground font-medium">
         <Loader2 className={cn("w-3.5 h-3.5", !regenerating && "hidden", "animate-spin")} />
         {!regenerating && <span>✨</span>}
         AI drafts
         <div className="ml-auto flex items-center gap-2">
+          <button onClick={() => setOpen(false)} className="md:hidden p-1 -my-1 rounded hover:bg-muted" title="Hide, show the mail">
+            <ChevronDown className="w-4 h-4" />
+          </button>
           {variants.length > 0 && (
             <button onClick={discard} className="text-2xs hover:text-foreground">discard</button>
           )}
