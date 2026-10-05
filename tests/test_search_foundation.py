@@ -216,9 +216,9 @@ def test_search_for_model_keeps_every_source_and_puts_title_hits_first():
     out = for_model(raw, "besprochen regeln yorik")
     assert list(out["results"])[0] == "recordings"
     assert out["results"]["recordings"][0]["source"] == "recordings"
-    assert all(len(h) <= 3 for h in out["results"].values())
+    assert all(len(h) <= 5 for h in out["results"].values())      # five per source since 2026-10-05
     assert all(len(h.get("snippet", "")) <= 160 for v in out["results"].values() for h in v)
-    assert "14 further hits" in out["more"]
+    assert "10 further hits" in out["more"]
 
 
 def test_references_header_is_split_into_ids():
@@ -349,8 +349,10 @@ def test_prefetch_searches_the_models_variants_too(house, monkeypatch):
     asked = []
     async def fake_variants(message, query, llm=None):
         return ["anthropic invoice"]
-    async def fake_search(q, user):
+    async def fake_search(q, user, meaning=None, **scope):
         asked.append(q)
+        if meaning is not None:                    # the whole question goes to the meaning branch
+            assert meaning == "was hab ich für claude bezahlt" and q == "claude bezahlt"
         docs = [{"source": "paperless", "id": 7, "title": "Your receipt from Anthropic"}] if "anthropic" in q else []
         bank = [{"source": "bank", "id": 1, "title": "ANTHROPIC CLAUDE SUB"}]
         return {"query": q, "total": 1 + len(docs), "results": {"bank": bank, "paperless": docs}}
