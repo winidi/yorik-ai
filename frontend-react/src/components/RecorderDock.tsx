@@ -38,6 +38,7 @@ export interface RecorderState {
   pendingUploads: number;
   error: string | null;
   needsResume: boolean;         // a reload interrupted a recording; tap to continue
+  micSilent?: boolean;          // no signal from the microphone for a while (phone locked?)
 }
 
 interface Active {
@@ -57,6 +58,16 @@ let stream: MediaStream | null = null;
 let tick: number | null = null;
 let poll: number | null = null;
 let wakeLock: any = null;
+// Level watch: Dirk's dinner 2026-10-04 — the phone's microphone stopped
+// after a minute and the browser recorded 18 minutes of silence without a
+// word. An analyser reads the level once a second; a dead track (muted,
+// ended, or plain zeros) is reopened and the dock says so.
+let audioCtx: AudioContext | null = null;
+let levelTimer: number | null = null;
+let silentSince: number | null = null;
+let lastReopen = 0;
+const SILENT_AFTER_MS = 15_000;   // this long without any signal: the mic is dead
+const REOPEN_EVERY_MS = 30_000;
 let stopping = false;
 const queue: Array<{ seq: number; blob: Blob }> = [];
 let uploading = false;
@@ -135,6 +146,75 @@ async function drainQueue(): Promise<void> {
   }
 }
 
+function stopLevelWatch() {
+  if (levelTimer) { window.clearInterval(levelTimer); levelTimer = null; }
+  try { void audioCtx?.close(); } catch {}
+  audioCtx = null;
+  silentSince = null;
+}
+
+/** Once a second: is any signal coming from the microphone? */
+function startLevelWatch(st: MediaStream) {
+  stopLevelWatch();
+  const track = st.getAudioTracks()[0];
+  if (track) {
+    track.onmute = () => { silentSince = silentSince ?? Date.now(); set({ micSilent: true }); void reopenMic("muted"); };
+    track.onunmute = () => { silentSince = null; set({ micSilent: false }); };
+    track.onended = () => { set({ micSilent: true }); void reopenMic("ended"); };
+  }
+  const Ctx: any = (window as any).AudioContext || (window as any).webkitAudioContext;
+  if (!Ctx) return;
+  try {
+    audioCtx = new Ctx();
+    const src = audioCtx!.createMediaStreamSource(st);
+    const analyser = audioCtx!.createAnalyser();
+    analyser.fftSize = 2048;
+    src.connect(analyser);
+    const buf = new Float32Array(analyser.fftSize);
+    levelTimer = window.setInterval(() => {
+      if (!active || state.phase !== "recording") return;
+      void audioCtx?.resume?.();
+      analyser.getFloatTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+      const rms = Math.sqrt(sum / buf.length);
+      const silent = rms < 1e-4;                       // below -80 dBFS: nothing, not even room noise
+      if (!silent) {
+        if (state.micSilent) set({ micSilent: false, error: null });
+        silentSince = null;
+        return;
+      }
+      silentSince = silentSince ?? Date.now();
+      if (Date.now() - silentSince >= SILENT_AFTER_MS) {
+        if (!state.micSilent) {
+          set({ micSilent: true, error: "no sound from the microphone — keep the phone unlocked and in the app" });
+          try { navigator.vibrate?.([200, 100, 200]); } catch {}
+        }
+        void reopenMic("silent");
+      }
+    }, 1000);
+  } catch {}
+}
+
+/** A fresh microphone and MediaRecorder for the running recording; the
+ *  chunk sequence simply continues. At most once every 30 s. */
+async function reopenMic(why: string): Promise<void> {
+  if (!active || state.phase !== "recording" || Date.now() - lastReopen < REOPEN_EVERY_MS) return;
+  lastReopen = Date.now();
+  try {
+    const old = recorder;
+    recorder = null;
+    try { old?.state !== "inactive" && old?.stop(); } catch {}
+    try { stream?.getTracks().forEach(t => t.stop()); } catch {}
+    recorder = await openMic();
+    recorder.start(CHUNK_MS);
+    silentSince = null;
+    console.info(`recorder: microphone reopened (${why})`);
+  } catch (e: any) {
+    set({ error: e?.message || "the microphone could not be reopened" });
+  }
+}
+
 function attachRecorder(rec: MediaRecorder) {
   rec.ondataavailable = (e: BlobEvent) => {
     if (!e.data || !e.data.size || !active) return;
@@ -154,6 +234,7 @@ async function openMic(): Promise<MediaRecorder> {
   const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find(m => (MediaRecorder as any).isTypeSupported?.(m));
   const rec = mime ? new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 32_000 }) : new MediaRecorder(stream);
   attachRecorder(rec);
+  startLevelWatch(stream);
   return rec;
 }
 
@@ -171,6 +252,7 @@ function startTicking() {
 }
 
 function teardown() {
+  stopLevelWatch();
   if (tick) { window.clearInterval(tick); tick = null; }
   if (poll) { window.clearInterval(poll); poll = null; }
   try { stream?.getTracks().forEach(t => t.stop()); } catch {}
@@ -339,7 +421,11 @@ export function RecorderDock() {
   // a reload mid-recording: try to carry on
   useEffect(() => {
     if (state.phase === "idle") void resumeAfterReload();
-    const onVisible = () => { if (document.visibilityState === "visible" && (state.phase === "recording")) void requestWakeLock(); };
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || state.phase !== "recording") return;
+      void requestWakeLock();
+      if (state.micSilent) { lastReopen = 0; void reopenMic("back in the app"); }
+    };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
@@ -361,6 +447,7 @@ export function RecorderDock() {
           <div className="text-xs text-white/70">
             {s.phase === "starting" && "starting…"}
             {(live || s.phase === "paused") && (<>{fmt(s.seconds)}{s.phase === "paused" && " · paused"}{s.pendingUploads > 0 && ` · uploading ${s.pendingUploads}`}</>)}
+            {live && s.micSilent && <span className="block text-amber-300">{s.error || "no sound from the microphone"}</span>}
             {s.phase === "finishing" && "uploading the last piece…"}
             {s.phase === "done" && `${fmt(s.seconds)} · transcript is being written; everybody gets a notification`}
             {s.phase === "error" && <span className="text-red-300">{s.error}</span>}

@@ -201,3 +201,21 @@ def test_label_and_merge_helpers():
     assert labels[5]["label"].endswith(" 1") and labels[3] == {"label": "Dirk", "user_id": "u"}
     turns = R._merge_turns(segs, labels)
     assert [t["label"] for t in turns] == [labels[5]["label"], "Dirk", labels[5]["label"]]
+
+
+def test_audio_health_names_where_the_sound_stopped():
+    """Dirk's dinner 2026-10-04: a minute of sound, then 18 minutes of
+    digital silence from a phone whose microphone had stopped."""
+    from backend import recordings as R
+    sr = R.SAMPLE_RATE
+    rng = np.random.default_rng(1)
+    speech = (rng.standard_normal(70 * sr) * 0.05).astype(np.float32)
+    dead = np.zeros(200 * sr, dtype=np.float32)
+    h = R.audio_health(np.concatenate([speech, dead]))
+    assert h["sound_until"] == 70.0 and h["silent_tail"] == 200.0 and h["silent_share"] > 0.7
+    assert h["note"] and "after 1:10" in h["note"]
+    fine = R.audio_health((rng.standard_normal(120 * sr) * 0.05).astype(np.float32))
+    assert fine["note"] is None and fine["silent_tail"] == 0.0
+    nothing = R.audio_health(np.zeros(90 * sr, dtype=np.float32))
+    assert nothing["note"] and "no sound" in nothing["note"]
+    assert R.audio_health(np.zeros(100, dtype=np.float32))["note"] is None     # too short to judge

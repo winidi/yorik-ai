@@ -498,6 +498,38 @@ def _merge_turns(segs: List[Dict[str, Any]], labels: Dict[int, Dict[str, Any]]) 
     return turns
 
 
+SILENCE_DBFS = -60.0          # below this a second carries no sound at all (digital silence)
+SILENT_TAIL_S = 60.0          # this much silence at the end: the microphone stopped
+
+
+def audio_health(audio: np.ndarray) -> Dict[str, Any]:
+    """Where the sound in a recording stops. Dirk's dinner on 2026-10-04:
+    19 minutes of audio, sound in the first minute, digital silence after
+    — the phone's microphone had stopped and the browser kept recording
+    nothing. {"seconds", "sound_until", "silent_tail", "silent_share",
+    "note"}; `note` is set when most of it is silence."""
+    n = int(len(audio))
+    seconds = n / SAMPLE_RATE
+    out: Dict[str, Any] = {"seconds": round(seconds, 1), "sound_until": 0.0, "silent_tail": round(seconds, 1),
+                           "silent_share": 1.0, "note": None}
+    if n < SAMPLE_RATE:
+        return out
+    whole = n - n % SAMPLE_RATE
+    rms = np.sqrt(np.mean(audio[:whole].reshape(-1, SAMPLE_RATE).astype(np.float64) ** 2, axis=1)) + 1e-12
+    loud = 20 * np.log10(rms) > SILENCE_DBFS
+    sound_seconds = [i for i, x in enumerate(loud) if x]
+    sound_until = float(sound_seconds[-1] + 1) if sound_seconds else 0.0
+    out.update(sound_until=sound_until, silent_tail=round(seconds - sound_until, 1),
+               silent_share=round(1 - len(sound_seconds) / len(loud), 2))
+    if not sound_seconds or out["silent_share"] >= 0.98:
+        out["note"] = "the recording carries no sound — the microphone delivered nothing"
+    elif out["silent_tail"] >= SILENT_TAIL_S and out["silent_share"] >= 0.5:
+        m, sec = divmod(int(sound_until), 60)
+        out["note"] = (f"only silence arrived after {m}:{sec:02d} — the microphone stopped delivering "
+                       f"(phone locked or switched away, another app took the microphone?)")
+    return out
+
+
 def process(rid: int) -> Dict[str, Any]:
     """The whole pipeline, blocking. Called from the worker thread."""
     from . import notifications as _notif
@@ -517,6 +549,7 @@ def process(rid: int) -> Dict[str, Any]:
             raise ValueError("recording is empty")
         if dur > MAX_MINUTES * 60:
             raise ValueError(f"recording longer than {MAX_MINUTES} minutes")
+        health = audio_health(audio)
         _set(rid, duration_s=round(dur, 1), progress="speakers")
         workers.heartbeat("recordings", "ok", f"#{rid} speakers ({dur/60:.0f} min)")
         segs = [s for s in diarize(audio) if s["end"] - s["start"] >= MIN_SEGMENT_S]
@@ -546,7 +579,11 @@ def process(rid: int) -> Dict[str, Any]:
                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (int(rid), seq, round(a, 2), round(b, 2), lab, uid, text))
             conn.commit()
-        _set(rid, status="done", progress=None, processed_at=_now())
+        # A clear word when the sound stopped: until 2026-10-05 such a
+        # recording was simply "done" with an empty transcript.
+        _set(rid, status="done", progress=None, processed_at=_now(), error=health.get("note"))
+        if health.get("note"):
+            log.warning("recordings: #%s %s (sound until %.0f s of %.0f)", rid, health["note"], health["sound_until"], dur)
         took = time.monotonic() - t0
         speakers = sorted({lab for _, _, _, lab, _, _ in rows})
         log.info("recordings: #%s done — %.0f s audio, %d turns, %d speakers (%s), %.0f s processing",
@@ -563,7 +600,7 @@ def process(rid: int) -> Dict[str, Any]:
                 log.warning("recordings: #%s report failed (%s); transcript is there", rid, exc)
             _set(rid, progress=None)
         if report is None:
-            _notify_done(rid, row, dur, len(rows), speakers)
+            _notify_done(rid, row, dur, len(rows), speakers, note=health.get("note"))
         return {"id": rid, "status": "done", "turns": len(rows), "speakers": speakers, "seconds": round(took, 1),
                 "report": bool(report)}
     except Exception as exc:  # noqa: BLE001
@@ -573,13 +610,17 @@ def process(rid: int) -> Dict[str, Any]:
         raise
 
 
-def _notify_done(rid: int, row: Dict[str, Any], dur: float, turns: int, speakers: List[str]) -> None:
+def _notify_done(rid: int, row: Dict[str, Any], dur: float, turns: int, speakers: List[str],
+                 note: Optional[str] = None) -> None:
     from . import notifications as _notif
     title = row["title"] or {"dinner": "Dinner", "meeting": "Meeting"}.get(row["kind"], "Recording")
     body = f"{dur/60:.0f} min, {turns} turns, {len(speakers)} speakers: {', '.join(speakers)}"
+    head = f"{title}: transcript ready"
+    if note:
+        head, body = f"{title}: the microphone stopped", f"{note}. {body}"
     for uid in [str(row["owner_user_id"])] + _participants(row):
         try:
-            _notif.create(user_id=uid, kind="recording_done", title=f"{title}: transcript ready", body=body,
+            _notif.create(user_id=uid, kind="recording_done", title=head, body=body,
                           payload={"recording_id": rid}, navigate_to=f"/r/recordings/{rid}")
         except Exception as exc:  # noqa: BLE001
             log.warning("recordings: notify %s failed: %s", uid, exc)

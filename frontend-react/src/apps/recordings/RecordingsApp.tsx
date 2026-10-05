@@ -230,6 +230,12 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
         </div>
       )}
       {rec.status === "failed" && <div className="rounded-xl border border-red-500/40 p-4 text-sm text-red-500">Failed: {rec.error}</div>}
+      {rec.status === "done" && rec.error && !rec.error.startsWith("report failed") && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+          <span className="font-medium">Something went wrong while recording: </span>{rec.error}.
+          Keep the phone unlocked and in the app while it records; it warns you now when the microphone goes quiet.
+        </div>
+      )}
 
       {rec.status === "done" && !report && (
         <div className="rounded-xl border border-border p-4 text-sm flex items-center justify-between gap-3">
