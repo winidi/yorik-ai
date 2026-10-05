@@ -969,11 +969,12 @@ def _insert_message(cfg: dict, folder_id: int, uid: int,
     body_text = fix_mojibake((parsed.text_plain or [""])[0] if parsed.text_plain else "") or ""
     body_html = fix_mojibake((parsed.text_html or [""])[0] if parsed.text_html else "") or ""
     if not body_text and body_html:
-        # Strip tags for a snippet — full text/html stripping is
-        # better but for snippet purposes this is fine.
-        body_text = re.sub(r"<[^>]+>", " ", body_html)
-        body_text = re.sub(r"\s+", " ", body_text).strip()
-    snippet = (body_text or "")[:SNIPPET_LEN].replace("\n", " ").strip()
+        # The words of the HTML, without its style sheets: a regex tag
+        # strip kept the CSS, and a quarter of the mailbox was unsearchable
+        # (search test set 2026-10-05).
+        from .email_text import html_to_text
+        body_text = html_to_text(body_html)
+    snippet = re.sub(r"\s+", " ", (body_text or "")[:SNIPPET_LEN]).strip()
 
     # a long subject arrives folded over several header lines; store it as the one line it is
     subject = fix_mojibake(re.sub(r"\s*[\r\n]+\s*", " ", parsed.subject or "").strip()) or ""
@@ -1643,3 +1644,53 @@ def repair_stored_mojibake(batch: int = 200) -> int:
     if fixed:
         log.info("mail umlaut repair: %d message(s) fixed", fixed)
     return fixed
+
+
+MARKUP_BACKUP_TABLE = "email_body_text_backup_20261005"
+
+
+def repair_stored_markup(batch: int = 200) -> int:
+    """Mails whose stored text is CSS or HTML (the regex strip until
+    2026-10-05) get their text again from the HTML that is still there;
+    the old text goes to MARKUP_BACKUP_TABLE first, so this can be undone
+    (UPDATE … FROM that table). Their search chunks are dropped, the
+    index sweep re-reads them. Returns how many were fixed; 0 when done."""
+    from .email_text import html_to_text, looks_like_markup
+    fixed = 0
+    with get_conn() as conn:
+        conn.execute(f"CREATE TABLE IF NOT EXISTS {MARKUP_BACKUP_TABLE} (id BIGINT PRIMARY KEY, body_text TEXT, "
+                     "snippet TEXT, saved_at TIMESTAMPTZ DEFAULT now())")
+        rows = conn.execute(
+            "SELECT id, snippet, body_text, body_html FROM email_messages "
+            "WHERE body_html IS NOT NULL AND body_html <> '' "
+            "AND (body_text ~ '/\\*|!important|\\.ExternalClass|#outlook|\\{[^}]{0,80}:[^}]{0,80};|<!\\[endif\\]|<\\w+[^>]*>' "
+            f"     OR COALESCE(body_text, '') = '') "
+            f"AND NOT EXISTS (SELECT 1 FROM {MARKUP_BACKUP_TABLE} b WHERE b.id = email_messages.id) LIMIT ?", (batch,),
+        ).fetchall()
+        for r in rows:
+            text = html_to_text(r["body_html"])
+            # remember it either way, so a mail this cannot improve is not read again
+            conn.execute(f"INSERT INTO {MARKUP_BACKUP_TABLE} (id, body_text, snippet) VALUES (?, ?, ?) "
+                         "ON CONFLICT (id) DO NOTHING", (r["id"], r["body_text"], r["snippet"]))
+            if not text or text == r["body_text"] or (looks_like_markup(text) and not looks_like_markup(r["body_text"])):
+                continue
+            snippet = re.sub(r"\s+", " ", text[:SNIPPET_LEN]).strip()
+            conn.execute("UPDATE email_messages SET body_text = ?, snippet = ? WHERE id = ?", (text, snippet, r["id"]))
+            conn.execute("DELETE FROM search_chunks WHERE source = 'email' AND row_id = ?", (r["id"],))
+            fixed += 1
+        conn.commit()
+    if rows:
+        log.info("mail markup repair: %d of %d message(s) got readable text", fixed, len(rows))
+    return len(rows)
+
+
+def undo_stored_markup_repair() -> int:
+    """Puts the old text back from MARKUP_BACKUP_TABLE (the way back if
+    the new text turns out worse) and drops the affected chunks."""
+    with get_conn() as conn:
+        n = conn.execute(f"UPDATE email_messages m SET body_text = b.body_text, snippet = b.snippet "
+                         f"FROM {MARKUP_BACKUP_TABLE} b WHERE b.id = m.id").rowcount
+        conn.execute(f"DELETE FROM search_chunks WHERE source = 'email' AND row_id IN (SELECT id FROM {MARKUP_BACKUP_TABLE})")
+        conn.execute(f"DROP TABLE {MARKUP_BACKUP_TABLE}")
+        conn.commit()
+    return n

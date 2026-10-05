@@ -2876,6 +2876,13 @@ def _startup() -> None:
                 pass
         except Exception:  # noqa: BLE001 — a repair must never stop the start
             log.exception("mail umlaut repair failed")
+        # CSS instead of words in stored mail (2026-10-05): text again
+        # from the HTML, the old text kept in a backup table.
+        try:
+            while ef_mod.repair_stored_markup() > 0:
+                pass
+        except Exception:  # noqa: BLE001
+            log.exception("mail markup repair failed")
     _aio.get_event_loop().run_in_executor(None, _repair_mail_umlauts)
     # Paperless reconciler — diffs Paperless live ids vs the local
     # chunk mirror and ingests anything missing. Runs once at startup
