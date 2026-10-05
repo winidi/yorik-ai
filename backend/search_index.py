@@ -482,6 +482,11 @@ def sweep() -> dict[str, int]:
         except Exception as exc:  # noqa: BLE001 — one source must not stop the others
             log.warning("search index: %s failed: %s", src.name, exc)
             out[src.name] = -1
+    try:
+        from . import search_vocab
+        search_vocab.refresh()          # names for typo correction, at most hourly
+    except Exception as exc:  # noqa: BLE001
+        log.warning("search vocab refresh failed: %s", exc)
     return out
 
 
