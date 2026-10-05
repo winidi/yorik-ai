@@ -813,6 +813,16 @@ if _docker_ready; then
     fi
   fi
 
+  # Search reranker (opt-in, CPU): the second look at the hits.
+  if [[ "${YORIK_SEARCH_RERANK:-0}" == "1" ]]; then
+    _rerank_file="models/rerank/${YORIK_SEARCH_RERANK_FILE:-bge-reranker-v2-m3-Q8_0.gguf}"
+    if [[ -f "$_rerank_file" ]]; then
+      PROFILES+=("search-rerank")
+    else
+      warn "YORIK_SEARCH_RERANK=1 but $_rerank_file is missing — run scripts/install-search-reranker.sh; hits keep the search's order"
+    fi
+  fi
+
   if (( ${#PROFILES[@]} == 0 )); then
     ok "all four services already running — nothing to bundle"
   else

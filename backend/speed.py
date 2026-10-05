@@ -27,6 +27,7 @@ log = logging.getLogger("yorik.speed")
 REFERENCE = {
     "embed": 0.06,   # one search-query embedding (Qwen3-Embedding-4B service)
     "llm": 0.30,     # a short model answer (a few dozen tokens)
+    "rerank": 0.80,  # the reranker reading ~24 question/hit pairs (bge-reranker-v2-m3, CPU)
     "cpu": 0.11,     # the CPU check below
 }
 MAX_FACTOR = 8.0

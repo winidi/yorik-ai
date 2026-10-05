@@ -307,6 +307,27 @@ services:
       -c 8192 -np 4 -b 2048 -ub 2048
       --host 0.0.0.0 --port 8080
 
+  # ─── Search reranker ────────────────────────────────────────
+  # Second look at the hits (backend/search_rerank.py): bge-reranker-v2-m3
+  # in llama.cpp on the CPU. Opt-in like the embedder: start.sh adds the
+  # profile when YORIK_SEARCH_RERANK=1 and the model file is there
+  # (scripts/install-search-reranker.sh does both).
+  search-rerank:
+    container_name: yorik-search-rerank
+    image: ${YORIK_SEARCH_RERANK_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
+    restart: unless-stopped
+    profiles: ["search-rerank"]
+    ports:
+      - "127.0.0.1:${YORIK_SEARCH_RERANK_PORT:-8094}:8080"
+    volumes:
+      - ./models/rerank:/models:ro
+    command: >
+      -m /models/${YORIK_SEARCH_RERANK_FILE:-bge-reranker-v2-m3-Q8_0.gguf}
+      --reranking
+      -ngl ${YORIK_SEARCH_RERANK_NGL:-0} -t ${YORIK_SEARCH_RERANK_THREADS:-16} -tb ${YORIK_SEARCH_RERANK_THREADS:-16}
+      -c 4096 -np 4 -b 4096 -ub 4096
+      --host 0.0.0.0 --port 8080
+
 volumes:
   immich_model_cache:
   paperless_redis:
