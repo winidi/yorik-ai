@@ -170,9 +170,14 @@ body {
 .overflow-y-scroll {
   touch-action: pan-y;
 }
+/* A sideways scroller also lets a vertical pan through to the page
+   around it. With pan-x alone, a finger that starts on a wide table (the
+   timetable on a phone) or on a row of chips could not scroll the page
+   up or down: touch-action is the intersection of the whole chain up to
+   the scroller, and pan-x ∩ pan-y is nothing. */
 .overflow-x-auto,
 .overflow-x-scroll {
-  touch-action: pan-x;
+  touch-action: pan-x pan-y;
 }
 .overflow-auto,
 .overflow-scroll {

@@ -153,7 +153,8 @@ export function BriefingApp() {
     <div className="h-screen overflow-y-auto bg-background text-foreground pb-[max(5rem,env(safe-area-inset-bottom)+4rem)]">
       {/* Header */}
       <header className="border-b border-border bg-card/40 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
+        {/* max-md:pr-16: on a phone the notification bell floats over the right end of this bar */}
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 max-md:pr-16 h-14 flex items-center gap-3">
           <Newspaper className="w-5 h-5 text-primary shrink-0" />
           <div className="font-semibold">Briefing</div>
           <div className="flex-1" />

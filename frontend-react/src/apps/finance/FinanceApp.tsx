@@ -651,11 +651,11 @@ function ConnectAccountForm({ onClose, onConnected }: { onClose: () => void; onC
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[800] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <form
         onSubmit={handleSubmit}
         onClick={e => e.stopPropagation()}
-        className="bg-background rounded-xl border border-border shadow-xl w-full max-w-md p-5 space-y-3"
+        className="bg-background rounded-xl border border-border shadow-xl w-full max-w-md p-5 space-y-3 max-h-full overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-1">
           <div className="font-medium">{t("finance.connectAccount")}</div>

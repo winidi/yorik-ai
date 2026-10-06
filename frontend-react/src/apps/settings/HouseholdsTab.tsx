@@ -565,8 +565,8 @@ function CreateHouseholdModal({
   }, [name, displayLabel, expiresHours, onCreated, toast]);
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-card rounded-xl border border-border shadow-xl max-w-md w-full">
+    <div className="fixed inset-0 bg-black/40 z-[800] flex items-center justify-center p-4">
+      <div className="bg-card rounded-xl border border-border shadow-xl max-w-md w-full max-h-full overflow-y-auto">
         <form onSubmit={submit}>
           <div className="px-5 py-4 border-b border-border">
             <h3 className="font-semibold">Add household</h3>

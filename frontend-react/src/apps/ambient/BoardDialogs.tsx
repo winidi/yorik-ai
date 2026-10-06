@@ -41,7 +41,7 @@ function Sheet({ tokens, accent, onClose, children, label }: { tokens: DialogTok
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center p-4" style={{ background: "rgba(20,22,28,.45)" }} onClick={onClose}>
+    <div className="fixed inset-0 z-[800] grid place-items-center p-4" style={{ background: "rgba(20,22,28,.45)" }} onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={label} onClick={e => e.stopPropagation()}
            className="relative w-full max-w-[460px] max-h-full overflow-y-auto rounded-[24px] p-5 select-text"
            style={{ background: tokens.card, color: tokens.ink, boxShadow: `inset 0 0 0 1px ${tokens.line}, 0 30px 60px -20px rgba(0,0,0,.5)`, borderTop: `6px solid ${accent}` }}>

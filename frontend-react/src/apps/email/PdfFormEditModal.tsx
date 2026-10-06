@@ -204,7 +204,7 @@ export function PdfFormEditModal({ filename, contentB64, onSave, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[800] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       {/* pdf_viewer.css gives every widget input a translucent blue
           background (deliberately see-through, to mark "this is a
           fillable field") — fine for checkboxes/radios, whose checked

@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
@@ -4747,7 +4748,9 @@ function DebugBundleModal({
   const counts = bundle?.redaction?.counts || {};
   const redactedTotal = Object.values(counts).reduce((s, n) => s + (n || 0), 0);
 
-  return (
+  // Into the body: on a phone the dialog is opened from the sidebar, a
+  // drawer that is slid away, and a fixed box inside it moves with it.
+  return createPortal(
     <div
       className="fixed inset-0 z-[1200] bg-black/50 flex items-center justify-center p-4"
       onClick={onClose}
@@ -4860,6 +4863,6 @@ function DebugBundleModal({
         </footer>
       </div>
     </div>
-  );
+  , document.body);
 }
 

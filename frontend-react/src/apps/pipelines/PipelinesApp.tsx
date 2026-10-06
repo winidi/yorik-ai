@@ -61,7 +61,7 @@ function Overview() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2 max-md:pr-12">
         <div className="flex items-center gap-2.5">
           <Workflow className="w-5 h-5 text-muted-foreground" />
           <h1 className="text-lg font-semibold">Pipelines</h1>
@@ -243,7 +243,7 @@ function SentMailPicker({ onClose, onPicked }: { onClose: () => void; onPicked: 
     api.get<SentMail[]>("/api/pipelines/sent-mails").then(setMails).catch(() => setMails([]));
   }, []);
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[800] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div className="bg-card border border-border rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-border">
           <div>

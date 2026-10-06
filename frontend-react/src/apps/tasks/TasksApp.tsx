@@ -1320,14 +1320,14 @@ function TaskRow({
           "running but no estimate" still reads at a glance. */}
       {running && estMin > 0 && (
         <div
-          className={cn("absolute inset-y-0 left-0 transition-all duration-1000 ease-linear", fillClass)}
+          className={cn("absolute inset-y-0 left-0 pointer-events-none transition-all duration-1000 ease-linear", fillClass)}
           style={{ width: `${fillPct}%` }}
           aria-hidden
         />
       )}
       {running && estMin === 0 && (
         <div
-          className="absolute inset-y-0 left-0 w-[3px] bg-emerald-500/50"
+          className="absolute inset-y-0 left-0 w-[3px] pointer-events-none bg-emerald-500/50"
           aria-hidden
         />
       )}
@@ -1336,7 +1336,7 @@ function TaskRow({
           as "this took N of M minutes". */}
       {showDoneBar && (
         <div
-          className={cn("absolute inset-y-0 left-0", doneFillClass)}
+          className={cn("absolute inset-y-0 left-0 pointer-events-none", doneFillClass)}
           style={{ width: `${doneFillPct}%` }}
           aria-hidden
         />
@@ -1720,7 +1720,7 @@ function TaskInlineEditor({
       {onAddSubtask && (
         <SubtaskComposer onAdd={onAddSubtask} />
       )}
-      <div className="flex items-center gap-2 pt-1">
+      <div className="flex flex-wrap items-center gap-2 pt-1">
         {/* Delete lives on the LEFT so it's spatially separated from
             the affirmative Save/Cancel on the right — pattern matches
             macOS Mail / Things / Outlook. Especially important on

@@ -115,10 +115,10 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
   // a plain function, not a component: a component declared in here would
   // be a new one on every render and the field would lose the cursor
   const field = (k: string, label: string, wide = false) => (
-    <label key={k} className={cn("grid gap-1 text-xs text-muted-foreground", wide && "col-span-2")}>
+    <label key={k} className={cn("grid gap-1 min-w-0 text-xs text-muted-foreground", wide && "col-span-2")}>
       {label}
       <input value={text(k)} onChange={e => set(k, e.target.value)}
-             className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary" />
+             className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary" />
     </label>
   );
 
@@ -140,24 +140,24 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
               <input type="color" value={text("accent") || "#1f3a5f"} onChange={e => set("accent", e.target.value)}
                      className="w-8 h-8 rounded-full border-0 bg-transparent cursor-pointer" aria-label="Custom accent colour" />
             </div>
-            <label className="grid gap-1 text-xs text-muted-foreground">
+            <label className="grid gap-1 min-w-0 text-xs text-muted-foreground">
               Font
               <select value={text("font")} onChange={e => set("font", e.target.value)}
-                      className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary">
+                      className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary">
                 {fonts.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
               </select>
             </label>
-            <label className="grid gap-1 text-xs text-muted-foreground">
+            <label className="grid gap-1 min-w-0 text-xs text-muted-foreground">
               Logo position
               <select value={text("logo_place")} onChange={e => set("logo_place", e.target.value)}
-                      className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary">
+                      className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary">
                 <option value="right">Right</option><option value="left">Left</option><option value="center">Centred</option>
               </select>
             </label>
-            <label className="col-span-2 grid gap-1 text-xs text-muted-foreground">
+            <label className="col-span-2 grid gap-1 min-w-0 text-xs text-muted-foreground">
               Letter style
               <select value={text("style") || "auto"} onChange={e => set("style", e.target.value)}
-                      className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary">
+                      className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary">
                 <option value="auto">Automatic — private letter unless a business name is set</option>
                 <option value="private">Private letter — your name once above the address and under the letter</option>
                 <option value="business">Business letterhead — name at the top and in the footer</option>
@@ -202,19 +202,19 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
           <Section title="Standard sentences">
             {field("closing", "Closing")}
             {field("signature_name", "Name under the closing")}
-            <label className="grid gap-1 text-xs text-muted-foreground">
+            <label className="grid gap-1 min-w-0 text-xs text-muted-foreground">
               Payment within (days)
               <input type="number" min={0} max={365} value={Number(form.payment_days ?? 14)} onChange={e => set("payment_days", Number(e.target.value))}
-                     className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary" />
+                     className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary" />
             </label>
             <label className="flex items-center gap-2 text-xs text-foreground self-end pb-1.5">
               <input type="checkbox" checked={!!form.small_business} onChange={e => set("small_business", e.target.checked)} />
               Small business, no VAT charged (in Germany: § 19 UStG)
             </label>
-            <label className="col-span-2 grid gap-1 text-xs text-muted-foreground">
+            <label className="col-span-2 grid gap-1 min-w-0 text-xs text-muted-foreground">
               Payment sentence — {"{faellig}"} becomes the due date, {"{betrag}"} the amount
               <textarea value={text("payment_text")} onChange={e => set("payment_text", e.target.value)} rows={2}
-                        className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary resize-y" />
+                        className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary resize-y" />
             </label>
           </Section>
 

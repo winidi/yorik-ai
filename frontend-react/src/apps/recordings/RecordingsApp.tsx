@@ -65,7 +65,7 @@ export function RecordingsApp() {
   return (
     <div className="h-screen overflow-y-auto bg-background text-foreground">
       <div className="mx-auto max-w-6xl px-4 pt-6 pb-[max(7rem,env(safe-area-inset-bottom)+6rem)]">
-        <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center justify-between gap-3 mb-4 max-md:pr-12">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Recordings</h1>
             <p className="text-xs text-muted-foreground">Dinners and meetings, with what came out of them.</p>

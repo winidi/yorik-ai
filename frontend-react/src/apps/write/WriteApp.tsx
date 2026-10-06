@@ -87,7 +87,7 @@ export function WriteApp() {
       <div className="flex-1 min-h-0 flex flex-col md:flex-row pb-24 md:pb-28">
         {/* list: a column on the desktop; on the phone it gives way to the open letter */}
         <aside className={cn("md:w-72 shrink-0 md:border-r border-border flex flex-col min-h-0", openId ? "hidden md:flex" : "flex flex-1 md:flex-none")}>
-          <div className="p-4 flex items-center justify-between gap-2">
+          <div className="p-4 max-md:pr-14 flex items-center justify-between gap-2">
             <h1 className="text-lg font-semibold flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> {t("write.appTitle")}</h1>
             <div className="relative">
               <button onClick={() => (kinds.length > 1 ? setMenu(m => !m) : create("letter"))} disabled={busy} aria-haspopup={kinds.length > 1} aria-expanded={menu}

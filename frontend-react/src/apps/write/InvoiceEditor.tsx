@@ -231,8 +231,8 @@ export function InvoiceEditor({ doc, onChanged, onBack, onOpen, say, extra }: {
       </div>
 
       {dialog === "finalise" && (
-        <div className="fixed inset-0 z-50 grid place-items-center p-4 bg-black/60" onClick={() => !busy && setDialog(null)}>
-          <div role="dialog" aria-modal="true" aria-label={t(`write.finaliseTitle_${kind}`)} onClick={ev => ev.stopPropagation()} className="w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl p-5 grid gap-3">
+        <div className="fixed inset-0 z-[800] grid place-items-center p-4 bg-black/60" onClick={() => !busy && setDialog(null)}>
+          <div role="dialog" aria-modal="true" aria-label={t(`write.finaliseTitle_${kind}`)} onClick={ev => ev.stopPropagation()} className="w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl max-h-full overflow-y-auto p-5 grid gap-3">
             <h2 className="font-semibold flex items-center gap-2"><Stamp className="w-4 h-4 text-primary" /> {t(`write.finaliseTitle_${kind}`)}</h2>
             {!problem ? (
               <p className="text-sm text-muted-foreground"><Trans i18nKey={`write.finaliseBody_${kind}`} values={{ number: state?.next_number || "…" }} components={{ b: <b className="text-foreground" /> }} />

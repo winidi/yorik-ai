@@ -78,7 +78,7 @@ export function PhotosApp() {
   return (
     <div className="h-screen flex flex-col bg-background text-foreground pb-16">
       {phoneSetup && <PhotosPhoneSetup onClose={() => setPhoneSetup(false)} />}
-      <header className="h-12 px-4 border-b border-border bg-background/85 backdrop-blur flex items-center gap-3 shrink-0">
+      <header className="h-12 px-4 max-md:pr-14 border-b border-border bg-background/85 backdrop-blur flex items-center gap-3 shrink-0">
         <div className="w-7 h-7 rounded-md bg-emerald-500/15 flex items-center justify-center">
           <Camera className="w-3.5 h-3.5 text-emerald-500" />
         </div>

@@ -77,8 +77,10 @@ export function useTriPane(): TriPane {
  *  drawer below `md` while leaving the desktop layout alone. */
 export function mobileAsideLeft(open: boolean): string {
   return cn(
-    // Mobile: full-height fixed drawer, slide from left edge.
-    "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-[280px]",
+    // Mobile: fixed drawer, slide from left edge. It ends where the tab
+    // bar begins (the bar lies above it and would cover its last rows)
+    // and scrolls on its own when its content is taller than that.
+    "max-md:fixed max-md:top-0 max-md:bottom-[var(--dock-clearance)] max-md:overflow-y-auto max-md:left-0 max-md:z-40 max-md:w-[280px]",
     "max-md:shadow-2xl max-md:transition-transform",
     open ? "max-md:translate-x-0" : "max-md:-translate-x-full",
   );
@@ -87,7 +89,7 @@ export function mobileAsideLeft(open: boolean): string {
 /** Mirror of `mobileAsideLeft` for the right context pane. */
 export function mobileAsideRight(open: boolean): string {
   return cn(
-    "max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-[300px]",
+    "max-md:fixed max-md:top-0 max-md:bottom-[var(--dock-clearance)] max-md:overflow-y-auto max-md:right-0 max-md:z-40 max-md:w-[300px]",
     "max-md:shadow-2xl max-md:transition-transform",
     open ? "max-md:translate-x-0" : "max-md:translate-x-full",
   );

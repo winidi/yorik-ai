@@ -576,7 +576,10 @@ export function EmailApp() {
         "border-r border-border flex flex-col bg-sidebar",
         "md:static md:translate-x-0 md:w-60 md:shrink-0",
         "fixed inset-y-0 left-0 z-50 w-72 transform transition-transform",
-        "pb-[env(safe-area-inset-bottom)]",
+        // on a phone the tab bar lies over the drawer's lower edge, and a
+        // short screen does not hold all sections: the drawer ends above
+        // the bar and scrolls as a whole
+        "max-md:pb-[var(--dock-clearance)] max-md:overflow-y-auto",
         mobileDrawerOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
       )}>
         <div className="h-14 px-4 flex items-center justify-between border-b border-border">
@@ -674,7 +677,7 @@ export function EmailApp() {
         </div>
 
         {/* Per-account expanded folder lists */}
-        <div className="border-t border-border mt-2 pt-3 px-2 flex-1 overflow-y-auto">
+        <div className="border-t border-border mt-2 pt-3 px-2 flex-1 overflow-y-auto max-md:flex-none max-md:overflow-visible">
           <div className="px-2 pb-2 flex items-center justify-between">
             <span className="text-2xs text-muted-foreground font-medium">
               Accounts
@@ -1614,7 +1617,7 @@ function CleanupModal({
   ).length;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[800] flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between p-5 border-b border-border">
           <div>
@@ -1997,7 +2000,7 @@ function AttachmentPreviewModal({
   // expensive thing (preview load) is already done.
   return (
     <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[800] flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
@@ -3550,11 +3553,11 @@ function EmailSettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[800] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
       onClick={() => { if (busyId === null) onClose(); }}
     >
       <div
-        className="bg-card border border-border rounded-2xl shadow-2xl max-w-lg w-full p-6"
+        className="bg-card border border-border rounded-2xl shadow-2xl max-w-lg w-full p-6 max-h-full overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

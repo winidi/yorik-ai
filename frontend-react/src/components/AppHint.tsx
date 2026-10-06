@@ -54,7 +54,7 @@ export function AppHint() {
     // it. Elsewhere it stays low and lies above the microphone button
     // (z 61 > 60), so "Got it" is never under it; lifting or narrowing
     // the tip made it cover the last row of a list instead.
-    <div className={app === "chat"
+    <div data-app-hint className={app === "chat"
       ? "fixed left-1/2 -translate-x-1/2 z-[61] w-[min(28rem,calc(100vw-2rem))] bottom-[calc(var(--dock-clearance)+5.5rem)]"
       : "fixed left-1/2 -translate-x-1/2 z-[61] w-[min(28rem,calc(100vw-2rem))] bottom-[calc(var(--dock-clearance)+0.75rem)]"}>
       <div className="flex items-start gap-3 p-3 rounded-2xl bg-card border border-border shadow-lg">
