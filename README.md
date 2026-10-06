@@ -1,11 +1,11 @@
 # Yorik
 
-**Yorik is the home server your AI agent uses.** It keeps the household's calendar, tasks, contacts, photos, documents, email, WhatsApp and (for German users) letters and e-invoicing in one place, with permissions per family member, and hands all of it to any agent that speaks MCP: Hermes, Claude Code, your own scripts. A built-in assistant, voice input and a phone-first UI are included for the people in the house who never touch an agent. Runs on your own machine. No cloud, no subscription, no telemetry unless you switch it on.
+**Yorik is a butler for your family that lives on a computer in your home.** It keeps the household's mail, WhatsApp, documents, photos, calendar, tasks and contacts in one place, finds things across all of them when you ask, drafts the reply, files the invoice and reminds you of the appointment. Every family member has an account of their own and sees what is theirs or was shared with them; children get restricted accounts. Everything is stored and processed on your own machine: a local AI model, no cloud account, no subscription, no telemetry unless you switch it on.
 
-Two ways to use it:
+One person installs Yorik. Everyone else joins with a QR code and uses it on the phone, by voice, or on a tablet on the wall. For German households it also writes letters and e-invoices.
 
-- **With your agent (recommended).** Connect Hermes or another MCP client to `http://<yorik>:8000/mcp` with a personal token. The agent gets one tool per Yorik skill, Yorik keeps the data, the rights and the confirmations. See [docs/MCP.md](docs/MCP.md).
-- **On its own.** Yorik's built-in assistant runs on a local model and can hand questions it cannot answer from the household's data to your agent (`ask_agent`). The install sets up a small model (Qwen 3.5 9B) that fits most PCs; the assistant is tuned on Qwen3.8-27B on an NVIDIA GPU, and smaller models answer less reliably. Treat the chat as beta.
+- **The assistant.** Yorik's built-in assistant runs on a local model. The install sets up a small one (Qwen 3.5 9B) that fits most PCs; the assistant is tuned on Qwen3.8-27B on an NVIDIA GPU, and smaller models answer less reliably. Treat the chat as beta.
+- **Your own AI agent, if you have one.** Yorik speaks MCP (Streamable HTTP): Claude Code, Hermes or any other agent with an MCP client connects to `http://<yorik>:8000/mcp` with a personal token and gets Yorik's skills with the rights of the token's owner. See [docs/MCP.md](docs/MCP.md).
 
 > ### ⚠️ Early rolling alpha. Expect bugs.
 >
