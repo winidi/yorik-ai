@@ -21,7 +21,7 @@ from backend.auth_sessions import current_user, require_admin, require_admin_ses
 from backend.database import get_conn
 
 from . import collector_url, consent, install_id, reset_identity, set_consent
-from . import pseudonyms, registry, scrub
+from . import pseudonyms, registry, report as _report, scrub
 
 log = logging.getLogger("yorik.diagnostics")
 
@@ -111,3 +111,54 @@ def get_report(report_id: str, user: dict = Depends(current_user)) -> Dict[str, 
     if not _is_admin(user) and str(r["user_id"]) != str(user["id"]):
         raise HTTPException(status_code=403, detail="not your report")
     return _row(r)
+
+
+class DraftIn(BaseModel):
+    conversation_id: str
+    message_idx: int
+    trigger: str = "thumbs_down"
+    reason: Optional[str] = None
+    note: Optional[str] = None
+
+
+@router.post("/reports/draft")
+def post_draft(body: DraftIn, user: dict = Depends(current_user)) -> Dict[str, Any]:
+    """A report for one answer of the person's own conversation, for
+    review. Children's accounts cannot report (a parent does)."""
+    if (user.get("role") or "").lower() in ("restricted", "child", "kid"):
+        raise HTTPException(status_code=403, detail="ask a parent to report this")
+    if not consent()["errors"]:
+        raise HTTPException(status_code=403, detail="diagnostics_disabled")
+    trigger = body.trigger if body.trigger in registry.TRIGGERS else "report_problem"
+    try:
+        return _report.assemble(body.conversation_id, body.message_idx, str(user["id"]), trigger, body.reason, body.note)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+class SendIn(BaseModel):
+    question: Optional[str] = None      # the person may shorten the scrubbed text
+    note: Optional[str] = None
+
+
+@router.post("/reports/{report_id}/send")
+def post_send(report_id: str, body: Optional[SendIn] = None, user: dict = Depends(current_user)) -> Dict[str, Any]:
+    body = body or SendIn()
+    try:
+        return _report.queue(report_id, str(user["id"]), body.question, body.note)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/reports/{report_id}/decline")
+def post_decline(report_id: str, user: dict = Depends(current_user)) -> Dict[str, Any]:
+    try:
+        return _report.decline(report_id, str(user["id"]))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc

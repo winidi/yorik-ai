@@ -2938,6 +2938,9 @@ def _startup() -> None:
     # events, recordings and drafts (first run, then every few minutes).
     from . import search_index as _search_index
     _search_index.start_scheduler(_aio.get_event_loop())
+    # Diagnostics outbox: sends only what was consented to and reviewed (backend/diagnostics).
+    from backend.diagnostics import outbox as _diag_outbox
+    _diag_outbox.start_scheduler(_aio.get_event_loop())
     # Chat attachments that were not filed in Paperless go after 30 days.
     _chat_attachments.start_scheduler(_aio.get_event_loop())
     # Subscribed calendars (a secret iCal address, e.g. Google) → read-only mirrors.

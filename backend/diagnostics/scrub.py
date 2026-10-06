@@ -100,9 +100,10 @@ def _dictionary_patterns(dictionary) -> List[Tuple[str, str, re.Pattern]]:
     return pats
 
 
-def scrub_text(text: str, dictionary: List[Tuple[str, str]], counts: Optional[Dict[str, int]] = None,
-               conn=None) -> Tuple[str, Dict[str, int]]:
-    """Stages 1 and 2. Returns (text, counts per kind)."""
+def scrub_text(text: str, dictionary, counts: Optional[Dict[str, int]] = None,
+               conn=None, mentions: Optional[Dict[str, Tuple[str, str]]] = None) -> Tuple[str, Dict[str, int]]:
+    """Stages 1 and 2. Returns (text, counts per kind). `mentions`, when
+    given, collects token → (kind, value) for the facts of a report."""
     counts = counts if counts is not None else {}
     out = text or ""
     if not out:
@@ -112,16 +113,23 @@ def scrub_text(text: str, dictionary: List[Tuple[str, str]], counts: Optional[Di
         if n:
             counts[k] = counts.get(k, 0) + n
 
+    def note(token: Optional[str], kind: str, value: str) -> None:
+        if mentions is not None and token:
+            mentions.setdefault(token, (kind, value))
+
     for kind, value, pat in _dictionary_patterns(dictionary):
         if pat.search(out):
             token = pseudonyms.token_for(kind, value, conn=conn) or f"[{kind}]"
+            note(token, kind, value)
             out, n = pat.subn(token, out)
             bump(kind, n)
     # what the dictionary did not know
     for pat, kind in ((_EMAIL_RE, "email"), (_IBAN_RE, "iban")):
         def repl(m, kind=kind):
             bump(kind)
-            return pseudonyms.token_for(kind, m.group(0), conn=conn) or f"[{kind}]"
+            tok = pseudonyms.token_for(kind, m.group(0), conn=conn) or f"[{kind}]"
+            note(tok, kind, m.group(0))
+            return tok
         out = pat.sub(repl, out)
     out, n = _URL_RE.subn("[url]", out); bump("url", n)
     for pat, _repl in _SECRET_PATTERNS:
@@ -192,12 +200,12 @@ def scrub_llm(text: str, counts: Dict[str, int], conn=None) -> Tuple[str, bool]:
     return out, True
 
 
-def scrub_free_text(text: str, dictionary: List[Tuple[str, str]], counts: Dict[str, int],
-                    conn=None) -> Tuple[str, str, bool]:
+def scrub_free_text(text: str, dictionary, counts: Dict[str, int],
+                    conn=None, mentions: Optional[Dict[str, Tuple[str, str]]] = None) -> Tuple[str, str, bool]:
     """All three stages for prose (the question, a note). Returns
     (text, level, dropped): with a cloud model the text is replaced by
     "" and dropped is True."""
-    out, counts = scrub_text(text, dictionary, counts, conn=conn)
+    out, counts = scrub_text(text, dictionary, counts, conn=conn, mentions=mentions)
     if not out:
         return out, "dictionary_regex", False
     if not llm_is_local():
@@ -290,8 +298,8 @@ invoice quote letter dinner meeting conversation pdf text html
 """.split())
 
 
-def scrub_args(args: Dict[str, Any], dictionary: List[Tuple[str, str]], counts: Dict[str, int],
-               conn=None) -> Dict[str, Any]:
+def scrub_args(args: Dict[str, Any], dictionary, counts: Dict[str, int],
+               conn=None, mentions: Optional[Dict[str, Tuple[str, str]]] = None) -> Dict[str, Any]:
     """Argument values only as tokens (known kinds) or as one of
     ENUM_VALUES; everything else is left out, its key stays in arg_keys."""
     out: Dict[str, Any] = {}
@@ -304,6 +312,8 @@ def scrub_args(args: Dict[str, Any], dictionary: List[Tuple[str, str]], counts: 
             if toks:
                 out[key] = toks[0]                      # one token per key in v1
                 counts[ARG_KINDS[key]] = counts.get(ARG_KINDS[key], 0) + len(toks)
+                if mentions is not None:
+                    mentions.setdefault(toks[0], (ARG_KINDS[key], str(vals[0])))
         elif key in ARG_ENUMS and isinstance(v, str) and v.strip().lower() in ENUM_VALUES:
             out[key] = v.strip().lower()
     return out

@@ -629,6 +629,7 @@ async def ask(
         meta = dict(messages[-1].get("metadata") or {})
         meta["tool_trace"] = tool_trace
         messages[-1]["metadata"] = meta
+    _diag_after_turn(conversation_id, getattr(user, "id", None), messages)
 
     # Strip redundant prose enumeration when a list-carrying card already
     # carries the same items. Mutates messages[-1]['content'] and updates
@@ -673,7 +674,10 @@ async def ask(
         # tool_calls (budget exhausted, guardrail halt), the last item
         # is still an assistant message — store there anyway so the user
         # can see what happened.
-        final_idx = len(messages) - 1
+        # The stored list is `older` + these messages without the system
+        # message (save_messages); until 2026-10-06 the index counted the
+        # system message and not `older`, so the trace sat one turn off.
+        final_idx = len(older) + len([m for m in messages if isinstance(m, dict) and m.get("role") != "system"]) - 1
         total_tool_calls = sum(len(it.get("tool_calls") or []) for it in trace_iterations)
         conversation_io.save_message_trace(
             conversation_id, final_idx,
@@ -1314,6 +1318,7 @@ async def ask_stream(
         meta = dict(messages[-1].get("metadata") or {})
         meta["tool_trace"] = tool_trace
         messages[-1]["metadata"] = meta
+    _diag_after_turn(conversation_id, getattr(user, "id", None), messages)
 
     # Strip redundant prose enumeration before persisting. Live-streamed
     # text already reached the user; this cleans the DB so reloads /
@@ -1516,6 +1521,19 @@ def _prune_recent_skill_view(
                 return max(0, original_len - len(_PRUNE_PLACEHOLDER))
             break  # tc_id matched but wrong skill — stop walking
     return 0
+
+
+def _diag_after_turn(conversation_id: Optional[str], user_id: Any, messages: List[Dict[str, Any]]) -> None:
+    """Hand the finished turn to the diagnostics (off the event loop):
+    a failed tool or an empty search may earn an offer to report it.
+    Nothing is sent; see backend/diagnostics/detect.py."""
+    try:
+        from backend.diagnostics import detect as _detect
+        import asyncio as _aio
+        snapshot = list(messages)
+        _aio.get_running_loop().run_in_executor(None, _detect.after_turn, conversation_id, user_id, snapshot)
+    except Exception:  # noqa: BLE001 — never let diagnostics touch the chat
+        pass
 
 
 def _build_turn_tool_trace(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
