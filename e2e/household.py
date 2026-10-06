@@ -341,6 +341,9 @@ def seed(settings: dict[str, str]) -> dict:
         s = sessions[key]
         _ok(s.post(f"{BASE}/api/onboarding/complete"), f"onboarding {key}")
         _ok(s.post(f"{BASE}/api/profile/pin", json={"pin": pin}), f"pin {key}")
+    # the one-time diagnostics question after setup (backend/diagnostics):
+    # answered "everything off" for the admin, so no journey meets the step
+    _ok(anna.put(f"{BASE}/api/diagnostics/consent", json={"counts": False, "usage": False, "errors": False}), "diagnostics consent")
 
     role_of = {k: r for k, _n, _e, r, _p in FAMILY}
 

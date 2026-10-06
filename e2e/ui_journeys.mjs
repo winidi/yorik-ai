@@ -127,15 +127,12 @@ if (H.real_llm) await journey("Anna asks the chat on her phone and gets an answe
 // any other host (newPage aborts every foreign request).
 await journey("the admin is asked about diagnostics once, a report shows numbers instead of people", "desktop", async (page) => {
   await login(page, "anna");
+  // the household answered the question for the admin when it was built
+  // (household.py), so the step must not come back
   const asked = await page.getByText("May Yorik tell its makers").count();
-  if (asked) {
-    await page.getByRole("switch").nth(2).click();
-    await page.getByText("Save my choices").click();
-    await page.waitForLoadState("networkidle");
-  } else {
-    await page.evaluate(async () => fetch("/api/diagnostics/consent", { method: "PUT", headers: { "Content-Type": "application/json" },
-                                                                       body: JSON.stringify({ errors: true }) }));
-  }
+  const state = await page.evaluate(async () => (await fetch("/api/diagnostics/consent")).json());
+  await page.evaluate(async () => fetch("/api/diagnostics/consent", { method: "PUT", headers: { "Content-Type": "application/json" },
+                                                                     body: JSON.stringify({ errors: true }) }));
   await page.goto(BASE + "/r/home"); await page.waitForLoadState("networkidle");
   const again = await page.getByText("May Yorik tell its makers").count();
   await page.goto(BASE + "/r/chat"); await page.waitForLoadState("networkidle");
@@ -151,9 +148,9 @@ await journey("the admin is asked about diagnostics once, a report shows numbers
   await page.getByText("Send this report").click(); await page.waitForTimeout(1500);
   const reports = await page.evaluate(async () => (await fetch("/api/diagnostics/reports")).json());
   const row = reports.reports.find(r => r.kind === "error");
-  const ok = asked + again <= 1 && !exact.includes("Hilde") && exact.includes("person_") && row && row.status === "queued"
-             && !JSON.stringify(row.payload).includes("Hilde");
-  return [ok, `asked ${asked} again ${again} · exact has person_: ${exact.includes("person_")} Hilde: ${exact.includes("Hilde")} · row: ${row ? row.status : "none"}`];
+  const ok = asked === 0 && again === 0 && state.asked === true && !exact.includes("Hilde") && exact.includes("person_")
+             && row && row.status === "queued" && !JSON.stringify(row.payload).includes("Hilde");
+  return [ok, `step shown ${asked}/${again} (answered at setup: ${state.asked}) · exact has person_: ${exact.includes("person_")} Hilde: ${exact.includes("Hilde")} · row: ${row ? row.status : "none"}`];
 }, browser);
 
 await journey("a member is never asked about diagnostics", "phone", async (page) => {
