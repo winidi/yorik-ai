@@ -32,6 +32,8 @@ import { openHelp } from "@/components/HelpPanel";
 import { InviteDialog } from "@/components/InviteDialog";
 import { useTriPane, MobileBackdrop, mobileAsideLeft } from "@/components/MobileShell";
 import { AppInstallConsentDialog } from "@/components/AppInstallConsentDialog";
+import { DiagnosticsCard } from "@/components/DiagnosticsConsent";
+import { DiagnosticsSection } from "@/components/DiagnosticsReports";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/AuthGate";
@@ -335,6 +337,7 @@ function PrivacyPage({ toast }: { toast: ToastFn }) {
         <KioskAgendaConsentCard toast={toast} />
         <KioskPhotosConsentCard toast={toast} />
         <EmergencyAccessCard toast={toast} />
+        <DiagnosticsCard toast={toast} onOpenReports={() => { window.location.assign("/r/settings?tab=developer&section=diagnostics"); }} />
       </div>
     </div>
   );
@@ -430,6 +433,7 @@ function AiPage({ toast }: { toast: ToastFn }) {
 const DEV_SECTIONS: { id: string; label: string; hostOnly?: boolean }[] = [
   { id: "logs", label: "Logs" },
   { id: "quality", label: "Quality" },
+  { id: "diagnostics", label: "Diagnostics" },
   { id: "skills", label: "Skills", hostOnly: true },
   { id: "addons", label: "Add-ons", hostOnly: true },
 ];
@@ -459,6 +463,7 @@ function DeveloperPage({ toast, section, onSection, hostOnlyHidden }: {
       </div>
       {active === "logs"    && <LogsTab toast={toast} />}
       {active === "quality" && <QualityTab toast={toast} />}
+      {active === "diagnostics" && <DiagnosticsSection toast={toast} />}
       {active === "skills"  && <SkillsTab toast={toast} />}
       {active === "addons"  && (
         <div className="space-y-10">

@@ -20,6 +20,7 @@ import { JoinScreen } from "./JoinScreen";
 import { LoginScreen } from "./LoginScreen";
 import { SetupScreen } from "./SetupScreen";
 import { OnboardingWizard } from "./OnboardingWizard";
+import { DiagnosticsConsentStep } from "@/components/DiagnosticsConsent";
 
 interface AuthContextValue {
   user: YorikUser;
@@ -224,6 +225,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         onSkip={refresh}
       />
     );
+  }
+
+  // Once, for the admin, after onboarding: may Yorik report problems to
+  // its makers? Its own screen, never part of finishing setup
+  // (backend/diagnostics; the flag is on the user object).
+  const diagRole = String(state.user.role || "").toLowerCase();
+  if ((diagRole === "admin" || diagRole === "platform_admin") && state.user.diag_consent_asked === false) {
+    return <DiagnosticsConsentStep onDone={refresh} />;
   }
 
   return (

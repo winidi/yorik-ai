@@ -149,6 +149,7 @@ export interface YorikUser {
   tax_id?: string | null;
   iban?: string | null;
   onboarded_at?: string | null;
+  diag_consent_asked?: boolean;      // the admin answered the diagnostics question (backend/diagnostics)
   /** Scanned handwritten signature as a data URL. Empty string when unset. */
   signature_data_url?: string;
   /** ISO timestamp when the kiosk PIN was last set/changed. Null when

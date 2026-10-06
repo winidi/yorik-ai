@@ -1,11 +1,13 @@
 # Privacy & Data
 
 > **TL;DR**: Yorik runs on YOUR machine. The Yorik project doesn't run a
-> backend, doesn't see your data, doesn't have telemetry, doesn't phone
-> home. The only outbound traffic is to services YOU configure (your
-> email server, your LLM, your Paperless/Immich if remote). For GDPR
-> purposes you are both data controller and data processor — you own
-> the whole stack.
+> backend and doesn't see your data. Outbound traffic goes to services
+> YOU configure (your email server, your LLM, your Paperless/Immich if
+> remote), to GitHub when an admin opens Health & updates (the release
+> check), and — only if the admin switched it on — to Yorik's small
+> diagnostics collector, with every person replaced by a number first
+> (see [Diagnostics](#diagnostics)). For GDPR purposes you are both data
+> controller and data processor — you own the whole stack.
 >
 > This doc explains exactly what touches the network, what stays local,
 > and how to exercise data-subject rights when the data lives on your
@@ -15,11 +17,24 @@
 
 **Nothing**, unless you actively send it.
 
-We don't run a hosted service. There is no `*.yorik.io` API endpoint
-that your install talks to. No analytics, no crash reporter, no update
-ping, no "anonymous usage stats". When you install Yorik, the
-maintainers learn that someone (we don't know who) cloned a public git
-repo. That's the extent of it.
+We don't run a hosted service your install talks to. Two exceptions,
+both visible in the code and the log:
+
+- **Update check.** When an admin opens Settings → Health & updates,
+  Yorik asks GitHub for the newest release (`backend/update_routes.py`)
+  or runs `git fetch` on a native install, at most every six hours.
+  GitHub sees an IP address, nothing else. Nothing runs in the
+  background.
+- **Diagnostics, opt-in.** If — and only if — the admin switches it on,
+  Yorik sends counts, feature usage by type, or error reports to a
+  collector the maintainers run. Every person, address, phone, chat and
+  file is replaced by a number before anything leaves the house, and
+  every error report is shown to the person it belongs to before it is
+  sent. See [Diagnostics](#diagnostics) below. Off by default, on fresh
+  installs too.
+
+Otherwise, when you install Yorik, the maintainers learn that someone
+(we don't know who) cloned a public git repo. That's the extent of it.
 
 If you choose to interact with us:
 
@@ -31,8 +46,8 @@ If you choose to interact with us:
 - **Send a PR** → DCO signoff is the only thing we collect (your name +
   email on each commit, public via git).
 
-That's it. Yorik will never grow a telemetry endpoint without an
-explicit opt-in (off by default).
+That's it. Diagnostics stay off until an admin says yes, each tier
+with its own switch.
 
 ## What Yorik (the app, on your box) sees
 
@@ -166,19 +181,56 @@ protections that apply to minors. The technical isolation between
 roles is enforced (see [THREAT_MODEL.md](../THREAT_MODEL.md)), but the
 legal responsibility is yours.
 
-## Telemetry
+## Diagnostics
 
-Yorik has none. If a future version adds anything that resembles
-telemetry (error reporting beacon, anonymised usage stats), it will
-be:
+Off by default. After setup the admin is asked once, on a screen of
+its own with nothing pre-ticked; "keep everything off" is a button.
+The three switches live in Settings → Privacy and can be changed any
+time:
 
-1. Off by default
-2. Documented in `CHANGELOG.md` under a `### Telemetry` heading
-3. Toggleable in Settings → Privacy
-4. Required to be opt-in even on fresh installs (no dark patterns)
+1. **Counts and versions** — once a day: Yorik's version (major.minor),
+   the kind of computer, how many people use it (as a range: 1, 2,
+   3–4, 5+), how often the chat was used (as a range), thumbs up and
+   down. Numbers only.
+2. **Which features are used** — mail, WhatsApp, documents, calendar,
+   bank, search … as ranges. Not which mail, not whose.
+3. **Error reports** — when something goes wrong (a thumbs-down, "Report
+   a problem", a failed skill), Yorik assembles a report: the question
+   with every person, address, phone, chat and file replaced by a
+   number (`person_7`, `email_2`), which tools ran and what shape their
+   answers had (counts, never text), whether the things the question
+   mentions exist in Yorik and where the search puts them, the error
+   class and the places in Yorik's own code. **Never mail text,
+   documents or messages.** The person whose conversation it was sees
+   the exact bytes and sends them — or not. Children's accounts cannot
+   send.
 
-If you ever see Yorik make a network call you didn't authorise, that's
-a bug. [File it as a security issue.](../SECURITY.md)
+How the numbers work: the installation makes a random secret once and
+keeps it; a token is the HMAC of the value with that secret, so the
+same person is `person_7` in every report from this house and no one
+without the secret can turn it back. The value itself is never stored
+next to the token. The admin can look a token up locally ("who is
+person_7?"); the lookup is logged. "Reset identity" makes a new secret
+and a new install id and forgets every token.
+
+What the collector keeps: the payload, the install id, the time of
+arrival. No IP address (the web server does not log on that host).
+Reports are deleted after 90 days; anything published is aggregated
+over at least five installations. Each report carries a deletion token
+the install can use to have it removed earlier (withdrawing consent
+does that for every report sent).
+
+Every field that can be sent is listed in Settings → Privacy ("every
+field Yorik can send") and in `backend/diagnostics/registry.py`; a
+field that is not on that list cannot be sent — the code drops it
+rather than scrubbing it. Every payload is written to the log and
+shown under Settings → Developer → Diagnostics.
+
+Legal basis is your consent (Art. 6(1)(a) GDPR; § 25 TDDDG for
+reading from the device). Pseudonymised data is still personal data;
+the maintainers' privacy notice names the collector, the retention
+and how to withdraw. If you see Yorik make a network call you did not
+switch on, that's a bug — [file it as a security issue.](../SECURITY.md)
 
 ## Logs
 

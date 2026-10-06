@@ -1,6 +1,6 @@
 # Yorik
 
-**Yorik is the home server your AI agent uses.** It keeps the household's calendar, tasks, contacts, photos, documents, email, WhatsApp and (for German users) letters and e-invoicing in one place, with permissions per family member, and hands all of it to any agent that speaks MCP: Hermes, Claude Code, your own scripts. A built-in assistant, voice input and a phone-first UI are included for the people in the house who never touch an agent. Runs on your own machine. No cloud, no subscription, no telemetry.
+**Yorik is the home server your AI agent uses.** It keeps the household's calendar, tasks, contacts, photos, documents, email, WhatsApp and (for German users) letters and e-invoicing in one place, with permissions per family member, and hands all of it to any agent that speaks MCP: Hermes, Claude Code, your own scripts. A built-in assistant, voice input and a phone-first UI are included for the people in the house who never touch an agent. Runs on your own machine. No cloud, no subscription, no telemetry unless you switch it on.
 
 Two ways to use it:
 
@@ -115,7 +115,7 @@ Honest breakdown of production-quality vs beta: [docs/EINVOICING.md](docs/EINVOI
 
 ## Privacy
 
-Yorik runs on your machine. No backend service, no telemetry, no phone-home. Outbound calls only happen to services YOU configure (your email, your LLM, your remote Paperless / Immich). Details + GDPR self-hosted scenario: [docs/PRIVACY.md](docs/PRIVACY.md).
+Yorik runs on your machine. No backend service, no phone-home. Outbound calls only happen to services YOU configure (your email, your LLM, your remote Paperless / Immich), to GitHub for the update check an admin triggers, and — only if the admin switches it on — to Yorik's diagnostics collector, with every person replaced by a number first. Details + GDPR self-hosted scenario: [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## License
 
