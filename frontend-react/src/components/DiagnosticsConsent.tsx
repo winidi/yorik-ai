@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Loader2, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { ScrollPage } from "@/components/ScrollPage";
 
 export interface DiagConsent {
   asked: boolean;
@@ -149,10 +150,7 @@ export function DiagnosticsConsentStep({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    // The page is its own scroll container: the body does not scroll
-    // (index.css), and on a phone this step is taller than the screen.
-    <div className="h-screen overflow-y-auto bg-background text-foreground login-bg">
-     <div className="min-h-full flex items-center justify-center px-4 sm:px-6 py-6 sm:py-8">
+    <ScrollPage className="bg-background text-foreground login-bg" innerClassName="items-center px-4 sm:px-6 py-6 sm:py-8">
       <div className="w-full max-w-xl">
         <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
           <div className="px-5 sm:px-7 pt-5 sm:pt-7 pb-3">
@@ -184,8 +182,7 @@ export function DiagnosticsConsentStep({ onDone }: { onDone: () => void }) {
           </div>
         </div>
       </div>
-     </div>
-    </div>
+    </ScrollPage>
   );
 }
 

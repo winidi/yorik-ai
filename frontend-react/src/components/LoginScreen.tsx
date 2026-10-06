@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { PinPad } from "@/components/PinPad";
 import { Loader2, Mail, Lock, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ScrollPage } from "@/components/ScrollPage";
 import { api } from "@/lib/api";
 
 interface Props {
@@ -54,7 +55,7 @@ export function LoginScreen({ onLoggedIn }: Props) {
 
   if (device.known && !useForm) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground px-6">
+      <ScrollPage className="bg-background text-foreground" innerClassName="items-center px-6 py-6">
         <div className="w-full max-w-sm flex flex-col items-center text-center gap-5">
           {device.avatar_url
             ? <img src={device.avatar_url} alt="" className="w-20 h-20 rounded-full object-cover" />
@@ -66,7 +67,7 @@ export function LoginScreen({ onLoggedIn }: Props) {
             <button onClick={forgetDevice} className="underline hover:text-foreground">Not {device.first_name}?</button>
           </div>
         </div>
-      </div>
+      </ScrollPage>
     );
   }
 
@@ -95,7 +96,7 @@ function PasswordLogin({ onLoggedIn }: Props) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background text-foreground px-6 login-bg">
+    <ScrollPage className="bg-background text-foreground login-bg" innerClassName="items-center px-6 py-6">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center text-center mb-8">
           <img
@@ -178,6 +179,6 @@ function PasswordLogin({ onLoggedIn }: Props) {
             radial-gradient(circle at 70% 85%, hsl(200 60% 60% / 0.08), transparent 50%);
         }
       `}</style>
-    </div>
+    </ScrollPage>
   );
 }

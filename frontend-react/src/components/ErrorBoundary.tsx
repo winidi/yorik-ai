@@ -13,6 +13,7 @@
  */
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { ScrollPage } from "@/components/ScrollPage";
 
 interface Props { children: ReactNode }
 interface State {
@@ -48,7 +49,7 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.err) {
       return (
-        <div className="min-h-screen flex items-center justify-center p-6 bg-background text-foreground">
+        <ScrollPage className="bg-background text-foreground" innerClassName="items-center p-6">
           <div className="max-w-2xl w-full bg-card border border-border rounded-xl p-6 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-red-500/15 text-red-500 flex items-center justify-center text-lg">!</div>
@@ -84,7 +85,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </button>
             </div>
           </div>
-        </div>
+        </ScrollPage>
       );
     }
     return <div key={this.state.resetCount}>{this.props.children}</div>;

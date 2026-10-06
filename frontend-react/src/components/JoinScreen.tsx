@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { ScrollPage } from "@/components/ScrollPage";
 import { PinPad } from "@/components/PinPad";
 import { PhoneSetup } from "@/components/PhoneSetup";
 
@@ -49,7 +50,7 @@ export function JoinScreen() {
   const initial = (name.trim()[0] || "?").toUpperCase();
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-start sm:items-center justify-center px-5 py-10">
+    <ScrollPage className="bg-background text-foreground" innerClassName="items-start sm:items-center px-5 py-10">
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-3 mb-8">
           <img src="/r/butler-mark.png" alt="" className="w-10 h-10 object-contain dark:invert" />
@@ -122,6 +123,6 @@ export function JoinScreen() {
           </div>
         )}
       </div>
-    </div>
+    </ScrollPage>
   );
 }

@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { Loader2, Sparkles, Mail, Lock, User as UserIcon, AlertCircle, Info, Copy, CheckCircle2, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ScrollPage } from "@/components/ScrollPage";
 import { api } from "@/lib/api";
 
 interface Props {
@@ -132,7 +133,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
   // ── Stage 2: paperless-fallback-password reveal (one-shot) ──
   if (paperlessFallback) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground px-6 login-bg">
+      <ScrollPage className="bg-background text-foreground login-bg" innerClassName="items-center px-6 py-6">
         <div className="w-full max-w-md">
           <div className="flex flex-col items-center text-center mb-6">
             <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center mb-4 shadow-lg">
@@ -180,12 +181,12 @@ export function SetupScreen({ onSetupComplete }: Props) {
             Stored encrypted on this machine. Yorik won't show it again, so keep it somewhere safe.
           </div>
         </div>
-      </div>
+      </ScrollPage>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background text-foreground px-6 login-bg">
+    <ScrollPage className="bg-background text-foreground login-bg" innerClassName="items-center px-6 py-6">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center text-center mb-6">
           <div className={cn(
@@ -355,6 +356,6 @@ export function SetupScreen({ onSetupComplete }: Props) {
             radial-gradient(circle at 70% 85%, hsl(200 60% 60% / 0.08), transparent 50%);
         }
       `}</style>
-    </div>
+    </ScrollPage>
   );
 }

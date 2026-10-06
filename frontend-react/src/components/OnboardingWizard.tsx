@@ -29,6 +29,7 @@ import {
   CheckCircle2, X, Globe, User as UserIcon, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ScrollPage } from "@/components/ScrollPage";
 import { api } from "@/lib/api";
 import type { YorikUser } from "@/lib/api";
 import { StoragePicker } from "@/components/StoragePicker";
@@ -215,7 +216,7 @@ export function OnboardingWizard({ user, isTenant, onComplete, onSkip }: Props) 
   const isLast = step === steps.length - 1;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background text-foreground px-6 py-8 login-bg">
+    <ScrollPage className="bg-background text-foreground login-bg" innerClassName="items-center px-6 py-8">
       <div className="w-full max-w-xl">
         {!isFirst && (
           <div className="flex items-center justify-between mb-6">
@@ -301,7 +302,7 @@ export function OnboardingWizard({ user, isTenant, onComplete, onSkip }: Props) 
             radial-gradient(circle at 70% 85%, hsl(200 60% 60% / 0.08), transparent 50%);
         }
       `}</style>
-    </div>
+    </ScrollPage>
   );
 }
 

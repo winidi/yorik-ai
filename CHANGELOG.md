@@ -18,7 +18,7 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The assistant no longer offers to connect services Yorik has no integration for (it offered a "Facebook connector"). Setting up an integration from the chat is switched off until Settings has a page for it; mail accounts are added in the Email app, a bank in Finance.
 - The bell's "Add to bills" button works again (it called a retired skill).
-- On a phone the question about diagnostics after setup can be scrolled; the button at its end was out of reach.
+- On a phone the first screens (sign in, setup, joining with a QR code, the welcome steps, the question about diagnostics) can be scrolled when they are taller than the screen; before, the button at the end could be out of reach.
 
 ## [0.2.0] — 2026-09-26
 
