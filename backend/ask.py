@@ -63,7 +63,6 @@ from .auth import build_user_resolver, filter_query_by_role
 from .conversation_store import SqliteConversationStore
 from .database import DEFAULT_DB_PATH, conn_ctx
 from .ui_tools import (
-    InstallConnectorTool,
     LAYOUT_CATALOGUE,
     ListAppsTool,
     ListCalendarLayoutsTool,
@@ -615,8 +614,9 @@ from .ui_tools import SkillViewTool, InvokeSkillTool
 _tools.register_local_tool(SkillViewTool(),   access_groups=_ALL_ROLES)
 _tools.register_local_tool(InvokeSkillTool(), access_groups=_ALL_ROLES)
 _tools.register_local_tool(ListConnectorsTool(), access_groups=_ALL_ROLES)
-# install_connector is admin-only (it adds new external integrations to the box)
-_tools.register_local_tool(InstallConnectorTool(), access_groups=["admin"])
+# install_connector is not registered: the form it opens has no receiver in
+# the frontend, so in the chat it was a promise that led nowhere. Mail
+# accounts are added in the Email app, a bank in the Finance app.
 # search_documents now lives at backend/skills/search_documents/. Registered
 # via the skills loader, not here. Keeping the legacy SearchDocumentsTool class
 # in ui_tools.py would double-register the name and surface two different
@@ -715,7 +715,7 @@ The index rows below show only `name — description` — enough to pick the rig
 
 2. `trigger_connector(name, params)` — call an external integration (currently `weather`). Use whenever the user asks about something outside the DB.
 
-3. `list_connectors(query)` / `install_connector(name)` — inspect / add integrations. install_connector is admin-only.
+3. `list_connectors(query)` — lists every integration this box has; never offer to connect a service that is not in it.
 
 4. `web_search(query)` → `web_extract(urls=[1-3])` → answer with citations. Max 3 tool calls total per chain. If you can't tell which URL has the answer, pass several into one web_extract.
 

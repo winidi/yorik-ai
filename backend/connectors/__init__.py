@@ -106,7 +106,7 @@ async def _invoke_n8n(spec: "ConnectorSpec", params: Dict[str, Any]) -> Dict[str
         return {
             "ok": False,
             "needs_install": True,
-            "error": f"connector '{spec.name}' is n8n-backed but not yet installed. Run install_connector first.",
+            "error": f"connector '{spec.name}' is n8n-backed and not set up on this box; it cannot be set up from the chat.",
         }
     return await asyncio.to_thread(lambda: n8n_client.trigger_webhook(path, params))
 

@@ -49,7 +49,7 @@ def _client():
     c = credential_store.get(CONNECTOR_NAME)
     if not c:
         return None, {"ok": False, "needs_install": True,
-                      "error": "banking-fints not configured — run install_connector to enter your bank credentials."}
+                      "error": "banking-fints not configured — a bank account is connected in the Finance app, not from the chat."}
     if not _AVAILABLE:
         return None, {"ok": False, "error": f"python-fints not installed: {_AVAIL_ERROR}"}
     client = FinTS3PinTanClient(

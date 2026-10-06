@@ -216,8 +216,7 @@ render an ugly or wrong PDF. No code execution.
    (friendly_llm_error), never an exception string.
 ```
 
-**Tools the LLM sees** — ten, the same every turn (minus `install_connector`
-for non-admin roles). Skills are NOT tools: the system prompt carries a
+**Tools the LLM sees** — the same every turn. Skills are NOT tools: the system prompt carries a
 one-line index of every skill, and the model reaches them through two
 meta-tools:
 
@@ -227,7 +226,7 @@ meta-tools:
 | `invoke_skill(name, args)`  | Run a skill. Role-gated by the registry. |
 | `show_calendar(view, anchor, highlight)` | UI control |
 | `list_calendar_layouts()`   | Marketplace stub |
-| `list_connectors()` / `trigger_connector(name, params)` / `install_connector(name)` | Connector plumbing (`install_connector` admin-only) |
+| `list_connectors()` / `trigger_connector(name, params)` | Connector plumbing; the assistant cannot add an integration |
 | `list_apps()`               | Discoverability; navigation itself is the `navigate_to` skill |
 | `web_search(query, limit)` / `web_extract(urls)` | Web search via the active provider; page text with UNTRUSTED markers |
 

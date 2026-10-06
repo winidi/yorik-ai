@@ -72,7 +72,7 @@ register(ConnectorSpec(
 ))
 ```
 
-That's the whole connector. The LLM now has a `weather` tool with a typed schema. Yorik's frontend renders it in Settings → Connectors with a Test button.
+That's the whole connector. The assistant finds it with `list_connectors` and calls it with `trigger_connector(name="weather", …)`. A page in Settings that lists every connector with a setup form and a test button is planned; today only the Maps key has a card there.
 
 ## The `ConnectorSpec` fields
 
@@ -142,7 +142,7 @@ register(ConnectorSpec(
 ```
 
 Yorik handles the rest:
-- Settings → Connectors renders the credentials form from `credentials_schema`
+- An admin stores the credentials with `POST /api/connectors/<name>/credentials`; a form in Settings built from `credentials_schema` is planned (today only the Maps key has a card)
 - User input is encrypted with the per-install Fernet key
 - `credential_store.get("paperless")` returns the decrypted blob inside your `invoke()`
 - The credentials never end up in logs (the credential store has masking built in)
@@ -176,6 +176,8 @@ register(ConnectorSpec(
 ```
 
 Yorik imports the workflow on install, the user clicks one button in n8n to grant OAuth, and from then on Yorik POSTs to `http://127.0.0.1:5678/webhook/yorik/gmail` to invoke it.
+
+The install step is `InstallConnectorTool` in `backend/ui_tools.py`. It is not offered in the chat at the moment (the assistant promised integrations that do not exist, and the forms it opens have no page yet); it returns with the Settings page for connectors.
 
 You don't need to handle OAuth refresh, scopes, or any of that — n8n does it.
 

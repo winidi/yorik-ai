@@ -378,7 +378,7 @@ def email_imap(op: str, **kw) -> Dict[str, Any]:
     if not c:
         return {
             "ok": False,
-            "error": "email-imap not configured — run `install_connector(name='email-imap')` to enter your IMAP/SMTP credentials.",
+            "error": "email-imap not configured — a mail account is added in the Email app, not from the chat.",
             "needs_install": True,
         }
     op = (op or "").lower().strip()
