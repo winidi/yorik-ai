@@ -15,8 +15,9 @@
       },
       "google": {
         "open": "Google-Kalender-Einstellungen öffnen",
-        "step1": "Links unter „Einstellungen für meine Kalender\" deinen Kalender antippen",
-        "step2": "Runterscrollen zu „Kalender integrieren\" → Privatadresse im iCal-Format kopieren"
+        "step1": "Im Browser öffnen, nicht in der Google-Kalender-App (sie zeigt die Adresse nicht). Am Handy: calendar.google.com öffnen und im Browser-Menü „Desktopwebsite\" einschalten",
+        "step2": "Links unter „Einstellungen für meine Kalender\" deinen Kalender antippen",
+        "step3": "Runterscrollen zu „Kalender integrieren\" → die „Privatadresse im iCal-Format\" kopieren. Den Kalender nicht öffentlich machen"
       },
       "icloud": {
         "step1": "iPhone: Kalender-App → unten „Kalender\" → beim Kalender auf ⓘ tippen",
@@ -41,6 +42,7 @@
     "tabFile": "Datei importieren (einmalig)",
     "subscribeIntro": "Yorik spiegelt den Kalender und gleicht ihn alle 15 Minuten ab. Er ist hier nur lesbar: Termine trägst du weiter bei Google ein, sie erscheinen dann in Yorik, auf der Familientafel und in der Suche. Nichts geht von Yorik zu Google.",
     "pasteHere": "Hier einfügen. Die Adresse ist geheim; Yorik speichert sie verschlüsselt.",
+    "publicAddress": "Das ist die öffentliche Adresse. Sie funktioniert nur, solange der Kalender für jeden im Internet offen ist. Nimm stattdessen die „Privatadresse im iCal-Format\" und schalte die öffentliche Freigabe bei Google wieder aus.",
     "namePlaceholder": "Name in Yorik",
     "subscribe": "Abonnieren",
     "subscribed": "Abonniert",

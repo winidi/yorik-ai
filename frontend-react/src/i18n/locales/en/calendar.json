@@ -15,8 +15,9 @@
       },
       "google": {
         "open": "Open Google Calendar settings",
-        "step1": "On the left under “Settings for my calendars”, tap your calendar",
-        "step2": "Scroll down to “Integrate calendar” → copy the secret address in iCal format"
+        "step1": "Use a browser, not the Google Calendar app (it does not show the address). On a phone: open calendar.google.com and switch on “Desktop site” in the browser menu",
+        "step2": "On the left under “Settings for my calendars”, tap your calendar",
+        "step3": "Scroll down to “Integrate calendar” → copy the “Secret address in iCal format”. Do not make the calendar public"
       },
       "icloud": {
         "step1": "iPhone: Calendar app → “Calendars” at the bottom → tap ⓘ next to the calendar",
@@ -41,6 +42,7 @@
     "tabFile": "Import a file (one time)",
     "subscribeIntro": "Yorik mirrors the calendar and syncs it every 15 minutes. It is read-only here: you keep adding events in Google, and they then show up in Yorik, on the family board and in search. Nothing goes from Yorik to Google.",
     "pasteHere": "Paste it here. The address is secret; Yorik stores it encrypted.",
+    "publicAddress": "This is the public address. It only works while the calendar is open to everyone on the internet. Take the “Secret address in iCal format” instead and switch public sharing off again in Google.",
     "namePlaceholder": "Name in Yorik",
     "subscribe": "Subscribe",
     "subscribed": "Subscribed",

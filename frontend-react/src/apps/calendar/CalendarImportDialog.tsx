@@ -6,6 +6,7 @@
  * Backend: backend/calendar_import.py.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CloudDownload, ExternalLink, FileUp, Loader2, RefreshCw, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
@@ -22,7 +23,7 @@ interface Preview { events: number; series: number; first: string | null; last: 
 // (calendar.import.source.<id>.*), shown in the person's language.
 type SourceId = "google" | "icloud" | "outlook" | "other";
 const SOURCES: Record<SourceId, { label: string; steps: number; url?: string }> = {
-  google:  { label: "Google", url: "https://calendar.google.com/calendar/r/settings", steps: 2 },
+  google:  { label: "Google", url: "https://calendar.google.com/calendar/r/settings", steps: 3 },
   icloud:  { label: "iPhone / iCloud", steps: 2 },
   outlook: { label: "Outlook", url: "https://outlook.live.com/calendar/0/options/calendar/SharedCalendars", steps: 2 },
   other:   { get label() { return i18n.t("calendar.import.source.other.label"); }, steps: 1 },
@@ -96,9 +97,11 @@ export function CalendarImportDialog({ calendars, onClose, onChanged }: {
   const nameOf = (id: number) => calendars.find(c => c.id === id)?.name || t("calendar.import.calendarFallback");
   const day = (iso: string | null) => iso ? formatDate(iso) : "";
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 grid place-items-center p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-xl border border-border bg-card text-card-foreground shadow-xl" onClick={e => e.stopPropagation()}>
+  // Into the body: the dialog is opened from the calendar sidebar, which is
+  // a slid-away drawer on a phone, and a fixed box inside it moves with it.
+  return createPortal(
+    <div className="fixed inset-0 z-[80] bg-black/50 grid place-items-center p-4" onClick={onClose}>
+      <div className="w-full max-w-lg max-h-full overflow-y-auto rounded-xl border border-border bg-card text-card-foreground shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 h-14 border-b border-border">
           <div className="font-semibold text-sm">{t("calendar.import.title")}</div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
@@ -139,6 +142,9 @@ export function CalendarImportDialog({ calendars, onClose, onChanged }: {
               )}
               <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
                      className="w-full h-9 rounded-md border border-border bg-background px-3 text-xs" />
+              {/\/calendar\/ical\/[^/]+\/public\//.test(url) && (
+                <p className="text-xs text-amber-600">{t("calendar.import.publicAddress")}</p>
+              )}
               <div className="flex gap-2">
                 <input value={name} onChange={e => setName(e.target.value)} placeholder={t("calendar.import.namePlaceholder")}
                        className="flex-1 h-9 rounded-md border border-border bg-background px-3 text-xs" />
@@ -204,5 +210,5 @@ export function CalendarImportDialog({ calendars, onClose, onChanged }: {
         </div>
       </div>
     </div>
-  );
+  , document.body);
 }
