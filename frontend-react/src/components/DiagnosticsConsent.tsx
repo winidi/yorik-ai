@@ -149,10 +149,13 @@ export function DiagnosticsConsentStep({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background text-foreground px-6 py-8 login-bg">
+    // The page is its own scroll container: the body does not scroll
+    // (index.css), and on a phone this step is taller than the screen.
+    <div className="h-screen overflow-y-auto bg-background text-foreground login-bg">
+     <div className="min-h-full flex items-center justify-center px-4 sm:px-6 py-6 sm:py-8">
       <div className="w-full max-w-xl">
         <div className="bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
-          <div className="px-7 pt-7 pb-3">
+          <div className="px-5 sm:px-7 pt-5 sm:pt-7 pb-3">
             <div className="flex items-center gap-2 text-xl font-semibold">
               <ShieldCheck className="w-5 h-5 text-violet-500" />
               {t("onboarding.diagnostics.title", "May Yorik tell its makers when something goes wrong?")}
@@ -161,10 +164,10 @@ export function DiagnosticsConsentStep({ onDone }: { onDone: () => void }) {
               {t("onboarding.diagnostics.subtitle", "Everything is off. Each switch is a separate yes, you can change them any time in Settings → Privacy, and Yorik never sends mail, documents or messages — people become numbers before anything leaves this computer.")}
             </div>
           </div>
-          <div className="px-7 pb-7">
+          <div className="px-5 sm:px-7 pb-5 sm:pb-7">
             <DiagnosticsSwitches value={value} onChange={setValue} disabled={busy} />
           </div>
-          <div className="border-t border-border px-7 py-4 bg-muted/20 flex items-center justify-between gap-2">
+          <div className="border-t border-border px-5 sm:px-7 py-4 bg-muted/20 flex items-center justify-between gap-2">
             <div className="text-xs text-red-500 truncate flex-1">{err}</div>
             <button
               onClick={save}
@@ -181,6 +184,7 @@ export function DiagnosticsConsentStep({ onDone }: { onDone: () => void }) {
           </div>
         </div>
       </div>
+     </div>
     </div>
   );
 }
