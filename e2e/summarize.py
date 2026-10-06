@@ -28,10 +28,15 @@ def main() -> None:
         findings = [f for r in crawl for f in r["findings"]]
         hard = [f for f in findings if f["kind"] in ("crash", "server", "blank", "overflow", "console")]
         refused = [f for f in findings if f["kind"] == "client"]
+        # the phone check names every control it cannot get to; one page
+        # with one kind of trouble is one problem
+        reach = {(f["route"], f["message"].split(":")[0]) for f in findings if f["kind"] == "reach"}
         clicks = sum(r["clicks"] for r in crawl)
-        problems += len({(f["route"], f["message"]) for f in hard})
+        problems += len({(f["route"], f["message"]) for f in hard}) + len(reach)
         lines += [f"## Crawler — {clicks} clicks, {len(crawl)} person × device runs", "",
                   f"- visibly broken (crash, server error, blank, console, phone overflow): **{len({(f['route'], f['message']) for f in hard})}**",
+                  f"- phone: pages where a finger cannot get to something (out of reach, cut off, covered): **{len(reach)}**"
+                  + (" — " + ", ".join(sorted(f"{r} ({k})" for r, k in reach)) if reach else ""),
                   f"- buttons shown to someone who may not use them (refused calls): {len({(f['route'], f['message']) for f in refused})}",
                   "- details: [SUMMARY.md](SUMMARY.md)", ""]
     else:

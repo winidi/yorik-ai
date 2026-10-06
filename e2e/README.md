@@ -7,7 +7,12 @@ the way the family would:
   and child, on desktop and phone, and clicks every button, tab,
   checkbox and select it may. It reports what is visibly broken: crashes,
   server errors, blank screens, console errors, phone pages wider than
-  the phone, and buttons someone is shown but not allowed to use.
+  the phone, and buttons someone is shown but not allowed to use. On the
+  phone it also checks, after every click, that a finger can get to
+  everything on the screen (`reach.mjs`): nothing above or below the
+  screen without a container that scrolls by touch, nothing cut off by a
+  screen-sized box, no control lying under another one or under the tab
+  bar. A picture of each such finding is in `report/shots/reach-*.png`.
 - **Journeys** (`journeys.py`): about 60 checks that Yorik does the
   *right* thing. A child sees only her chores, Ben cannot open Anna's
   mail, a daily chore comes back, the chat creates what it says it

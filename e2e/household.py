@@ -345,6 +345,20 @@ def seed(settings: dict[str, str]) -> dict:
     # answered "everything off" for the admin, so no journey meets the step
     _ok(anna.put(f"{BASE}/api/diagnostics/consent", json={"counts": False, "usage": False, "errors": False}), "diagnostics consent")
 
+    # Both children have a full timetable: eight periods on five days, so
+    # the timetable on the board is wider and taller than a phone.
+    subjects = ["Deutsch", "Mathe", "Englisch", "Sachkunde", "Sport", "Musik", "Kunst", "Religion"]
+    periods = [{"start": f"{7 + i:02d}:45", "end": f"{8 + i:02d}:30"} for i in range(8)]
+    for child in ("clara", "david"):
+        cells = {f"{day}-{row}": {"subject": subjects[(day + row) % len(subjects)], "room": f"R{100 + day * 10 + row}"}
+                 for day in range(5) for row in range(8)}
+        _ok(anna.put(f"{BASE}/api/ambient/timetable/{ids[child]}", json={"periods": periods, "cells": cells}), f"timetable {child}")
+    # A timetable shows only for children who are on the family board.
+    # Clara is; David joins in a journey ("Mich anzeigen"), which also
+    # overwrites Clara's timetable, so the crawler that runs afterwards
+    # finds David's.
+    _ok(sessions["clara"].patch(f"{BASE}/api/users/me/kiosk-agenda-consent", json={"consent": True}), "board consent clara")
+
     role_of = {k: r for k, _n, _e, r, _p in FAMILY}
 
     def task(who: str, title: str, **kw) -> None:

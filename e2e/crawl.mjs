@@ -13,6 +13,7 @@ import { chromium } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { reachFindings } from "./reach.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const HOUSEHOLD = JSON.parse(fs.readFileSync(path.join(HERE, ".run", "household.json"), "utf8"));
@@ -28,9 +29,12 @@ const ROUTES = [
   "/r/contacts", "/r/documents", "/r/photos", "/r/recordings", "/r/compose", "/r/write",
   "/r/board", "/r/ambient", "/r/pipelines", "/r/settings",
 ];
+// CRAWL_PHONE=360x560 crawls as a small phone.
+const [PHONE_W, PHONE_H] = (process.env.CRAWL_PHONE || "390x700").split("x").map(Number);
 const VIEWPORTS = {
   desktop: { viewport: { width: 1440, height: 900 } },
-  phone: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
+  // 700 high: what is left of a phone screen once the browser's bars are on it.
+  phone: { viewport: { width: PHONE_W, height: PHONE_H }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
 };
 // Anna runs the box, Ben is the other parent, Clara a child.
 const PEOPLE = ["anna", "ben", "clara"];
@@ -77,6 +81,17 @@ async function looks(page, sink, viewport) {
   if (facts.text < 15) sink.add("blank", `the page shows almost nothing (${facts.text} characters)`, sink.context);
   if (viewport === "phone" && facts.scroll > facts.inner + 2)
     sink.add("overflow", `page is ${facts.scroll}px wide on a ${facts.inner}px phone`, sink.context);
+  if (viewport === "phone") {
+    const found = await reachFindings(page);
+    for (const f of found) sink.add("reach", `${f.kind}: ${f.what} — ${f.detail}`, sink.context);
+    // One picture per page and kind of problem, taken while it shows.
+    for (const kind of new Set(found.map((f) => f.kind))) {
+      const key = `${sink.context.person}${sink.context.route.replaceAll("/", "_")}-${kind}`;
+      if (sink.shot.has(key)) continue;
+      sink.shot.add(key);
+      await page.screenshot({ path: path.join(REPORT, "shots", `reach-${key}.png`) }).catch(() => {});
+    }
+  }
 }
 
 async function candidates(page) {
@@ -121,6 +136,17 @@ async function crawlRoute(page, sink, person, viewport, route) {
     const handle = (await page.$$(CLICKABLE))[next.i];
     if (!handle) continue;
     try {
+      // On a phone an app's side menu is a drawer that is slid away: open
+      // it first, or nothing inside it is ever clicked.
+      const side = await handle.evaluate((el) => {
+        const r = el.getBoundingClientRect(), cx = r.left + r.width / 2;
+        if (cx >= 0 && cx <= window.innerWidth) return null;
+        return el.closest("aside") ? (cx < 0 ? "left" : "right") : null;
+      });
+      if (side) {
+        const opener = page.locator(side === "left" ? 'button[aria-label="Open menu"]' : 'button[aria-label="Details"]').first();
+        if (await opener.count()) { await opener.click({ timeout: 2000 }).catch(() => {}); await page.waitForTimeout(350); }
+      }
       if (next.tag === "select") {
         const values = await handle.$$eval("option", (os) => os.map((o) => o.value));
         if (values.length > 1) await handle.selectOption(values[values.length - 1]);
@@ -147,7 +173,7 @@ async function crawlRoute(page, sink, person, viewport, route) {
 // ─── the run ────────────────────────────────────────────────────────
 
 class Sink {
-  constructor() { this.findings = []; this.context = {}; }
+  constructor() { this.findings = []; this.context = {}; this.shot = new Set(); }
   add(kind, message, context) { this.findings.push({ kind, message, ...context }); }
 }
 
@@ -174,6 +200,7 @@ const LABEL = {
   server: "Server error (5xx) or page did not load",
   blank: "Blank page",
   overflow: "Phone: page wider than the screen",
+  reach: "Phone: something a finger cannot get to (out of reach, cut off, or covered)",
   console: "Error in the browser console",
   client: "Refused or missing API call (4xx)",
 };
