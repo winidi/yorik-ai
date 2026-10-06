@@ -19,5 +19,44 @@
     "history": "History",
     "range": "{{from}} to {{to}}",
     "running": "(active)"
+  },
+  "diagnostics": {
+    "title": "Diagnostics for Yorik's makers",
+    "intro": "What Yorik may report about how it works here. Off means nothing leaves this computer. People, addresses and chats are replaced by numbers before any report; you review every error report before it is sent.",
+    "introMember": "The admin decides what Yorik may report about how it works here. You review every error report from your own chats before it is sent.",
+    "cloudNote": "Your model runs in a cloud, so free text in reports is left out entirely (only a local model may check names).",
+    "counts": {
+      "title": "Counts and versions",
+      "what": "Once a day: Yorik's version, the kind of computer, how many people use it (as a range), how often the chat was used, thumbs up and down. Numbers only, never content."
+    },
+    "usage": {
+      "title": "Which features are used",
+      "what": "Which kinds of features get used — mail, WhatsApp, documents, calendar, bank — as ranges. Not which mail, not whose."
+    },
+    "errors": {
+      "title": "Error reports",
+      "what": "When something goes wrong, Yorik writes a report in which every person, address, phone and chat is replaced by a number (person_7). You see the exact report and send it yourself, or not. Never mail text, documents or messages."
+    },
+    "example": "What leaves the house, for example:",
+    "allFields": "Every field Yorik can send",
+    "noFields": "The list could not be loaded.",
+    "tier": "tier",
+    "saved": "Saved",
+    "resetDone": "New identity. {{n}} pseudonyms forgotten.",
+    "whatWasSent": "What Yorik has sent",
+    "reset": "Reset identity (forget every pseudonym)",
+    "askedAt": "Answered",
+    "saveFailed": "Could not save. Try again.",
+    "reportsTitle": "What Yorik has sent",
+    "reportsIntro": "Every report Yorik drafted, queued or sent, with the exact bytes. The same text is written to the log.",
+    "none": "Nothing yet. Reports appear here when one is drafted from a thumbs-down or \"Report a problem\", or when daily counts are switched on.",
+    "kind": "Kind",
+    "status": "Status",
+    "size": "Size",
+    "daily": "daily counts",
+    "error": "error",
+    "replaced": "Replaced",
+    "dropped": "fields dropped",
+    "freeTextDropped": "free text left out"
   }
 }

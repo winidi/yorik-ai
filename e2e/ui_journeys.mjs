@@ -122,6 +122,46 @@ if (H.real_llm) await journey("Anna asks the chat on her phone and gets an answe
           (text.split("Welche Termine habe ich morgen?").pop() || "").replace(/\s+/g, " ").slice(0, 200)];
 }, browser);
 
+// Diagnostics: the admin is asked once, a thumbs-down drafts a report
+// with nothing in clear, sending queues it, and nothing leaves for
+// any other host (newPage aborts every foreign request).
+await journey("the admin is asked about diagnostics once, a report shows numbers instead of people", "desktop", async (page) => {
+  await login(page, "anna");
+  const asked = await page.getByText("May Yorik tell its makers").count();
+  if (asked) {
+    await page.getByRole("switch").nth(2).click();
+    await page.getByText("Save my choices").click();
+    await page.waitForLoadState("networkidle");
+  } else {
+    await page.evaluate(async () => fetch("/api/diagnostics/consent", { method: "PUT", headers: { "Content-Type": "application/json" },
+                                                                       body: JSON.stringify({ errors: true }) }));
+  }
+  await page.goto(BASE + "/r/home"); await page.waitForLoadState("networkidle");
+  const again = await page.getByText("May Yorik tell its makers").count();
+  await page.goto(BASE + "/r/chat"); await page.waitForLoadState("networkidle");
+  if (await page.getByText("Start a conversation").count()) { await page.getByText("Start a conversation").first().click(); await page.waitForTimeout(600); }
+  const box = page.locator("textarea[placeholder^='Ask me'], input[placeholder^='Ask me']").first();
+  await box.fill("Hat Oma Hilde mir wegen Sonntag Kaffee geschrieben?"); await box.press("Enter");
+  await page.waitForTimeout(6000);
+  await page.getByTitle("This wasn't helpful").last().click(); await page.waitForTimeout(500);
+  await page.getByText("found nothing").last().click(); await page.waitForTimeout(300);
+  await page.getByText("Send a diagnostic report").last().click(); await page.waitForTimeout(4000);
+  await page.locator("summary", { hasText: "The exact report" }).click(); await page.waitForTimeout(300);
+  const exact = await page.locator("textarea[readonly]").last().inputValue();
+  await page.getByText("Send this report").click(); await page.waitForTimeout(1500);
+  const reports = await page.evaluate(async () => (await fetch("/api/diagnostics/reports")).json());
+  const row = reports.reports.find(r => r.kind === "error");
+  const ok = asked + again <= 1 && !exact.includes("Hilde") && exact.includes("person_") && row && row.status === "queued"
+             && !JSON.stringify(row.payload).includes("Hilde");
+  return [ok, `asked ${asked} again ${again} · exact has person_: ${exact.includes("person_")} Hilde: ${exact.includes("Hilde")} · row: ${row ? row.status : "none"}`];
+}, browser);
+
+await journey("a member is never asked about diagnostics", "phone", async (page) => {
+  await login(page, "ben");
+  const asked = await page.getByText("May Yorik tell its makers").count();
+  return [asked === 0, `asked ${asked}`];
+}, browser);
+
 async function openMail(page, subject) {
   await page.goto(BASE + "/r/email");
   await page.waitForLoadState("networkidle");

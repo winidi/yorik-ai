@@ -19,5 +19,11 @@
     "chipAddress": "Deine Adresse",
     "chipBusiness": "Privat oder Firma",
     "letsGo": "Los geht's"
+  },
+  "diagnostics": {
+    "title": "Darf Yorik seinen Entwicklern sagen, wenn etwas schiefgeht?",
+    "subtitle": "Alles ist aus. Jeder Schalter ist ein eigenes Ja, du kannst sie jederzeit unter Einstellungen → Privatsphäre ändern, und Yorik sendet nie Mails, Dokumente oder Nachrichten – Personen werden zu Nummern, bevor etwas diesen Rechner verlässt.",
+    "save": "Meine Auswahl speichern",
+    "saveNone": "Alles aus lassen"
   }
 }

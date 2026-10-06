@@ -8,5 +8,9 @@
   "close": "Schließen",
   "back": "Zurück",
   "loading": "Lädt…",
-  "error": "Etwas ist schiefgegangen"
+  "error": "Etwas ist schiefgegangen",
+  "on": "an",
+  "off": "aus",
+  "refresh": "Aktualisieren",
+  "date": "Datum"
 }

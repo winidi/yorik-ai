@@ -159,5 +159,21 @@
     "visParents": "The adults of the household will see it",
     "visBusiness": "Everyone in the business group will see it",
     "visHousehold": "The whole household will see it"
+  },
+  "diag": {
+    "title": "Send a diagnostic report?",
+    "intro": "This is exactly what would leave this computer. People, addresses and chats are already numbers; the words of your mails and messages are never included. You can shorten the text; nothing is sent until you click Send.",
+    "preparing": "Preparing the report …",
+    "replaced": "Replaced",
+    "nothingReplaced": "nothing needed replacing",
+    "dropped": "fields left out",
+    "freeTextDropped": "Your question's words were left out: your model runs in a cloud, so no local model could check it for names.",
+    "question": "Your question, as it would be sent (shorten it if you like)",
+    "note": "What went wrong, in your words (optional)",
+    "notePlaceholder": "e.g. it showed last month's order, not the newest",
+    "exact": "The exact report",
+    "sentText": "Thank you. The report is queued and leaves with the next send; you can see it under Settings → Developer → Diagnostics.",
+    "dontSend": "Don't send",
+    "send": "Send this report"
   }
 }

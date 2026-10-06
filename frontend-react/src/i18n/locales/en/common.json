@@ -8,5 +8,9 @@
   "close": "Close",
   "back": "Back",
   "loading": "Loading…",
-  "error": "Something went wrong"
+  "error": "Something went wrong",
+  "on": "on",
+  "off": "off",
+  "refresh": "Refresh",
+  "date": "Date"
 }

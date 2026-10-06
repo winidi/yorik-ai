@@ -19,5 +19,11 @@
     "chipAddress": "Your address",
     "chipBusiness": "Personal or business",
     "letsGo": "Let's go"
+  },
+  "diagnostics": {
+    "title": "May Yorik tell its makers when something goes wrong?",
+    "subtitle": "Everything is off. Each switch is a separate yes, you can change them any time in Settings → Privacy, and Yorik never sends mail, documents or messages — people become numbers before anything leaves this computer.",
+    "save": "Save my choices",
+    "saveNone": "Keep everything off"
   }
 }

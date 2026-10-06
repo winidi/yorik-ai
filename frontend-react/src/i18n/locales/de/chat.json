@@ -159,5 +159,21 @@
     "visParents": "Die Erwachsenen im Haushalt sehen es",
     "visBusiness": "Alle in der Firmengruppe sehen es",
     "visHousehold": "Der ganze Haushalt sieht es"
+  },
+  "diag": {
+    "title": "Diagnosebericht senden?",
+    "intro": "Genau das würde diesen Rechner verlassen. Personen, Adressen und Chats sind bereits Nummern; die Wörter deiner Mails und Nachrichten sind nie dabei. Du kannst den Text kürzen; gesendet wird erst, wenn du auf Senden klickst.",
+    "preparing": "Bericht wird vorbereitet …",
+    "replaced": "Ersetzt",
+    "nothingReplaced": "nichts musste ersetzt werden",
+    "dropped": "Felder weggelassen",
+    "freeTextDropped": "Die Wörter deiner Frage wurden weggelassen: Dein Modell läuft in einer Cloud, kein lokales Modell konnte sie auf Namen prüfen.",
+    "question": "Deine Frage, so wie sie gesendet würde (kürze sie, wenn du magst)",
+    "note": "Was schiefging, in deinen Worten (optional)",
+    "notePlaceholder": "z. B. es zeigte die Bestellung vom letzten Monat, nicht die neueste",
+    "exact": "Der genaue Bericht",
+    "sentText": "Danke. Der Bericht ist eingereiht und geht mit dem nächsten Versand raus; du findest ihn unter Einstellungen → Entwickler → Diagnose.",
+    "dontSend": "Nicht senden",
+    "send": "Diesen Bericht senden"
   }
 }

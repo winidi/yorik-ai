@@ -19,5 +19,44 @@
     "history": "Verlauf",
     "range": "{{from}} bis {{to}}",
     "running": "(läuft)"
+  },
+  "diagnostics": {
+    "title": "Diagnose für die Entwickler von Yorik",
+    "intro": "Was Yorik darüber melden darf, wie es hier läuft. Aus heißt: Nichts verlässt diesen Rechner. Personen, Adressen und Chats werden vor jedem Bericht durch Nummern ersetzt; jeden Fehlerbericht siehst du vor dem Senden.",
+    "introMember": "Der Admin entscheidet, was Yorik darüber melden darf, wie es hier läuft. Jeden Fehlerbericht aus deinen eigenen Gesprächen siehst du vor dem Senden.",
+    "cloudNote": "Dein Modell läuft in einer Cloud, deshalb bleibt Freitext in Berichten ganz weg (nur ein lokales Modell darf Namen prüfen).",
+    "counts": {
+      "title": "Zahlen und Versionen",
+      "what": "Einmal am Tag: Yoriks Version, die Art des Rechners, wie viele Personen ihn nutzen (als Spanne), wie oft der Chat benutzt wurde, Daumen hoch und runter. Nur Zahlen, nie Inhalte."
+    },
+    "usage": {
+      "title": "Welche Funktionen genutzt werden",
+      "what": "Welche Arten von Funktionen genutzt werden – Mail, WhatsApp, Dokumente, Kalender, Bank – als Spannen. Nicht welche Mail, nicht von wem."
+    },
+    "errors": {
+      "title": "Fehlerberichte",
+      "what": "Wenn etwas schiefgeht, schreibt Yorik einen Bericht, in dem jede Person, Adresse, Telefonnummer und jeder Chat durch eine Nummer ersetzt ist (person_7). Du siehst den genauen Bericht und sendest ihn selbst – oder nicht. Nie Mailtexte, Dokumente oder Nachrichten."
+    },
+    "example": "Was das Haus verlässt, zum Beispiel:",
+    "allFields": "Jedes Feld, das Yorik senden kann",
+    "noFields": "Die Liste konnte nicht geladen werden.",
+    "tier": "Stufe",
+    "saved": "Gespeichert",
+    "resetDone": "Neue Kennung. {{n}} Pseudonyme vergessen.",
+    "whatWasSent": "Was Yorik gesendet hat",
+    "reset": "Kennung zurücksetzen (alle Pseudonyme vergessen)",
+    "askedAt": "Beantwortet",
+    "saveFailed": "Konnte nicht speichern. Noch einmal versuchen.",
+    "reportsTitle": "Was Yorik gesendet hat",
+    "reportsIntro": "Jeder Bericht, den Yorik entworfen, eingereiht oder gesendet hat, mit den genauen Bytes. Derselbe Text steht im Protokoll.",
+    "none": "Noch nichts. Berichte erscheinen hier, wenn einer aus einem Daumen runter oder „Problem melden“ entsteht oder die täglichen Zahlen eingeschaltet sind.",
+    "kind": "Art",
+    "status": "Status",
+    "size": "Größe",
+    "daily": "tägliche Zahlen",
+    "error": "Fehler",
+    "replaced": "Ersetzt",
+    "dropped": "Felder weggelassen",
+    "freeTextDropped": "Freitext weggelassen"
   }
 }
