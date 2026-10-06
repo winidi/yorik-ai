@@ -3634,6 +3634,7 @@ function PhotoLightbox({
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const swipeFrom = useRef<{ x: number; y: number } | null>(null);
 
   // Clamp index so a stale value (e.g. after the list changes) doesn't crash.
   const safeIdx = Math.max(0, Math.min(index, photos.length - 1));
@@ -3737,52 +3738,96 @@ function PhotoLightbox({
     window.location.href = `/r/photos?asset=${encodeURIComponent(photo.id)}`;
   }
 
+  // Swipe left / right walks through the photos on a phone.
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    swipeFrom.current = e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null;
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    const from = swipeFrom.current;
+    swipeFrom.current = null;
+    if (!from) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - from.x, dy = t.clientY - from.y;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx < 0 && hasNext) onChangeIndex(safeIdx + 1);
+    else if (dx > 0 && hasPrev) onChangeIndex(safeIdx - 1);
+  }
+
+  const arrow = "absolute top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-black/50 text-white hover:bg-black/70 transition cursor-pointer disabled:opacity-30 disabled:cursor-default";
+
+  // Fixed layout: a bar on top, the photo in a stage of constant size,
+  // the actions below. Whatever the photo's shape, the arrows, the
+  // close button and the action bar stay where they are. data-no-swipe
+  // keeps the app-to-app swipe (SwipeNav) out of the viewer.
   return (
     <div
-      className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex items-center justify-center p-6 cursor-zoom-out"
+      data-no-swipe
+      className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex flex-col cursor-zoom-out"
       onClick={onClose}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
-      {/* Prev / next arrows — fixed to the viewport edges so they don't
-          shift when the image's aspect ratio changes between photos.
-          stopPropagation keeps a click on the arrow from closing the
-          lightbox. */}
-      {hasPrev && (
+      <div className="relative h-14 shrink-0 flex items-center justify-center">
+        {photos.length > 1 && (
+          <div className="text-xs text-white/85 bg-black/55 px-3 py-1 rounded-full">
+            Photo {safeIdx + 1} of {photos.length}
+          </div>
+        )}
         <button
           type="button"
-          aria-label="Previous photo"
-          onClick={(e) => { e.stopPropagation(); onChangeIndex(safeIdx - 1); }}
-          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 text-white hover:bg-black/70 transition cursor-pointer"
+          aria-label="Close"
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition cursor-pointer"
         >
-          <ChevronLeft className="w-6 h-6" />
+          <X className="w-5 h-5" />
         </button>
-      )}
-      {hasNext && (
-        <button
-          type="button"
-          aria-label="Next photo"
-          onClick={(e) => { e.stopPropagation(); onChangeIndex(safeIdx + 1); }}
-          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 text-white hover:bg-black/70 transition cursor-pointer"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-      )}
-      {photos.length > 1 && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 text-xs text-white/85 bg-black/55 px-3 py-1 rounded-full">
-          Photo {safeIdx + 1} of {photos.length}
-        </div>
-      )}
+      </div>
 
-      <div
-        className="relative max-w-full max-h-full flex flex-col items-center gap-3"
-        onClick={e => e.stopPropagation()}
-      >
+      {/* The stage. The photo is centred in it and never larger than it. */}
+      <div className="relative flex-1 min-h-0 mx-3 sm:mx-20">
         <img
           src={displayUrl}
           alt={photo.original_name || "Photo"}
-          className="max-w-full max-h-[78vh] object-contain rounded-lg shadow-2xl cursor-default"
+          onClick={e => e.stopPropagation()}
+          className="absolute inset-0 m-auto max-w-full max-h-full object-contain rounded-lg shadow-2xl cursor-default"
         />
+      </div>
+
+      {/* Prev / next: above the photo, at the same place for every photo.
+          At the first and the last photo the arrow stays, dimmed. */}
+      {photos.length > 1 && (
+        <>
+          <button
+            type="button"
+            aria-label="Previous photo"
+            disabled={!hasPrev}
+            onClick={(e) => { e.stopPropagation(); if (hasPrev) onChangeIndex(safeIdx - 1); }}
+            className={cn(arrow, "left-2 sm:left-4")}
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <button
+            type="button"
+            aria-label="Next photo"
+            disabled={!hasNext}
+            onClick={(e) => { e.stopPropagation(); if (hasNext) onChangeIndex(safeIdx + 1); }}
+            className={cn(arrow, "right-2 sm:right-4")}
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+        </>
+      )}
+
+      <div className="relative shrink-0 flex flex-col items-center gap-2 px-4 pt-3 pb-4">
+        {hint && (
+          <div className="absolute -top-8 text-xs text-white/85 bg-black/60 px-3 py-1 rounded-full">{hint}</div>
+        )}
         {/* Action bar */}
-        <div className="bg-card/95 backdrop-blur border border-border rounded-xl shadow-2xl px-2 py-1.5 flex items-center gap-1 cursor-default flex-wrap justify-center max-w-[calc(100vw-2rem)]">
+        <div
+          onClick={e => e.stopPropagation()}
+          className="bg-card/95 backdrop-blur border border-border rounded-xl shadow-2xl px-2 py-1.5 flex items-center gap-1 cursor-default flex-wrap justify-center max-w-full"
+        >
           <LbAction onClick={copyToClipboard} busy={busy === "copy"} title="Copy to clipboard">
             <Copy className="w-4 h-4" /> <span className="hidden sm:inline">Copy</span>
           </LbAction>
@@ -3806,15 +3851,10 @@ function PhotoLightbox({
             <Eye className="w-4 h-4" /> <span className="hidden sm:inline">Photos app</span>
           </LbAction>
         </div>
-        {hint && (
-          <div className="text-xs text-white/85 bg-black/60 px-3 py-1 rounded-full">{hint}</div>
-        )}
-        {(photo.original_name || photo.taken_at) && (
-          <div className="text-xs text-white/60">
-            {photo.original_name}
-            {photo.taken_at && <span className="opacity-70"> · {photo.taken_at.slice(0, 10)}</span>}
-          </div>
-        )}
+        <div className="h-4 max-w-full truncate text-xs text-white/60">
+          {photo.original_name}
+          {photo.taken_at && <span className="opacity-70"> · {photo.taken_at.slice(0, 10)}</span>}
+        </div>
       </div>
     </div>
   );
