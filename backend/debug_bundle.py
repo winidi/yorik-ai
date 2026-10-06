@@ -1,7 +1,8 @@
 """Debug bundle — user-initiated, paste-anywhere export of one
 conversation for sharing in bug reports.
 
-Yorik is local-first; there is no telemetry pipeline. The bundle is
+Yorik is local-first; this bundle is never sent by Yorik itself (the
+opt-in diagnostics live in backend/diagnostics). The bundle is
 built on demand, redacted server-side, and returned to the caller.
 What the caller does with it (paste in a GitHub issue, send to a
 maintainer, drop into a chat with their own assistant) is up to them

@@ -297,6 +297,8 @@ def get_user_for_session(sid: Optional[str], ip: Optional[str] = None) -> Option
         "agent_may_confirm_deletes": bool(row["agent_may_confirm_deletes"]),
         "voice_ack_enabled": bool(row["voice_ack_enabled"]),
         "dev_mode":          bool(row["dev_mode"]),
+        # the one-time diagnostics step after setup (backend/diagnostics)
+        "diag_consent_asked": _diag_consent_asked(),
         "default_doc_visibility": row["default_doc_visibility"] or "private",
         "first_name":         row["first_name"] or "",
         "last_name":          row["last_name"] or "",
@@ -639,6 +641,14 @@ def current_user(
                           extra={"event": "deny_no_session", "path": request.url.path})
         raise HTTPException(status_code=401, detail="not authenticated")
     return user
+
+
+def _diag_consent_asked() -> bool:
+    try:
+        from backend.diagnostics import consent
+        return bool(consent()["asked"])
+    except Exception:  # noqa: BLE001 — never let a settings read break a login
+        return False
 
 
 def require_admin(request: Request, user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
