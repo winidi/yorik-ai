@@ -17,6 +17,7 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - The assistant no longer offers to connect services Yorik has no integration for (it offered a "Facebook connector"). Setting up an integration from the chat is switched off until Settings has a page for it; mail accounts are added in the Email app, a bank in Finance.
+- The assistant no longer lists Gmail, Twilio and an n8n test as integrations on boxes that have no n8n; these three are off unless `YORIK_N8N_CONNECTORS=1` is set.
 - The bell's "Add to bills" button works again (it called a retired skill).
 - On a phone the first screens (sign in, setup, joining with a QR code, the welcome steps, the question about diagnostics) can be scrolled when they are taller than the screen; before, the button at the end could be out of reach.
 

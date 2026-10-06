@@ -4,7 +4,9 @@ A **connector** is a function the LLM can call by name. *"What's the weather in 
 
 If you want Yorik to talk to a service it doesn't talk to yet — Spotify, Strava, your bank, your power meter, anything — this is the doc.
 
-## Heads up: n8n is BYO (bring-your-own)
+## Heads up: n8n is BYO (bring-your-own), and off by default
+
+The n8n-backed connectors (`email-gmail`, `sms-twilio`, `n8n-echo`) are not registered unless `YORIK_N8N_CONNECTORS=1` is set in `config.env`. Without it the assistant neither lists nor calls them.
 
 OAuth-heavy connectors (Gmail, Twilio, anything where managing rotating tokens in Python is painful) can install themselves as n8n workflows. **Yorik does NOT bundle n8n.** n8n ships under the [Sustainable Use License](https://docs.n8n.io/sustainable-use-license/) — source-available, not OSI-approved open source. Bundling it would drag SUL distribution terms into the AGPL-3 codebase and create license-compatibility friction we don't want.
 

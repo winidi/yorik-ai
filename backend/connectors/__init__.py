@@ -23,6 +23,7 @@ import asyncio
 import importlib
 import inspect
 import logging
+import os
 import pkgutil
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional
@@ -58,7 +59,17 @@ class ConnectorSpec:
 _REGISTRY: Dict[str, ConnectorSpec] = {}
 
 
+def n8n_connectors_enabled() -> bool:
+    """n8n-backed connectors (Gmail, Twilio, the echo test) are off unless
+    the box opts in: nobody uses them yet, and listed they read like
+    integrations the household has."""
+    return os.getenv("YORIK_N8N_CONNECTORS", "").strip().lower() in ("1", "true", "yes")
+
+
 def register(spec: ConnectorSpec) -> None:
+    if spec.backend == "n8n" and not n8n_connectors_enabled():
+        log.info("connector not registered: %s (n8n connectors are off; YORIK_N8N_CONNECTORS=1)", spec.name)
+        return
     if spec.name in _REGISTRY:
         log.warning("connector '%s' already registered — overwriting", spec.name)
     _REGISTRY[spec.name] = spec
