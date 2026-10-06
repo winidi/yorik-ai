@@ -15,7 +15,7 @@
       },
       "google": {
         "open": "Google-Kalender-Einstellungen öffnen",
-        "step1": "Im Browser öffnen, nicht in der Google-Kalender-App (sie zeigt die Adresse nicht). Am Handy: calendar.google.com öffnen und im Browser-Menü „Desktopwebsite\" einschalten",
+        "step1": "Am Computer machen: calendar.google.com im Browser öffnen. Am Handy geht es nicht, die Google-Kalender-App zeigt die Adresse nicht",
         "step2": "Links unter „Einstellungen für meine Kalender\" deinen Kalender antippen",
         "step3": "Runterscrollen zu „Kalender integrieren\" → die „Privatadresse im iCal-Format\" kopieren. Den Kalender nicht öffentlich machen"
       },

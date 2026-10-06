@@ -55,10 +55,9 @@ direction only; nothing ever goes from Yorik to the other side.
 
 **Subscribe (stays current).** Paste the calendar's secret iCal
 address (Google: Settings → your calendar → "Integrate calendar" →
-*Secret address in iCal format*). Google shows that address only in a
-browser, not in the Google Calendar app: use a computer, or on a phone
-open calendar.google.com and switch on "Desktop site" in the browser
-menu. The calendar does not have to be public and should not be made
+*Secret address in iCal format*). Google shows that address only on a
+computer, at calendar.google.com in the browser: it cannot be done on a
+phone, the Google Calendar app has no such setting. The calendar does not have to be public and should not be made
 public; if you paste Google's *public* address, the dialog says so.
 Yorik creates a read-only mirror
 calendar and refreshes it every 15 minutes: you keep entering

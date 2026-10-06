@@ -15,7 +15,7 @@
       },
       "google": {
         "open": "Open Google Calendar settings",
-        "step1": "Use a browser, not the Google Calendar app (it does not show the address). On a phone: open calendar.google.com and switch on “Desktop site” in the browser menu",
+        "step1": "Do this on a computer: open calendar.google.com in the browser. It does not work on a phone, the Google Calendar app does not show the address",
         "step2": "On the left under “Settings for my calendars”, tap your calendar",
         "step3": "Scroll down to “Integrate calendar” → copy the “Secret address in iCal format”. Do not make the calendar public"
       },
