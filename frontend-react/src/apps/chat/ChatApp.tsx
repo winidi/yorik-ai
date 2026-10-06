@@ -19,10 +19,11 @@ import {
   FileText, Download, Eye, X, ArrowDown, ThumbsUp, ThumbsDown,
   AlertCircle, Globe, Check, Upload, Paperclip, Copy, RefreshCw, Calendar,
   CheckSquare, UsersRound, Cake, ChevronDown, ChevronLeft, ChevronRight,
-  Pin, PinOff, Mic, Pencil, Square, Bug,
+  Pin, PinOff, Mic, Pencil, Square, Bug, ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, notifySessionExpired } from "@/lib/api";
+import { DiagnosticsReportModal } from "@/components/DiagnosticsReportModal";
 import { useApi } from "@/lib/useApi";
 import { Dock } from "@/components/Dock";
 import { PendingActionChip } from "@/components/PendingActionChip";
@@ -1739,6 +1740,7 @@ function MessageBubble({
                 <Pencil className="w-3 h-3" /> edit
               </button>
             )}
+            {conversationId && <ReportProblemButton conversationId={conversationId} messageIdx={messageIdx} />}
             {isLast && onRegenerate && conversationId && (
               <button
                 type="button"
@@ -4391,65 +4393,154 @@ function DigestCard({
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Whether error reports are switched on (tier 3): fetched once per page.
+let _diagErrorsOn: Promise<boolean> | null = null;
+function diagErrorsOn(): Promise<boolean> {
+  if (!_diagErrorsOn) {
+    _diagErrorsOn = api.get<{ errors: boolean }>("/api/diagnostics/consent").then(r => !!r.errors).catch(() => false);
+  }
+  return _diagErrorsOn;
+}
+
+const FEEDBACK_REASONS: Array<{ key: string; label: string }> = [
+  { key: "wrong_answer", label: "wrong answer" },
+  { key: "found_nothing", label: "found nothing" },
+  { key: "wrong_person", label: "wrong person or thing" },
+  { key: "too_slow", label: "too slow" },
+  { key: "error", label: "an error" },
+  { key: "other", label: "something else" },
+];
+
+/** 👍 / 👎 under every answer — always visible (they used to show only
+ *  on hover and Dirk never saw them, 2026-10-06). A thumbs-down asks
+ *  for a reason and a line, and, when error reports are switched on,
+ *  offers the diagnostic report (reviewed before it goes). */
 function TurnFeedback({ conversationId, messageIdx }:
   { conversationId: string | null; messageIdx: number }) {
   const [rated, setRated] = useState<1 | -1 | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reason, setReason] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  const [open, setOpen] = useState(false);
+  const [canReport, setCanReport] = useState(false);
+  const [modal, setModal] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  async function rate(value: 1 | -1) {
-    if (busy || rated === value) return;
+  useEffect(() => { diagErrorsOn().then(setCanReport); }, []);
+
+  async function post(value: 1 | -1, r: string | null, n: string) {
     setBusy(true);
     try {
       await api.post("/api/feedback/turn", {
         conversation_id: conversationId,
         message_idx: messageIdx,
         rating: value,
+        note: r || n ? `reason:${r || "none"} | ${n}`.trim() : undefined,
       });
       setRated(value);
     } catch {
-      // Silent fail — feedback is best-effort
+      // best-effort
     } finally {
       setBusy(false);
     }
   }
 
+  async function rate(value: 1 | -1) {
+    if (busy) return;
+    if (value === 1) { setOpen(false); await post(1, null, ""); return; }
+    setOpen(true);
+    await post(-1, reason, note);
+  }
+
   return (
-    <div className={cn(
-      "mt-1.5 flex items-center gap-1 transition-opacity",
-      rated ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100",
-    )}>
-      <button
-        onClick={() => rate(1)}
-        disabled={busy}
-        title="This was helpful"
-        className={cn(
-          "w-6 h-6 rounded-md flex items-center justify-center transition",
-          rated === 1
-            ? "bg-emerald-500/15 text-emerald-600"
-            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-        )}
-      >
-        <ThumbsUp className="w-3 h-3" />
-      </button>
-      <button
-        onClick={() => rate(-1)}
-        disabled={busy}
-        title="This wasn't helpful"
-        className={cn(
-          "w-6 h-6 rounded-md flex items-center justify-center transition",
-          rated === -1
-            ? "bg-red-500/15 text-red-500"
-            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-        )}
-      >
-        <ThumbsDown className="w-3 h-3" />
-      </button>
-      {rated && (
-        <span className="text-2xs text-muted-foreground ml-1">
-          {rated === 1 ? "Thanks!" : "Logged · we'll improve it"}
-        </span>
+    <div className="mt-1.5">
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => rate(1)}
+          disabled={busy}
+          title="This was helpful"
+          className={cn(
+            "w-7 h-7 rounded-md flex items-center justify-center transition",
+            rated === 1
+              ? "bg-emerald-500/15 text-emerald-600"
+              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+          )}
+        >
+          <ThumbsUp className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => rate(-1)}
+          disabled={busy}
+          title="This wasn't helpful"
+          className={cn(
+            "w-7 h-7 rounded-md flex items-center justify-center transition",
+            rated === -1
+              ? "bg-red-500/15 text-red-500"
+              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+          )}
+        >
+          <ThumbsDown className="w-4 h-4" />
+        </button>
+        {rated === 1 && <span className="text-2xs text-muted-foreground ml-1">Thanks!</span>}
+        {rated === -1 && !open && <span className="text-2xs text-muted-foreground ml-1">{sent ? "Report sent · thanks" : "Logged · we'll improve it"}</span>}
+      </div>
+      {open && rated === -1 && (
+        <div className="mt-1.5 rounded-lg border border-border bg-muted/20 p-2.5 max-w-xl space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            {FEEDBACK_REASONS.map(r => (
+              <button key={r.key} type="button"
+                      onClick={() => { setReason(r.key); void post(-1, r.key, note); }}
+                      className={cn("px-2 py-1 rounded-full text-2xs border transition",
+                        reason === r.key ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted")}>
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <input value={note} onChange={e => setNote(e.target.value.slice(0, 300))}
+                   onBlur={() => { if (note) void post(-1, reason, note); }}
+                   placeholder="What should have happened? (optional)"
+                   className="flex-1 h-8 px-2 rounded-md bg-background border border-border text-xs" />
+            {canReport && conversationId && !sent && (
+              <button type="button" onClick={() => setModal(true)}
+                      className="h-8 px-2.5 rounded-md text-2xs text-white bg-gradient-to-r from-violet-500 to-blue-500 whitespace-nowrap"
+                      title="Prepare a pseudonymised report for Yorik's makers — you see it before it goes">
+                Send a diagnostic report
+              </button>
+            )}
+            <button type="button" onClick={() => setOpen(false)} className="text-2xs text-muted-foreground hover:text-foreground">done</button>
+          </div>
+        </div>
+      )}
+      {modal && conversationId && (
+        <DiagnosticsReportModal conversationId={conversationId} messageIdx={messageIdx} trigger="thumbs_down"
+                                reason={reason} note={note}
+                                onClose={ok => { setModal(false); if (ok) { setSent(true); setOpen(false); } }} />
       )}
     </div>
+  );
+}
+
+/** "Report a problem" in the reply's action row — for anything that is
+ *  not a thumbs-down, e.g. a tool that failed. */
+function ReportProblemButton({ conversationId, messageIdx }: { conversationId: string; messageIdx: number }) {
+  const [canReport, setCanReport] = useState(false);
+  const [modal, setModal] = useState(false);
+  const [sent, setSent] = useState(false);
+  useEffect(() => { diagErrorsOn().then(setCanReport); }, []);
+  if (!canReport) return null;
+  return (
+    <>
+      <button type="button" onClick={() => setModal(true)} disabled={sent}
+              className="inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition disabled:opacity-50"
+              title="Prepare a pseudonymised report for Yorik's makers — you see it before it goes">
+        <ShieldAlert className="w-3 h-3" /> {sent ? "reported" : "report a problem"}
+      </button>
+      {modal && (
+        <DiagnosticsReportModal conversationId={conversationId} messageIdx={messageIdx} trigger="report_problem"
+                                onClose={ok => { setModal(false); if (ok) setSent(true); }} />
+      )}
+    </>
   );
 }
 
