@@ -127,8 +127,17 @@ jobs:
         run: |
           mkdir -p out
           (cd deploy && zip -qr ../out/yorik-deploy.zip . -x '.env' 'backups/*')
-          (cd deploy && zip -q ../out/Yorik-Setup-Windows.zip Yorik-Setup.cmd install-windows.ps1)
-          (cd deploy && zip -q "../out/Yorik-Setup-Mac.zip" "Yorik Setup.command" install-mac.sh)
+          # The launchers of this release install this release: the version
+          # is baked into the double-click files, so a preview (-rc) zip
+          # installs the preview and not "stable" (Dirk, 2026-10-07).
+          TAG_NO_V="${GITHUB_REF_NAME#v}"
+          mkdir -p pack && cp deploy/install-windows.ps1 deploy/install-mac.sh pack/
+          sed "s|install-windows.ps1\" %\*|install-windows.ps1\" -Version $TAG_NO_V %*|" deploy/Yorik-Setup.cmd > pack/Yorik-Setup.cmd
+          sed "s|bash install-mac.sh \"\$@\"|bash install-mac.sh --version $TAG_NO_V \"\$@\"|" "deploy/Yorik Setup.command" > "pack/Yorik Setup.command"
+          chmod +x "pack/Yorik Setup.command"
+          grep -q "$TAG_NO_V" pack/Yorik-Setup.cmd && grep -q "$TAG_NO_V" "pack/Yorik Setup.command"
+          (cd pack && zip -q ../out/Yorik-Setup-Windows.zip Yorik-Setup.cmd install-windows.ps1)
+          (cd pack && zip -q "../out/Yorik-Setup-Mac.zip" "Yorik Setup.command" install-mac.sh)
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
