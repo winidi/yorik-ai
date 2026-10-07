@@ -7,6 +7,14 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0-rc2] - 2026-10-07
+
+The same preview as 0.3.0-rc1; the double-click launchers in the Windows and Mac zips now install the release they came with.
+
+### Highlights
+
+- Windows and Mac zips: Yorik-Setup.cmd and "Yorik Setup.command" install this release (before, a preview zip installed the last stable release unless a version was typed).
+
 ## [0.3.0-rc1] - 2026-10-07
 
 A preview for testing the Windows install; not offered to existing installs.
