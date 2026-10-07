@@ -7,6 +7,23 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0-rc1] - 2026-10-07
+
+A preview for testing the Windows install; not offered to existing installs.
+
+### Highlights
+
+- Search: finds the right mail, message or document far more often (test set of 127 real questions: the answer is in front of the assistant for 92 % instead of 71 %). Words are weighted by how rare they are, hits by words and by meaning are fused, duplicates are folded, the whole question goes to the meaning search, typos in names are corrected against your own senders and chats ("rivertie" → Riverty), dates and "the latest from …" narrow the search, and a short follow-up keeps the previous question's words.
+- Mail: a quarter of HTML-only mails had style sheets instead of text in the index; they are readable and searchable now. On a phone a mail reads like Gmail: one scrolling page, short header, the mail edge to edge, Reply / Reply all / Forward under it.
+- Diagnostics, opt-in: the admin is asked once after setup whether Yorik may report counts, feature usage or errors to its makers. Everything is off until switched on; people, addresses and chats become numbers before anything leaves the house; every error report is shown to the person before it is sent. See docs/PRIVACY.md.
+- Search by meaning on small PCs: the embedding service runs on a schedule (at night, every hour, or continuously) and sleeps in between instead of holding memory around the clock.
+
+### Added
+
+- Thumbs under every answer are always visible; a thumbs-down asks why, and "Report a problem" sits under every reply.
+- Recordings: when the phone's microphone stops delivering (screen locked, another app), the recorder warns, vibrates and reopens it; a recording that was mostly silence says so instead of "transcript ready".
+- Settings › Search by meaning: when to index, keep the model loaded, next run, "Index now".
+
 ### Added
 
 - Bills: a "Bills" tab in Finance with what is still to pay. A bill comes from a mail or a photographed letter (Yorik proposes it in the bell), from the chat or from the form; a booking on a connected bank account with the same amount and payee ticks it off by itself; a reminder three days before the due date and one when it is overdue; a "Bills due this week" section in the morning briefing.
