@@ -2155,6 +2155,20 @@ function AttachmentPreviewModal({
 }
 
 
+/** Narrow screen (below md): the reader scrolls as one page, like
+ *  Gmail, instead of a fixed header over a small scrolling box. */
+function useIsPhone(): boolean {
+  const [phone, setPhone] = useState<boolean>(() => typeof window !== "undefined" && !!window.matchMedia && !window.matchMedia("(min-width: 768px)").matches);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia("(min-width: 768px)");
+    const on = () => setPhone(!mq.matches);
+    mq.addEventListener?.("change", on);
+    return () => mq.removeEventListener?.("change", on);
+  }, []);
+  return phone;
+}
+
 function Reader({
   messageRow, accounts, onReply, onRefresh, onActionDone, onBack, onOpenMessage,
 }: {
@@ -2169,6 +2183,8 @@ function Reader({
    *  list pane is always visible so this isn't rendered. */
   onBack?: () => void;
 }) {
+  const phone = useIsPhone();                      // hooks first: before any early return
+  const [headerOpen, setHeaderOpen] = useState(false);
   const { t } = useTranslation();
   // Refetch the full message detail when the selected id changes.
   const detail = useApi<EmailMessageDetail>(`/api/email/messages/${messageRow.id}`, []);
@@ -2375,7 +2391,33 @@ function Reader({
       {/* Header strip: sender + subject, shrink-0 so it doesn't get squeezed.
           Body region below uses flex-1 so the iframe fills the rest of the
           available column — short emails no longer leave a tall blank gap
-          between the body and the AI panel. */}
+          between the body and the AI panel.
+          On a phone (Dirk 2026-10-07: "zu wenig von der Mail selbst") the
+          header is short — subject, then one line with sender and time,
+          tap for the addresses — and it scrolls away with the mail, the
+          way Gmail and Outlook do it. */}
+      <div className={cn("flex-1 min-h-0 flex flex-col", phone && "overflow-y-auto")}>
+      {phone ? (
+        <div className="px-4 pt-3 pb-2 border-b border-border shrink-0">
+          <h1 className="text-lg font-semibold leading-snug break-words">{m.subject || "(no subject)"}</h1>
+          <button type="button" onClick={() => setHeaderOpen(o => !o)} className="mt-1.5 w-full flex items-center gap-2 text-left">
+            <Avatar name={m.from_name || m.from_email} />
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-medium truncate">{m.from_name || m.from_email}</span>
+              {!headerOpen && <span className="block text-xs text-muted-foreground truncate">to {m.to_addrs?.map(a => a.name || a.email).join(", ") || "me"}</span>}
+            </span>
+            <span className="text-xs text-muted-foreground shrink-0">{formatWhen(m.date_received)}</span>
+            <ChevronDown className={cn("w-4 h-4 text-muted-foreground shrink-0 transition", headerOpen && "rotate-180")} />
+          </button>
+          {headerOpen && (
+            <div className="mt-2 text-xs text-muted-foreground space-y-0.5 break-words">
+              <div>from {m.from_email}</div>
+              {m.to_addrs?.length > 0 && <div>to {m.to_addrs.map(a => a.email).join(", ")}</div>}
+              <div>{formatFull(m.date_received)} · via {m.account_email}</div>
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="px-6 pt-6 pb-4 border-b border-border shrink-0">
         <div className="flex items-start gap-4 mb-3">
           <PersonHover identifier={m.from_email}>
@@ -2405,11 +2447,23 @@ function Reader({
         )}
       </div>
 
+      )}
+
       {/* Body region: flex-1 + min-h-0 so it can shrink AND grow inside
-          the flex column. Internal scroll for long emails. */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-6 py-4 h-full flex flex-col">
-          {hasRemoteImages && !showImages && (
+          the flex column. Internal scroll for long emails on wide
+          screens; on a phone the whole page scrolls and the mail is
+          edge to edge. */}
+      <div className={cn("flex-1 min-h-0", !phone && "overflow-y-auto")}>
+        <div className={cn("flex flex-col", phone ? "px-0 py-0" : "px-6 py-4 h-full")}>
+          {phone && hasRemoteImages && !showImages && (
+            <div className="px-4 py-1.5 bg-amber-500/[0.08] border-b border-amber-500/30 text-xs flex items-center gap-3 shrink-0">
+              <span className="flex-1 text-foreground/80 truncate">Images blocked</span>
+              <button onClick={() => setShowImages(true)} className="underline">Show once</button>
+              <button onClick={async () => { try { await api.post(`/api/email/messages/${m.id}/trust-sender-images`); setSenderTrusted(true); } catch {} setShowImages(true); }}
+                      className="underline">Always</button>
+            </div>
+          )}
+          {!phone && hasRemoteImages && !showImages && (
             <div className="mb-3 p-2.5 rounded-md bg-amber-500/[0.08] border border-amber-500/30 text-xs flex items-center gap-2 flex-wrap shrink-0">
               <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-500 shrink-0" />
               <span className="flex-1 min-w-[12rem] text-foreground/85">
@@ -2479,23 +2533,33 @@ function Reader({
               </button>
             </div>
           )}
-          <div className="flex-1 min-h-0">
+          <div className={cn(!phone && "flex-1 min-h-0")}>
             {m.body_html ? (
               <HtmlBody
                 html={m.body_html}
-                fill
+                fill={!phone}
+                flow={phone}
                 messageId={m.id}
                 allowImages={showImages}
                 cidMap={cidMap}
               />
             ) : (
-              <div className="text-sm leading-relaxed whitespace-pre-wrap break-words h-full overflow-y-auto">
+              <div className={cn("text-sm leading-relaxed whitespace-pre-wrap break-words", phone ? "px-4 py-3" : "h-full overflow-y-auto")}>
                 {m.body_text ? <LinkedText text={m.body_text} /> : "(empty body)"}
               </div>
             )}
           </div>
+          {phone && (
+            <div className="px-4 py-3 flex flex-wrap gap-2 border-t border-border">
+              <button onClick={() => onReply(buildReply(false))} className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full border border-border text-sm"><Reply className="w-4 h-4" /> Reply</button>
+              <button onClick={() => onReply(buildReply(true))} className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full border border-border text-sm"><ReplyAll className="w-4 h-4" /> Reply all</button>
+              <button onClick={() => onReply({ accountId: messageRow.account_id, to: "", subject: `Fwd: ${m.subject}`,
+                        body: `\n\n--- Forwarded message ---\nFrom: ${m.from_name || m.from_email}\nSubject: ${m.subject}\n\n${m.body_text || ""}` })}
+                      className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full border border-border text-sm"><Forward className="w-4 h-4" /> Forward</button>
+            </div>
+          )}
           {m.attachments?.length > 0 && (
-            <div className="mt-6 space-y-2 shrink-0">
+            <div className={cn("mt-6 space-y-2 shrink-0", phone && "px-4 pb-4 mt-2")}>
               <div className="text-xs text-muted-foreground font-medium">
                 Attachments
               </div>
@@ -2509,6 +2573,7 @@ function Reader({
             </div>
           )}
         </div>
+      </div>
       </div>
       <SuggestionPanel sourceKind="email" sourceId={messageRow.id} />
       <AIDraftPanel
@@ -2756,7 +2821,7 @@ function AIDraftPanel({
     return (
       <button
         onClick={() => setOpen(true)}
-        className="md:hidden border-t border-border bg-muted/30 px-4 h-12 mb-24 w-full flex items-center gap-2 text-sm text-foreground/85"
+        className="md:hidden border-t border-border bg-muted/30 px-4 h-11 mb-14 w-full flex items-center gap-2 text-sm text-foreground/85"
         title="Reply with Yorik's help"
       >
         <span>✨</span>
@@ -2770,7 +2835,7 @@ function AIDraftPanel({
     // mb-24: the global Dock floats fixed at bottom-center (~75px tall);
     // without this gap below the panel the regenerate row + variant
     // cards sit underneath it and the user can't read/click them.
-    <div className="border-t border-border bg-muted/30 p-4 mb-24 max-md:max-h-[60vh] max-md:overflow-y-auto">
+    <div className="border-t border-border bg-muted/30 p-4 mb-14 md:mb-24 max-md:max-h-[60vh] max-md:overflow-y-auto">
       <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground font-medium">
         <Loader2 className={cn("w-3.5 h-3.5", !regenerating && "hidden", "animate-spin")} />
         {!regenerating && <span>✨</span>}

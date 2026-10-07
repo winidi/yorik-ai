@@ -23,6 +23,10 @@ interface Props {
    *  Used by the Reader so short emails don't leave blank space
    *  between the body and the AI drafts panel. */
   fill?: boolean;
+  /** Phone reading: the iframe takes the height of its content (no
+   *  cap, re-measured on resize) and the page scrolls as one — the
+   *  way Gmail and Outlook show a mail. No inner scrolling. */
+  flow?: boolean;
   /** Message id, required when allowImages is true — the proxy
    *  endpoint scopes requests by message ownership. */
   messageId?: number;
@@ -175,36 +179,39 @@ function rewriteHtmlImages(
 
 
 export function HtmlBody({
-  html, className = "", fill = false,
+  html, className = "", fill = false, flow = false,
   messageId, allowImages = false, cidMap,
 }: Props) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(fill ? 0 : 400);
 
   useEffect(() => {
-    if (fill) return; // fixed-fill height, no measurement needed
+    if (fill && !flow) return; // fixed-fill height, no measurement needed
     // Wait for the iframe's load event so srcdoc has finished parsing,
     // then measure the rendered content's scrollHeight. srcdoc is
     // same-origin so we CAN read the content's body height (unlike
     // cross-origin iframes). The sandbox attribute is still applied.
     const iframe = ref.current;
     if (!iframe) return;
-    const handler = () => {
+    const measure = () => {
       try {
         const doc = iframe.contentDocument;
         if (doc) {
           const h = Math.min(
             doc.documentElement.scrollHeight,
             doc.body?.scrollHeight ?? 800,
-            2000  // cap — runaway docs scroll inside the iframe
+            flow ? 40000 : 2000  // cap — runaway docs scroll inside the iframe (not on a phone: the page scrolls)
           );
           setHeight(h + 20);
         }
       } catch {}
     };
-    iframe.addEventListener("load", handler);
-    return () => iframe.removeEventListener("load", handler);
-  }, [html, fill]);
+    iframe.addEventListener("load", measure);
+    // images arriving later and a turned phone change the height
+    const again = window.setTimeout(measure, 1200);
+    window.addEventListener("resize", measure);
+    return () => { iframe.removeEventListener("load", measure); window.clearTimeout(again); window.removeEventListener("resize", measure); };
+  }, [html, fill, flow]);
 
   const { head: emailHead, body: emailBody } = rewriteHtmlImages(html, {
     allowImages, messageId, cidMap,
@@ -213,7 +220,7 @@ export function HtmlBody({
   // the cascade and the email's own <style> rules win where they're
   // specified (otherwise generic <a> color etc. would override the
   // retailer's brand colors).
-  const fullSrc = `<!doctype html><html><head>${BASE_STYLE}<base target="_blank">${emailHead}</head><body>${emailBody}</body></html>`;
+  const fullSrc = `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">${BASE_STYLE}<base target="_blank">${emailHead}</head><body>${emailBody}</body></html>`;
 
   return (
     <iframe
@@ -236,8 +243,9 @@ export function HtmlBody({
       sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
       title="email body"
       srcDoc={fullSrc}
-      className={`w-full border-0 rounded-lg bg-white ${className}`}
-      style={fill ? { height: "100%" } : { height: `${height}px` }}
+      className={`w-full border-0 bg-white ${flow ? "" : "rounded-lg"} ${className}`}
+      style={fill && !flow ? { height: "100%" } : { height: `${height}px` }}
+      scrolling={flow ? "no" : undefined}
     />
   );
 }
