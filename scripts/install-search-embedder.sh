@@ -45,6 +45,20 @@ set_env YORIK_SEARCH_EMBED 1
 set_env YORIK_SEARCH_EMBED_URL "http://127.0.0.1:${PORT}/v1"
 set_env YORIK_SEARCH_EMBED_MODEL "$MODEL_TAG"
 set_env YORIK_SEARCH_EMBED_FILE "$FILE"
+# An NVIDIA card with room (4 GB free) takes the model off the RAM: the
+# CUDA image and all layers on the GPU. Needs nvidia-container-toolkit
+# and YORIK_IMMICH_GPU=nvidia (start.sh layers docker-compose.nvidia.yml).
+if command -v nvidia-smi >/dev/null 2>&1; then
+  free_mib="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')"
+  if [[ "${free_mib:-0}" -ge 4000 ]]; then
+    set_env YORIK_SEARCH_EMBED_IMAGE "ghcr.io/ggml-org/llama.cpp:server-cuda"
+    set_env YORIK_SEARCH_EMBED_NGL 99
+    echo "NVIDIA GPU with ${free_mib} MiB free: the embedder will run on it (set YORIK_IMMICH_GPU=nvidia in config.env if it is not)."
+  else
+    echo "NVIDIA GPU found but only ${free_mib:-0} MiB free: the embedder stays on the CPU."
+  fi
+fi
+echo "The service sleeps between index runs (Settings › Search by meaning: at night, every hour, or continuously)."
 
 echo "Done. Restart Yorik (sudo systemctl restart yorik, or bash start.sh)."
 echo "The worker \"search-index\" on the home screen shows the rebuild."

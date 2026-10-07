@@ -2958,7 +2958,12 @@ type SearchIndexStatus = {
   enabled: boolean;
   embedder: "service" | "bundled";
   model: string;
-  service: { configured: boolean; model: string; reachable: boolean | null };
+  service: { configured: boolean; model: string; reachable: boolean | null; state?: string };
+  schedule: "continuous" | "hourly" | "nightly";
+  at: string;
+  keep: "while_used" | "always";
+  next_run: string | null;
+  pending: number;
   sources: { source: string; indexed: number; total: number }[];
 };
 
@@ -2983,7 +2988,7 @@ function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | 
     return () => clearInterval(t);
   }, [load]);
 
-  async function put(body: { enabled?: boolean; embedder?: "service" | "bundled" }) {
+  async function put(body: { enabled?: boolean; embedder?: "service" | "bundled"; schedule?: string; at?: string; keep?: string }) {
     setBusy(true);
     try {
       setSt(await api.put<SearchIndexStatus>("/api/search/index", body));
@@ -3044,18 +3049,67 @@ function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | 
             <input type="radio" name="search-embedder" className="mt-1 accent-violet-500"
               checked={st.embedder === "service"} disabled={busy || !st.enabled || !st.service.configured}
               onChange={() => put({ embedder: "service" })} />
-            <span>{st.service.configured ? st.service.model : "Qwen3-Embedding-4B"} (embedding service, CPU)
+            <span>{st.service.configured ? st.service.model : "Qwen3-Embedding-4B"} (embedding service)
               <span className="block text-xs text-muted-foreground">
                 {!st.service.configured
                   ? "Not installed. Run scripts/install-search-embedder.sh on the server once (2.5 GB), then restart Yorik."
-                  : st.service.reachable
-                    ? "Running. Separates hits from noise much better; uses no GPU memory."
-                    : "Installed, but the service does not answer. Search finds by keyword until it is back."}
+                  : st.service.state === "running"
+                    ? "Loaded right now. Separates hits from noise much better."
+                    : st.service.state === "starting"
+                      ? "Starting … (a few seconds)"
+                      : st.service.state === "stopped"
+                        ? "Asleep — takes no memory. Wakes for the next index run or the next search."
+                        : "Installed, but the service does not answer. Search finds by keyword until it is back."}
               </span>
             </span>
           </label>
         </div>
         <p className="text-xs text-muted-foreground mt-2">Changing the model rebuilds the index in the background.</p>
+
+        {/* When the index runs, and whether the model stays in memory
+            (Dirk 2026-10-07: the service must not hold RAM around the
+            clock on small PCs). */}
+        <div className="mt-4 text-xs font-medium mb-1.5">When to index new mail, messages and documents</div>
+        <div className="flex flex-col gap-1.5 text-sm">
+          {([
+            ["nightly", "At night", "Once a day, at the time below. Until then, new things are found by their words."],
+            ["hourly", "Every hour", "New things are found by meaning within the hour."],
+            ["continuous", "Continuously", "Every five minutes. The model stays loaded most of the time."],
+          ] as const).map(([key, label, hint]) => (
+            <label key={key} className="flex items-start gap-2">
+              <input type="radio" name="search-schedule" className="mt-1 accent-violet-500"
+                checked={st.schedule === key} disabled={busy || !st.enabled}
+                onChange={() => put({ schedule: key })} />
+              <span>{label}
+                {key === "nightly" && (
+                  <input type="time" value={st.at} disabled={busy || !st.enabled || st.schedule !== "nightly"}
+                         onChange={e => e.target.value && put({ at: e.target.value })}
+                         className="ml-2 h-6 px-1.5 rounded border border-border bg-background text-xs" />
+                )}
+                <span className="block text-xs text-muted-foreground">{hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        {st.embedder === "service" && (
+          <label className="mt-3 flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1 accent-violet-500" checked={st.keep === "always"} disabled={busy || !st.enabled}
+                   onChange={e => put({ keep: e.target.checked ? "always" : "while_used" })} />
+            <span>Keep the model loaded
+              <span className="block text-xs text-muted-foreground">
+                Off: the service sleeps after 15 minutes without a search and frees its memory; a search while it sleeps
+                finds by words and wakes it for the next one. On: always ready, several GB of memory in use.
+              </span>
+            </span>
+          </label>
+        )}
+        <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+          {st.next_run && <span>Next run {st.next_run.slice(11, 16)}{st.next_run.slice(0, 10) !== new Date().toISOString().slice(0, 10) ? ` (${st.next_run.slice(8, 10)}.${st.next_run.slice(5, 7)}.)` : ""}</span>}
+          {st.pending > 0 && <span>{st.pending.toLocaleString()} waiting</span>}
+          <button onClick={async () => { try { await api.post("/api/search/index/run", {}); toast("Indexing now.", "success"); } catch (e: any) { toast(e?.message || "Failed", "error"); } }}
+                  disabled={busy || !st.enabled}
+                  className="px-2 py-0.5 rounded border border-border hover:bg-muted disabled:opacity-50">Index now</button>
+        </div>
 
         <div className="mt-4 flex items-baseline justify-between">
           <div className="text-sm font-medium tabular-nums">

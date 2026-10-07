@@ -83,6 +83,9 @@ export function ChatApp() {
   // re-pinning the same conversation if the user later navigates away.
   const location = useLocation();
   const [deepLinkConsumed, setDeepLinkConsumed] = useState(false);
+  // A sleeping embedding service (Settings › Search by meaning) wakes
+  // when the chat opens, so the first question already finds by meaning.
+  useEffect(() => { api.post("/api/search/index/warm", {}).catch(() => {}); }, []);
   useEffect(() => {
     if (deepLinkConsumed) return;
     const params = new URLSearchParams(location.search);

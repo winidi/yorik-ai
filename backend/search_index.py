@@ -65,6 +65,13 @@ QUERY_TIMEOUT_S = 2.5      # then the search answers by keyword only
 # only says where an embedding service lives.
 SETTING_ENABLED = "search_semantic_enabled"      # '1' (default) | '0'
 SETTING_EMBEDDER = "search_embedder"             # 'service' (default when configured) | 'bundled'
+# When the index runs and whether the model stays loaded (Dirk 2026-10-07:
+# the embedding service must not hold RAM around the clock on small PCs).
+SETTING_SCHEDULE = "search_index_schedule"       # 'continuous' | 'hourly' | 'nightly'
+SETTING_AT = "search_index_at"                   # 'HH:MM' local, for nightly
+SETTING_KEEP = "search_embedder_keep"            # 'while_used' | 'always'
+SCHEDULES = ("continuous", "hourly", "nightly")
+KEEPS = ("while_used", "always")
 
 
 def enabled() -> bool:
@@ -78,6 +85,51 @@ def use_service() -> bool:
         return False
     from .household_settings import get_setting
     return get_setting(SETTING_EMBEDDER, default="service") != "bundled"
+
+
+def schedule() -> str:
+    """How often the index runs. The embedding service defaults to
+    nightly (it is started for the run and stopped after); the bundled
+    embedder is cheap and runs continuously."""
+    from .household_settings import get_setting
+    v = get_setting(SETTING_SCHEDULE, default="")
+    if v in SCHEDULES:
+        return v
+    return "nightly" if use_service() else "continuous"
+
+
+def run_at() -> str:
+    from .household_settings import get_setting
+    v = (get_setting(SETTING_AT, default="") or "").strip()
+    return v if re.match(r"^([01]\d|2[0-3]):[0-5]\d$", v) else "03:00"
+
+
+def keep_loaded() -> str:
+    from .household_settings import get_setting
+    v = get_setting(SETTING_KEEP, default="")
+    return v if v in KEEPS else "while_used"
+
+
+def next_run(now: Optional[datetime] = None) -> Optional[datetime]:
+    """When the next scheduled sweep is due (aware, household time);
+    None for continuous."""
+    from .push import _tz
+    sched = schedule()
+    now = now or datetime.now(_tz())
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=_tz())
+    if sched == "continuous":
+        return None
+    if sched == "hourly":
+        base = now.replace(minute=0, second=0, microsecond=0)
+        from datetime import timedelta
+        return base + timedelta(hours=1)
+    hh, mm = (int(x) for x in run_at().split(":"))
+    due = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    if due <= now:
+        from datetime import timedelta
+        due += timedelta(days=1)
+    return due
 
 
 def model_tag() -> str:
@@ -295,6 +347,8 @@ def vec_literal(vec: list[float]) -> str:
 
 def _post_embeddings(texts: list[str], timeout: float = 120) -> list[list[float]]:
     import requests
+    from . import search_embedder
+    search_embedder.touch()
     r = requests.post(f"{EMBED_URL}/embeddings", json={"model": EMBED_MODEL, "input": texts}, timeout=timeout)
     r.raise_for_status()
     data = sorted(r.json()["data"], key=lambda d: d.get("index", 0))
@@ -348,14 +402,23 @@ def embed_query(text: str) -> Optional[str]:
     t0 = time.perf_counter()
     try:
         if use_service():
+            from . import search_embedder
+            search_embedder.touch()
             vec = vec_literal(_post_embeddings([QUERY_PREFIX + text], timeout=limit)[0])
         else:
+            from .embedders import local as _local
+            _local.touch()
             vec = vec_literal(embed_many([text])[0])
         speed.record("embed", time.perf_counter() - t0)
         return vec
     except Exception as exc:  # noqa: BLE001
         if "timed out" in str(exc).lower() or "timeout" in type(exc).__name__.lower():
             speed.record("embed", limit)                # a timeout is a measurement too
+        if use_service():
+            # asleep (search_embedder): wake it for the next question
+            from . import search_embedder
+            if not search_embedder.reachable():
+                search_embedder.start_in_background()
         log.debug("query embed failed: %s", exc)
         return None
 
@@ -468,13 +531,54 @@ def _drop_gone(src: Source) -> int:
         return cur.rowcount or 0
 
 
-def sweep() -> dict[str, int]:
+def pending() -> int:
+    """Rows the next sweep would have to embed (immutable sources
+    without chunks; mutable ones are compared by hash and not counted)."""
+    n = 0
+    with get_conn() as conn:
+        for src in SOURCES.values():
+            if not src.immutable:
+                continue
+            try:
+                n += int(conn.execute(
+                    f"SELECT COUNT(*) AS n FROM {src.table} t WHERE ({src.where}) AND NOT EXISTS "
+                    f"(SELECT 1 FROM search_chunks sc WHERE sc.source = ? AND sc.row_id = t.id AND sc.model = ?)",
+                    (src.name, model_tag())).fetchone()["n"])
+            except Exception:  # noqa: BLE001
+                continue
+    return n
+
+
+def sweep(window: bool = False) -> dict[str, int]:
     """One pass over every source. Returns rows indexed per source.
     Switched off in the settings: nothing happens, the index stays as
-    it is and is current again one sweep after switching back on."""
+    it is and is current again one sweep after switching back on.
+    `window`: a scheduled run — the embedding service is started for
+    it and, unless kept loaded, stopped when the pass is done."""
     out: dict[str, int] = {}
     if not enabled():
         return out
+    service = use_service()
+    if service:
+        from . import search_embedder
+        if not search_embedder.reachable():
+            if not (window or pending() > 0):
+                return out
+            if not search_embedder.start(wait=True):
+                log.warning("search index: embedding service not available, pass skipped")
+                return {src.name: -1 for src in SOURCES.values()}
+        search_embedder.sweeping(True)
+    try:
+        return _sweep_sources(out)
+    finally:
+        if service:
+            from . import search_embedder
+            search_embedder.sweeping(False)
+            if window and keep_loaded() == "while_used" and schedule() != "continuous":
+                search_embedder.stop()
+
+
+def _sweep_sources(out: dict[str, int]) -> dict[str, int]:
     for src in SOURCES.values():
         try:
             _drop_gone(src)
@@ -543,22 +647,60 @@ def start_scheduler(loop: asyncio.AbstractEventLoop) -> None:
 
     async def _loop():
         await asyncio.sleep(45)     # let the start-up settle first
+        due_window = True           # the first pass after a start counts as a window
         while True:
             busy = False
             try:
-                result = await asyncio.get_running_loop().run_in_executor(None, sweep)
-                indexed = sum(n for n in result.values() if n > 0)
-                busy = any(n >= MAX_ROWS_PER_PASS for n in result.values())
-                failed = [k for k, n in result.items() if n < 0]
-                detail = "switched off in Settings › AI › Search" if not result else \
-                    f"{indexed} rows indexed" + (f", failed: {', '.join(failed)}" if failed else "")
-                workers.heartbeat("search-index", "warn" if failed else "ok", detail)
+                sched = schedule()
+                if sched == "continuous" or due_window:
+                    result = await asyncio.get_running_loop().run_in_executor(None, sweep, due_window and sched != "continuous")
+                    indexed = sum(n for n in result.values() if n > 0)
+                    busy = any(n >= MAX_ROWS_PER_PASS for n in result.values())
+                    failed = [k for k, n in result.items() if n < 0]
+                    detail = "switched off in Settings › AI › Search" if not result else \
+                        f"{indexed} rows indexed" + (f", failed: {', '.join(failed)}" if failed else "")
+                    if sched != "continuous" and not busy:
+                        nxt = next_run()
+                        detail += f" · next run {nxt.strftime('%H:%M')}" if nxt else ""
+                    workers.heartbeat("search-index", "warn" if failed else "ok", detail)
+                else:
+                    # between windows: the service may go to sleep, the bundled model may be unloaded
+                    await asyncio.get_running_loop().run_in_executor(None, _rest_tick)
+                    nxt = next_run()
+                    workers.heartbeat("search-index", "ok", f"waiting · next run {nxt.strftime('%d.%m. %H:%M') if nxt else '?'}")
             except Exception as exc:  # noqa: BLE001
                 log.warning("search index: sweep failed: %s", exc)
+            # how long to wait: a busy pass continues at once; continuous keeps
+            # its interval; a schedule sleeps until it is due (checked every 5 min)
+            if busy:
+                timeout = 5
+            elif schedule() == "continuous":
+                timeout = SWEEP_INTERVAL_S
+            else:
+                nxt = next_run()
+                from .push import _tz
+                timeout = max(5, min(300, (nxt - datetime.now(_tz())).total_seconds())) if nxt else SWEEP_INTERVAL_S
             try:
-                await asyncio.wait_for(_wake.wait(), timeout=5 if busy else SWEEP_INTERVAL_S)
+                await asyncio.wait_for(_wake.wait(), timeout=timeout)
+                due_window = True                          # "Index now", or settings changed
             except asyncio.TimeoutError:
-                pass
+                nxt = next_run()
+                from .push import _tz
+                due_window = busy or nxt is None or (nxt - datetime.now(_tz())).total_seconds() <= 5
             _wake.clear()
 
     _scheduler_task = loop.create_task(_loop(), name="search-index")
+
+
+def _rest_tick() -> None:
+    """Between scheduled windows: stop an idle embedding service, unload
+    an idle bundled model."""
+    try:
+        if use_service():
+            from . import search_embedder
+            search_embedder.maybe_stop_idle(keep_loaded())
+        else:
+            from .embedders import local as _local
+            _local.maybe_unload()
+    except Exception as exc:  # noqa: BLE001
+        log.debug("search index rest tick: %s", exc)

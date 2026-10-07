@@ -33,3 +33,13 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+  # The search embedder, when scripts/install-search-embedder.sh chose the
+  # CUDA image (profile search-embed; harmless when the profile is off).
+  search-embed:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

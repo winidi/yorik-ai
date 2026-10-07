@@ -926,12 +926,18 @@ def search_index_status(user: dict = Depends(current_user)) -> dict[str, Any]:
     _require_admin(user)
     from . import search_index as si
     indexed, totals = si.stats(), si.totals()
+    from . import search_embedder
+    nxt = si.next_run()
     return {
         "enabled": si.enabled(),
         "embedder": "service" if si.use_service() else "bundled",
         "model": si.model_tag(),
         "service": {"configured": bool(si.EMBED_URL), "model": si.EMBED_MODEL,
-                    "reachable": si.service_reachable()},
+                    "reachable": si.service_reachable(),
+                    "state": search_embedder.state() if si.EMBED_URL else "unmanaged"},
+        "schedule": si.schedule(), "at": si.run_at(), "keep": si.keep_loaded(),
+        "next_run": nxt.isoformat(timespec="minutes") if nxt else None,
+        "pending": si.pending() if si.enabled() else 0,
         "sources": [{"source": name, "indexed": indexed.get(name, 0), "total": totals.get(name, 0)}
                     for name in si.SOURCES],
     }
@@ -943,6 +949,9 @@ from pydantic import BaseModel  # noqa: E402
 class _SearchIndexIn(BaseModel):
     enabled: Optional[bool] = None
     embedder: Optional[str] = None      # 'service' | 'bundled'
+    schedule: Optional[str] = None      # 'continuous' | 'hourly' | 'nightly'
+    at: Optional[str] = None            # 'HH:MM'
+    keep: Optional[str] = None          # 'while_used' | 'always'
 
 
 @router.put("/search/index")
@@ -959,8 +968,42 @@ def search_index_set(body: _SearchIndexIn, user: dict = Depends(current_user)) -
             raise HTTPException(status_code=400, detail="no embedding service is installed "
                                 "(scripts/install-search-embedder.sh)")
         set_setting(si.SETTING_EMBEDDER, body.embedder, updated_by_user_id=user["id"])
-    si.wake()
+    if body.schedule is not None:
+        if body.schedule not in si.SCHEDULES:
+            raise HTTPException(status_code=400, detail="schedule must be continuous, hourly or nightly")
+        set_setting(si.SETTING_SCHEDULE, body.schedule, updated_by_user_id=user["id"])
+    if body.at is not None:
+        if not re.match(r"^([01]\d|2[0-3]):[0-5]\d$", body.at):
+            raise HTTPException(status_code=400, detail="at must be HH:MM")
+        set_setting(si.SETTING_AT, body.at, updated_by_user_id=user["id"])
+    if body.keep is not None:
+        if body.keep not in si.KEEPS:
+            raise HTTPException(status_code=400, detail="keep must be while_used or always")
+        set_setting(si.SETTING_KEEP, body.keep, updated_by_user_id=user["id"])
+    if body.enabled is not None or body.embedder is not None:
+        si.wake()
     return search_index_status(user)
+
+
+@router.post("/search/index/run")
+def search_index_run(user: dict = Depends(current_user)) -> dict[str, Any]:
+    """Index now, outside the schedule (the settings page's button)."""
+    _require_admin(user)
+    from . import search_index as si
+    si.wake()
+    return {"ok": True}
+
+
+@router.post("/search/index/warm")
+async def search_index_warm(user: dict = Depends(current_user)) -> dict[str, Any]:
+    """The chat page calls this when it opens: a sleeping embedding
+    service is started now, so the first question already finds by
+    meaning. Nothing to do for the bundled embedder."""
+    from . import search_index as si, search_embedder
+    if si.enabled() and si.use_service() and not search_embedder.reachable():
+        search_embedder.start_in_background()
+        return {"state": "starting"}
+    return {"state": search_embedder.state() if si.EMBED_URL else "bundled"}
 
 
 @router.post("/search/index/rebuild")

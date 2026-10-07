@@ -69,6 +69,36 @@ _tokenizer = None
 _input_names: list[str] = []
 _dim: Optional[int] = None
 _lock = threading.Lock()
+_last_used = 0.0
+IDLE_UNLOAD_S = int(os.getenv("HOMEOS_EMBED_IDLE_S", "900"))      # free the session after 15 min without a call
+
+
+def touch() -> None:
+    global _last_used
+    import time
+    _last_used = time.time()
+
+
+def loaded() -> bool:
+    return _session is not None
+
+
+def unload() -> bool:
+    """Drop the session and tokenizer; the next call loads again (~1 s)."""
+    global _session, _tokenizer, _input_names
+    with _lock:
+        if _session is None:
+            return False
+        _session, _tokenizer, _input_names = None, None, []
+    log.info("local embedder unloaded (idle)")
+    return True
+
+
+def maybe_unload() -> bool:
+    import time
+    if _session is not None and _last_used and time.time() - _last_used >= IDLE_UNLOAD_S:
+        return unload()
+    return False
 
 
 def model_dir() -> Path:
@@ -141,6 +171,7 @@ def embed(text: str) -> List[float]:
 
 
 def embed_batch(texts: List[str]) -> List[List[float]]:
+    touch()
     sess = _load()
     assert _tokenizer is not None
     out: List[List[float]] = []
