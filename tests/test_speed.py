@@ -52,8 +52,8 @@ def test_one_late_source_does_not_drop_the_others(fresh_app, monkeypatch):
     from backend import speed
     monkeypatch.setattr(speed, "factor", lambda kind: 1.0)
     monkeypatch.setattr(search_routes, "_search_email",
-                        lambda q, u, v: [{"source": "email", "id": 1, "title": "Rechnung"}])
-    def slow(q, u):
+                        lambda q, u, *a, **k: [{"source": "email", "id": 1, "title": "Rechnung"}])
+    def slow(q, u, *a, **k):
         time.sleep(2)
         return [{"source": "immich", "id": "x"}]
     monkeypatch.setattr(search_routes, "_search_immich", slow)
