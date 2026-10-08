@@ -37,6 +37,22 @@ function Fail($t, $fix) {
   Read-Host "Press Enter to close"
   exit 1
 }
+# Anything unexpected: say it and wait, instead of a window that is
+# gone before anyone can read it (Dirk's first Windows test, 2026-10-08).
+trap {
+  Write-Host "  x $($_.Exception.Message)" -ForegroundColor Red
+  Write-Host "    at line $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line.Trim())"
+  Read-Host "Press Enter to close"
+  exit 1
+}
+# A native command that writes to stderr (wsl.exe when WSL is missing,
+# docker when the daemon is down) counts as an error under
+# ErrorActionPreference=Stop. Run such checks through cmd and read the
+# exit code only.
+function Quiet($cmdline) {
+  cmd /c "$cmdline >nul 2>&1"
+  return $LASTEXITCODE
+}
 function Hex($bytes) {
   $b = New-Object byte[] $bytes
   [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
@@ -68,8 +84,7 @@ if (-not (Test-Path $dockerExe)) {
   if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     Fail "winget (App Installer) is missing." "Install 'App Installer' from the Microsoft Store, then start this again."
   }
-  wsl.exe --status *> $null
-  if ($LASTEXITCODE -ne 0) {
+  if ((Quiet "wsl.exe --status") -ne 0) {
     Say "turning on WSL2 (Windows' Linux layer, which Docker uses)"
     wsl.exe --install --no-distribution
   }
@@ -98,14 +113,13 @@ try {
 } catch { Warn "couldn't set Docker Desktop to start with Windows; turn it on in Docker Desktop -> Settings" }
 
 Say "starting Docker Desktop"
-docker info *> $null
-if ($LASTEXITCODE -ne 0) { Start-Process $dockerExe }
+if ((Quiet "docker info") -ne 0) { Start-Process $dockerExe }
 $deadline = (Get-Date).AddMinutes(10)
 do {
   Start-Sleep 5
-  docker info *> $null
-} until ($LASTEXITCODE -eq 0 -or (Get-Date) -gt $deadline)
-if ($LASTEXITCODE -ne 0) { Fail "Docker Desktop didn't start within 10 minutes." "Open Docker Desktop once (accept its terms if it asks), then start this again." }
+  $dockerUp = ((Quiet "docker info") -eq 0)
+} until ($dockerUp -or (Get-Date) -gt $deadline)
+if (-not $dockerUp) { Fail "Docker Desktop didn't start within 10 minutes." "Open Docker Desktop once (accept its terms if it asks), then start this again." }
 Ok "Docker is running"
 
 # -- 3. Yorik's files and settings ------------------------------------
@@ -114,8 +128,7 @@ New-Item -ItemType Directory -Force -Path $Backups | Out-Null
 # images from it and run in place (compose.build.yaml needs the source).
 $needBuild = $false
 if ($Source -and (Test-Path (Join-Path $Source "Dockerfile"))) {
-  docker manifest inspect "ghcr.io/winidi/yorik-ai:$Version" *> $null
-  $needBuild = ($LASTEXITCODE -ne 0)
+  $needBuild = ((Quiet "docker manifest inspect ghcr.io/winidi/yorik-ai:$Version") -ne 0)
 }
 if ($needBuild) {
   $Home_ = Join-Path $Source "deploy"

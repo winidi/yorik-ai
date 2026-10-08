@@ -7,6 +7,12 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0-rc3] - 2026-10-08
+
+### Fixed
+
+- Windows installer: on a PC without WSL the window closed at once instead of turning WSL on (wsl.exe's "not installed" line counted as an error). Checks of wsl and docker now read only the exit code, and any unexpected error stays on screen until Enter.
+
 ## [0.3.0-rc2] - 2026-10-07
 
 The same preview as 0.3.0-rc1; the double-click launchers in the Windows and Mac zips now install the release they came with.
