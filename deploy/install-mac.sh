@@ -70,7 +70,8 @@ elif [[ -n "$SOURCE" ]]; then
 else
   mkdir -p "$HOME_"
   url="https://github.com/$REPO/releases/latest/download/yorik-deploy.zip"
-  [[ "$VERSION" != "stable" ]] && url="https://github.com/$REPO/releases/download/$VERSION/yorik-deploy.zip"
+  # release tags carry a "v" (v0.3.0-rc3), image tags do not (0.3.0-rc3)
+  [[ "$VERSION" != "stable" ]] && url="https://github.com/$REPO/releases/download/v${VERSION#v}/yorik-deploy.zip"
   say "downloading Yorik ($VERSION)"
   curl -fL -o /tmp/yorik-deploy.zip "$url" || fail "couldn't download Yorik" "check the internet connection"
   unzip -oq /tmp/yorik-deploy.zip -d "$HOME_"; rm -f /tmp/yorik-deploy.zip

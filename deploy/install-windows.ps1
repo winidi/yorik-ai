@@ -142,8 +142,10 @@ if ($needBuild) {
   New-Item -ItemType Directory -Force -Path $Home_ | Out-Null
   Say "downloading Yorik ($Version)"
   $zip = Join-Path $env:TEMP "yorik-deploy.zip"
+  # release tags carry a "v" (v0.3.0-rc3), image tags do not (0.3.0-rc3)
+  $tag = if ($Version -match '^v') { $Version } else { "v$Version" }
   $url = if ($Version -eq "stable") { "https://github.com/$Repo/releases/latest/download/yorik-deploy.zip" }
-         else { "https://github.com/$Repo/releases/download/$Version/yorik-deploy.zip" }
+         else { "https://github.com/$Repo/releases/download/$tag/yorik-deploy.zip" }
   try { Invoke-WebRequest $url -OutFile $zip -UseBasicParsing }
   catch { Fail "couldn't download Yorik ($url)." "Check the internet connection, then start this again." }
   Expand-Archive -Force $zip $Home_

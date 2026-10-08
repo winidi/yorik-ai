@@ -7,6 +7,12 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0-rc4] - 2026-10-08
+
+### Fixed
+
+- Windows and Mac installers: a pinned version downloaded from `releases/download/0.3.0-rc3/…` — the release tag carries a "v", so the download failed with "check the internet connection". The installers now add the "v" themselves (the updater already did).
+
 ## [0.3.0-rc3] - 2026-10-08
 
 ### Fixed
