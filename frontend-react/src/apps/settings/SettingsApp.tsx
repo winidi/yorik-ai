@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
-import { locale } from "@/i18n";
+import i18n, { locale } from "@/i18n";
 import {
   Loader2, Settings as Cog, User as UserIcon, Hash, BarChart3,
   Plug, ExternalLink, Save, CheckCircle2, AlertCircle, Sparkles,
@@ -67,22 +67,22 @@ type Group = "start" | "you" | "household" | "maintenance";
 //   kids       = shown to children too
 const TABS: { id: Tab; label: string; group: Group; icon: React.ComponentType<{ className?: string }>; color: string;
               adminOnly?: boolean; ownerOnly?: boolean; hostOnly?: boolean; adults?: boolean; kids?: boolean }[] = [
-  { id: "start",      label: "Start here",          group: "start",       icon: Sparkles,  color: "text-violet-500 bg-violet-500/10", adminOnly: true },
-  { id: "profile",    label: "Profile",             group: "you",         icon: UserIcon,  color: "text-violet-500 bg-violet-500/10", kids: true },
-  { id: "signin",     label: "Sign-in & devices",   group: "you",         icon: KeyRound,  color: "text-blue-500 bg-blue-500/10", kids: true },
-  { id: "privacy",    label: "Privacy & safety",    group: "you",         icon: Shield,    color: "text-teal-500 bg-teal-500/10", adults: true },
-  { id: "assistant",  label: "Assistant & alerts",  group: "you",         icon: Lightbulb, color: "text-yellow-500 bg-yellow-500/10", adults: true },
-  { id: "people",     label: "People",              group: "household",   icon: Users,     color: "text-cyan-500 bg-cyan-500/10", adminOnly: true },
-  { id: "apps",       label: "Apps & accounts",     group: "household",   icon: Grid3x3,   color: "text-fuchsia-500 bg-fuchsia-500/10", adminOnly: true },
-  { id: "letters",    label: "Letters & invoices",  group: "household",   icon: FileText,  color: "text-rose-500 bg-rose-500/10", adults: true },
-  { id: "backup",     label: "Backup & storage",    group: "household",   icon: HardDrive, color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, hostOnly: true },
-  { id: "system",     label: "Health & updates",    group: "maintenance", icon: Activity,  color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, hostOnly: true },
-  { id: "ai",         label: "AI",                  group: "maintenance", icon: Cpu,       color: "text-blue-500 bg-blue-500/10", adminOnly: true, hostOnly: true },
-  { id: "developer",  label: "Developer",           group: "maintenance", icon: ScrollText,color: "text-orange-500 bg-orange-500/10", adminOnly: true },
-  { id: "households", label: "Hosted families",     group: "maintenance", icon: Home,      color: "text-orange-500 bg-orange-500/10", ownerOnly: true, hostOnly: true },
+  { id: "start",      label: "settings.tabs.start",      group: "start",       icon: Sparkles,  color: "text-violet-500 bg-violet-500/10", adminOnly: true },
+  { id: "profile",    label: "settings.tabs.profile",    group: "you",         icon: UserIcon,  color: "text-violet-500 bg-violet-500/10", kids: true },
+  { id: "signin",     label: "settings.tabs.signin",     group: "you",         icon: KeyRound,  color: "text-blue-500 bg-blue-500/10", kids: true },
+  { id: "privacy",    label: "settings.tabs.privacy",    group: "you",         icon: Shield,    color: "text-teal-500 bg-teal-500/10", adults: true },
+  { id: "assistant",  label: "settings.tabs.assistant",  group: "you",         icon: Lightbulb, color: "text-yellow-500 bg-yellow-500/10", adults: true },
+  { id: "people",     label: "settings.tabs.people",     group: "household",   icon: Users,     color: "text-cyan-500 bg-cyan-500/10", adminOnly: true },
+  { id: "apps",       label: "settings.tabs.apps",       group: "household",   icon: Grid3x3,   color: "text-fuchsia-500 bg-fuchsia-500/10", adminOnly: true },
+  { id: "letters",    label: "settings.tabs.letters",    group: "household",   icon: FileText,  color: "text-rose-500 bg-rose-500/10", adults: true },
+  { id: "backup",     label: "settings.tabs.backup",     group: "household",   icon: HardDrive, color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, hostOnly: true },
+  { id: "system",     label: "settings.tabs.system",     group: "maintenance", icon: Activity,  color: "text-emerald-500 bg-emerald-500/10", adminOnly: true, hostOnly: true },
+  { id: "ai",         label: "settings.tabs.ai",         group: "maintenance", icon: Cpu,       color: "text-blue-500 bg-blue-500/10", adminOnly: true, hostOnly: true },
+  { id: "developer",  label: "settings.tabs.developer",  group: "maintenance", icon: ScrollText,color: "text-orange-500 bg-orange-500/10", adminOnly: true },
+  { id: "households", label: "settings.tabs.households", group: "maintenance", icon: Home,      color: "text-orange-500 bg-orange-500/10", ownerOnly: true, hostOnly: true },
 ];
 
-const GROUP_LABEL: Record<Group, string> = { start: "", you: "You", household: "Household", maintenance: "Maintenance" };
+const GROUP_LABEL: Record<Group, string> = { start: "", you: "settings.tabs.groups.you", household: "settings.tabs.groups.household", maintenance: "settings.tabs.groups.maintenance" };
 
 // Old tab names (bookmarks, links in help pages and other apps) → the
 // page that holds that setting now; a few open a section inside it.
@@ -102,6 +102,7 @@ function resolveTab(want: string | null): { tab: Tab | null; section?: string } 
 }
 
 export function SettingsApp() {
+  const { t: tr } = useTranslation();
   const auth = useAuth();
   const role = auth.user.role;
   const isAdmin = role === "admin" || role === "platform_admin";
@@ -160,7 +161,7 @@ export function SettingsApp() {
       <div className={cn("w-7 h-7 rounded-md flex items-center justify-center shrink-0", t.color)}>
         <t.icon className="w-3.5 h-3.5" />
       </div>
-      <span className="text-sm font-medium">{t.label}</span>
+      <span className="text-sm font-medium">{tr(t.label)}</span>
     </button>
   );
   const groupTabs = (g: Group) => visibleTabs.filter(t => t.group === g);
@@ -177,7 +178,7 @@ export function SettingsApp() {
             <Cog className="w-4 h-4 text-muted-foreground" />
           </div>
           <div>
-            <div className="font-semibold leading-none">Settings</div>
+            <div className="font-semibold leading-none">{tr("settings.shell.title")}</div>
             <div className="text-2xs text-muted-foreground mt-0.5">
               {auth.user.name}
             </div>
@@ -189,7 +190,7 @@ export function SettingsApp() {
           {(["you", "household"] as Group[]).map(g => groupTabs(g).length > 0 && (
             <div key={g} className="pt-2 space-y-1">
               <div className="px-3 pt-1 pb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {GROUP_LABEL[g]}
+                {tr(GROUP_LABEL[g])}
               </div>
               {groupTabs(g).map(tabButton)}
             </div>
@@ -201,7 +202,7 @@ export function SettingsApp() {
                 className="w-full text-left px-3 pt-1 pb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground flex items-center gap-1"
                 aria-expanded={maintenanceOpen}
               >
-                <ChevronRight className={cn("w-3 h-3 transition", maintenanceOpen && "rotate-90")} /> {GROUP_LABEL.maintenance}
+                <ChevronRight className={cn("w-3 h-3 transition", maintenanceOpen && "rotate-90")} /> {tr(GROUP_LABEL.maintenance)}
               </button>
               {maintenanceOpen && groupTabs("maintenance").map(tabButton)}
             </div>
@@ -213,13 +214,13 @@ export function SettingsApp() {
             onClick={() => openHelp()}
             className="w-full text-left text-muted-foreground hover:text-foreground transition"
           >
-            Help
+            {tr("settings.shell.help")}
           </button>
           <button
             onClick={() => auth.logout()}
             className="w-full text-left text-muted-foreground hover:text-foreground transition"
           >
-            Sign out
+            {tr("settings.shell.signOut")}
           </button>
         </footer>
       </aside>
@@ -228,13 +229,13 @@ export function SettingsApp() {
         <div className="md:hidden h-12 px-3 border-b border-border bg-background/85 backdrop-blur flex items-center gap-2 sticky top-0 z-30">
           <button
             onClick={() => tri.setLeftOpen(true)}
-            aria-label="Open menu"
+            aria-label={tr("settings.shell.openMenu")}
             className="w-9 h-9 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition flex items-center justify-center"
           >
             <Menu className="w-4 h-4" />
           </button>
           <div className="text-sm font-medium truncate flex-1">
-            {visibleTabs.find(t => t.id === activeTab)?.label}
+            {(() => { const cur = visibleTabs.find(x => x.id === activeTab); return cur ? tr(cur.label) : ""; })()}
           </div>
         </div>
         <div className="max-w-3xl mx-auto px-4 sm:px-8 py-6 sm:py-8">
@@ -309,10 +310,11 @@ function MoreSection({ title, hint, open, children }: { title: string; hint?: st
 }
 
 function SignInPage({ toast }: { toast: ToastFn }) {
+  const { t } = useTranslation();
   return (
     <div>
-      <PageHeader title="Sign-in & devices">
-        How you get into Yorik, and where you are signed in right now.
+      <PageHeader title={t("settings.pages.signin.title")}>
+        {t("settings.pages.signin.intro")}
       </PageHeader>
       <div className="space-y-5">
         <ChangePasswordCard toast={toast} />
@@ -325,11 +327,11 @@ function SignInPage({ toast }: { toast: ToastFn }) {
 }
 
 function PrivacyPage({ toast }: { toast: ToastFn }) {
+  const { t } = useTranslation();
   return (
     <div>
-      <PageHeader title="Privacy & safety">
-        Who sees what of yours, what the family wall may show, and what
-        happens in an emergency.
+      <PageHeader title={t("settings.pages.privacy.title")}>
+        {t("settings.pages.privacy.intro")}
       </PageHeader>
       <div className="space-y-5">
         <SharingCard toast={toast} />
@@ -344,20 +346,21 @@ function PrivacyPage({ toast }: { toast: ToastFn }) {
 }
 
 function AssistantPage({ toast }: { toast: ToastFn }) {
+  const { t } = useTranslation();
   return (
     <div>
-      <PageHeader title="Assistant & alerts">
-        How Yorik works with you: notifications, undo, suggestions and planning.
+      <PageHeader title={t("settings.pages.assistant.title")}>
+        {t("settings.pages.assistant.intro")}
       </PageHeader>
       <div className="space-y-5">
         <PushCard toast={toast} />
         <ConfirmMutationsToggle toast={toast} part="undo" />
         <SuggestionEngineCard toast={toast} />
         <PlanningRulesCard toast={toast} />
-        <Card title="Voice">
+        <Card title={t("settings.pages.assistant.voice")}>
           <VoiceAckToggle toast={toast} />
         </Card>
-        <MoreSection title="Your own AI agent" hint="(for people who use Hermes, Claude or scripts)">
+        <MoreSection title={t("settings.pages.assistant.ownAgent")} hint={t("settings.pages.assistant.ownAgentHint")}>
           <AgentCard toast={toast} />
           <ApiTokensCard toast={toast} />
           <ConfirmMutationsToggle toast={toast} part="agents" />
@@ -369,10 +372,11 @@ function AssistantPage({ toast }: { toast: ToastFn }) {
 }
 
 function PeoplePage({ toast, openGroups }: { toast: ToastFn; openGroups?: boolean }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-6">
       <UsersTab toast={toast} />
-      <MoreSection title="Groups" hint="(advanced: extra shared spaces, e.g. for a business)" open={openGroups}>
+      <MoreSection title={t("settings.pages.people.groups")} hint={t("settings.pages.people.groupsHint")} open={openGroups}>
         <SpacesTab toast={toast} />
       </MoreSection>
     </div>
@@ -390,11 +394,11 @@ function AppsAccountsPage({ toast }: { toast: ToastFn }) {
 }
 
 function LettersPage({ toast, isAdmin }: { toast: ToastFn; isAdmin: boolean }) {
+  const { t } = useTranslation();
   return (
     <div>
-      <PageHeader title="Letters & invoices">
-        What your letters, invoices and quotes from the Write app look like,
-        and how invoices are numbered.
+      <PageHeader title={t("settings.pages.letters.title")}>
+        {t("settings.pages.letters.intro")}
       </PageHeader>
       <div className="space-y-5">
         <BusinessCard toast={toast} />
@@ -408,10 +412,11 @@ function LettersPage({ toast, isAdmin }: { toast: ToastFn; isAdmin: boolean }) {
 }
 
 function BackupStoragePage({ toast }: { toast: ToastFn }) {
+  const { t } = useTranslation();
   return (
     <div>
-      <PageHeader title="Backup & storage">
-        Copies of everything on a second drive, and where the photos live.
+      <PageHeader title={t("settings.pages.backup.title")}>
+        {t("settings.pages.backup.intro")}
       </PageHeader>
       <div className="space-y-5">
         <BackupTab toast={toast} />
@@ -431,23 +436,23 @@ function AiPage({ toast }: { toast: ToastFn }) {
 }
 
 const DEV_SECTIONS: { id: string; label: string; hostOnly?: boolean }[] = [
-  { id: "logs", label: "Logs" },
-  { id: "quality", label: "Quality" },
-  { id: "diagnostics", label: "Diagnostics" },
-  { id: "skills", label: "Skills", hostOnly: true },
-  { id: "addons", label: "Add-ons", hostOnly: true },
+  { id: "logs", label: "settings.pages.developer.sections.logs" },
+  { id: "quality", label: "settings.pages.developer.sections.quality" },
+  { id: "diagnostics", label: "settings.pages.developer.sections.diagnostics" },
+  { id: "skills", label: "settings.pages.developer.sections.skills", hostOnly: true },
+  { id: "addons", label: "settings.pages.developer.sections.addons", hostOnly: true },
 ];
 
 function DeveloperPage({ toast, section, onSection, hostOnlyHidden }: {
   toast: ToastFn; section?: string; onSection: (s: string) => void; hostOnlyHidden: boolean;
 }) {
+  const { t } = useTranslation();
   const sections = DEV_SECTIONS.filter(d => !(d.hostOnly && hostOnlyHidden));
   const active = sections.some(d => d.id === section) ? section! : "logs";
   return (
     <div>
-      <PageHeader title="Developer">
-        For finding out what went wrong, and for extending Yorik. Nothing here
-        is needed for everyday use.
+      <PageHeader title={t("settings.pages.developer.title")}>
+        {t("settings.pages.developer.intro")}
       </PageHeader>
       <div className="flex flex-wrap gap-1.5 mb-6">
         {sections.map(d => (
@@ -457,7 +462,7 @@ function DeveloperPage({ toast, section, onSection, hostOnlyHidden }: {
             className={cn("px-3 py-1.5 rounded-full text-sm border transition",
               active === d.id ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted")}
           >
-            {d.label}
+            {t(d.label)}
           </button>
         ))}
       </div>
@@ -478,6 +483,7 @@ function DeveloperPage({ toast, section, onSection, hostOnlyHidden }: {
 // ─── Profile tab ──────────────────────────────────────────────────────
 
 function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const auth = useAuth();
   const u = auth.user;
   const kid = isKid(u.role);
@@ -522,9 +528,9 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
       }
       await api.patch("/api/profile", payload);
       await auth.refresh();
-      toast("Profile saved", "success");
+      toast(t("settings.profile.saved"), "success");
     } catch (e: any) {
-      toast(`Save failed: ${e.message}`, "error");
+      toast(t("settings.profile.saveFailed", { msg: e.message }), "error");
     } finally {
       setBusy(false);
     }
@@ -533,79 +539,79 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
   return (
     <div>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Profile</h1>
+        <h1 className="text-2xl font-semibold">{t("settings.profile.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Who you are in Yorik. {kid ? "" : "Your name and address also start your letterhead (Letters & invoices)."}
+          {t("settings.profile.intro")} {kid ? "" : t("settings.profile.introLetterhead")}
         </p>
       </header>
 
       <div className="space-y-5">
-        <Card title="You">
+        <Card title={t("settings.profile.you")}>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="First name">
+            <Field label={t("settings.profile.firstName")}>
               <input value={form.first_name} onChange={e => set("first_name", e.target.value)} className={inputClass} />
             </Field>
-            <Field label="Last name">
+            <Field label={t("settings.profile.lastName")}>
               <input value={form.last_name} onChange={e => set("last_name", e.target.value)} className={inputClass} />
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3">
-            <Field label="What the family calls you">
+            <Field label={t("settings.profile.familyName")}>
               <input value={form.name} onChange={e => set("name", e.target.value)} className={inputClass} />
             </Field>
             {!isPlaceholderEmail(u.email) && (
-              <Field label="Email (you sign in with it)">
+              <Field label={t("settings.profile.email")}>
                 <input value={u.email} disabled className={cn(inputClass, "opacity-60 cursor-not-allowed")} />
               </Field>
             )}
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3">
-            <Field label="Language">
+            <Field label={t("settings.profile.language")}>
               <select value={form.language} onChange={e => set("language", e.target.value)} className={inputClass}>
                 <option value="en">English</option>
                 <option value="de">Deutsch</option>
               </select>
             </Field>
             {!kid && (
-              <Field label="Country">
+              <Field label={t("settings.profile.country")}>
                 <select value={form.country} onChange={e => set("country", e.target.value)} className={inputClass}>
                   <option value="">—</option>
-                  <option value="DE">🇩🇪 Germany</option>
-                  <option value="AT">🇦🇹 Austria</option>
-                  <option value="CH">🇨🇭 Switzerland</option>
-                  <option value="US">🇺🇸 United States</option>
-                  <option value="GB">🇬🇧 United Kingdom</option>
-                  <option value="PL">🇵🇱 Poland</option>
-                  <option value="FR">🇫🇷 France</option>
-                  <option value="ES">🇪🇸 Spain</option>
-                  <option value="IT">🇮🇹 Italy</option>
+                  <option value="DE">🇩🇪 {t("settings.profile.countries.DE")}</option>
+                  <option value="AT">🇦🇹 {t("settings.profile.countries.AT")}</option>
+                  <option value="CH">🇨🇭 {t("settings.profile.countries.CH")}</option>
+                  <option value="US">🇺🇸 {t("settings.profile.countries.US")}</option>
+                  <option value="GB">🇬🇧 {t("settings.profile.countries.GB")}</option>
+                  <option value="PL">🇵🇱 {t("settings.profile.countries.PL")}</option>
+                  <option value="FR">🇫🇷 {t("settings.profile.countries.FR")}</option>
+                  <option value="ES">🇪🇸 {t("settings.profile.countries.ES")}</option>
+                  <option value="IT">🇮🇹 {t("settings.profile.countries.IT")}</option>
                 </select>
               </Field>
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Yorik answers you in this language.
-            {isAdmin && " As an admin, changing the country also sets the household's time zone, currency and the language documents are read in."}
+            {t("settings.profile.languageNote")}
+            {isAdmin && ` ${t("settings.profile.adminCountryNote")}`}
           </p>
         </Card>
 
         {!kid && (
-          <Card title="Address">
-            <Field label="Street and number">
+          <Card title={t("settings.profile.address")}>
+            <Field label={t("settings.profile.street")}>
               <input value={form.address_street} onChange={e => set("address_street", e.target.value)} className={inputClass} />
             </Field>
             <div className="grid grid-cols-3 gap-3 mt-3">
-              <Field label="Postal code">
+              <Field label={t("settings.profile.postcode")}>
                 <input value={form.address_postcode} onChange={e => set("address_postcode", e.target.value)} className={inputClass} />
               </Field>
               <div className="col-span-2">
-                <Field label="City">
+                <Field label={t("settings.profile.city")}>
                   <input value={form.address_city} onChange={e => set("address_city", e.target.value)} className={inputClass} />
                 </Field>
               </div>
             </div>
             <div className="mt-3">
-              <Field label="Phone">
+              <Field label={t("settings.profile.phone")}>
                 <input value={form.phone} onChange={e => set("phone", e.target.value)} className={inputClass} />
               </Field>
             </div>
@@ -613,7 +619,7 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
         )}
 
         <div className="flex items-center justify-end gap-3">
-          {dirty && <span className="text-xs text-amber-600">Not saved yet</span>}
+          {dirty && <span className="text-xs text-amber-600">{t("settings.profile.notSaved")}</span>}
           <button
             onClick={save}
             disabled={busy || !dirty}
@@ -625,7 +631,7 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
             )}
           >
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Save changes
+            {t("settings.profile.saveChanges")}
           </button>
         </div>
 
@@ -640,6 +646,7 @@ function ProfileTab({ toast }: { toast: (text: string, kind?: "info" | "success"
  *  need. Saved on the profile; the letterhead below takes them over
  *  where it hasn't been changed by hand. */
 function BusinessCard({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const auth = useAuth();
   const u = auth.user;
   const initial = { business_name: u.business_name || "", tax_id: u.tax_id || "", iban: u.iban || "" };
@@ -654,25 +661,25 @@ function BusinessCard({ toast }: { toast: (text: string, kind?: "info" | "succes
         business_name: form.business_name || null, tax_id: form.tax_id || null, iban: form.iban || null,
       });
       await auth.refresh();
-      toast("Saved", "success");
+      toast(t("settings.business.saved"), "success");
     } catch (e: any) {
-      toast(`Save failed: ${e.message}`, "error");
+      toast(t("settings.business.saveFailed", { msg: e.message }), "error");
     } finally { setBusy(false); }
   }
 
   return (
-    <Card title="Business details">
+    <Card title={t("settings.business.title")}>
       <p className="text-xs text-muted-foreground mb-3">
-        Only if you write invoices. Yorik uses these on forms it fills in for you and in your letterhead below.
+        {t("settings.business.intro")}
       </p>
-      <Field label="Business name (leave blank for personal use)">
+      <Field label={t("settings.business.businessName")}>
         <input value={form.business_name} onChange={e => setForm(f => ({ ...f, business_name: e.target.value }))} className={inputClass} />
       </Field>
       <div className="grid grid-cols-2 gap-3 mt-3">
-        <Field label="Tax number">
+        <Field label={t("settings.business.taxNumber")}>
           <input value={form.tax_id} onChange={e => setForm(f => ({ ...f, tax_id: e.target.value }))} className={inputClass} />
         </Field>
-        <Field label="IBAN">
+        <Field label={t("settings.business.iban")}>
           <input value={form.iban} onChange={e => setForm(f => ({ ...f, iban: e.target.value }))} className={cn(inputClass, "font-mono")} />
         </Field>
       </div>
@@ -683,7 +690,7 @@ function BusinessCard({ toast }: { toast: (text: string, kind?: "info" | "succes
           className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition disabled:opacity-50 inline-flex items-center gap-1.5"
         >
           {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-          Save
+          {t("settings.business.save")}
         </button>
       </div>
     </Card>
@@ -709,6 +716,7 @@ function applyTheme(theme: Theme) {
 }
 
 function ThemeToggle() {
+  const { t } = useTranslation();
   const [theme, setTheme] = useState<Theme>(() => {
     try {
       const saved = localStorage.getItem("yorik_theme");
@@ -733,18 +741,18 @@ function ThemeToggle() {
   }
 
   const options: { id: Theme; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { id: "light",  label: "Light",  icon: Sun },
-    { id: "dark",   label: "Dark",   icon: Moon },
-    { id: "system", label: "System", icon: Monitor },
+    { id: "light",  label: t("settings.theme.light"),  icon: Sun },
+    { id: "dark",   label: t("settings.theme.dark"),   icon: Moon },
+    { id: "system", label: t("settings.theme.system"), icon: Monitor },
   ];
 
   return (
-    <Card title="Appearance">
+    <Card title={t("settings.theme.title")}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex-1">
-          <div className="text-sm font-medium">Theme</div>
+          <div className="text-sm font-medium">{t("settings.theme.theme")}</div>
           <p className="text-xs text-muted-foreground mt-1">
-            Light, dark, or follow your operating system. Saved per device.
+            {t("settings.theme.intro")}
           </p>
         </div>
         <div className="inline-flex rounded-md border border-border bg-card p-0.5 shrink-0">
@@ -785,6 +793,7 @@ function ThemeToggle() {
 function VoiceAckToggle({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -808,12 +817,12 @@ function VoiceAckToggle({ toast }: {
       setEnabled(next);
       toast(
         next
-          ? "Instant confirmation sounds ON"
-          : "Instant confirmation sounds OFF",
+          ? t("settings.voiceAck.on")
+          : t("settings.voiceAck.off"),
         "success",
       );
     } catch (e: any) {
-      toast(e.message || "Failed to save", "error");
+      toast(e.message || t("settings.voiceAck.saveFailed"), "error");
     } finally {
       setSaving(false);
     }
@@ -822,11 +831,9 @@ function VoiceAckToggle({ toast }: {
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="flex-1">
-        <div className="text-sm font-medium">Instant confirmation sound</div>
+        <div className="text-sm font-medium">{t("settings.voiceAck.title")}</div>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Yorik says "on it" or similar the moment it hears you,
-          before answering. Makes the conversation feel natural — random
-          phrase per turn so it doesn't sound robotic.
+          {t("settings.voiceAck.intro")}
         </p>
       </div>
       <button
@@ -872,6 +879,7 @@ type ApiToken = {
 function ApiTokensCard({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [tokens, setTokens] = useState<ApiToken[]>([]);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -888,9 +896,9 @@ function ApiTokensCard({ toast }: {
         setHousehold(await api.get<(ApiToken & { owner: string; owner_id: string })[]>("/api/tokens/all"));
       }
     } catch (e: any) {
-      toast(`Couldn't load tokens: ${e.message}`, "error");
+      toast(t("settings.apiTokens.loadFailed", { msg: e.message }), "error");
     }
-  }, [toast, isAdmin]);
+  }, [toast, isAdmin, t]);
   useEffect(() => { load(); }, [load]);
 
   async function create() {
@@ -902,7 +910,7 @@ function ApiTokensCard({ toast }: {
       setName("");
       await load();
     } catch (e: any) {
-      toast(`Couldn't create token: ${e.message}`, "error");
+      toast(t("settings.apiTokens.createFailed", { msg: e.message }), "error");
     } finally {
       setBusy(false);
     }
@@ -915,9 +923,9 @@ function ApiTokensCard({ toast }: {
       await api.delete(`/api/tokens/${id}`);
       if (fresh?.id === id) setFresh(null);
       await load();
-      toast("Token revoked", "success");
+      toast(t("settings.apiTokens.revoked"), "success");
     } catch (e: any) {
-      toast(`Couldn't revoke token: ${e.message}`, "error");
+      toast(t("settings.apiTokens.revokeFailed", { msg: e.message }), "error");
     } finally {
       setBusy(false);
     }
@@ -926,29 +934,28 @@ function ApiTokensCard({ toast }: {
   async function copy(text: string, what: string) {
     try {
       await navigator.clipboard.writeText(text);
-      toast(`${what} copied`, "success");
+      toast(t("settings.apiTokens.copied", { what }), "success");
     } catch {
-      toast("Copy failed. Select the text and copy it by hand.", "error");
+      toast(t("settings.apiTokens.copyFailed"), "error");
     }
   }
 
   const live = tokens.filter(t => !t.revoked);
 
   return (
-    <Card title="API tokens">
+    <Card title={t("settings.apiTokens.title")}>
       <div className="mb-3 flex items-start gap-2">
         <KeyRound className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
         <div className="flex-1">
-          <div className="text-sm font-medium">Let an agent use Yorik as you</div>
+          <div className="text-sm font-medium">{t("settings.apiTokens.heading")}</div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            A token gives an outside assistant (Hermes, Claude, a script) the same skills you
-            have in chat, nothing more. Deletions still wait for a confirmation. The MCP endpoint is
+            {t("settings.apiTokens.intro")}
           </p>
           <button
             type="button"
-            onClick={() => copy(mcpUrl, "Endpoint")}
+            onClick={() => copy(mcpUrl, t("settings.apiTokens.endpoint"))}
             className="mt-1 inline-flex items-center gap-1 text-xs font-mono text-foreground/80 hover:text-foreground transition"
-            title="Copy endpoint"
+            title={t("settings.apiTokens.copyEndpoint")}
           >
             {mcpUrl}
             <Copy className="w-3 h-3" />
@@ -960,7 +967,7 @@ function ApiTokensCard({ toast }: {
         <input
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="Name, e.g. Hermes on the workstation"
+          placeholder={t("settings.apiTokens.namePlaceholder")}
           className={inputClass}
           maxLength={80}
           onKeyDown={e => { if (e.key === "Enter") create(); }}
@@ -972,23 +979,23 @@ function ApiTokensCard({ toast }: {
           className="h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm inline-flex items-center gap-1.5 disabled:opacity-50 shrink-0"
         >
           {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-          Create
+          {t("settings.apiTokens.create")}
         </button>
       </div>
 
       {fresh && (
         <div className="mt-3 rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/60 p-3">
           <div className="text-xs text-amber-800 dark:text-amber-300 mb-1.5">
-            Copy this token now. It is shown only once.
+            {t("settings.apiTokens.showOnce")}
           </div>
           <div className="flex items-center gap-2">
             <code className="flex-1 text-xs font-mono break-all select-all">{fresh.token}</code>
             <button
               type="button"
-              onClick={() => copy(fresh.token, "Token")}
+              onClick={() => copy(fresh.token, t("settings.apiTokens.token"))}
               className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition shrink-0"
             >
-              <Copy className="w-3.5 h-3.5" /> Copy
+              <Copy className="w-3.5 h-3.5" /> {t("settings.apiTokens.copy")}
             </button>
           </div>
         </div>
@@ -996,57 +1003,57 @@ function ApiTokensCard({ toast }: {
 
       {live.length > 0 && (
         <ul className="mt-3 divide-y divide-border">
-          {live.map(t => (
-            <li key={t.id} className="py-2 flex items-center gap-3">
+          {live.map(tok => (
+            <li key={tok.id} className="py-2 flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                <div className="text-sm truncate">{t.name}</div>
+                <div className="text-sm truncate">{tok.name}</div>
                 <div className="text-xs text-muted-foreground font-mono">
-                  {t.prefix}
-                  <span className="font-sans"> · created {t.created_at?.slice(0, 10) ?? "?"}
-                    {t.last_used_at ? ` · last used ${t.last_used_at.slice(0, 16)}` : " · never used"}
+                  {tok.prefix}
+                  <span className="font-sans"> · {t("settings.apiTokens.created", { date: tok.created_at?.slice(0, 10) ?? "?" })}
+                    {tok.last_used_at ? ` · ${t("settings.apiTokens.lastUsed", { date: tok.last_used_at.slice(0, 16) })}` : ` · ${t("settings.apiTokens.neverUsed")}`}
                   </span>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => revoke(t.id)}
+                onClick={() => revoke(tok.id)}
                 disabled={busy}
                 className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-red-600 transition disabled:opacity-50"
-                title="Revoke"
+                title={t("settings.apiTokens.revoke")}
               >
-                <Trash2 className="w-3.5 h-3.5" /> Revoke
+                <Trash2 className="w-3.5 h-3.5" /> {t("settings.apiTokens.revoke")}
               </button>
             </li>
           ))}
         </ul>
       )}
       {live.length === 0 && !fresh && (
-        <p className="mt-3 text-xs text-muted-foreground">No tokens yet.</p>
+        <p className="mt-3 text-xs text-muted-foreground">{t("settings.apiTokens.none")}</p>
       )}
       {isAdmin && household.some(t => t.owner_id !== String(auth.user?.id)) && (
         <div className="mt-4 pt-3 border-t border-border">
           <div className="text-xs text-muted-foreground mb-1">
-            Other members' tokens
+            {t("settings.apiTokens.others")}
           </div>
           <ul className="divide-y divide-border">
-            {household.filter(t => t.owner_id !== String(auth.user?.id)).map(t => (
-              <li key={t.id} className="py-2 flex items-center gap-3">
+            {household.filter(tok => tok.owner_id !== String(auth.user?.id)).map(tok => (
+              <li key={tok.id} className="py-2 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm truncate">{t.owner}: {t.name}</div>
+                  <div className="text-sm truncate">{tok.owner}: {tok.name}</div>
                   <div className="text-xs text-muted-foreground font-mono">
-                    {t.prefix}
+                    {tok.prefix}
                     <span className="font-sans">
-                      {t.last_used_at ? ` · last used ${t.last_used_at.slice(0, 16)}` : " · never used"}
+                      {tok.last_used_at ? ` · ${t("settings.apiTokens.lastUsed", { date: tok.last_used_at.slice(0, 16) })}` : ` · ${t("settings.apiTokens.neverUsed")}`}
                     </span>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => revoke(t.id)}
+                  onClick={() => revoke(tok.id)}
                   disabled={busy}
                   className="text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-red-600 transition disabled:opacity-50"
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Revoke
+                  <Trash2 className="w-3.5 h-3.5" /> {t("settings.apiTokens.revoke")}
                 </button>
               </li>
             ))}
@@ -1060,6 +1067,7 @@ function ApiTokensCard({ toast }: {
 function ChangePasswordCard({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
@@ -1080,12 +1088,12 @@ function ChangePasswordCard({ toast }: {
         new_password:     newPw,
       });
       setCurrentPw(""); setNewPw(""); setConfirmPw("");
-      toast("Password changed. Your other devices have been signed out and need the new password.", "success");
+      toast(t("settings.password.changed"), "success");
     } catch (e: any) {
       // 401 = current password wrong; 400 = new too short / other validation
-      const msg = e?.message || "Couldn't change password";
+      const msg = e?.message || t("settings.password.changeFailed");
       toast(msg.includes("401") || msg.toLowerCase().includes("current")
-        ? "Current password is incorrect"
+        ? t("settings.password.currentWrong")
         : msg, "error");
     } finally {
       setSaving(false);
@@ -1093,13 +1101,13 @@ function ChangePasswordCard({ toast }: {
   }
 
   return (
-    <Card title="Password">
+    <Card title={t("settings.password.title")}>
       <div className="mb-3 flex items-start gap-2">
         <KeyRound className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
         <div className="flex-1">
-          <div className="text-sm font-medium">Change your password</div>
+          <div className="text-sm font-medium">{t("settings.password.heading")}</div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Requires your current password. Minimum 8 characters.
+            {t("settings.password.intro")}
           </p>
         </div>
         <button
@@ -1107,11 +1115,11 @@ function ChangePasswordCard({ toast }: {
           className="text-xs text-muted-foreground hover:text-foreground transition shrink-0"
           type="button"
         >
-          {show ? "Hide" : "Show"}
+          {show ? t("settings.password.hide") : t("settings.password.show")}
         </button>
       </div>
       <div className="space-y-2.5">
-        <Field label="Current password">
+        <Field label={t("settings.password.current")}>
           <input
             type={show ? "text" : "password"}
             value={currentPw}
@@ -1120,7 +1128,7 @@ function ChangePasswordCard({ toast }: {
             className={inputClass}
           />
         </Field>
-        <Field label="New password">
+        <Field label={t("settings.password.new")}>
           <input
             type={show ? "text" : "password"}
             value={newPw}
@@ -1131,10 +1139,10 @@ function ChangePasswordCard({ toast }: {
         </Field>
         {newTooShort && (
           <p className="text-xs text-amber-600 dark:text-amber-500 -mt-1.5">
-            Too short — needs ≥8 characters.
+            {t("settings.password.tooShort")}
           </p>
         )}
-        <Field label="Confirm new password">
+        <Field label={t("settings.password.confirm")}>
           <input
             type={show ? "text" : "password"}
             value={confirmPw}
@@ -1146,7 +1154,7 @@ function ChangePasswordCard({ toast }: {
         </Field>
         {mismatch && (
           <p className="text-xs text-amber-600 dark:text-amber-500 -mt-1.5">
-            Doesn't match the new password above.
+            {t("settings.password.mismatch")}
           </p>
         )}
       </div>
@@ -1161,7 +1169,7 @@ function ChangePasswordCard({ toast }: {
           )}
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Change password
+          {t("settings.password.submit")}
         </button>
       </div>
     </Card>
@@ -1182,6 +1190,7 @@ function ChangePasswordCard({ toast }: {
 function KioskPinCard({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [meHasPin, setMeHasPin] = useState<boolean | null>(null);
   const [pinSetAt, setPinSetAt] = useState<string | null>(null);
   const [pin, setPin]           = useState("");
@@ -1216,39 +1225,37 @@ function KioskPinCard({ toast }: {
       setPin(""); setPin2("");
       setMeHasPin(true);
       setPinSetAt(new Date().toISOString());
-      toast("PIN saved", "success");
+      toast(t("settings.kioskPin.saved"), "success");
     } catch (e: any) {
-      toast(e?.message || "Couldn't set PIN", "error");
+      toast(e?.message || t("settings.kioskPin.setFailed"), "error");
     } finally {
       setSaving(false);
     }
   }
 
   async function clear() {
-    if (!confirm("Remove your PIN? You can't sign in on the family wall with it any more until you set a new one.")) return;
+    if (!confirm(t("settings.kioskPin.removeConfirm"))) return;
     setSaving(true);
     try {
       await api.delete("/api/profile/pin");
       setMeHasPin(false);
       setPinSetAt(null);
-      toast("PIN removed", "success");
+      toast(t("settings.kioskPin.removed"), "success");
     } catch (e: any) {
-      toast(e?.message || "Couldn't clear PIN", "error");
+      toast(e?.message || t("settings.kioskPin.clearFailed"), "error");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Card title="Your PIN">
+    <Card title={t("settings.kioskPin.title")}>
       <div className="mb-3 flex items-start gap-2">
         <KeyRound className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
         <div className="flex-1">
-          <div className="text-sm font-medium">4 digits to sign in on your phone and on the family wall</div>
+          <div className="text-sm font-medium">{t("settings.kioskPin.heading")}</div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            If you joined with a QR code, this PIN is how your phone signs you in.
-            On the family wall it tells Yorik who is standing there. On a computer's
-            browser you still sign in with your email and password.
+            {t("settings.kioskPin.intro")}
           </p>
         </div>
       </div>
@@ -1256,21 +1263,20 @@ function KioskPinCard({ toast }: {
       {meHasPin === true && (
         <div className="mb-3 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400 flex items-center justify-between gap-2">
           <span>
-            PIN set
-            {pinSetAt ? ` on ${new Date(pinSetAt).toLocaleDateString()}` : ""}.
+            {pinSetAt ? t("settings.kioskPin.setOn", { date: new Date(pinSetAt).toLocaleDateString(locale()) }) : t("settings.kioskPin.set")}
           </span>
           <button
             onClick={clear}
             disabled={saving}
             className="text-xs underline hover:no-underline disabled:opacity-50"
           >
-            Clear PIN
+            {t("settings.kioskPin.clear")}
           </button>
         </div>
       )}
 
       <div className="space-y-2.5">
-        <Field label={meHasPin ? "New PIN (4 digits)" : "PIN (4 digits)"}>
+        <Field label={meHasPin ? t("settings.kioskPin.newPin") : t("settings.kioskPin.pin")}>
           <input
             type={show ? "text" : "password"}
             inputMode="numeric"
@@ -1282,7 +1288,7 @@ function KioskPinCard({ toast }: {
             className={inputClass}
           />
         </Field>
-        <Field label="Confirm PIN">
+        <Field label={t("settings.kioskPin.confirm")}>
           <input
             type={show ? "text" : "password"}
             inputMode="numeric"
@@ -1296,12 +1302,12 @@ function KioskPinCard({ toast }: {
         </Field>
         {pin.length > 0 && pin.length < 4 && (
           <p className="text-xs text-amber-600 dark:text-amber-500 -mt-1.5">
-            PINs are exactly 4 digits.
+            {t("settings.kioskPin.exactlyFour")}
           </p>
         )}
         {pin2.length === 4 && !matches && (
           <p className="text-xs text-amber-600 dark:text-amber-500 -mt-1.5">
-            PINs don't match.
+            {t("settings.kioskPin.mismatch")}
           </p>
         )}
       </div>
@@ -1312,7 +1318,7 @@ function KioskPinCard({ toast }: {
           className="text-xs text-muted-foreground hover:text-foreground transition"
           type="button"
         >
-          {show ? "Hide digits" : "Show digits"}
+          {show ? t("settings.kioskPin.hideDigits") : t("settings.kioskPin.showDigits")}
         </button>
         <button
           onClick={save}
@@ -1324,7 +1330,7 @@ function KioskPinCard({ toast }: {
           )}
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {meHasPin ? "Update PIN" : "Set PIN"}
+          {meHasPin ? t("settings.kioskPin.update") : t("settings.kioskPin.setPin")}
         </button>
       </div>
     </Card>
@@ -1345,6 +1351,7 @@ function KioskPinCard({ toast }: {
 function VoiceEnrollmentCard({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const auth = useAuth();
   const myId = auth.user.id;
 
@@ -1354,7 +1361,7 @@ function VoiceEnrollmentCard({ toast }: {
   // Sample prompt — phonetically varied so the embedding covers
   // common vowels + consonants. Households can re-record any time
   // if they want to try a different prompt.
-  const PROMPT = "Hey Yorik, today is a good day. I'd like to check what's on my calendar, then read the news. Thank you.";
+  const PROMPT = t("settings.voiceEnrollment.prompt");
 
   const [enrolled,    setEnrolled]    = useState<boolean | null>(null);
   const [recording,   setRecording]   = useState(false);
@@ -1382,7 +1389,7 @@ function VoiceEnrollmentCard({ toast }: {
   async function startRecording() {
     setError(null);
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setError("This browser doesn't support voice recording. Try Chrome / Edge / Safari.");
+      setError(t("settings.voiceEnrollment.noSupport"));
       return;
     }
     try {
@@ -1421,8 +1428,8 @@ function VoiceEnrollmentCard({ toast }: {
       }, 150);
     } catch (err: any) {
       const msg = err?.name === "NotAllowedError"
-        ? "Microphone permission denied. Allow it for this page and try again."
-        : (err?.message || "Couldn't open the microphone");
+        ? t("settings.voiceEnrollment.micDenied")
+        : (err?.message || t("settings.voiceEnrollment.micFailed"));
       setError(msg);
     }
   }
@@ -1453,19 +1460,19 @@ function VoiceEnrollmentCard({ toast }: {
         try { const j = JSON.parse(text); msg = j.detail || j.message || msg; } catch { /* plain text */ }
         throw new Error(msg);
       }
-      toast("Voice enrolled — Yorik will recognise you on the kiosk now", "success");
+      toast(t("settings.voiceEnrollment.enrolled"), "success");
       await refresh();
     } catch (err: any) {
-      const msg = err?.message || "Enrollment failed";
+      const msg = err?.message || t("settings.voiceEnrollment.failed");
       setError(msg);
-      toast(`Enrollment failed: ${msg}`, "error");
+      toast(t("settings.voiceEnrollment.failedWith", { msg }), "error");
     } finally {
       setUploading(false);
     }
   }
 
   async function clearEnrollment() {
-    if (!confirm("Remove your voice enrollment? Kiosk will fall back to PIN until you re-enroll.")) return;
+    if (!confirm(t("settings.voiceEnrollment.removeConfirm"))) return;
     setUploading(true);
     try {
       const r = await fetch(`/api/voice-profile/${myId}/enrollment`, {
@@ -1473,38 +1480,36 @@ function VoiceEnrollmentCard({ toast }: {
         credentials: "include",
       });
       if (!r.ok && r.status !== 204) throw new Error(`HTTP ${r.status}`);
-      toast("Voice enrollment cleared", "success");
+      toast(t("settings.voiceEnrollment.cleared"), "success");
       await refresh();
     } catch (err: any) {
-      toast(err?.message || "Couldn't clear enrollment", "error");
+      toast(err?.message || t("settings.voiceEnrollment.clearFailed"), "error");
     } finally {
       setUploading(false);
     }
   }
 
   return (
-    <Card title="Your voice on the family wall">
+    <Card title={t("settings.voiceEnrollment.title")}>
       <div className="mb-3 flex items-start gap-2">
         <Mic className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
         <div className="flex-1">
-          <div className="text-sm font-medium">Let the wall recognise you when you speak</div>
+          <div className="text-sm font-medium">{t("settings.voiceEnrollment.heading")}</div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Records a short sample so the family wall knows it's you without
-            your PIN. Only the wall listens for voices; phones and computers
-            never do. Skip this if you have no wall tablet.
+            {t("settings.voiceEnrollment.intro")}
           </p>
         </div>
       </div>
 
       {enrolled === true && !recording && !uploading && (
         <div className="mb-3 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400 flex items-center justify-between gap-2">
-          <span>Voice enrolled. The kiosk will recognise you silently.</span>
+          <span>{t("settings.voiceEnrollment.enrolledNote")}</span>
           <button
             onClick={clearEnrollment}
             disabled={uploading}
             className="text-xs underline hover:no-underline disabled:opacity-50"
           >
-            Clear
+            {t("settings.voiceEnrollment.clear")}
           </button>
         </div>
       )}
@@ -1516,7 +1521,7 @@ function VoiceEnrollmentCard({ toast }: {
       )}
 
       <div className="rounded-md border border-violet-500/20 bg-violet-500/5 px-3 py-2 text-xs text-foreground/80 mb-3 italic">
-        Read aloud: <span className="not-italic">"{PROMPT}"</span>
+        {t("settings.voiceEnrollment.readAloud")} <span className="not-italic">"{PROMPT}"</span>
       </div>
 
       <div className="flex items-center gap-3">
@@ -1529,7 +1534,7 @@ function VoiceEnrollmentCard({ toast }: {
             )}
           >
             <Mic className="w-4 h-4" />
-            {enrolled ? "Re-enroll voice" : "Record voice sample"}
+            {enrolled ? t("settings.voiceEnrollment.reEnroll") : t("settings.voiceEnrollment.record")}
           </button>
         )}
 
@@ -1539,14 +1544,14 @@ function VoiceEnrollmentCard({ toast }: {
             className="px-4 py-2 rounded-md font-medium text-sm inline-flex items-center gap-1.5 bg-rose-500 text-white shadow-md hover:bg-rose-600"
           >
             <Square className="w-4 h-4" />
-            Stop · {remaining}s left
+            {t("settings.voiceEnrollment.stop", { s: remaining })}
           </button>
         )}
 
         {uploading && (
           <span className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            Enrolling…
+            {t("settings.voiceEnrollment.enrolling")}
           </span>
         )}
       </div>
@@ -1619,6 +1624,7 @@ interface STTConfigResponse {
 function STTConfigCard({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   // Whisper model picker (unchanged surface — admin can still swap
   // tiny ↔ turbo etc, even when a cloud engine is selected, because
   // Whisper stays the silent fallback).
@@ -1656,8 +1662,8 @@ function STTConfigCard({ toast }: {
   }, []);
 
   useEffect(() => {
-    loadConfig().catch((e: any) => toast(`Couldn't load voice config: ${e.message}`, "error"));
-  }, [loadConfig, toast]);
+    loadConfig().catch((e: any) => toast(t("settings.stt.loadFailed", { msg: e.message }), "error"));
+  }, [loadConfig, toast, t]);
 
   // A model picked before it was downloaded: switch once it's there.
   const switchAfterRef = useRef<ParakeetVariant["id"] | null>(null);
@@ -1666,23 +1672,23 @@ function STTConfigCard({ toast }: {
   const downloading = parakeet?.download.state === "running";
   useEffect(() => {
     if (!downloading) return;
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       loadConfig().then(r => {
         if (r.parakeet?.download.state === "done") {
           const next = switchAfterRef.current;
           switchAfterRef.current = null;
           if (next) void pickVariant(next);
-          else toast("Speech model downloaded.", "success");
+          else toast(t("settings.stt.modelDownloaded"), "success");
         }
         if (r.parakeet?.download.state === "error") {
           switchAfterRef.current = null;
-          toast(`Download failed: ${r.parakeet.download.message}`, "error");
+          toast(t("settings.stt.downloadFailed", { msg: r.parakeet.download.message }), "error");
         }
       }).catch(() => {});
     }, 3000);
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [downloading, loadConfig, toast]);
+  }, [downloading, loadConfig, toast, t]);
 
   async function pickVariant(id: ParakeetVariant["id"]) {
     if (!parakeet || id === parakeet.model || busyVariant) return;
@@ -1697,9 +1703,9 @@ function STTConfigCard({ toast }: {
     try {
       const r = await api.patch<STTConfigResponse>("/api/voice/config", { parakeet_model: id });
       setParakeet(r.parakeet);
-      toast(`Switched to ${meta?.label || id}.`, "success");
+      toast(t("settings.stt.switchedTo", { name: meta?.label || id }), "success");
     } catch (e: any) {
-      toast(e.message || "Switch failed", "error");
+      toast(e.message || t("settings.stt.switchFailed"), "error");
     } finally {
       setBusyVariant(null);
     }
@@ -1712,10 +1718,10 @@ function STTConfigCard({ toast }: {
       );
       setParakeet(p => p ? { ...p, download: r.download } : p);
       if (!r.installed) toast(switchAfterRef.current === id
-        ? "Downloading (~600 MB, one-time). Yorik switches to it when it's done; until then the current model keeps working."
-        : "Downloading in the background (~600 MB, one-time).", "info");
+        ? t("settings.stt.downloadingThenSwitch")
+        : t("settings.stt.downloadingBackground"), "info");
     } catch (e: any) {
-      toast(e.message || "Download failed to start", "error");
+      toast(e.message || t("settings.stt.downloadStartFailed"), "error");
     }
   }
 
@@ -1727,13 +1733,13 @@ function STTConfigCard({ toast }: {
       setCurrentModel(id);
       const meta = catalogue.find(m => m.id === id);
       toast(
-        `Switched to ${meta?.label || id}. ${meta && meta.size_mb > 200
-          ? `First voice request will download the model (~${meta.size_mb} MB).`
-          : "Active on next voice request."}`,
+        `${t("settings.stt.switchedTo", { name: meta?.label || id })} ${meta && meta.size_mb > 200
+          ? t("settings.stt.willDownload", { mb: meta.size_mb })
+          : t("settings.stt.activeNext")}`,
         "success",
       );
     } catch (e: any) {
-      toast(e.message || "Switch failed", "error");
+      toast(e.message || t("settings.stt.switchFailed"), "error");
     } finally {
       setBusyModel(null);
     }
@@ -1764,7 +1770,7 @@ function STTConfigCard({ toast }: {
       // backend immediately so the previous cloud config doesn't
       // keep serving requests.
       saveBackend({ stt_backend: id },
-        id === "parakeet" ? "Switched to local Parakeet." : "Switched to local Whisper.");
+        id === "parakeet" ? t("settings.stt.switchedParakeet") : t("settings.stt.switchedWhisper"));
     }
   }
 
@@ -1778,7 +1784,7 @@ function STTConfigCard({ toast }: {
       setApiKeyInput("");
       toast(successMsg, "success");
     } catch (e: any) {
-      toast(e.message || "Save failed", "error");
+      toast(e.message || t("settings.stt.saveFailed"), "error");
     } finally {
       setSavingBackend(false);
     }
@@ -1788,7 +1794,7 @@ function STTConfigCard({ toast }: {
     const meta = backends.find(b => b.id === backend);
     const trimmedKey = apiKeyInput.trim();
     if (meta?.requires_key && !trimmedKey && !apiKeySet) {
-      toast("Paste an API key first.", "error");
+      toast(t("settings.stt.pasteKeyFirst"), "error");
       return;
     }
     const payload: Record<string, unknown> = {
@@ -1797,7 +1803,7 @@ function STTConfigCard({ toast }: {
       stt_model_name: modelName.trim(),
     };
     if (trimmedKey) payload.stt_api_key = trimmedKey;
-    await saveBackend(payload, `Saved. ${meta?.label || backend} is now active.`);
+    await saveBackend(payload, t("settings.stt.savedActive", { name: meta?.label || backend }));
   }
 
   async function testConnection() {
@@ -1818,12 +1824,12 @@ function STTConfigCard({ toast }: {
         },
       );
       if (r.ok) {
-        toast(r.note || "Connection OK — endpoint accepted the test audio.", "success");
+        toast(r.note || t("settings.stt.connectionOk"), "success");
       } else {
-        toast(`Connection failed: ${r.error || "unknown error"}`, "error");
+        toast(t("settings.stt.connectionFailed", { msg: r.error || t("settings.stt.unknownError") }), "error");
       }
     } catch (e: any) {
-      toast(e.message || "Test failed", "error");
+      toast(e.message || t("settings.stt.testFailed"), "error");
     } finally {
       setTesting(false);
     }
@@ -1833,17 +1839,13 @@ function STTConfigCard({ toast }: {
   const isCloud = backend !== "whisper" && backend !== "parakeet";
 
   return (
-    <Card title="Speech recognition">
+    <Card title={t("settings.stt.title")}>
       <div className="mb-3 flex items-start gap-2">
         <Mic className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
         <div className="flex-1">
-          <div className="text-sm font-medium">How Yorik turns speech into text</div>
+          <div className="text-sm font-medium">{t("settings.stt.heading")}</div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            For everyone in the household: the microphone in the chat, the wall
-            and WhatsApp voice notes. <strong>Parakeet</strong> (recommended) runs on
-            this computer and keeps the audio at home. A cloud service is faster on
-            weak machines, but then the audio, including voice notes other people
-            sent you, goes to that provider. Recordings always use Parakeet.
+            {t("settings.stt.introBefore")}<strong>Parakeet</strong>{t("settings.stt.introAfter")}
           </p>
         </div>
       </div>
@@ -1873,7 +1875,7 @@ function STTConfigCard({ toast }: {
                 <span className="font-medium text-sm">{b.label}</span>
                 {b.requires_key && (
                   <span className="text-2xs text-muted-foreground font-mono">
-                    API key
+                    {t("settings.stt.apiKey")}
                   </span>
                 )}
               </div>
@@ -1888,7 +1890,7 @@ function STTConfigCard({ toast }: {
       {/* Parakeet variant + model download */}
       {backend === "parakeet" && parakeet && (
         <div className="space-y-1.5 mb-4 border border-border rounded-md p-3 bg-muted/30">
-          <div className="text-xs font-medium mb-1">Parakeet model</div>
+          <div className="text-xs font-medium mb-1">{t("settings.stt.parakeetModel")}</div>
           {parakeet.variants.map(v => {
             const active = parakeet.model === v.id;
             const isBusy = busyVariant === v.id;
@@ -1917,8 +1919,8 @@ function STTConfigCard({ toast }: {
                     <span className="font-medium text-sm">{v.label}</span>
                     <span className="text-2xs text-muted-foreground font-mono">~{v.size_mb} MB</span>
                     {v.installed
-                      ? <span className="text-2xs text-emerald-600">downloaded</span>
-                      : <span className="text-2xs text-amber-600">not downloaded</span>}
+                      ? <span className="text-2xs text-emerald-600">{t("settings.stt.downloaded")}</span>
+                      : <span className="text-2xs text-amber-600">{t("settings.stt.notDownloaded")}</span>}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 ml-6">{v.blurb}</div>
                 </button>
@@ -1930,7 +1932,7 @@ function STTConfigCard({ toast }: {
                     className="text-xs px-2.5 py-1.5 rounded border border-border bg-card hover:bg-muted disabled:opacity-60 inline-flex items-center gap-1.5 shrink-0"
                   >
                     {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                    {running ? "Downloading" : "Download"}
+                    {running ? t("settings.stt.downloading") : t("settings.stt.download")}
                   </button>
                 )}
               </div>
@@ -1948,13 +1950,12 @@ function STTConfigCard({ toast }: {
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
             <p className="text-xs text-muted-foreground">
-              Audio is uploaded to <span className="font-mono">{currentBackendMeta.label}</span> for transcription.
-              If the service can't be reached, Yorik falls back to the speech recognition on this computer.
+              {t("settings.stt.cloudNoteBefore")}<span className="font-mono">{currentBackendMeta.label}</span>{t("settings.stt.cloudNoteAfter")}
             </p>
           </div>
 
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">Endpoint URL</label>
+            <label className="block text-xs text-muted-foreground mb-1">{t("settings.stt.endpointUrl")}</label>
             <input
               type="text"
               value={url}
@@ -1969,7 +1970,7 @@ function STTConfigCard({ toast }: {
           </div>
 
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">Model</label>
+            <label className="block text-xs text-muted-foreground mb-1">{t("settings.stt.model")}</label>
             <input
               type="text"
               value={modelName}
@@ -1981,15 +1982,15 @@ function STTConfigCard({ toast }: {
 
           <div>
             <label className="block text-xs text-muted-foreground mb-1">
-              API key {apiKeySet && !apiKeyInput && (
-                <span className="text-emerald-600 font-mono">— saved</span>
+              {t("settings.stt.apiKey")} {apiKeySet && !apiKeyInput && (
+                <span className="text-emerald-600 font-mono">{t("settings.stt.keySaved")}</span>
               )}
             </label>
             <input
               type="password"
               value={apiKeyInput}
               onChange={e => setApiKeyInput(e.target.value)}
-              placeholder={apiKeySet ? "•••••••• (key on file — paste a new one to replace)" : "Paste your API key"}
+              placeholder={apiKeySet ? t("settings.stt.keyOnFile") : t("settings.stt.pasteKey")}
               autoComplete="off"
               spellCheck={false}
               className="w-full text-xs font-mono px-2 py-1.5 rounded border border-border bg-background"
@@ -2005,7 +2006,7 @@ function STTConfigCard({ toast }: {
               {savingBackend
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <Save className="w-3.5 h-3.5" />}
-              Save
+              {t("settings.stt.save")}
             </button>
             <button
               onClick={testConnection}
@@ -2015,7 +2016,7 @@ function STTConfigCard({ toast }: {
               {testing
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <Plug className="w-3.5 h-3.5" />}
-              Test connection
+              {t("settings.stt.testConnection")}
             </button>
           </div>
         </div>
@@ -2027,11 +2028,11 @@ function STTConfigCard({ toast }: {
         <div className="flex items-start gap-2 mb-2">
           <HardDrive className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
           <div className="flex-1">
-            <div className="text-xs font-medium">Local Whisper model</div>
+            <div className="text-xs font-medium">{t("settings.stt.whisperModel")}</div>
             <p className="text-xs text-muted-foreground mt-0.5">
               {backend !== "whisper"
-                ? "Only used when Parakeet is not available. Bigger = better fallback quality."
-                : "Bigger = more accurate, slower, larger download. Switching downloads the new model on the next voice request."}
+                ? t("settings.stt.whisperFallbackHint")
+                : t("settings.stt.whisperActiveHint")}
             </p>
           </div>
         </div>
@@ -2200,6 +2201,7 @@ function EmergencyAccessCard({ toast }: {
 function KioskPhotosConsentCard({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -2222,26 +2224,23 @@ function KioskPhotosConsentCard({ toast }: {
       await api.patch("/api/users/me/kiosk-photos-consent", { consent: next });
       setEnabled(next);
       toast(next
-        ? "Your photos of the day will roll past on the family wall."
-        : "Your photos are no longer on the wall.",
+        ? t("settings.kioskPhotos.on")
+        : t("settings.kioskPhotos.off"),
         "success");
     } catch (e: any) {
-      toast(e.message || "Failed to save", "error");
+      toast(e.message || t("settings.kioskPhotos.saveFailed"), "error");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Card title="Family wall: your photos">
+    <Card title={t("settings.kioskPhotos.title")}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="text-sm font-medium">Show my photos of the day on the family wall</div>
+          <div className="text-sm font-medium">{t("settings.kioskPhotos.heading")}</div>
           <p className="text-xs text-muted-foreground mt-1">
-            What you photographed today rolls past in the wall tablet's slideshow,
-            with everyone else who said yes (the wall itself must have "today's
-            photos" on). Separate from the calendar switch above. Off by default;
-            only matters if your household has a wall tablet.
+            {t("settings.kioskPhotos.explain")}
           </p>
         </div>
         <button
@@ -2271,6 +2270,7 @@ function KioskPhotosConsentCard({ toast }: {
 function KioskAgendaConsentCard({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -2293,26 +2293,23 @@ function KioskAgendaConsentCard({ toast }: {
       await api.patch("/api/users/me/kiosk-agenda-consent", { consent: next });
       setEnabled(next);
       toast(next
-        ? "Your appointments and to-dos now show on the family wall."
-        : "Your appointments are no longer on the wall.",
+        ? t("settings.kioskAgenda.on")
+        : t("settings.kioskAgenda.off"),
         "success");
     } catch (e: any) {
-      toast(e.message || "Failed to save", "error");
+      toast(e.message || t("settings.kioskAgenda.saveFailed"), "error");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Card title="Family wall: your day">
+    <Card title={t("settings.kioskAgenda.title")}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="text-sm font-medium">Show my appointments and to-dos on the family wall</div>
+          <div className="text-sm font-medium">{t("settings.kioskAgenda.heading")}</div>
           <p className="text-xs text-muted-foreground mt-1">
-            You get a column on the family board, next to everyone else who said
-            yes. Private appointments show only as "Busy". Off by default; nobody
-            sees your day on the wall without this switch. Only matters if your
-            household has a wall tablet.
+            {t("settings.kioskAgenda.explain")}
           </p>
         </div>
         <button
@@ -2344,6 +2341,7 @@ function ConfirmMutationsToggle({ toast, part }: {
    *  "agents": whether an outside agent may confirm deletions. */
   part: "undo" | "agents";
 }) {
+  const { t } = useTranslation();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [agentDeletes, setAgentDeletes] = useState<boolean | null>(null);
@@ -2370,11 +2368,11 @@ function ConfirmMutationsToggle({ toast, part }: {
       await api.patch("/api/profile/agent-deletes", { enabled: next });
       setAgentDeletes(next);
       toast(next
-        ? "Agents may now confirm deletions themselves"
-        : "Deletions from agents wait for your tap in the notification bell",
+        ? t("settings.confirmMutations.agentsOn")
+        : t("settings.confirmMutations.agentsOff"),
         "success");
     } catch (e: any) {
-      toast(e.message || "Failed to save", "error");
+      toast(e.message || t("settings.confirmMutations.saveFailed"), "error");
     } finally {
       setSavingAgent(false);
     }
@@ -2388,11 +2386,11 @@ function ConfirmMutationsToggle({ toast, part }: {
       await api.patch("/api/profile/confirm-mutations", { enabled: next });
       setEnabled(next);
       toast(next
-        ? "Yorik shows an Undo card after each change"
-        : "No more Undo cards. Most deletions still wait for your tap.",
+        ? t("settings.confirmMutations.undoOn")
+        : t("settings.confirmMutations.undoOff"),
         "success");
     } catch (e: any) {
-      toast(e.message || "Failed to save", "error");
+      toast(e.message || t("settings.confirmMutations.saveFailed"), "error");
     } finally {
       setSaving(false);
     }
@@ -2400,14 +2398,12 @@ function ConfirmMutationsToggle({ toast, part }: {
 
   return (
     part === "undo" ? (
-    <Card title="Undo">
+    <Card title={t("settings.confirmMutations.undoTitle")}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="text-sm font-medium">Show an Undo card when Yorik changes something</div>
+          <div className="text-sm font-medium">{t("settings.confirmMutations.undoHeading")}</div>
           <p className="text-xs text-muted-foreground mt-1">
-            When Yorik adds or changes a to-do, appointment, contact or bill for you,
-            a card under its answer lets you take it back. Most deletions wait for
-            your tap anyway, whatever this switch says.
+            {t("settings.confirmMutations.undoExplain")}
           </p>
         </div>
         <button
@@ -2419,7 +2415,7 @@ function ConfirmMutationsToggle({ toast, part }: {
             (enabled === null || saving) && "opacity-60 cursor-wait",
           )}
           aria-pressed={!!enabled}
-          aria-label="Show an Undo card"
+          aria-label={t("settings.confirmMutations.undoAria")}
         >
           <span
             className={cn(
@@ -2431,15 +2427,12 @@ function ConfirmMutationsToggle({ toast, part }: {
       </div>
     </Card>
     ) : (
-    <Card title="Deletions by your agent">
+    <Card title={t("settings.confirmMutations.agentsTitle")}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="text-sm font-medium">Let agents confirm deletions</div>
+          <div className="text-sm font-medium">{t("settings.confirmMutations.agentsHeading")}</div>
           <p className="text-xs text-muted-foreground mt-1">
-            An outside agent using your API token (Hermes, Claude, a script) can ask to
-            delete something but not do it. When OFF, the request waits in your
-            notification bell and only your tap deletes. Turn ON only if you trust the
-            agent to ask you first.
+            {t("settings.confirmMutations.agentsExplain")}
           </p>
         </div>
         <button
@@ -2451,7 +2444,7 @@ function ConfirmMutationsToggle({ toast, part }: {
             (agentDeletes === null || savingAgent) && "opacity-60 cursor-wait",
           )}
           aria-pressed={!!agentDeletes}
-          aria-label="Let agents confirm deletions"
+          aria-label={t("settings.confirmMutations.agentsHeading")}
         >
           <span
             className={cn(
@@ -2471,6 +2464,7 @@ function ConfirmMutationsToggle({ toast, part }: {
 function SuggestionEngineCard({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [sources, setSources] = useState<Record<string, boolean>>({ email: true });
   const [saving, setSaving] = useState<"" | "master" | string>("");
@@ -2497,11 +2491,11 @@ function SuggestionEngineCard({ toast }: {
       await api.post("/api/suggestions/settings", { suggestions_enabled: next });
       setEnabled(next);
       toast(next
-        ? "Suggestions ON — Yorik will analyse opted-in contacts' messages"
-        : "Suggestions OFF — no analysis, no cards",
+        ? t("settings.suggestions.on")
+        : t("settings.suggestions.off"),
         "success");
     } catch (e: any) {
-      toast(e.message || "Failed to save", "error");
+      toast(e.message || t("settings.suggestions.saveFailed"), "error");
     } finally {
       setSaving("");
     }
@@ -2514,26 +2508,24 @@ function SuggestionEngineCard({ toast }: {
       await api.post("/api/suggestions/settings", { sources: next });
       setSources(next);
     } catch (e: any) {
-      toast(e.message || "Failed to save", "error");
+      toast(e.message || t("settings.suggestions.saveFailed"), "error");
     } finally {
       setSaving("");
     }
   }
 
   const KNOWN_SOURCES: Array<{ key: string; label: string; hint?: string }> = [
-    { key: "email", label: "Email",    hint: "Inbound messages from opted-in contacts" },
-    { key: "wa",    label: "WhatsApp", hint: "1:1 chats from opted-in contacts (groups are skipped)" },
+    { key: "email", label: t("settings.suggestions.sources.email"), hint: t("settings.suggestions.sources.emailHint") },
+    { key: "wa",    label: t("settings.suggestions.sources.wa"),    hint: t("settings.suggestions.sources.waHint") },
   ];
 
   return (
-    <Card title="Suggestions">
+    <Card title={t("settings.suggestions.title")}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="text-sm font-medium">Let Yorik suggest actions</div>
+          <div className="text-sm font-medium">{t("settings.suggestions.heading")}</div>
           <p className="text-xs text-muted-foreground mt-1">
-            When ON, Yorik reads new messages from contacts you've opted in and proposes
-            one-click actions (reply drafts, meeting slots). Privacy: only contacts with
-            "Yorik assist" enabled are analysed. Turn this OFF and nothing is sent to the LLM.
+            {t("settings.suggestions.explain")}
           </p>
         </div>
         <button
@@ -2557,7 +2549,7 @@ function SuggestionEngineCard({ toast }: {
       {enabled && (
         <div className="mt-4 pt-3 border-t border-border space-y-2">
           <div className="text-xs text-muted-foreground font-medium">
-            Sources
+            {t("settings.suggestions.sourcesHeading")}
           </div>
           {KNOWN_SOURCES.map((src) => (
             <div key={src.key} className="flex items-center justify-between gap-3">
@@ -2594,6 +2586,7 @@ function SuggestionEngineCard({ toast }: {
 function DevModeToggle({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const auth = useAuth();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
@@ -2618,26 +2611,23 @@ function DevModeToggle({ toast }: {
       await auth.refresh();   // the chat reads it from the signed-in user
       setEnabled(next);
       toast(next
-        ? "Dev mode ON — agent trace will appear under each reply"
-        : "Dev mode OFF — chat is clean again",
+        ? t("settings.devMode.on")
+        : t("settings.devMode.off"),
         "success");
     } catch (e: any) {
-      toast(e.message || "Failed to save", "error");
+      toast(e.message || t("settings.devMode.saveFailed"), "error");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Card title="Developer mode">
+    <Card title={t("settings.devMode.title")}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="text-sm font-medium">Show how Yorik got to each answer</div>
+          <div className="text-sm font-medium">{t("settings.devMode.heading")}</div>
           <p className="text-xs text-muted-foreground mt-1">
-            Adds a collapsible <span className="font-mono opacity-80">▼ Debug</span> caret below every Yorik reply.
-            Expand it to see iterations, tool calls (with arguments + result snippets),
-            and per-step timing. Useful when you're debugging a weird answer or
-            measuring latency. Adds ~1–3 KB to the response payload; OFF by default.
+            {t("settings.devMode.explainBefore")}<span className="font-mono opacity-80">▼ Debug</span>{t("settings.devMode.explainAfter")}
           </p>
         </div>
         <button
@@ -2664,15 +2654,17 @@ function DevModeToggle({ toast }: {
 
 type DocVisibility = "private" | "parents" | "business" | "shared";
 const DEFAULT_DOC_VIS_OPTIONS: { value: DocVisibility; label: string; emoji: string; desc: string }[] = [
-  { value: "private",  emoji: "🔒", label: "Private",  desc: "Only you see new uploads." },
-  { value: "parents",  emoji: "👪", label: "Parents",  desc: "Visible to the adults of the household, not the children." },
-  { value: "business", emoji: "💼", label: "Business", desc: "Visible to the business group (employees, partners)." },
-  { value: "shared",   emoji: "👥", label: "Shared",   desc: "Visible to the whole household / team." },
+  // label/desc are i18n keys, resolved with t() at render time.
+  { value: "private",  emoji: "🔒", label: "settings.docVisibility.options.private",  desc: "settings.docVisibility.options.privateDesc" },
+  { value: "parents",  emoji: "👪", label: "settings.docVisibility.options.parents",  desc: "settings.docVisibility.options.parentsDesc" },
+  { value: "business", emoji: "💼", label: "settings.docVisibility.options.business", desc: "settings.docVisibility.options.businessDesc" },
+  { value: "shared",   emoji: "👥", label: "settings.docVisibility.options.shared",   desc: "settings.docVisibility.options.sharedDesc" },
 ];
 
 function DefaultDocVisibilityChips({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [value, setValue] = useState<DocVisibility | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -2694,18 +2686,17 @@ function DefaultDocVisibilityChips({ toast }: {
     setSaving(true);
     try {
       await api.patch("/api/profile/default-doc-visibility", { visibility: v });
-      toast("Saved: new documents start with this visibility", "success");
+      toast(t("settings.docVisibility.saved"), "success");
     } catch (e: any) {
       setValue(prev);
-      toast(e.message || "Failed to save", "error");
+      toast(e.message || t("settings.docVisibility.saveFailed"), "error");
     } finally { setSaving(false); }
   }
 
   return (
-    <Card title="Default visibility for new documents">
+    <Card title={t("settings.docVisibility.title")}>
       <p className="text-xs text-muted-foreground mb-3">
-        Every document you upload (via Yorik or auto-filed from email / WhatsApp) gets this
-        visibility tag applied automatically. You can override per-document later.
+        {t("settings.docVisibility.explain")}
       </p>
       <div className="flex flex-wrap gap-2">
         {DEFAULT_DOC_VIS_OPTIONS.map(opt => (
@@ -2722,9 +2713,9 @@ function DefaultDocVisibilityChips({ toast }: {
             )}
           >
             <div className="text-sm font-medium flex items-center gap-1.5">
-              <span>{opt.emoji}</span> {opt.label}
+              <span>{opt.emoji}</span> {t(opt.label)}
             </div>
-            <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{t(opt.desc)}</div>
           </button>
         ))}
       </div>
@@ -2737,6 +2728,7 @@ function DefaultDocVisibilityChips({ toast }: {
 function SignatureUpload({ toast }: {
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const auth = useAuth();
   const [dataUrl, setDataUrl] = useState<string>(auth.user.signature_data_url || "");
   const [saving, setSaving] = useState(false);
@@ -2798,11 +2790,11 @@ function SignatureUpload({ toast }: {
     const f = e.target.files?.[0];
     if (!f) return;
     if (!ACCEPTED_TYPES.has(f.type)) {
-      toast("Pick a PNG, JPEG, GIF, WebP, or SVG image.", "error");
+      toast(t("settings.signature.wrongType"), "error");
       return;
     }
     if (f.size > MAX_BYTES) {
-      toast(`Signature too large (${Math.round(f.size / 1024)} KB). Max 200 KB — try scanning at lower resolution.`, "error");
+      toast(t("settings.signature.tooLarge", { kb: Math.round(f.size / 1024) }), "error");
       return;
     }
 
@@ -2820,47 +2812,45 @@ function SignatureUpload({ toast }: {
         url = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(String(reader.result || ""));
-          reader.onerror = () => reject(new Error("Couldn't read the file."));
+          reader.onerror = () => reject(new Error(t("settings.signature.readFailed")));
           reader.readAsDataURL(f);
         });
       }
       await api.patch("/api/profile", { signature_data_url: url });
       setDataUrl(url);
       await auth.refresh();
-      toast("Signature uploaded — it'll appear on new letters.", "success");
+      toast(t("settings.signature.uploaded"), "success");
     } catch (err: any) {
-      toast(`Save failed: ${err.message || err}`, "error");
+      toast(t("settings.signature.saveFailed", { msg: err.message || err }), "error");
     } finally {
       setSaving(false);
     }
   }
 
   async function remove() {
-    if (!confirm("Remove your signature? Letters will fall back to a blank signature line.")) return;
+    if (!confirm(t("settings.signature.removeConfirm"))) return;
     setSaving(true);
     try {
       await api.patch("/api/profile", { signature_data_url: null });
       setDataUrl("");
       await auth.refresh();
-      toast("Signature removed.", "success");
+      toast(t("settings.signature.removed"), "success");
     } catch (err: any) {
-      toast(`Remove failed: ${err.message || err}`, "error");
+      toast(t("settings.signature.removeFailed", { msg: err.message || err }), "error");
     } finally { setSaving(false); }
   }
 
   return (
-    <Card title="Signature">
+    <Card title={t("settings.signature.title")}>
       <p className="text-xs text-muted-foreground mb-3">
-        Scan your handwritten signature once and Yorik puts it above your name on the letters
-        you write. PNG, JPEG, GIF, WebP or SVG, up to 200 KB. A transparent or white background
-        works best; an SVG (e.g. from an iPad drawing app) stays sharp at any size.
+        {t("settings.signature.explain")}
       </p>
       {dataUrl ? (
         <div className="flex items-start gap-4">
           <div className="border border-border rounded-md p-2 bg-white">
             <img
               src={dataUrl}
-              alt="Your signature"
+              alt={t("settings.signature.alt")}
               style={{ maxWidth: 240, maxHeight: 80, display: "block" }}
             />
           </div>
@@ -2870,14 +2860,14 @@ function SignatureUpload({ toast }: {
               disabled={saving}
               className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted disabled:opacity-50"
             >
-              Replace
+              {t("settings.signature.replace")}
             </button>
             <button
               onClick={remove}
               disabled={saving}
               className="text-xs px-3 py-1.5 rounded-md border border-border text-red-600 hover:bg-red-500/10 disabled:opacity-50"
             >
-              Remove
+              {t("settings.signature.remove")}
             </button>
           </div>
         </div>
@@ -2888,7 +2878,7 @@ function SignatureUpload({ toast }: {
           className="text-xs px-4 py-2 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-          Upload signature image
+          {t("settings.signature.upload")}
         </button>
       )}
       <input
@@ -2905,13 +2895,12 @@ function SignatureUpload({ toast }: {
 // ─── Storage tab ─────────────────────────────────────────────────────
 
 function StorageTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-4">
-      <Card title="Where the photos live">
+      <Card title={t("settings.storageTab.title")}>
         <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-          A photo library grows big. You can move it to an external drive to keep
-          this computer's disk free; everything keeps working as before. The drive
-          must then stay plugged in: without it Yorik won't start until it is back.
+          {t("settings.storageTab.explain")}
         </p>
         {/* Imported lazily to keep the bundle from including it on tabs that don't need it. */}
         <StoragePicker />
@@ -2967,15 +2956,19 @@ type SearchIndexStatus = {
   sources: { source: string; indexed: number; total: number }[];
 };
 
+// i18n keys, resolved with t() at render time.
 const SEARCH_SOURCE_LABEL: Record<string, string> = {
-  email: "Email", whatsapp: "WhatsApp", tasks: "Tasks", contacts: "Contacts",
-  events: "Calendar", recordings: "Recordings", drafts: "Letters & drafts",
-  bank: "Bank", letters: "Write", paperless: "Documents",
+  email: "settings.searchMeaning.sources.email", whatsapp: "settings.searchMeaning.sources.whatsapp",
+  tasks: "settings.searchMeaning.sources.tasks", contacts: "settings.searchMeaning.sources.contacts",
+  events: "settings.searchMeaning.sources.events", recordings: "settings.searchMeaning.sources.recordings",
+  drafts: "settings.searchMeaning.sources.drafts", bank: "settings.searchMeaning.sources.bank",
+  letters: "settings.searchMeaning.sources.letters", paperless: "settings.searchMeaning.sources.paperless",
 };
 
 /** Settings → Embeddings: search by meaning on/off, which model, how
  *  far the index is. Backend: backend/search_index.py. */
 function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const [st, setSt] = useState<SearchIndexStatus | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -2984,8 +2977,8 @@ function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | 
   }, []);
   useEffect(() => {
     load();
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
+    const timer = setInterval(load, 5000);
+    return () => clearInterval(timer);
   }, [load]);
 
   async function put(body: { enabled?: boolean; embedder?: "service" | "bundled"; schedule?: string; at?: string; keep?: string }) {
@@ -2993,18 +2986,18 @@ function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | 
     try {
       setSt(await api.put<SearchIndexStatus>("/api/search/index", body));
     } catch (e: any) {
-      toast(`Couldn't save: ${e?.message || e}`, "error");
+      toast(t("settings.searchMeaning.saveFailed", { msg: e?.message || e }), "error");
     } finally { setBusy(false); }
   }
   async function rebuild() {
-    if (!confirm("Drop the search index and build it again? It runs in the background; until it is done, search finds by keyword only.")) return;
+    if (!confirm(t("settings.searchMeaning.rebuildConfirm"))) return;
     setBusy(true);
     try {
       await api.post("/api/search/index/rebuild", {});
-      toast("Rebuild started.", "success");
+      toast(t("settings.searchMeaning.rebuildStarted"), "success");
       load();
     } catch (e: any) {
-      toast(`Rebuild failed: ${e?.message || e}`, "error");
+      toast(t("settings.searchMeaning.rebuildFailed", { msg: e?.message || e }), "error");
     } finally { setBusy(false); }
   }
 
@@ -3014,13 +3007,10 @@ function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | 
   const pct = total > 0 ? Math.min(100, Math.round((indexed / total) * 100)) : 0;
 
   return (
-    <Card title="Search by meaning">
+    <Card title={t("settings.searchMeaning.title")}>
       <div className="flex items-start justify-between gap-4">
         <p className="text-xs text-muted-foreground">
-          The search (Ctrl+K, chat, agents) also finds mail, WhatsApp, tasks, contacts, calendar, recordings
-          and letters when the words differ: "electricity bill" finds the mail from your power company. Off means
-          those are found by their words only (documents keep a simpler search by meaning); the index stays and
-          is current again shortly after switching back on.
+          {t("settings.searchMeaning.explain")}
         </p>
         <label className="flex items-center gap-2 text-sm shrink-0">
           <input
@@ -3030,51 +3020,51 @@ function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | 
             onChange={e => put({ enabled: e.target.checked })}
             className="w-4 h-4 accent-violet-500"
           />
-          {st.enabled ? "On" : "Off"}
+          {st.enabled ? t("settings.searchMeaning.on") : t("settings.searchMeaning.off")}
         </label>
       </div>
 
       <div className={cn("mt-4", !st.enabled && "opacity-50")}>
-        <div className="text-xs font-medium mb-1.5">Model</div>
+        <div className="text-xs font-medium mb-1.5">{t("settings.searchMeaning.model")}</div>
         <div className="flex flex-col gap-1.5 text-sm">
           <label className="flex items-start gap-2">
             <input type="radio" name="search-embedder" className="mt-1 accent-violet-500"
               checked={st.embedder === "bundled"} disabled={busy || !st.enabled}
               onChange={() => put({ embedder: "bundled" })} />
-            <span>Bundled (MiniLM)
-              <span className="block text-xs text-muted-foreground">Small and fast, finds clear paraphrases.</span>
+            <span>{t("settings.searchMeaning.bundled")}
+              <span className="block text-xs text-muted-foreground">{t("settings.searchMeaning.bundledHint")}</span>
             </span>
           </label>
           <label className={cn("flex items-start gap-2", !st.service.configured && "opacity-60")}>
             <input type="radio" name="search-embedder" className="mt-1 accent-violet-500"
               checked={st.embedder === "service"} disabled={busy || !st.enabled || !st.service.configured}
               onChange={() => put({ embedder: "service" })} />
-            <span>{st.service.configured ? st.service.model : "Qwen3-Embedding-4B"} (embedding service)
+            <span>{st.service.configured ? st.service.model : "Qwen3-Embedding-4B"} {t("settings.searchMeaning.serviceSuffix")}
               <span className="block text-xs text-muted-foreground">
                 {!st.service.configured
-                  ? "Not installed. Run scripts/install-search-embedder.sh on the server once (2.5 GB), then restart Yorik."
+                  ? t("settings.searchMeaning.serviceNotInstalled")
                   : st.service.state === "running"
-                    ? "Loaded right now. Separates hits from noise much better."
+                    ? t("settings.searchMeaning.serviceRunning")
                     : st.service.state === "starting"
-                      ? "Starting … (a few seconds)"
+                      ? t("settings.searchMeaning.serviceStarting")
                       : st.service.state === "stopped"
-                        ? "Asleep — takes no memory. Wakes for the next index run or the next search."
-                        : "Installed, but the service does not answer. Search finds by keyword until it is back."}
+                        ? t("settings.searchMeaning.serviceAsleep")
+                        : t("settings.searchMeaning.serviceUnreachable")}
               </span>
             </span>
           </label>
         </div>
-        <p className="text-xs text-muted-foreground mt-2">Changing the model rebuilds the index in the background.</p>
+        <p className="text-xs text-muted-foreground mt-2">{t("settings.searchMeaning.modelChangeNote")}</p>
 
         {/* When the index runs, and whether the model stays in memory
             (Dirk 2026-10-07: the service must not hold RAM around the
             clock on small PCs). */}
-        <div className="mt-4 text-xs font-medium mb-1.5">When to index new mail, messages and documents</div>
+        <div className="mt-4 text-xs font-medium mb-1.5">{t("settings.searchMeaning.whenHeading")}</div>
         <div className="flex flex-col gap-1.5 text-sm">
           {([
-            ["nightly", "At night", "Once a day, at the time below. Until then, new things are found by their words."],
-            ["hourly", "Every hour", "New things are found by meaning within the hour."],
-            ["continuous", "Continuously", "Every five minutes. The model stays loaded most of the time."],
+            ["nightly", t("settings.searchMeaning.schedule.nightly"), t("settings.searchMeaning.schedule.nightlyHint")],
+            ["hourly", t("settings.searchMeaning.schedule.hourly"), t("settings.searchMeaning.schedule.hourlyHint")],
+            ["continuous", t("settings.searchMeaning.schedule.continuous"), t("settings.searchMeaning.schedule.continuousHint")],
           ] as const).map(([key, label, hint]) => (
             <label key={key} className="flex items-start gap-2">
               <input type="radio" name="search-schedule" className="mt-1 accent-violet-500"
@@ -3095,25 +3085,24 @@ function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | 
           <label className="mt-3 flex items-start gap-2 text-sm">
             <input type="checkbox" className="mt-1 accent-violet-500" checked={st.keep === "always"} disabled={busy || !st.enabled}
                    onChange={e => put({ keep: e.target.checked ? "always" : "while_used" })} />
-            <span>Keep the model loaded
+            <span>{t("settings.searchMeaning.keepLoaded")}
               <span className="block text-xs text-muted-foreground">
-                Off: the service sleeps after 15 minutes without a search and frees its memory; a search while it sleeps
-                finds by words and wakes it for the next one. On: always ready, several GB of memory in use.
+                {t("settings.searchMeaning.keepLoadedHint")}
               </span>
             </span>
           </label>
         )}
         <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
-          {st.next_run && <span>Next run {st.next_run.slice(11, 16)}{st.next_run.slice(0, 10) !== new Date().toISOString().slice(0, 10) ? ` (${st.next_run.slice(8, 10)}.${st.next_run.slice(5, 7)}.)` : ""}</span>}
-          {st.pending > 0 && <span>{st.pending.toLocaleString()} waiting</span>}
-          <button onClick={async () => { try { await api.post("/api/search/index/run", {}); toast("Indexing now.", "success"); } catch (e: any) { toast(e?.message || "Failed", "error"); } }}
+          {st.next_run && <span>{t("settings.searchMeaning.nextRun")} {st.next_run.slice(11, 16)}{st.next_run.slice(0, 10) !== new Date().toISOString().slice(0, 10) ? ` (${st.next_run.slice(8, 10)}.${st.next_run.slice(5, 7)}.)` : ""}</span>}
+          {st.pending > 0 && <span>{t("settings.searchMeaning.waiting", { n: st.pending.toLocaleString(locale()) })}</span>}
+          <button onClick={async () => { try { await api.post("/api/search/index/run", {}); toast(t("settings.searchMeaning.indexingNow"), "success"); } catch (e: any) { toast(e?.message || t("settings.searchMeaning.failed"), "error"); } }}
                   disabled={busy || !st.enabled}
-                  className="px-2 py-0.5 rounded border border-border hover:bg-muted disabled:opacity-50">Index now</button>
+                  className="px-2 py-0.5 rounded border border-border hover:bg-muted disabled:opacity-50">{t("settings.searchMeaning.indexNow")}</button>
         </div>
 
         <div className="mt-4 flex items-baseline justify-between">
           <div className="text-sm font-medium tabular-nums">
-            {indexed.toLocaleString()} <span className="text-muted-foreground font-normal">/ {total.toLocaleString()} entries indexed</span>
+            {indexed.toLocaleString(locale())} <span className="text-muted-foreground font-normal">/ {total.toLocaleString(locale())} {t("settings.searchMeaning.entriesIndexed")}</span>
           </div>
           <div className="text-xs text-muted-foreground tabular-nums">{st.model} · {pct}%</div>
         </div>
@@ -3123,7 +3112,7 @@ function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | 
         </div>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground tabular-nums">
           {st.sources.map(x => (
-            <span key={x.source}>{SEARCH_SOURCE_LABEL[x.source] || x.source} {x.indexed.toLocaleString()}/{x.total.toLocaleString()}</span>
+            <span key={x.source}>{SEARCH_SOURCE_LABEL[x.source] ? t(SEARCH_SOURCE_LABEL[x.source]) : x.source} {x.indexed.toLocaleString(locale())}/{x.total.toLocaleString(locale())}</span>
           ))}
         </div>
         <button
@@ -3131,7 +3120,7 @@ function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | 
           disabled={busy || !st.enabled}
           className="mt-3 text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition disabled:opacity-50"
         >
-          Rebuild index
+          {t("settings.searchMeaning.rebuildIndex")}
         </button>
       </div>
     </Card>
@@ -3139,6 +3128,7 @@ function SearchByMeaningCard({ toast }: { toast: (text: string, kind?: "info" | 
 }
 
 function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<EmbeddingsStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [reindexing, setReindexing] = useState(false);
@@ -3149,34 +3139,29 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
       const s = await api.get<EmbeddingsStatus>("/api/embeddings/status");
       setStatus(s);
     } catch (e: any) {
-      toast(`Failed to load embeddings status: ${e.message}`, "error");
+      toast(t("settings.embeddings.loadFailed", { msg: e.message }), "error");
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, t]);
 
   useEffect(() => {
     refresh();
     // Poll every 5s so the user watching a reindex job sees progress.
-    const t = setInterval(refresh, 5000);
-    return () => clearInterval(t);
+    const timer = setInterval(refresh, 5000);
+    return () => clearInterval(timer);
   }, [refresh]);
 
   async function reindexAll() {
-    if (!confirm(
-      "Reindex every Paperless document?\n\n" +
-      "This walks the whole corpus, re-extracts text, and re-embeds every chunk. " +
-      "For ~2500 docs on a CPU embedder, expect 5–15 minutes. The job runs in the " +
-      "background — you can close this page."
-    )) return;
+    if (!confirm(t("settings.embeddings.reindexConfirm"))) return;
     setReindexing(true);
     try {
       await api.post("/api/paperless/reindex-all", {});
-      toast("Reindex queued — watch the progress here.", "success");
+      toast(t("settings.embeddings.reindexQueued"), "success");
       // Immediate refresh, then the 5s poll picks up the rest.
       refresh();
     } catch (e: any) {
-      toast(`Reindex failed to queue: ${e.message}`, "error");
+      toast(t("settings.embeddings.reindexFailed", { msg: e.message }), "error");
     } finally {
       setReindexing(false);
     }
@@ -3188,30 +3173,26 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
     setStopping(true);
     try {
       await api.post("/api/embeddings/autotag-cancel", {});
-      toast("Stop requested — finishing current document, then exiting.", "info");
+      toast(t("settings.embeddings.stopRequested"), "info");
       refresh();
     } catch (e: any) {
-      toast(`Stop request failed: ${e.message}`, "error");
+      toast(t("settings.embeddings.stopFailed", { msg: e.message }), "error");
     } finally {
       setStopping(false);
     }
   }
   async function autotagAll(force: boolean) {
     if (!confirm(
-      (force
-        ? "Re-run autotagger on EVERY document — including ones that already have tags?"
-        : "Autotag every Paperless document?") + "\n\n" +
-      "The LLM picks 0–3 tags per doc from a curated taxonomy (no invented tags, " +
-      "no deletions). Existing user-added tags are kept. For ~2500 docs on a " +
-      "local LLM, expect 30–90 minutes — runs in the background, watch progress here."
+      (force ? t("settings.embeddings.autotagConfirmForce") : t("settings.embeddings.autotagConfirm")) + "\n\n" +
+      t("settings.embeddings.autotagConfirmBody")
     )) return;
     setAutotagging(true);
     try {
       await api.post("/api/embeddings/autotag-all", { force_retag: force });
-      toast(force ? "Autotagger queued (force re-run)" : "Autotagger queued", "success");
+      toast(force ? t("settings.embeddings.autotagQueuedForce") : t("settings.embeddings.autotagQueued"), "success");
       refresh();
     } catch (e: any) {
-      toast(`Autotagger failed to queue: ${e.message}`, "error");
+      toast(t("settings.embeddings.autotagFailed", { msg: e.message }), "error");
     } finally {
       setAutotagging(false);
     }
@@ -3227,7 +3208,7 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
   if (!status) {
     return (
       <div className="py-16 text-center text-sm text-muted-foreground">
-        Couldn't load embeddings status. <button onClick={refresh} className="underline">Retry</button>
+        {t("settings.embeddings.statusLoadFailed")} <button onClick={refresh} className="underline">{t("settings.embeddings.retry")}</button>
       </div>
     );
   }
@@ -3253,18 +3234,18 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
     <div>
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Search</h2>
+          <h2 className="text-lg font-semibold">{t("settings.embeddings.title")}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            How Yorik finds things by what they mean, and how it tags your documents.
+            {t("settings.embeddings.subtitle")}
           </p>
         </div>
         <button
           onClick={refresh}
           className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition inline-flex items-center gap-1.5"
-          title="Refresh"
+          title={t("settings.embeddings.refresh")}
         >
           <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
-          Refresh
+          {t("settings.embeddings.refresh")}
         </button>
       </header>
 
@@ -3275,20 +3256,20 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
         <details className="group rounded-xl border border-border bg-card/40">
           <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium flex items-center gap-2">
             <ChevronRight className="w-4 h-4 transition group-open:rotate-90" />
-            Document index and tags
-            <span className="text-xs font-normal text-muted-foreground">(technical details, repairs)</span>
+            {t("settings.embeddings.detailsSummary")}
+            <span className="text-xs font-normal text-muted-foreground">{t("settings.embeddings.detailsHint")}</span>
           </summary>
           <div className="px-4 pb-4 space-y-4">
 
         {/* Index population */}
-        <Card title="Documents: index population">
+        <Card title={t("settings.embeddings.populationTitle")}>
           <div className="flex items-baseline justify-between mb-2">
             <div className="text-2xl font-semibold tabular-nums">
-              {status.vec_count.toLocaleString()}
-              <span className="text-muted-foreground text-base font-normal"> / {status.chunk_count.toLocaleString()} chunks embedded</span>
+              {status.vec_count.toLocaleString(locale())}
+              <span className="text-muted-foreground text-base font-normal"> / {status.chunk_count.toLocaleString(locale())} {t("settings.embeddings.chunksEmbedded")}</span>
             </div>
             <div className="text-xs text-muted-foreground tabular-nums">
-              {status.doc_count.toLocaleString()} documents · {pct}%
+              {t("settings.embeddings.documents", { count: status.doc_count, n: status.doc_count.toLocaleString(locale()) })} · {pct}%
             </div>
           </div>
           <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -3302,105 +3283,100 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
           </div>
           {backlog > 0 && (
             <p className="text-xs text-muted-foreground mt-2">
-              {backlog.toLocaleString()} chunks still to embed.
-              {recon?.status === "ok" && " The reconciler is catching up automatically."}
-              {!reachable && " Embedder unreachable — fix it (below) before the backlog will clear."}
+              {t("settings.embeddings.backlog", { n: backlog.toLocaleString(locale()) })}
+              {recon?.status === "ok" && ` ${t("settings.embeddings.reconcilerCatchingUp")}`}
+              {!reachable && ` ${t("settings.embeddings.embedderUnreachableBacklog")}`}
             </p>
           )}
           {backlog === 0 && status.chunk_count > 0 && (
             <p className="text-xs text-emerald-600 mt-2 inline-flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Fully embedded.
+              <CheckCircle2 className="w-3.5 h-3.5" /> {t("settings.embeddings.fullyEmbedded")}
             </p>
           )}
           {status.chunk_count === 0 && (
             <p className="text-xs text-amber-600 mt-2 inline-flex items-center gap-1.5">
               <AlertCircle className="w-3.5 h-3.5" />
-              No Paperless chunks ingested yet. Click "Reindex all" below to walk your corpus.
+              {t("settings.embeddings.noChunks")}
             </p>
           )}
         </Card>
 
         {/* Embedder status */}
-        <Card title="Embedder">
+        <Card title={t("settings.embeddings.embedderTitle")}>
           <div className="grid grid-cols-[120px_1fr] gap-y-2 text-sm">
-            <div className="text-muted-foreground">Reachable</div>
+            <div className="text-muted-foreground">{t("settings.embeddings.reachable")}</div>
             <div className="inline-flex items-center gap-1.5">
               {reachable ? (
-                <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /><span className="text-emerald-600 font-medium">Yes</span></>
+                <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /><span className="text-emerald-600 font-medium">{t("settings.embeddings.yes")}</span></>
               ) : (
-                <><AlertCircle className="w-3.5 h-3.5 text-amber-500" /><span className="text-amber-600 font-medium">No</span></>
+                <><AlertCircle className="w-3.5 h-3.5 text-amber-500" /><span className="text-amber-600 font-medium">{t("settings.embeddings.no")}</span></>
               )}
             </div>
-            <div className="text-muted-foreground">Backend</div>
+            <div className="text-muted-foreground">{t("settings.embeddings.backend")}</div>
             <div className="font-mono text-xs">{status.embedder.backend}</div>
-            <div className="text-muted-foreground">Local model</div>
+            <div className="text-muted-foreground">{t("settings.embeddings.localModel")}</div>
             <div className="font-mono text-xs break-all">{status.embedder.local_model}</div>
             {status.embedder.external_url && (
               <>
-                <div className="text-muted-foreground">External URL</div>
+                <div className="text-muted-foreground">{t("settings.embeddings.externalUrl")}</div>
                 <div className="font-mono text-xs break-all">{status.embedder.external_url}</div>
-                <div className="text-muted-foreground">External model</div>
+                <div className="text-muted-foreground">{t("settings.embeddings.externalModel")}</div>
                 <div className="font-mono text-xs">{status.embedder.external_model}</div>
               </>
             )}
-            <div className="text-muted-foreground">Dimension</div>
+            <div className="text-muted-foreground">{t("settings.embeddings.dimension")}</div>
             <div className="font-mono text-xs">{status.embedder.dim}</div>
           </div>
           {!reachable && (
             <div className="mt-3 p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-300">
               <div className="font-medium mb-1 inline-flex items-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5" /> Embedder not reachable
+                <AlertCircle className="w-3.5 h-3.5" /> {t("settings.embeddings.notReachableTitle")}
               </div>
               <p className="leading-relaxed">
-                On <code className="font-mono">auto</code>/<code className="font-mono">local</code> backend, this usually means
-                <code className="font-mono"> sentence-transformers</code> isn't installed in the venv yet. Run{" "}
-                <code className="font-mono">venv/bin/pip install -r backend/requirements.txt</code> and restart, then refresh this page.
-                First call downloads the model (~120 MB, one-time).
+                {t("settings.embeddings.notReachableOn")}<code className="font-mono">auto</code>/<code className="font-mono">local</code>{t("settings.embeddings.notReachableMeans")}<code className="font-mono"> sentence-transformers</code>{t("settings.embeddings.notReachableRun")}<code className="font-mono">venv/bin/pip install -r backend/requirements.txt</code>{t("settings.embeddings.notReachableAfter")}
               </p>
             </div>
           )}
         </Card>
 
         {/* Reconciler heartbeat */}
-        <Card title="Background reconciler">
+        <Card title={t("settings.embeddings.reconcilerTitle")}>
           {recon ? (
             <div className="grid grid-cols-[140px_1fr] gap-y-2 text-sm">
-              <div className="text-muted-foreground">Status</div>
+              <div className="text-muted-foreground">{t("settings.embeddings.status")}</div>
               <div className="inline-flex items-center gap-1.5">
-                {recon.status === "ok" && <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /><span className="text-emerald-600 font-medium">Healthy</span></>}
-                {recon.status === "warn" && <><AlertCircle className="w-3.5 h-3.5 text-amber-500" /><span className="text-amber-600 font-medium">Warning</span></>}
-                {recon.status === "error" && <><AlertCircle className="w-3.5 h-3.5 text-red-500" /><span className="text-red-600 font-medium">Error</span></>}
-                {recon.status === "starting" && <><Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /><span className="text-muted-foreground">Starting</span></>}
+                {recon.status === "ok" && <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /><span className="text-emerald-600 font-medium">{t("settings.embeddings.healthy")}</span></>}
+                {recon.status === "warn" && <><AlertCircle className="w-3.5 h-3.5 text-amber-500" /><span className="text-amber-600 font-medium">{t("settings.embeddings.warning")}</span></>}
+                {recon.status === "error" && <><AlertCircle className="w-3.5 h-3.5 text-red-500" /><span className="text-red-600 font-medium">{t("settings.embeddings.error")}</span></>}
+                {recon.status === "starting" && <><Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /><span className="text-muted-foreground">{t("settings.embeddings.starting")}</span></>}
               </div>
-              <div className="text-muted-foreground">Last heartbeat</div>
-              <div>{recon.last_heartbeat_age_s == null ? "never" : formatAge(recon.last_heartbeat_age_s)}</div>
-              <div className="text-muted-foreground">Detail</div>
+              <div className="text-muted-foreground">{t("settings.embeddings.lastHeartbeat")}</div>
+              <div>{recon.last_heartbeat_age_s == null ? t("settings.embeddings.never") : formatAge(recon.last_heartbeat_age_s)}</div>
+              <div className="text-muted-foreground">{t("settings.embeddings.detail")}</div>
               <div className="text-xs">{recon.detail || <span className="text-muted-foreground">—</span>}</div>
-              <div className="text-muted-foreground">Uptime</div>
+              <div className="text-muted-foreground">{t("settings.embeddings.uptime")}</div>
               <div className="text-xs">{formatAge(recon.uptime_s)}</div>
               {recon.error_count > 0 && (
                 <>
-                  <div className="text-muted-foreground">Errors</div>
+                  <div className="text-muted-foreground">{t("settings.embeddings.errors")}</div>
                   <div className="text-red-600 font-medium">{recon.error_count}</div>
                 </>
               )}
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Reconciler hasn't reported yet. It registers itself on first run (boot + every 6h).
+              {t("settings.embeddings.reconcilerNotYet")}
             </p>
           )}
           <p className="text-xs text-muted-foreground mt-3">
-            Runs every 6 hours. Walks Paperless, ingests + embeds any new docs. Failures are surfaced here AND in /api/dashboard/workers.
+            {t("settings.embeddings.reconcilerExplain")}
           </p>
         </Card>
 
         {/* Manual reindex */}
-        <Card title="Manual reindex">
+        <Card title={t("settings.embeddings.reindexTitle")}>
           <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-            Walk every Paperless document, re-extract text, and re-embed every chunk.
-            Useful after changing the embedder, swapping models, or recovering from a corrupted index.
-            For ~2500 docs on a CPU embedder this takes 5–15 minutes; the job runs in the background.
+            {t("settings.embeddings.reindexExplain")}
           </p>
           <button
             onClick={reindexAll}
@@ -3413,20 +3389,17 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
             )}
           >
             {reindexing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-            {reindexing ? "Queuing…" : "Reindex all Paperless documents"}
+            {reindexing ? t("settings.embeddings.queuing") : t("settings.embeddings.reindexAll")}
           </button>
           {!reachable && (
-            <p className="text-xs text-amber-600 mt-2">Embedder needs to be reachable first.</p>
+            <p className="text-xs text-amber-600 mt-2">{t("settings.embeddings.needsReachable")}</p>
           )}
         </Card>
 
         {/* Autotagger */}
-        <Card title="Autotagger">
+        <Card title={t("settings.embeddings.autotaggerTitle")}>
           <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-            The AI gives each document 0–3 tags from Yorik's list of about 66
-            (finance, insurance, home, health …). They show as folders in the
-            Documents app. It only ever adds tags: yours stay, and it never
-            invents new ones.
+            {t("settings.embeddings.autotaggerExplain")}
           </p>
 
           {status.autotagger ? (
@@ -3439,7 +3412,7 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
                 <span className="font-medium">{status.autotagger.status}</span>
                 <span className="text-muted-foreground">·</span>
                 <span className="text-muted-foreground">
-                  {status.autotagger.last_heartbeat_age_s == null ? "never" : formatAge(status.autotagger.last_heartbeat_age_s)}
+                  {status.autotagger.last_heartbeat_age_s == null ? t("settings.embeddings.never") : formatAge(status.autotagger.last_heartbeat_age_s)}
                 </span>
               </div>
               {status.autotagger.detail && (
@@ -3448,7 +3421,7 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
             </div>
           ) : (
             <p className="text-xs text-muted-foreground mb-3 italic">
-              Autotagger hasn't run yet. Click below to start the first pass.
+              {t("settings.embeddings.autotaggerNotYet")}
             </p>
           )}
 
@@ -3464,7 +3437,7 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
               )}
             >
               {autotagging ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <TagIcon className="w-3.5 h-3.5" />}
-              {autotagging ? "Queuing…" : "Autotag untagged docs"}
+              {autotagging ? t("settings.embeddings.queuing") : t("settings.embeddings.autotagUntagged")}
             </button>
             <button
               onClick={() => autotagAll(true)}
@@ -3477,7 +3450,7 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
               )}
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              Re-tag everything
+              {t("settings.embeddings.retagAll")}
             </button>
             {isAutotaggerRunning && (
               <button
@@ -3491,36 +3464,32 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
                 )}
               >
                 {stopping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
-                {stopping ? "Stopping…" : "Stop"}
+                {stopping ? t("settings.embeddings.stopping") : t("settings.embeddings.stop")}
               </button>
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            ~30–90 min for 2500 docs on a local LLM. First button skips docs that already
-            carry a taxonomy tag; second forces a full re-run.
+            {t("settings.embeddings.autotagTiming")}
           </p>
           <p className="text-xs text-muted-foreground mt-1 inline-flex items-start gap-1.5">
             <Info className="w-3 h-3 mt-0.5 shrink-0 opacity-70" />
             <span>
-              The job runs on the server, not in your browser — safe to close this page or shut down your laptop's lid.
-              Progress and counts below survive reloads. Stop is cooperative: the current document finishes (an in-flight
-              LLM call), then the walk exits cleanly.
+              {t("settings.embeddings.autotagServerNote")}
             </span>
           </p>
         </Card>
 
         {/* Tag distribution */}
         {status.taxonomy_tag_counts.length > 0 && (
-          <Card title="Tag distribution">
+          <Card title={t("settings.embeddings.tagDistTitle")}>
             <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-              Counts across all docs in Paperless for the {status.taxonomy_tag_counts.length} taxonomy tag(s) currently in use.
-              User-added tags outside the taxonomy aren't listed here.
+              {t("settings.embeddings.tagDistExplain", { count: status.taxonomy_tag_counts.length })}
             </p>
             <div className="flex flex-wrap gap-1.5">
               {status.taxonomy_tag_counts.slice(0, 80).map(tc => (
                 <span
                   key={tc.id}
-                  title={`${tc.label_en} / ${tc.label_de} · category: ${tc.category_id}`}
+                  title={t("settings.embeddings.tagTitle", { en: tc.label_en, de: tc.label_de, category: tc.category_id })}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20"
                 >
                   <span>{locale().startsWith("de") ? tc.label_de : tc.label_en}</span>
@@ -3531,7 +3500,7 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
             </div>
             {status.taxonomy_tag_counts.length > 80 && (
               <p className="text-xs text-muted-foreground mt-2">
-                +{status.taxonomy_tag_counts.length - 80} more not shown.
+                {t("settings.embeddings.moreNotShown", { n: status.taxonomy_tag_counts.length - 80 })}
               </p>
             )}
           </Card>
@@ -3545,10 +3514,10 @@ function EmbeddingsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
 }
 
 function formatAge(seconds: number): string {
-  if (seconds < 60)   return `${seconds}s ago`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
+  if (seconds < 60)   return i18n.t("settings.ageFmt.seconds", { n: seconds });
+  if (seconds < 3600) return i18n.t("settings.ageFmt.minutes", { n: Math.floor(seconds / 60) });
+  if (seconds < 86400) return i18n.t("settings.ageFmt.hoursMinutes", { h: Math.floor(seconds / 3600), m: Math.floor((seconds % 3600) / 60) });
+  return i18n.t("settings.ageFmt.days", { n: Math.floor(seconds / 86400) });
 }
 
 
@@ -3577,14 +3546,12 @@ function BackupSetup() {
 }
 
 function BackupTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-4">
-      <Card title="Backups">
+      <Card title={t("settings.backupTab.title")}>
         <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-          Every night Yorik copies everything to a second drive, locked with a
-          passphrase only you have. Calendars, contacts, to-dos, chats and settings
-          are always in it; photos, documents and the WhatsApp link are extra
-          switches below (they are big).
+          {t("settings.backupTab.intro")}
         </p>
         <BackupSetup />
       </Card>
@@ -3614,6 +3581,7 @@ interface LlmCandidate {
 }
 
 function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const [cfg, setCfg] = useState<LlmConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [draftUrl, setDraftUrl] = useState("");
@@ -3644,11 +3612,11 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
         ? { ok: true, models: c.served_models }
         : { ok: false, models: [], reason: c.reason });
     } catch (e: any) {
-      toast(`Couldn't load LLM config: ${e.message}`, "error");
+      toast(t("settings.llm.loadFailed", { msg: e.message }), "error");
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, t]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -3680,7 +3648,7 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
       const r = await api.get<{ candidates: LlmCandidate[] }>("/api/llm/detect");
       setCandidates(r.candidates);
     } catch (e: any) {
-      toast(`Detection failed: ${e.message}`, "error");
+      toast(t("settings.llm.detectFailed", { msg: e.message }), "error");
     } finally {
       setDetecting(false);
     }
@@ -3688,7 +3656,7 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
 
   async function save() {
     if (!draftUrl.trim() || !draftModel.trim()) {
-      toast("URL and model are both required", "error");
+      toast(t("settings.llm.urlModelRequired"), "error");
       return;
     }
     setSaving(true);
@@ -3708,9 +3676,9 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
       setShowApiKey(false);
       // First-time-connected case → surface the guidance banner.
       if (c.reachable && !wasReachable) setJustConnected(true);
-      toast("LLM endpoint saved — next chat turn uses it", "success");
+      toast(t("settings.llm.saved"), "success");
     } catch (e: any) {
-      toast(e.message || "Save failed", "error");
+      toast(e.message || t("settings.llm.saveFailed"), "error");
     } finally {
       setSaving(false);
     }
@@ -3725,10 +3693,9 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
   return (
     <div>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold">AI</h1>
+        <h1 className="text-2xl font-semibold">{t("settings.llm.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          The model Yorik thinks with, how it understands speech, and how it
-          searches by meaning. Everything here applies to the whole household.
+          {t("settings.llm.intro")}
         </p>
       </header>
 
@@ -3738,24 +3705,23 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
             <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                The AI model is connected.
+                {t("settings.llm.connected")}
               </div>
               <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                Open the chat and ask <em>"what should I do next?"</em> — Yorik will walk you through
-                connecting an email account, importing your documents, and setting up photo backup.
+                {t("settings.llm.connectedAskBefore")} <em>{t("settings.llm.connectedAskQuestion")}</em> {t("settings.llm.connectedAskAfter")}
               </p>
               <div className="mt-3 flex items-center gap-2 flex-wrap">
                 <a
                   href="/r/chat"
                   className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 transition"
                 >
-                  Open chat
+                  {t("settings.llm.openChat")}
                 </a>
                 <button
                   onClick={() => setJustConnected(false)}
                   className="text-xs text-muted-foreground hover:text-foreground transition"
                 >
-                  Dismiss
+                  {t("settings.llm.dismiss")}
                 </button>
               </div>
             </div>
@@ -3771,23 +3737,23 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
 
       {cfg && (
         <div className="space-y-5">
-          <Card title="Chat model">
+          <Card title={t("settings.llm.chatModel")}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="text-sm">
                   {cfg.reachable
-                    ? "Yorik's model is running and answering."
-                    : "Yorik can't reach its model right now, so the chat can't answer."}
+                    ? t("settings.llm.modelRunning")
+                    : t("settings.llm.modelUnreachable")}
                 </div>
-                <div className="text-xs text-muted-foreground mt-2">Model</div>
+                <div className="text-xs text-muted-foreground mt-2">{t("settings.llm.model")}</div>
                 <div className="font-mono text-sm truncate">{cfg.model}</div>
-                <div className="text-xs text-muted-foreground mt-2">Address</div>
+                <div className="text-xs text-muted-foreground mt-2">{t("settings.llm.address")}</div>
                 <div className="font-mono text-xs truncate text-muted-foreground">{cfg.base_url}</div>
               </div>
               <div className="shrink-0 text-right flex flex-col items-end gap-0.5">
                 {cfg.reachable
-                  ? <span className="inline-flex items-center gap-1 text-emerald-600 text-xs"><CheckCircle2 className="w-3.5 h-3.5" /> reachable</span>
-                  : <span className="inline-flex items-center gap-1 text-red-500 text-xs"><AlertCircle className="w-3.5 h-3.5" /> offline</span>}
+                  ? <span className="inline-flex items-center gap-1 text-emerald-600 text-xs"><CheckCircle2 className="w-3.5 h-3.5" /> {t("settings.llm.reachable")}</span>
+                  : <span className="inline-flex items-center gap-1 text-red-500 text-xs"><AlertCircle className="w-3.5 h-3.5" /> {t("settings.llm.offline")}</span>}
                 {!cfg.reachable && cfg.reason && (
                   <div className="text-2xs text-muted-foreground mt-0.5">{cfg.reason}</div>
                 )}
@@ -3795,7 +3761,7 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
                   onClick={refresh}
                   className="text-2xs text-muted-foreground hover:text-foreground transition mt-1 inline-flex items-center gap-1"
                 >
-                  <RefreshCw className="w-2.5 h-2.5" /> Re-check
+                  <RefreshCw className="w-2.5 h-2.5" /> {t("settings.llm.recheck")}
                 </button>
               </div>
             </div>
@@ -3804,23 +3770,17 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
           <details className="group rounded-xl border border-border bg-card/40" open={!cfg.reachable || undefined}>
             <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium flex items-center gap-2">
               <ChevronRight className="w-4 h-4 transition group-open:rotate-90" />
-              Use a different model
-              <span className="text-xs font-normal text-muted-foreground">(for people who run their own AI server)</span>
+              {t("settings.llm.useDifferent")}
+              <span className="text-xs font-normal text-muted-foreground">{t("settings.llm.useDifferentHint")}</span>
             </summary>
             <div className="px-4 pb-4 space-y-5">
           <p className="text-xs text-muted-foreground">
-            Yorik works with any server that speaks the OpenAI API: Ollama, LM Studio,
-            llama.cpp, vLLM, or a cloud provider. Changes apply to the next question,
-            no restart needed. No server yet? The quickest is Ollama
-            (<code className="font-mono">curl -fsSL https://ollama.com/install.sh | sh</code>),
-            then <code className="font-mono">ollama pull</code> a chat model that can call tools
-            (Yorik is tested with Qwen 3.5 9B) and press <strong>Scan now</strong>.
+            {t("settings.llm.anyServerBefore")} (<code className="font-mono">curl -fsSL https://ollama.com/install.sh | sh</code>),{" "}
+            {t("settings.llm.anyServerThen")} <code className="font-mono">ollama pull</code> {t("settings.llm.anyServerModel")} <strong>{t("settings.llm.scanNow")}</strong>.
           </p>
-          <Card title="Find a server on this computer">
+          <Card title={t("settings.llm.findServer")}>
             <p className="text-xs text-muted-foreground mb-3">
-              Looks on the usual ports (Yorik's own server 8082, llama-swap 8080,
-              llama.cpp 8081, LM Studio 1234, Ollama 11434, vLLM 8001). Click a
-              model to use it.
+              {t("settings.llm.findServerIntro")}
             </p>
             <button
               onClick={detect}
@@ -3832,7 +3792,7 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
               )}
             >
               {detecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-              Scan now
+              {t("settings.llm.scanNow")}
             </button>
             {candidates && (
               <div className="mt-3 space-y-1.5">
@@ -3850,7 +3810,7 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
                         <span className="text-muted-foreground font-mono truncate">{c.base_url}</span>
                       </div>
                       {c.ok
-                        ? <span className="text-2xs text-emerald-600">{c.models.length} model{c.models.length === 1 ? "" : "s"}</span>
+                        ? <span className="text-2xs text-emerald-600">{t("settings.llm.modelCount", { count: c.models.length })}</span>
                         : <span className="text-2xs text-muted-foreground">{c.reason}</span>}
                     </div>
                     {c.ok && c.models.length > 0 && (
@@ -3860,7 +3820,7 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
                             key={m}
                             onClick={() => useCandidate(c, m)}
                             className="text-2xs px-1.5 py-0.5 rounded bg-card border border-border hover:border-blue-500/40 font-mono"
-                            title={`Use ${m} via ${c.label}`}
+                            title={t("settings.llm.useVia", { model: m, label: c.label })}
                           >
                             {m}
                           </button>
@@ -3873,8 +3833,8 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
             )}
           </Card>
 
-          <Card title="Enter an address">
-            <Field label="Server address (ends with /v1)">
+          <Card title={t("settings.llm.enterAddress")}>
+            <Field label={t("settings.llm.serverAddress")}>
               <div className="flex gap-2">
                 <input
                   value={draftUrl}
@@ -3891,7 +3851,7 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
                   )}
                 >
                   {probing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plug className="w-3.5 h-3.5" />}
-                  Test
+                  {t("settings.llm.test")}
                 </button>
               </div>
             </Field>
@@ -3908,14 +3868,14 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
                   : <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
                 <span className="flex-1 min-w-0">
                   {probeResult.ok
-                    ? `Reachable. ${probeResult.models.length} model(s) served.`
-                    : `Can't reach: ${probeResult.reason}`}
+                    ? t("settings.llm.probeOk", { count: probeResult.models.length })
+                    : t("settings.llm.probeFailed", { reason: probeResult.reason })}
                 </span>
               </div>
             )}
 
             <div className="mt-4">
-              <Field label="Model">
+              <Field label={t("settings.llm.model")}>
                 {probeResult?.ok && probeResult.models.length > 0 ? (
                   <select
                     value={draftModel}
@@ -3926,32 +3886,31 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
                       <option key={m} value={m}>{m}</option>
                     ))}
                     {!probeResult.models.includes(draftModel) && draftModel && (
-                      <option value={draftModel}>{draftModel} (not in current list)</option>
+                      <option value={draftModel}>{draftModel} {t("settings.llm.notInList")}</option>
                     )}
                   </select>
                 ) : (
                   <input
                     value={draftModel}
                     onChange={e => setDraftModel(e.target.value)}
-                    placeholder="model-name (e.g. from `ollama list`)"
+                    placeholder={t("settings.llm.modelPlaceholder")}
                     className={cn(inputClass, "font-mono")}
                   />
                 )}
               </Field>
               <div className="text-2xs text-muted-foreground mt-1">
-                Test the endpoint first to populate the dropdown from its
-                served-model list. Or type a model id directly if you know it.
+                {t("settings.llm.modelHint")}
               </div>
             </div>
 
             <div className="mt-4">
-              <Field label="API key (only for cloud / authenticated endpoints)">
+              <Field label={t("settings.llm.apiKey")}>
                 <div className="flex gap-2">
                   <input
                     type={showApiKey ? "text" : "password"}
                     value={draftApiKey ?? ""}
                     onChange={e => setDraftApiKey(e.target.value)}
-                    placeholder={cfg.has_api_key ? "•••••••• (stored — leave blank to keep)" : "sk-… or leave blank for local endpoints"}
+                    placeholder={cfg.has_api_key ? t("settings.llm.apiKeyStored") : t("settings.llm.apiKeyEmpty")}
                     className={cn(inputClass, "font-mono flex-1")}
                     autoComplete="off"
                   />
@@ -3963,31 +3922,28 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
                       "bg-muted hover:bg-muted/70 text-foreground",
                     )}
                   >
-                    {showApiKey ? "Hide" : "Show"}
+                    {showApiKey ? t("settings.llm.hide") : t("settings.llm.show")}
                   </button>
                   {cfg.has_api_key && draftApiKey !== "" && (
                     <button
                       type="button"
                       onClick={() => setDraftApiKey("")}
-                      title="Remove the stored key when you save"
+                      title={t("settings.llm.clearKeyTitle")}
                       className={cn(
                         "px-3 py-1.5 text-xs rounded-md font-medium transition shrink-0",
                         "bg-red-500/10 hover:bg-red-500/20 text-red-600 border border-red-500/20",
                       )}
                     >
-                      Clear
+                      {t("settings.llm.clear")}
                     </button>
                   )}
                 </div>
               </Field>
               {cfg.has_api_key && draftApiKey === "" && (
-                <div className="text-2xs text-amber-600 mt-1">The stored key will be removed when you save.</div>
+                <div className="text-2xs text-amber-600 mt-1">{t("settings.llm.keyWillBeRemoved")}</div>
               )}
               <div className="text-2xs text-muted-foreground mt-1">
-                Servers on this computer don't need a key. A cloud provider
-                (OpenAI, Anthropic and the like) does, and then <strong>what the
-                family asks Yorik leaves the house</strong>. The key is stored
-                encrypted and used only for this address.
+                {t("settings.llm.keyHintBefore")} <strong>{t("settings.llm.keyHintStrong")}</strong>{t("settings.llm.keyHintAfter")}
               </div>
             </div>
 
@@ -4003,19 +3959,19 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
                   {!probeResult && !unchanged && (
                     <div className="mt-4 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
                       <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                      <span>Run <strong>Test</strong> first — Save is gated on a successful probe so a bad URL or model can't silently break chat.</span>
+                      <span>{t("settings.llm.runTestBefore")} <strong>{t("settings.llm.test")}</strong> {t("settings.llm.runTestAfter")}</span>
                     </div>
                   )}
                   {probeFailed && !unchanged && (
                     <div className="mt-4 text-xs text-red-600 dark:text-red-400 flex items-start gap-2">
                       <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                      <span>The endpoint didn't respond. Fix the URL/key or revert before saving — Save stays disabled until the probe succeeds.</span>
+                      <span>{t("settings.llm.noResponse")}</span>
                     </div>
                   )}
                   {probeResult?.ok && !probeResult.models.includes(draftModel) && !unchanged && (
                     <div className="mt-4 text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
                       <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                      <span>Endpoint is reachable but doesn't serve <code className="font-mono">{draftModel}</code>. Pick one from the served-model list.</span>
+                      <span>{t("settings.llm.notServedBefore")} <code className="font-mono">{draftModel}</code>. {t("settings.llm.notServedAfter")}</span>
                     </div>
                   )}
                   <div className="flex justify-end mt-4">
@@ -4029,7 +3985,7 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
                       )}
                     >
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      Save + apply
+                      {t("settings.llm.saveApply")}
                     </button>
                   </div>
                 </>
@@ -4048,14 +4004,13 @@ function LlmTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "
 
 
 function NumberingTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   return (
     <div>
       <header className="mb-6">
-        <h2 className="text-lg font-semibold">Invoice and quote numbers</h2>
+        <h2 className="text-lg font-semibold">{t("settings.numbering.title")}</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Every invoice needs its own number, without gaps; the law requires it
-          in Germany and Poland. Write sets this up by itself with your first
-          invoice. Change it here if you continue a numbering you started elsewhere.
+          {t("settings.numbering.intro")}
         </p>
       </header>
       <SeriesManager
@@ -4103,7 +4058,16 @@ interface SkillStat {
   last_used: string | null;
 }
 
+// Backend ui_category buckets, in display order (System last).
+const SKILL_CATEGORIES = [
+  "Calendar", "Tasks", "Bills", "Contacts", "Documents",
+  "Photos", "Email", "WhatsApp", "Compose", "System",
+];
+
 function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
+  // Category names come from the backend; the known buckets get a translated label.
+  const catLabel = (c: string) => SKILL_CATEGORIES.includes(c) ? t(`settings.skills.categories.${c.toLowerCase()}`) : c;
   const [skills, setSkills] = useState<SkillManifest[] | null>(null);
   const [stats, setStats]   = useState<Record<string, SkillStat>>({});
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
@@ -4120,9 +4084,9 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
       setSkills(s);
       setStats(st || {});
     } catch (e: any) {
-      toast(`Couldn't load skills: ${e.message}`, "error");
+      toast(t("settings.skills.loadFailed", { msg: e.message }), "error");
     }
-  }, [toast]);
+  }, [toast, t]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -4132,7 +4096,7 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
       await api.patch(`/api/skills/${encodeURIComponent(name)}`, { enabled: nextEnabled });
       setSkills(curr => curr?.map(s => s.name === name ? { ...s, disabled: !nextEnabled } : s) || null);
     } catch (e: any) {
-      toast(`Couldn't ${nextEnabled ? "enable" : "disable"} ${name}: ${e.message}`, "error");
+      toast(nextEnabled ? t("settings.skills.enableFailed", { name, msg: e.message }) : t("settings.skills.disableFailed", { name, msg: e.message }), "error");
     } finally {
       setBusy(b => { const n = new Set(b); n.delete(name); return n; });
     }
@@ -4150,10 +4114,10 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
         flipped.has(s.name) ? { ...s, disabled: !nextEnabled } : s,
       ) || null);
       if (r.flipped?.length) {
-        toast(`${cat}: ${r.flipped.length} skill${r.flipped.length === 1 ? "" : "s"} ${nextEnabled ? "enabled" : "disabled"}`, "success");
+        toast(nextEnabled ? t("settings.skills.catEnabled", { cat: catLabel(cat), count: r.flipped.length }) : t("settings.skills.catDisabled", { cat: catLabel(cat), count: r.flipped.length }), "success");
       }
     } catch (e: any) {
-      toast(`Couldn't toggle ${cat}: ${e.message}`, "error");
+      toast(t("settings.skills.toggleFailed", { cat: catLabel(cat), msg: e.message }), "error");
     } finally {
       setBusy(b => { const n = new Set(b); n.delete(key); return n; });
     }
@@ -4170,10 +4134,7 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
   // Group by ui_category. Order: predefined domain buckets first
   // (so Calendar/Tasks/Bills/etc. lead the page), then anything
   // unexpected, then System last.
-  const CATEGORY_ORDER = [
-    "Calendar", "Tasks", "Bills", "Contacts", "Documents",
-    "Photos", "Email", "WhatsApp", "Compose", "System",
-  ];
+  const CATEGORY_ORDER = SKILL_CATEGORIES;
   const byCategory = new Map<string, SkillManifest[]>();
   for (const s of skills) {
     const cat = s.ui_category || "System";
@@ -4199,20 +4160,18 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
   return (
     <div>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Skills</h1>
+        <h1 className="text-2xl font-semibold">{t("settings.skills.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          What Yorik can do. {totalEnabled} of {skills.length} skill{skills.length === 1 ? "" : "s"} enabled,
-          grouped by category. Toggle whole categories from the header, or individual skills from each row.
-          Disabled skills disappear from the LLM's next answer.
+          {t("settings.skills.intro", { enabled: totalEnabled, count: skills.length })}
         </p>
       </header>
 
-      <Card title="Got an idea for a new skill?">
+      <Card title={t("settings.skills.ideaTitle")}>
         <p className="text-xs text-muted-foreground mb-2">
-          A skill is two files in <code className="font-mono text-xs">backend/skills/</code>.
-          ~50 lines. Scaffold one with{" "}
+          {t("settings.skills.ideaBefore")} <code className="font-mono text-xs">backend/skills/</code>.{" "}
+          {t("settings.skills.ideaMiddle")}{" "}
           <code className="font-mono text-xs">bash scripts/new-skill.sh &lt;name&gt;</code>{" "}
-          then edit the two files. After backend restart, the LLM picks it up automatically.
+          {t("settings.skills.ideaAfter")}
         </p>
         <a
           href="https://github.com/winidi/yorik-ai/blob/main/docs/SKILLS.md"
@@ -4221,7 +4180,7 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
           className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-violet-500 hover:bg-violet-600 text-white font-medium transition"
         >
           <Lightbulb className="w-3.5 h-3.5" />
-          Read the guide
+          {t("settings.skills.readGuide")}
           <ExternalLink className="w-3 h-3" />
         </a>
       </Card>
@@ -4247,13 +4206,13 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
                   className="flex items-center gap-2 flex-1 min-w-0 text-left"
                 >
                   <ArrowDownIcon open={!catCollapsed} />
-                  <span className="font-semibold text-sm">{cat}</span>
+                  <span className="font-semibold text-sm">{catLabel(cat)}</span>
                   <span className="text-2xs tabular-nums text-muted-foreground">
                     {enabledCount}/{members.length}
                   </span>
                   {!catFullyEnabled && catEnabled && (
                     <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600">
-                      partial
+                      {t("settings.skills.partial")}
                     </span>
                   )}
                 </button>
@@ -4266,7 +4225,7 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
                     catBusy && "opacity-60 cursor-wait",
                   )}
                   aria-pressed={catEnabled}
-                  title={catEnabled ? `Disable all ${cat} skills` : `Enable all ${cat} skills`}
+                  title={catEnabled ? t("settings.skills.disableAll", { cat: catLabel(cat) }) : t("settings.skills.enableAll", { cat: catLabel(cat) })}
                 >
                   <span className={cn(
                     "inline-block h-3.5 w-3.5 transform rounded-full bg-white transition",
@@ -4297,29 +4256,29 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
                                 <span className="font-mono text-sm">{skill.name}</span>
                                 {skill.side_effects && skill.side_effects !== "none" && (
                                   <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600">
-                                    mutates
+                                    {t("settings.skills.mutates")}
                                   </span>
                                 )}
                                 {skill.tags?.includes("free") && (
                                   <span className="text-2xs px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600">
-                                    free
+                                    {t("settings.skills.free")}
                                   </span>
                                 )}
                               </div>
                               <div className="flex items-center gap-3 text-2xs tabular-nums text-muted-foreground shrink-0">
                                 {stat ? (
                                   <>
-                                    <span>{stat.total} call{stat.total === 1 ? "" : "s"}</span>
+                                    <span>{t("settings.skills.calls", { count: stat.total })}</span>
                                     {successRate !== null && (
                                       <span className={cn(
                                         "font-medium",
                                         successRate >= 80 ? "text-emerald-600" :
                                         successRate >= 50 ? "text-amber-600" : "text-red-500",
-                                      )}>{successRate}% ok</span>
+                                      )}>{t("settings.skills.percentOk", { rate: successRate })}</span>
                                     )}
                                   </>
                                 ) : (
-                                  <span className="opacity-60">never called</span>
+                                  <span className="opacity-60">{t("settings.skills.neverCalled")}</span>
                                 )}
                                 <ArrowDownIcon open={isOpen} />
                               </div>
@@ -4337,7 +4296,7 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
                               skillBusy && "opacity-60 cursor-wait",
                             )}
                             aria-pressed={skillEnabled}
-                            title={skillEnabled ? `Disable ${skill.name}` : `Enable ${skill.name}`}
+                            title={skillEnabled ? t("settings.skills.disableOne", { name: skill.name }) : t("settings.skills.enableOne", { name: skill.name })}
                           >
                             <span className={cn(
                               "inline-block h-3.5 w-3.5 transform rounded-full bg-white transition",
@@ -4349,13 +4308,13 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
                           <div className="px-3 pb-3 pt-1 border-t border-border bg-muted/10 text-xs space-y-2.5">
                             {skill.when_to_use && (
                               <div>
-                                <div className="text-2xs text-muted-foreground font-semibold mb-0.5">When to use</div>
+                                <div className="text-2xs text-muted-foreground font-semibold mb-0.5">{t("settings.skills.whenToUse")}</div>
                                 <div className="whitespace-pre-wrap text-xs">{skill.when_to_use.trim()}</div>
                               </div>
                             )}
                             {skill.inputs && Object.keys(skill.inputs).length > 0 && (
                               <div>
-                                <div className="text-2xs text-muted-foreground font-semibold mb-0.5">Inputs</div>
+                                <div className="text-2xs text-muted-foreground font-semibold mb-0.5">{t("settings.skills.inputs")}</div>
                                 <div className="space-y-0.5">
                                   {Object.entries(skill.inputs).map(([key, spec]) => (
                                     <div key={key} className="text-xs">
@@ -4372,13 +4331,13 @@ function SkillsTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
                             )}
                             {skill.permissions && (
                               <div className="text-xs">
-                                <span className="text-muted-foreground">Allowed roles: </span>
+                                <span className="text-muted-foreground">{t("settings.skills.allowedRoles")} </span>
                                 <span className="font-mono">{skill.permissions.join(", ")}</span>
                               </div>
                             )}
                             {stat?.last_used && (
                               <div className="text-2xs text-muted-foreground">
-                                Last used: {new Date(stat.last_used).toLocaleString()}
+                                {t("settings.skills.lastUsed", { date: new Date(stat.last_used).toLocaleString(locale()) })}
                               </div>
                             )}
                           </div>
@@ -4424,6 +4383,7 @@ interface QualitySummary {
 }
 
 function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const [data, setData] = useState<QualitySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
@@ -4434,11 +4394,11 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
       const r = await api.get<QualitySummary>(`/api/quality/summary?role=admin&days=${days}`);
       setData(r);
     } catch (e: any) {
-      toast(`Could not load quality: ${e.message}`, "error");
+      toast(t("settings.quality.loadFailed", { msg: e.message }), "error");
     } finally {
       setLoading(false);
     }
-  }, [days, toast]);
+  }, [days, toast, t]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -4446,10 +4406,9 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
     <div>
       <header className="mb-6 flex items-baseline justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Quality</h1>
+          <h1 className="text-2xl font-semibold">{t("settings.quality.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            How often Yorik's actions worked and how the family rated its answers
-            (the thumbs under each reply), per AI model. It stays on this machine.
+            {t("settings.quality.intro")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -4458,15 +4417,15 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
             onChange={e => setDays(Number(e.target.value))}
             className={cn(inputClass, "h-8 text-xs w-auto")}
           >
-            <option value={7}>Last 7 days</option>
-            <option value={30}>Last 30 days</option>
-            <option value={90}>Last 90 days</option>
-            <option value={365}>Last year</option>
+            <option value={7}>{t("settings.quality.lastDays", { count: 7 })}</option>
+            <option value={30}>{t("settings.quality.lastDays", { count: 30 })}</option>
+            <option value={90}>{t("settings.quality.lastDays", { count: 90 })}</option>
+            <option value={365}>{t("settings.quality.lastYear")}</option>
           </select>
           <button
             onClick={refresh}
             className="w-8 h-8 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition flex items-center justify-center"
-            title="Reload"
+            title={t("settings.quality.reload")}
           >
             <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
           </button>
@@ -4481,21 +4440,21 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
 
       {data && (
         <div className="space-y-6">
-          <Card title="Current LLM">
+          <Card title={t("settings.quality.currentLlm")}>
             <div className="flex items-center gap-3 py-1">
               <div className="w-10 h-10 rounded-md bg-gradient-to-br from-violet-500/30 to-blue-500/30 flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-violet-500" />
               </div>
               <div className="font-mono text-sm">{data.current_model}</div>
               <div className="ml-auto text-xs text-muted-foreground">
-                Change the model under Maintenance › AI
+                {t("settings.quality.changeModelHint")}
               </div>
             </div>
           </Card>
 
-          <Card title={`Skills (${data.skills.length})`}>
+          <Card title={t("settings.quality.skillsTitle", { n: data.skills.length })}>
             {data.skills.length === 0 ? (
-              <EmptyMetric icon={Database} label="No skill invocations yet. Use the chat to call some skills." />
+              <EmptyMetric icon={Database} label={t("settings.quality.noSkillCalls")} />
             ) : (
               <div className="divide-y divide-border">
                 {data.skills.map((s, i) => {
@@ -4506,7 +4465,7 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{s.skill_id}</div>
                         <div className="text-2xs text-muted-foreground font-mono">
-                          {s.llm_model || "(no model tag)"}
+                          {s.llm_model || t("settings.quality.noModelTag")}
                           {s.avg_latency_ms && ` · ~${Math.round(s.avg_latency_ms)}ms`}
                         </div>
                       </div>
@@ -4521,19 +4480,19 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
             )}
           </Card>
 
-          <Card title={`Chat turns rated (${data.turns_by_model.reduce((a, t) => a + t.n, 0)})`}>
+          <Card title={t("settings.quality.turnsRated", { n: data.turns_by_model.reduce((a, turn) => a + turn.n, 0) })}>
             {data.turns_by_model.length === 0 ? (
-              <EmptyMetric icon={ThumbsUp} label="No turn ratings yet. The 👍/👎 buttons under assistant replies feed this." />
+              <EmptyMetric icon={ThumbsUp} label={t("settings.quality.noRatings")} />
             ) : (
               <div className="space-y-2">
-                {data.turns_by_model.map((t, i) => {
-                  const total = t.up + t.down;
-                  const rate = total > 0 ? Math.round((t.up / total) * 100) : 0;
+                {data.turns_by_model.map((turn, i) => {
+                  const total = turn.up + turn.down;
+                  const rate = total > 0 ? Math.round((turn.up / total) * 100) : 0;
                   return (
                     <div key={i} className="flex items-center gap-3 text-sm">
-                      <div className="font-mono flex-1 min-w-0 truncate">{t.llm_model || "(no model)"}</div>
-                      <span className="inline-flex items-center gap-0.5 text-emerald-500"><ThumbsUp className="w-3 h-3" />{t.up}</span>
-                      <span className="inline-flex items-center gap-0.5 text-red-500"><ThumbsDown className="w-3 h-3" />{t.down}</span>
+                      <div className="font-mono flex-1 min-w-0 truncate">{turn.llm_model || t("settings.quality.noModel")}</div>
+                      <span className="inline-flex items-center gap-0.5 text-emerald-500"><ThumbsUp className="w-3 h-3" />{turn.up}</span>
+                      <span className="inline-flex items-center gap-0.5 text-red-500"><ThumbsDown className="w-3 h-3" />{turn.down}</span>
                       <span className="font-mono text-foreground/80 w-12 text-right">{rate}%</span>
                     </div>
                   );
@@ -4543,7 +4502,7 @@ function QualityTab({ toast }: { toast: (text: string, kind?: "info" | "success"
           </Card>
 
           {data.recent_failures.length > 0 && (
-            <Card title="Recent failures">
+            <Card title={t("settings.quality.recentFailures")}>
               <div className="space-y-1.5">
                 {data.recent_failures.map((f, i) => (
                   <div key={i} className="text-xs bg-red-500/5 border border-red-500/15 rounded-md p-2.5">
@@ -4588,20 +4547,22 @@ interface YorikUserRow {
 // can't be picked here.
 const ROLES = ["member", "restricted", "admin"] as const;
 type Role = typeof ROLES[number];
+// Translation keys; resolve with t(ROLE_LABEL[r]) at render time.
 const ROLE_LABEL: Record<string, string> = {
-  member: "Adult", restricted: "Child", admin: "Admin", platform_admin: "Owner",
-  child: "Child", employee: "Child", viewer: "Child",
+  member: "settings.users.roles.adult", restricted: "settings.users.roles.child", admin: "settings.users.roles.admin", platform_admin: "settings.users.roles.owner",
+  child: "settings.users.roles.child", employee: "settings.users.roles.child", viewer: "settings.users.roles.child",
 };
 const ROLE_HINT: Record<string, string> = {
-  member: "Uses every app, can't change household settings",
-  restricted: "Board, tasks, calendar, photos and chat; sees the household read-only",
-  admin: "Can also add people and change household settings",
+  member: "settings.users.roleHints.adult",
+  restricted: "settings.users.roleHints.child",
+  admin: "settings.users.roleHints.admin",
 };
 /** QR-invited people get a placeholder address nobody reads. */
 const isPlaceholderEmail = (e: string | null) => !!e && e.endsWith("@members.yorik.invalid");
 const isChildRole = (r: string) => ["restricted", "child", "employee", "viewer"].includes(r);
 
 function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const auth = useAuth();
   const [users, setUsers] = useState<YorikUserRow[] | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -4620,47 +4581,45 @@ function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" |
       setUsers(list);
     } catch (e: any) {
       setUsers([]);
-      if (e?.status !== 403) toast("Failed to load users", "error");
+      if (e?.status !== 403) toast(t("settings.users.loadFailed"), "error");
     }
-  }, [toast]);
+  }, [toast, t]);
 
   useEffect(() => { void load(); }, [load]);
 
   async function toggleDisabled(u: YorikUserRow) {
     try {
       await api.patch(`/api/users/${u.id}`, { disabled: !u.disabled });
-      toast(u.disabled ? `${u.name} can sign in again` : `${u.name} is paused and signed out`, "success");
+      toast(u.disabled ? t("settings.users.canSignInAgain", { name: u.name }) : t("settings.users.pausedOut", { name: u.name }), "success");
       await load();
-    } catch (e: any) { toast(e?.message || "Failed", "error"); }
+    } catch (e: any) { toast(e?.message || t("settings.users.failed"), "error"); }
   }
 
   async function changeRole(u: YorikUserRow, role: Role) {
     if (role === u.role) return;
     try {
       await api.patch(`/api/users/${u.id}`, { role });
-      toast(`${u.name} is now ${ROLE_LABEL[role]}`, "success");
+      toast(t("settings.users.nowRole", { name: u.name, role: t(ROLE_LABEL[role]) }), "success");
       await load();
-    } catch (e: any) { toast(e?.message || "Failed", "error"); }
+    } catch (e: any) { toast(e?.message || t("settings.users.failed"), "error"); }
   }
 
   async function deleteUser(u: YorikUserRow) {
-    if (!confirm(`Remove ${u.name} from Yorik?\n\nThey can no longer sign in. Their private to-dos, appointments and notes stay in the database but nobody can open them any more.\n\nTo stop someone signing in for a while, use "Pause access" (the power button) instead.`)) return;
+    if (!confirm(t("settings.users.removeConfirm", { name: u.name }))) return;
     try {
       await api.delete(`/api/users/${u.id}`);
-      toast(`${u.name} deleted`, "success");
+      toast(t("settings.users.deleted", { name: u.name }), "success");
       await load();
-    } catch (e: any) { toast(e?.message || "Failed", "error"); }
+    } catch (e: any) { toast(e?.message || t("settings.users.failed"), "error"); }
   }
 
   return (
     <div>
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">People</h1>
+          <h1 className="text-2xl font-semibold">{t("settings.users.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Everyone in the household. The easiest way in is a QR code: the person
-            scans it with their phone and picks a PIN. "Add by hand" is for someone
-            who signs in on a computer with an email and password.
+            {t("settings.users.intro")}
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 shrink-0">
@@ -4668,13 +4627,13 @@ function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" |
             onClick={() => setShowInvite(true)}
             className="px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition inline-flex items-center gap-1.5"
           >
-            <QrCode className="w-4 h-4" /> Invite with a QR code
+            <QrCode className="w-4 h-4" /> {t("settings.users.inviteQr")}
           </button>
           <button
             onClick={() => setShowAdd(true)}
             className="px-3 py-2 rounded-md border border-border text-sm font-medium hover:bg-muted transition inline-flex items-center gap-1.5"
           >
-            <UserPlus className="w-4 h-4" /> Add by hand
+            <UserPlus className="w-4 h-4" /> {t("settings.users.addByHand")}
           </button>
         </div>
       </header>
@@ -4684,27 +4643,26 @@ function UsersTab({ toast }: { toast: (text: string, kind?: "info" | "success" |
           <div className="w-full max-w-2xl my-8 bg-background border border-border rounded-2xl shadow-2xl p-5" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
-                <h2 className="text-lg font-semibold">Sharing for {sharingFor.name}</h2>
+                <h2 className="text-lg font-semibold">{t("settings.users.sharingFor", { name: sharingFor.name })}</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Children don't set this themselves. Here you decide who in the family sees
-                  {" "}{sharingFor.name}'s to-dos, appointments, contacts and documents.
+                  {t("settings.users.sharingForIntro", { name: sharingFor.name })}
                 </p>
               </div>
-              <button onClick={() => setSharingFor(null)} className="p-1 text-muted-foreground hover:text-foreground" aria-label="Close">
+              <button onClick={() => setSharingFor(null)} className="p-1 text-muted-foreground hover:text-foreground" aria-label={t("settings.users.close")}>
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <SharingCard toast={toast} ownerId={String(sharingFor.id)} title={`What ${sharingFor.name} shares`} />
+            <SharingCard toast={toast} ownerId={String(sharingFor.id)} title={t("settings.users.whatShares", { name: sharingFor.name })} />
           </div>
         </div>
       )}
 
       {users === null && (
-        <div className="text-sm text-muted-foreground">Loading…</div>
+        <div className="text-sm text-muted-foreground">{t("settings.users.loading")}</div>
       )}
       {users && users.length === 0 && (
         <div className="bg-card border border-border rounded-xl p-5 text-sm text-muted-foreground">
-          Admin role required to manage users.
+          {t("settings.users.adminRequired")}
         </div>
       )}
 
@@ -4777,6 +4735,7 @@ function UserRow({ user: u, isSelf, onToggleDisabled, onChangeRole, onResetPassw
   /** Only for a child: open what they share and see. */
   onSharing?: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className={cn(
       "bg-card border border-border rounded-xl p-4 flex items-center gap-4",
@@ -4790,24 +4749,24 @@ function UserRow({ user: u, isSelf, onToggleDisabled, onChangeRole, onResetPassw
           <span className="font-semibold truncate">{u.name}</span>
           {isSelf && (
             <span className="text-2xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-              you
+              {t("settings.users.you")}
             </span>
           )}
           {u.disabled && (
             <span className="text-2xs px-1.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400">
-              paused
+              {t("settings.users.paused")}
             </span>
           )}
           {!u.has_password && (
             <span className="text-2xs px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
-              no password
+              {t("settings.users.noPassword")}
             </span>
           )}
         </div>
         <div className="text-xs text-muted-foreground truncate mt-0.5">
-          {isPlaceholderEmail(u.email) ? "signs in with a PIN on their phone" : (u.email || <em>no email</em>)}
-          {u.last_login_at && <span className="ml-2 opacity-70">· last login {formatRelativeShort(u.last_login_at)}</span>}
-          {u.active_sessions > 0 && <span className="ml-2 opacity-70">· {u.active_sessions} session{u.active_sessions === 1 ? "" : "s"}</span>}
+          {isPlaceholderEmail(u.email) ? t("settings.users.pinSignIn") : (u.email || <em>{t("settings.users.noEmail")}</em>)}
+          {u.last_login_at && <span className="ml-2 opacity-70">· {t("settings.users.lastLogin", { when: formatRelativeShort(u.last_login_at) })}</span>}
+          {u.active_sessions > 0 && <span className="ml-2 opacity-70">· {t("settings.users.sessions", { count: u.active_sessions })}</span>}
         </div>
       </div>
       <select
@@ -4815,23 +4774,23 @@ function UserRow({ user: u, isSelf, onToggleDisabled, onChangeRole, onResetPassw
         onChange={e => onChangeRole(e.target.value as Role)}
         disabled={isSelf || u.role === "platform_admin"}
         className="h-8 px-2 rounded bg-muted text-xs focus:outline-none disabled:opacity-50"
-        title={isSelf ? "Can't change your own role" : u.role === "platform_admin" ? "The owner of this Yorik" : ROLE_HINT[u.role] || "Change role"}
+        title={isSelf ? t("settings.users.ownRole") : u.role === "platform_admin" ? t("settings.users.ownerOfYorik") : ROLE_HINT[u.role] ? t(ROLE_HINT[u.role]) : t("settings.users.changeRole")}
       >
-        {u.role === "platform_admin" && <option value="platform_admin">{ROLE_LABEL.platform_admin}</option>}
-        {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+        {u.role === "platform_admin" && <option value="platform_admin">{t(ROLE_LABEL.platform_admin)}</option>}
+        {ROLES.map(r => <option key={r} value={r}>{t(ROLE_LABEL[r])}</option>)}
       </select>
       {onSharing && (
         <button
           onClick={onSharing}
-          title="What this child shares and sees"
+          title={t("settings.users.childSharingTitle")}
           className="h-8 px-2 rounded-md hover:bg-muted text-xs text-muted-foreground hover:text-foreground transition inline-flex items-center gap-1"
         >
-          <Shield className="w-3.5 h-3.5" /> Sharing
+          <Shield className="w-3.5 h-3.5" /> {t("settings.users.sharing")}
         </button>
       )}
       <button
         onClick={onResetPassword}
-        title="Reset password"
+        title={t("settings.users.resetPassword")}
         className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition"
       >
         <KeyRound className="w-4 h-4" />
@@ -4839,7 +4798,7 @@ function UserRow({ user: u, isSelf, onToggleDisabled, onChangeRole, onResetPassw
       <button
         onClick={onToggleDisabled}
         disabled={isSelf}
-        title={isSelf ? "Can't pause yourself" : (u.disabled ? "Allow access again" : "Pause access (can be undone)")}
+        title={isSelf ? t("settings.users.cantPauseSelf") : (u.disabled ? t("settings.users.allowAgain") : t("settings.users.pauseAccess"))}
         className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition disabled:opacity-30 disabled:cursor-not-allowed"
       >
         <Power className="w-4 h-4" />
@@ -4847,7 +4806,7 @@ function UserRow({ user: u, isSelf, onToggleDisabled, onChangeRole, onResetPassw
       <button
         onClick={onDelete}
         disabled={isSelf}
-        title={isSelf ? "Can't remove yourself" : "Remove from Yorik"}
+        title={isSelf ? t("settings.users.cantRemoveSelf") : t("settings.users.removeFromYorik")}
         className="p-1.5 rounded-md hover:bg-rose-500/10 text-muted-foreground hover:text-rose-600 transition disabled:opacity-30 disabled:cursor-not-allowed"
       >
         <Trash2 className="w-4 h-4" />
@@ -4861,11 +4820,11 @@ function formatRelativeShort(iso: string): string {
   if (isNaN(d.getTime())) return iso;
   const ms = Date.now() - d.getTime();
   const days = Math.floor(ms / (24 * 3600 * 1000));
-  if (days < 1) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (days < 1) return i18n.t("settings.users.rel.today");
+  if (days === 1) return i18n.t("settings.users.rel.yesterday");
+  if (days < 7) return i18n.t("settings.users.rel.daysAgo", { n: days });
+  if (days < 30) return i18n.t("settings.users.rel.weeksAgo", { n: Math.floor(days / 7) });
+  return d.toLocaleDateString(locale(), { month: "short", day: "numeric" });
 }
 
 function generatePassword(): string {
@@ -4891,6 +4850,7 @@ function AddUserModal({ onClose, onCreated, toast }: {
   onCreated: (creds: { name: string; email: string; password: string }) => void;
   toast: (t: string, k?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("member");
@@ -4907,10 +4867,10 @@ function AddUserModal({ onClose, onCreated, toast }: {
       if (provisionPaperless) auto_provision.push("paperless");
       if (provisionImmich) auto_provision.push("immich");
       await api.post("/api/users", { name, email, role, password, auto_provision });
-      toast(`${name} added`, "success");
+      toast(t("settings.users.add.added", { name }), "success");
       onCreated({ name, email, password });
     } catch (e: any) {
-      toast(e?.message || "Create failed", "error");
+      toast(e?.message || t("settings.users.add.createFailed"), "error");
       setBusy(false);
     }
   }
@@ -4928,40 +4888,40 @@ function AddUserModal({ onClose, onCreated, toast }: {
             <div className="w-8 h-8 rounded-full bg-cyan-500/15 flex items-center justify-center">
               <UserPlus className="w-4 h-4 text-cyan-500" />
             </div>
-            <div className="font-semibold">Add user</div>
+            <div className="font-semibold">{t("settings.users.add.title")}</div>
           </div>
           <button type="button" onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground">
             <X className="w-4 h-4" />
           </button>
         </header>
         <div className="p-5 space-y-3">
-          <Field label="Name">
+          <Field label={t("settings.users.add.name")}>
             <input
               required
               autoFocus
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="Anna"
+              placeholder={t("settings.users.add.namePlaceholder")}
               className={inputClass}
             />
           </Field>
-          <Field label="Email">
+          <Field label={t("settings.users.add.email")}>
             <input
               required
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="anna@example.com"
+              placeholder={t("settings.users.add.emailPlaceholder")}
               className={inputClass}
             />
           </Field>
-          <Field label="Role">
+          <Field label={t("settings.users.add.role")}>
             <select value={role} onChange={e => setRole(e.target.value as Role)} className={inputClass}>
-              {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+              {ROLES.map(r => <option key={r} value={r}>{t(ROLE_LABEL[r])}</option>)}
             </select>
-            <p className="text-xs text-muted-foreground mt-1">{ROLE_HINT[role]}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t(ROLE_HINT[role])}</p>
           </Field>
-          <Field label="Initial password">
+          <Field label={t("settings.users.add.initialPassword")}>
             <div className="flex gap-1.5">
               <input
                 required
@@ -4973,14 +4933,14 @@ function AddUserModal({ onClose, onCreated, toast }: {
               <button
                 type="button"
                 onClick={() => setPassword(generatePassword())}
-                title="Generate a new one"
+                title={t("settings.users.add.generateNew")}
                 className="px-2 rounded-md bg-muted hover:bg-muted/80 text-xs text-muted-foreground shrink-0"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
             </div>
             <div className="text-xs text-muted-foreground mt-1 leading-relaxed">
-              Share this with the user after they're added. They can change it themselves later.
+              {t("settings.users.add.passwordHint")}
             </div>
           </Field>
           <div className="border-t border-border pt-3 space-y-2">
@@ -4990,7 +4950,7 @@ function AddUserModal({ onClose, onCreated, toast }: {
                 checked={provisionPaperless}
                 onChange={e => setProvisionPaperless(e.target.checked)}
               />
-              <span>Auto-create matching Paperless account</span>
+              <span>{t("settings.users.add.paperless")}</span>
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input
@@ -4998,16 +4958,16 @@ function AddUserModal({ onClose, onCreated, toast }: {
                 checked={provisionImmich}
                 onChange={e => setProvisionImmich(e.target.checked)}
               />
-              <span>Auto-create matching Immich account</span>
+              <span>{t("settings.users.add.immich")}</span>
             </label>
             <div className="text-xs text-muted-foreground mt-1 leading-relaxed">
-              Uses the same email + password. Skips silently if Paperless/Immich isn't configured.
+              {t("settings.users.add.provisionHint")}
             </div>
           </div>
         </div>
         <footer className="px-5 py-3 border-t border-border bg-muted/30 flex items-center justify-end gap-2">
           <button type="button" onClick={onClose} className="px-3 py-1.5 rounded-md text-sm hover:bg-muted transition">
-            Cancel
+            {t("settings.users.add.cancel")}
           </button>
           <button
             type="submit"
@@ -5015,7 +4975,7 @@ function AddUserModal({ onClose, onCreated, toast }: {
             className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition inline-flex items-center gap-1.5 disabled:opacity-50"
           >
             {busy ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
-            Add user
+            {t("settings.users.add.submit")}
           </button>
         </footer>
       </form>
@@ -5030,6 +4990,7 @@ function ResetPasswordModal({ user, onClose, onDone, toast }: {
   onDone: (newPassword: string) => void;
   toast: (t: string, k?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [password, setPassword] = useState(() => generatePassword());
   const [busy, setBusy] = useState(false);
 
@@ -5038,10 +4999,10 @@ function ResetPasswordModal({ user, onClose, onDone, toast }: {
     setBusy(true);
     try {
       await api.post(`/api/users/${user.id}/reset-password`, { new_password: password });
-      toast(`${user.name}'s password reset — their sessions were revoked`, "success");
+      toast(t("settings.users.reset.done", { name: user.name }), "success");
       onDone(password);
     } catch (e: any) {
-      toast(e?.message || "Reset failed", "error");
+      toast(e?.message || t("settings.users.reset.failed"), "error");
       setBusy(false);
     }
   }
@@ -5057,14 +5018,14 @@ function ResetPasswordModal({ user, onClose, onDone, toast }: {
         <header className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <KeyRound className="w-4 h-4 text-primary" />
-            <div className="font-semibold">Reset password for {user.name}</div>
+            <div className="font-semibold">{t("settings.users.reset.title", { name: user.name })}</div>
           </div>
           <button type="button" onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground">
             <X className="w-4 h-4" />
           </button>
         </header>
         <div className="p-5 space-y-3">
-          <Field label="New password">
+          <Field label={t("settings.users.reset.newPassword")}>
             <div className="flex gap-1.5">
               <input required minLength={8} value={password} onChange={e => setPassword(e.target.value)} className={inputClass} autoFocus />
               <button type="button" onClick={() => setPassword(generatePassword())} className="px-2 rounded-md bg-muted hover:bg-muted/80 text-xs text-muted-foreground shrink-0">
@@ -5073,14 +5034,14 @@ function ResetPasswordModal({ user, onClose, onDone, toast }: {
             </div>
           </Field>
           <div className="text-xs text-muted-foreground leading-relaxed">
-            All of {user.name}'s active sessions will be revoked. They'll need to log in again with the new password.
+            {t("settings.users.reset.hint", { name: user.name })}
           </div>
         </div>
         <footer className="px-5 py-3 border-t border-border bg-muted/30 flex items-center justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-3 py-1.5 rounded-md text-sm hover:bg-muted transition">Cancel</button>
+          <button type="button" onClick={onClose} className="px-3 py-1.5 rounded-md text-sm hover:bg-muted transition">{t("settings.users.reset.cancel")}</button>
           <button type="submit" disabled={busy || password.length < 8}
             className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition disabled:opacity-50">
-            Reset password
+            {t("settings.users.reset.submit")}
           </button>
         </footer>
       </form>
@@ -5094,27 +5055,22 @@ function CredentialsHandoff({ name, email, password, onClose, toast }: {
   onClose: () => void;
   toast: (t: string, k?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const loginUrl = typeof window !== "undefined" ? `${window.location.origin}/` : "/";
-  const block =
-`Hi ${name},
-I added you to Yorik (our home OS).
-Sign in at: ${loginUrl}
-Email:    ${email}
-Password: ${password}
-You can change the password once you're in (Settings → Profile).`;
+  const block = t("settings.users.handoff.message", { name, loginUrl, email, password });
 
   async function copyAll() {
     try {
       await navigator.clipboard.writeText(block);
-      toast("Copied — paste in Signal / message", "success");
+      toast(t("settings.users.handoff.copied"), "success");
     } catch {
-      toast("Clipboard not available — select + copy manually", "error");
+      toast(t("settings.users.handoff.clipboardUnavailable"), "error");
     }
   }
   async function copyOne(value: string, label: string) {
     try {
       await navigator.clipboard.writeText(value);
-      toast(`${label} copied`, "success");
+      toast(t("settings.users.handoff.oneCopied", { label }), "success");
     } catch {/* ignore */}
   }
 
@@ -5124,7 +5080,7 @@ You can change the password once you're in (Settings → Profile).`;
         <header className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-            <div className="font-semibold">Share these with {name}</div>
+            <div className="font-semibold">{t("settings.users.handoff.title", { name })}</div>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground">
             <X className="w-4 h-4" />
@@ -5132,24 +5088,22 @@ You can change the password once you're in (Settings → Profile).`;
         </header>
         <div className="p-5 space-y-3">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Yorik doesn't email invites yet — send these to {name} however you normally chat
-            (Signal, WhatsApp, paper note). They'll log in and can change the password
-            themselves.
+            {t("settings.users.handoff.intro", { name })}
           </p>
           <div className="bg-muted/50 rounded-lg p-3 text-sm font-mono space-y-1.5">
-            <CredRow label="URL"      value={loginUrl}  onCopy={() => copyOne(loginUrl, "URL")} />
-            <CredRow label="Email"    value={email}     onCopy={() => copyOne(email, "Email")} />
-            <CredRow label="Password" value={password}  onCopy={() => copyOne(password, "Password")} mono />
+            <CredRow label={t("settings.users.handoff.url")}      value={loginUrl}  onCopy={() => copyOne(loginUrl, t("settings.users.handoff.url"))} />
+            <CredRow label={t("settings.users.handoff.email")}    value={email}     onCopy={() => copyOne(email, t("settings.users.handoff.email"))} />
+            <CredRow label={t("settings.users.handoff.password")} value={password}  onCopy={() => copyOne(password, t("settings.users.handoff.password"))} mono />
           </div>
           <button
             onClick={copyAll}
             className="w-full px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition inline-flex items-center justify-center gap-1.5"
           >
             <Copy className="w-3.5 h-3.5" />
-            Copy ready-to-send message
+            {t("settings.users.handoff.copyMessage")}
           </button>
           <div className="text-xs text-muted-foreground leading-relaxed text-center">
-            The password is shown only once. Closing this dialog forgets it; you'd have to reset.
+            {t("settings.users.handoff.shownOnce")}
           </div>
         </div>
       </div>
@@ -5161,11 +5115,12 @@ You can change the password once you're in (Settings → Profile).`;
 function CredRow({ label, value, onCopy, mono }: {
   label: string; value: string; onCopy: () => void; mono?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-2">
       <span className="text-2xs text-muted-foreground font-semibold w-16 shrink-0">{label}</span>
       <span className={cn("flex-1 truncate", mono && "font-mono")}>{value}</span>
-      <button onClick={onCopy} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition" title={`Copy ${label}`}>
+      <button onClick={onCopy} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition" title={t("settings.users.handoff.copyLabel", { label })}>
         <Copy className="w-3 h-3" />
       </button>
     </div>
@@ -5190,6 +5145,7 @@ interface OptInApp {
 }
 
 function AppsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const [apps, setApps] = useState<OptInApp[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -5204,9 +5160,9 @@ function AppsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
       // 403 here means the current user isn't admin. Empty list + a hint
       // is friendlier than a red toast on a tab they navigated to manually.
       setApps([]);
-      if (e?.status && e.status !== 403) toast("Failed to load apps list", "error");
+      if (e?.status && e.status !== 403) toast(t("settings.appsTab.loadFailed"), "error");
     }
-  }, [toast]);
+  }, [toast, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -5217,9 +5173,9 @@ function AppsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
       setApps(curr => curr?.map(a => a.id === appId ? { ...a, enabled: next } : a) ?? curr);
       window.dispatchEvent(new Event("yorik:apps-changed"));
       const name = apps?.find(a => a.id === appId)?.name || appId;
-      toast(next ? `${name} is on: it's in the dock now` : `${name} is off and hidden`, "success");
+      toast(next ? t("settings.appsTab.turnedOn", { name }) : t("settings.appsTab.turnedOff", { name }), "success");
     } catch {
-      toast(`Failed to ${next ? "enable" : "disable"} ${appId}`, "error");
+      toast(next ? t("settings.appsTab.enableFailed", { name: appId }) : t("settings.appsTab.disableFailed", { name: appId }), "error");
     } finally {
       setBusy(null);
     }
@@ -5228,20 +5184,19 @@ function AppsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
   return (
     <div>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Apps & accounts</h1>
+        <h1 className="text-2xl font-semibold">{t("settings.appsTab.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Extra apps that come with Yorik but stay hidden until you turn them on,
-          and the accounts Yorik gets your mail, dates and photos from.
+          {t("settings.appsTab.intro")}
         </p>
       </header>
 
       {apps === null && (
-        <div className="text-sm text-muted-foreground">Loading…</div>
+        <div className="text-sm text-muted-foreground">{t("settings.appsTab.loading")}</div>
       )}
 
       {apps && apps.length === 0 && (
         <div className="bg-card border border-border rounded-xl p-5 text-sm text-muted-foreground">
-          No extra apps available.
+          {t("settings.appsTab.none")}
         </div>
       )}
 
@@ -5260,9 +5215,9 @@ function AppsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
                     {a.experimental && (
                       <span
                         className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-600 dark:text-amber-400"
-                        title="Works on the maintainer's machine, little real use elsewhere yet. Feedback welcome."
+                        title={t("settings.appsTab.experimentalTitle")}
                       >
-                        Experimental
+                        {t("settings.appsTab.experimental")}
                       </span>
                     )}
                   </div>
@@ -5279,7 +5234,7 @@ function AppsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
                     busy === a.id && "opacity-50 cursor-wait",
                   )}
                   aria-pressed={a.enabled}
-                  aria-label={`${a.enabled ? "Disable" : "Enable"} ${a.name}`}
+                  aria-label={a.enabled ? t("settings.appsTab.disableApp", { name: a.name }) : t("settings.appsTab.enableApp", { name: a.name })}
                 >
                   <span
                     className={cn(
@@ -5332,6 +5287,7 @@ interface MarketplaceApp {
 const VERIFIED_AUTHORS = new Set(["yorik-core", "yorik"]);
 
 function MarketplaceTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const [apps, setApps] = useState<MarketplaceApp[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [pending, setPending] = useState<MarketplaceApp | null>(null);
@@ -5343,9 +5299,9 @@ function MarketplaceTab({ toast }: { toast: (text: string, kind?: "info" | "succ
       setApps(Array.isArray(list) ? list : []);
     } catch (e: any) {
       setApps([]);
-      if (e?.status && e.status !== 403) toast("Failed to load marketplace", "error");
+      if (e?.status && e.status !== 403) toast(t("settings.marketplace.loadFailed"), "error");
     }
-  }, [toast]);
+  }, [toast, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -5354,10 +5310,10 @@ function MarketplaceTab({ toast }: { toast: (text: string, kind?: "info" | "succ
     setBusy(app.id);
     try {
       await api.post(`/api/apps/install_from_catalog/${app.id}`);
-      toast(`${app.name} installed — open the Dock to use it`, "success");
+      toast(t("settings.marketplace.installed", { name: app.name }), "success");
       await load();
     } catch {
-      toast(`Failed to install ${app.name}`, "error");
+      toast(t("settings.marketplace.installFailed", { name: app.name }), "error");
     } finally {
       setBusy(null);
     }
@@ -5368,10 +5324,10 @@ function MarketplaceTab({ toast }: { toast: (text: string, kind?: "info" | "succ
     setBusy(app.id);
     try {
       await api.delete(`/api/apps/${app.id}?wipe_data=true`);
-      toast(`${app.name} uninstalled`, "success");
+      toast(t("settings.marketplace.uninstalled", { name: app.name }), "success");
       await load();
     } catch {
-      toast(`Failed to uninstall ${app.name}`, "error");
+      toast(t("settings.marketplace.uninstallFailed", { name: app.name }), "error");
     } finally {
       setBusy(null);
     }
@@ -5380,10 +5336,9 @@ function MarketplaceTab({ toast }: { toast: (text: string, kind?: "info" | "succ
   return (
     <div>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Marketplace</h1>
+        <h1 className="text-2xl font-semibold">{t("settings.marketplace.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Community apps that extend Yorik. Each one ships its own database
-          and operations the Yorik agent can call.
+          {t("settings.marketplace.intro")}
         </p>
       </header>
 
@@ -5391,26 +5346,23 @@ function MarketplaceTab({ toast }: { toast: (text: string, kind?: "info" | "succ
       <div className="mb-5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex gap-3">
         <Shield className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
         <div className="text-[13px] leading-relaxed">
-          <div className="font-medium text-foreground">Only install apps you trust.</div>
+          <div className="font-medium text-foreground">{t("settings.marketplace.trustTitle")}</div>
           <div className="text-muted-foreground mt-0.5">
-            Each app gets its own database, and its screen runs walled off from the
-            rest of Yorik. Its server part, though, runs inside Yorik with full
-            access, so an app from a stranger could read everything.{" "}
-            <span className="inline-flex items-center gap-1"><BadgeCheck className="w-3 h-3 text-emerald-600 inline" /> Verified</span> apps
-            come from the Yorik maintainers.
+            {t("settings.marketplace.trustBefore")}
+            <span className="inline-flex items-center gap-1"><BadgeCheck className="w-3 h-3 text-emerald-600 inline" /> {t("settings.marketplace.verified")}</span>{t("settings.marketplace.trustAfter")}
           </div>
         </div>
       </div>
 
       {apps === null && (
-        <div className="text-sm text-muted-foreground">Loading…</div>
+        <div className="text-sm text-muted-foreground">{t("settings.marketplace.loading")}</div>
       )}
 
       {apps && apps.length === 0 && (
         <div className="bg-card border border-border rounded-xl p-8 text-sm text-muted-foreground text-center">
           <Store className="w-6 h-6 mx-auto mb-2 opacity-50" />
-          <div>No apps in the catalog yet.</div>
-          <div className="mt-1 text-xs">Check back as new community apps are vetted and added.</div>
+          <div>{t("settings.marketplace.emptyTitle")}</div>
+          <div className="mt-1 text-xs">{t("settings.marketplace.emptyHint")}</div>
         </div>
       )}
 
@@ -5429,15 +5381,15 @@ function MarketplaceTab({ toast }: { toast: (text: string, kind?: "info" | "succ
                     <div className="font-semibold">{a.name}</div>
                     <span className="text-xs text-muted-foreground">v{a.version}</span>
                     {a.author && (
-                      <span className="text-xs text-muted-foreground">by {a.author}</span>
+                      <span className="text-xs text-muted-foreground">{t("settings.marketplace.by", { author: a.author })}</span>
                     )}
                     {verified && (
                       <span
                         className="inline-flex items-center gap-1 text-2xs font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                        title="First-party app, reviewed by Yorik maintainers"
+                        title={t("settings.marketplace.verifiedTitle")}
                       >
                         <BadgeCheck className="w-3 h-3" />
-                        Verified
+                        {t("settings.marketplace.verified")}
                       </span>
                     )}
                   </div>
@@ -5460,7 +5412,7 @@ function MarketplaceTab({ toast }: { toast: (text: string, kind?: "info" | "succ
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-2"
                     >
-                      Source <ExternalLink className="w-3 h-3" />
+                      {t("settings.marketplace.source")} <ExternalLink className="w-3 h-3" />
                     </a>
                   )}
                 </div>
@@ -5474,7 +5426,7 @@ function MarketplaceTab({ toast }: { toast: (text: string, kind?: "info" | "succ
                       busy === a.id && "opacity-50 cursor-wait",
                     )}
                   >
-                    {busy === a.id ? "Uninstalling…" : "Uninstall"}
+                    {busy === a.id ? t("settings.marketplace.uninstalling") : t("settings.marketplace.uninstall")}
                   </button>
                 ) : (
                   <button
@@ -5487,7 +5439,7 @@ function MarketplaceTab({ toast }: { toast: (text: string, kind?: "info" | "succ
                     )}
                   >
                     <Download className="w-3.5 h-3.5" />
-                    {busy === a.id ? "Installing…" : "Install"}
+                    {busy === a.id ? t("settings.marketplace.installing") : t("settings.marketplace.install")}
                   </button>
                 )}
               </div>
@@ -5525,6 +5477,7 @@ function InstallConfirmModal({ app, verified, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
   const tables = app.requires_tables_external || [];
   const connectors = app.requires_connectors || [];
   const selfContained = tables.length === 0 && connectors.length === 0;
@@ -5539,8 +5492,8 @@ function InstallConfirmModal({ app, verified, onClose, onConfirm }: {
         onClick={(e) => e.stopPropagation()}
       >
         <header className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <div className="font-semibold">Install {app.name}?</div>
-          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground" aria-label="Close">
+          <div className="font-semibold">{t("settings.marketplace.installModal.question", { name: app.name })}</div>
+          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground" aria-label={t("settings.marketplace.installModal.close")}>
             <X className="w-4 h-4" />
           </button>
         </header>
@@ -5555,12 +5508,12 @@ function InstallConfirmModal({ app, verified, onClose, onConfirm }: {
                 {verified && (
                   <span className="inline-flex items-center gap-1 text-2xs font-semibold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
                     <BadgeCheck className="w-3 h-3" />
-                    Verified
+                    {t("settings.marketplace.verified")}
                   </span>
                 )}
               </div>
               {app.author && (
-                <div className="text-xs text-muted-foreground mt-0.5">by {app.author}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{t("settings.marketplace.by", { author: app.author })}</div>
               )}
               <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{app.description}</p>
             </div>
@@ -5568,35 +5521,35 @@ function InstallConfirmModal({ app, verified, onClose, onConfirm }: {
 
           <div className="border-t border-border pt-4">
             <div className="text-2xs font-semibold text-muted-foreground mb-2">
-              What this app can access
+              {t("settings.marketplace.installModal.accessTitle")}
             </div>
             <ul className="space-y-1.5 text-[13px]">
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                 <span>
-                  Its own private database
+                  {t("settings.marketplace.installModal.ownDb")}
                   <span className="font-mono text-xs text-muted-foreground"> (data/apps/{app.id}/data.db)</span>
                 </span>
               </li>
-              {tables.length > 0 && tables.map((t, i) => (
+              {tables.length > 0 && tables.map((tb, i) => (
                 <li key={i} className="flex items-start gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                   <span>
-                    <strong>{t.access || "read"}</strong> access to
-                    <span className="font-mono text-xs ml-1">{t.db}.{t.table}</span>
+                    <strong>{tb.access || "read"}</strong> {t("settings.marketplace.installModal.accessTo")}
+                    <span className="font-mono text-xs ml-1">{tb.db}.{tb.table}</span>
                   </span>
                 </li>
               ))}
               {connectors.length > 0 && connectors.map((c, i) => (
                 <li key={i} className="flex items-start gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                  <span>Calls the <span className="font-mono text-xs">{c}</span> connector</span>
+                  <span>{t("settings.marketplace.installModal.callsConnectorBefore")}<span className="font-mono text-xs">{c}</span>{t("settings.marketplace.installModal.callsConnectorAfter")}</span>
                 </li>
               ))}
               {selfContained && (
                 <li className="flex items-start gap-2 text-muted-foreground">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                  <span>The Yorik LLM (text completions via the SDK)</span>
+                  <span>{t("settings.marketplace.installModal.yorikLlm")}</span>
                 </li>
               )}
             </ul>
@@ -5604,21 +5557,20 @@ function InstallConfirmModal({ app, verified, onClose, onConfirm }: {
 
           <div className="border-t border-border pt-4">
             <div className="text-2xs font-semibold text-muted-foreground mb-2">
-              What the app's screen can't do
+              {t("settings.marketplace.installModal.cannotTitle")}
             </div>
             <ul className="space-y-1 text-[13px] text-muted-foreground">
               <li className="flex items-center gap-2">
                 <Globe className="w-3 h-3 shrink-0" />
-                Talk to the internet
+                {t("settings.marketplace.installModal.noInternet")}
               </li>
               <li className="flex items-center gap-2">
                 <Lock className="w-3 h-3 shrink-0" />
-                Use your sign-in or see other apps' data
+                {t("settings.marketplace.installModal.noSignIn")}
               </li>
             </ul>
             <p className="text-xs text-muted-foreground mt-2">
-              The app's server part runs inside Yorik and is not walled off: install
-              only apps from people you trust.
+              {t("settings.marketplace.installModal.serverNote")}
             </p>
           </div>
 
@@ -5627,14 +5579,14 @@ function InstallConfirmModal({ app, verified, onClose, onConfirm }: {
               onClick={onClose}
               className="flex-1 px-3 py-2 rounded-md text-sm font-medium border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition"
             >
-              Cancel
+              {t("settings.marketplace.installModal.cancel")}
             </button>
             <button
               onClick={onConfirm}
               className="flex-1 px-3 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition inline-flex items-center justify-center gap-1.5"
             >
               <Download className="w-3.5 h-3.5" />
-              Install {app.name}
+              {t("settings.marketplace.installModal.confirm", { name: app.name })}
             </button>
           </div>
         </div>
@@ -5650,6 +5602,7 @@ function UninstallConfirmModal({ app, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
   return createPortal(
     <div
       className="fixed inset-0 z-[810] flex items-center justify-center bg-black/55 backdrop-blur-sm p-4"
@@ -5660,32 +5613,32 @@ function UninstallConfirmModal({ app, onClose, onConfirm }: {
         onClick={(e) => e.stopPropagation()}
       >
         <header className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <div className="font-semibold">Uninstall {app.name}?</div>
-          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground" aria-label="Close">
+          <div className="font-semibold">{t("settings.marketplace.uninstallModal.question", { name: app.name })}</div>
+          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground" aria-label={t("settings.marketplace.installModal.close")}>
             <X className="w-4 h-4" />
           </button>
         </header>
         <div className="p-5 space-y-4">
           <div className="text-sm text-muted-foreground leading-relaxed">
-            This removes <span className="font-mono text-xs">{app.id}</span> and
-            <strong className="text-foreground"> wipes its database</strong> at
+            {t("settings.marketplace.uninstallModal.removesBefore")}<span className="font-mono text-xs">{app.id}</span>{t("settings.marketplace.uninstallModal.removesMiddle")}
+            <strong className="text-foreground">{t("settings.marketplace.uninstallModal.wipesDb")}</strong>{t("settings.marketplace.uninstallModal.removesAt")}
             <span className="font-mono text-xs"> data/apps/{app.id}/</span>.
           </div>
           <div className="text-xs text-muted-foreground">
-            You can reinstall from the Marketplace at any time, but the data will not return.
+            {t("settings.marketplace.uninstallModal.reinstallNote")}
           </div>
           <div className="flex gap-2 pt-2">
             <button
               onClick={onClose}
               className="flex-1 px-3 py-2 rounded-md text-sm font-medium border border-border hover:bg-muted transition"
             >
-              Keep installed
+              {t("settings.marketplace.uninstallModal.keep")}
             </button>
             <button
               onClick={onConfirm}
               className="flex-1 px-3 py-2 rounded-md text-sm font-medium bg-destructive text-white hover:opacity-90 transition"
             >
-              Uninstall and wipe
+              {t("settings.marketplace.uninstallModal.confirm")}
             </button>
           </div>
         </div>
@@ -5697,6 +5650,7 @@ function UninstallConfirmModal({ app, onClose, onConfirm }: {
 
 
 function WhatsAppOptions({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -5713,10 +5667,10 @@ function WhatsAppOptions({ toast }: { toast: (text: string, kind?: "info" | "suc
         "/api/whatsapp/settings", { import_status_broadcasts: next });
       setEnabled(r.import_status_broadcasts);
       toast(next
-        ? "Status posts will now import to Photos"
-        : "Status posts will no longer import", "success");
+        ? t("settings.whatsappOptions.statusOn")
+        : t("settings.whatsappOptions.statusOff"), "success");
     } catch {
-      toast("Failed to update setting", "error");
+      toast(t("settings.whatsappOptions.updateFailed"), "error");
     } finally {
       setBusy(false);
     }
@@ -5725,12 +5679,12 @@ function WhatsAppOptions({ toast }: { toast: (text: string, kind?: "info" | "suc
   return (
     <div className="border-t border-border bg-muted/20 px-5 py-3 flex items-start gap-4">
       <div className="flex-1 text-sm">
-        <div className="font-medium">Import Status posts to Photos</div>
+        <div className="font-medium">{t("settings.whatsappOptions.title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
           {enabled
-            ? "On: your contacts' 24-hour Status photos are saved to Photos too."
-            : "Off: your contacts' 24-hour Status photos are not saved to Photos."}
-          {" "}Photos from chats and groups are always saved.
+            ? t("settings.whatsappOptions.onNote")
+            : t("settings.whatsappOptions.offNote")}
+          {" "}{t("settings.whatsappOptions.alwaysNote")}
         </div>
       </div>
       <button
@@ -5758,6 +5712,7 @@ function WhatsAppOptions({ toast }: { toast: (text: string, kind?: "info" | "suc
 
 
 function MapsConnectorCard() {
+  const { t } = useTranslation();
   const [apiKey, setApiKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -5780,33 +5735,33 @@ function MapsConnectorCard() {
   async function save() {
     const key = apiKey.trim();
     if (!key) {
-      setStatus("Please enter an API key.");
+      setStatus(t("settings.maps.enterKey"));
       return;
     }
     setBusy(true);
     setStatus(null);
     try {
       await api.post("/api/connectors/maps/credentials", { credentials: { ors_api_key: key } });
-      setStatus("✓ Saved. Yorik now uses OpenRouteService for route calculations.");
+      setStatus("✓ " + t("settings.maps.saved"));
       setConfigured(true);
       setApiKey("");
     } catch (err: any) {
-      setStatus(`Error: ${err?.message || err}`);
+      setStatus(t("settings.maps.error", { msg: err?.message || err }));
     } finally {
       setBusy(false);
     }
   }
 
   async function clear() {
-    if (!confirm("Remove the OpenRouteService API key? Yorik will fall back to the free OSRM demo.")) return;
+    if (!confirm(t("settings.maps.removeConfirm"))) return;
     setBusy(true);
     setStatus(null);
     try {
       await api.delete("/api/connectors/maps/credentials");
-      setStatus("✓ Removed. Routing is using the OSRM demo again.");
+      setStatus("✓ " + t("settings.maps.removed"));
       setConfigured(false);
     } catch (err: any) {
-      setStatus(`Error: ${err?.message || err}`);
+      setStatus(t("settings.maps.error", { msg: err?.message || err }));
     } finally {
       setBusy(false);
     }
@@ -5816,12 +5771,9 @@ function MapsConnectorCard() {
     <div className="bg-card border border-border rounded-xl p-5">
       <div className="flex items-start gap-3 mb-3">
         <div className="flex-1 min-w-0">
-          <div className="font-semibold">Maps (OpenStreetMap + optional OpenRouteService)</div>
+          <div className="font-semibold">{t("settings.maps.title")}</div>
           <div className="text-sm text-muted-foreground mt-1 leading-relaxed">
-            Works <em>without</em> an API key via the free OSM services
-            (Nominatim for geocoding, OSRM demo for routing, Overpass for
-            POI search). With an OpenRouteService API key, Yorik gets
-            better routing accuracy and ~2,000 requests/day.
+            {t("settings.maps.introBefore")}<em>{t("settings.maps.introEm")}</em>{t("settings.maps.introAfter")}
           </div>
         </div>
         {configured !== null && (
@@ -5831,17 +5783,17 @@ function MapsConnectorCard() {
               ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
               : "bg-muted text-muted-foreground"
           )}>
-            {configured ? "ORS active" : "OSRM demo"}
+            {configured ? t("settings.maps.orsActive") : t("settings.maps.osrmDemo")}
           </span>
         )}
       </div>
 
-      <Field label="OpenRouteService key (optional)">
+      <Field label={t("settings.maps.keyLabel")}>
         <input
           type="password"
           value={apiKey}
           onChange={e => setApiKey(e.target.value)}
-          placeholder={configured ? "Current key is stored encrypted — enter a new one to overwrite" : "e.g. 5b3ce3597851110001cf6248..."}
+          placeholder={configured ? t("settings.maps.keyStoredPlaceholder") : t("settings.maps.keyPlaceholder")}
           className={cn(inputClass, "font-mono")}
           disabled={busy}
         />
@@ -5853,7 +5805,7 @@ function MapsConnectorCard() {
           disabled={busy || !apiKey.trim()}
           className="text-sm px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition"
         >
-          {busy ? "Saving…" : "Save"}
+          {busy ? t("settings.maps.saving") : t("settings.maps.save")}
         </button>
         {configured && (
           <button
@@ -5861,7 +5813,7 @@ function MapsConnectorCard() {
             disabled={busy}
             className="text-sm px-3 py-1.5 rounded-md border border-border hover:bg-muted disabled:opacity-50 transition"
           >
-            Remove
+            {t("settings.maps.remove")}
           </button>
         )}
         <a
@@ -5869,7 +5821,7 @@ function MapsConnectorCard() {
           target="_blank" rel="noopener"
           className="text-xs text-muted-foreground hover:text-foreground underline ml-auto"
         >
-          Get a free key →
+          {t("settings.maps.getKey")}
         </a>
       </div>
 
@@ -5933,6 +5885,7 @@ interface ExtensionRow {
 }
 
 function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<ExtensionRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState<string | null>(null);
@@ -5946,11 +5899,11 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
       setForbidden(false);
     } catch (e: any) {
       if (String(e?.message || "").includes("403")) setForbidden(true);
-      else toast(`Couldn't load extensions: ${e.message}`, "error");
+      else toast(t("settings.extensions.loadFailed", { msg: e.message }), "error");
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, t]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -5961,13 +5914,13 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
         `/api/extensions/${extId}/install`, {},
       );
       if (r.ok) {
-        toast(`Installed ${extId}. It works right away.`, "success");
+        toast(t("settings.extensions.installed", { id: extId }), "success");
       } else {
-        toast(`Install failed: ${r.error || `pip exit ${r.returncode}`}`, "error");
+        toast(t("settings.extensions.installFailedMsg", { msg: r.error || `pip exit ${r.returncode}` }), "error");
       }
       await refresh();
     } catch (e: any) {
-      toast(e?.message || "Install failed", "error");
+      toast(e?.message || t("settings.extensions.installFailed"), "error");
     } finally {
       setInstalling(null);
     }
@@ -5976,7 +5929,7 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
   if (forbidden) {
     return (
       <div className="text-sm text-muted-foreground py-8 text-center">
-        Admin only. Ask an admin user to install extensions.
+        {t("settings.extensions.adminOnly")}
       </div>
     );
   }
@@ -5984,11 +5937,9 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
   return (
     <div>
       <header className="mb-6">
-        <h2 className="text-lg font-semibold">E-invoices and other extras</h2>
+        <h2 className="text-lg font-semibold">{t("settings.extensions.title")}</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Extras not every household needs, such as German e-invoices
-          (ZUGFeRD / XRechnung) attached to the invoices you write. Installing
-          one downloads it once; no restart needed.
+          {t("settings.extensions.intro")}
         </p>
       </header>
 
@@ -6000,7 +5951,7 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
 
       {rows && rows.length === 0 && (
         <div className="text-sm text-muted-foreground py-8 text-center">
-          No extensions discovered in <code>extensions/</code>.
+          {t("settings.extensions.noneBefore")}<code>extensions/</code>.
         </div>
       )}
 
@@ -6019,28 +5970,28 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
                     )}
                     {r.loaded ? (
                       <span className="text-2xs inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                        <CheckCircle2 className="w-2.5 h-2.5" /> active
+                        <CheckCircle2 className="w-2.5 h-2.5" /> {t("settings.extensions.active")}
                       </span>
                     ) : r.deps.all_met ? (
                       <span className="text-2xs inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                        <AlertCircle className="w-2.5 h-2.5" /> installed, restart pending
+                        <AlertCircle className="w-2.5 h-2.5" /> {t("settings.extensions.restartPending")}
                       </span>
                     ) : (
                       <span className="text-2xs inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
-                        <X className="w-2.5 h-2.5" /> dependencies not installed
+                        <X className="w-2.5 h-2.5" /> {t("settings.extensions.depsMissing")}
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1.5">{r.description}</p>
                   {r.python_requirements.length > 0 && (
                     <div className="mt-2 text-2xs text-muted-foreground">
-                      <span className="font-medium">Python deps:</span>{" "}
+                      <span className="font-medium">{t("settings.extensions.pythonDeps")}</span>{" "}
                       <span className="font-mono">{r.python_requirements.join(", ")}</span>
                     </div>
                   )}
                   {r.errors.length > 0 && (
                     <div className="mt-2 text-2xs text-rose-600">
-                      <span className="font-medium">Errors:</span> {r.errors.join(" / ")}
+                      <span className="font-medium">{t("settings.extensions.errors")}</span> {r.errors.join(" / ")}
                     </div>
                   )}
                   {r.docs_url && (
@@ -6050,7 +6001,7 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
                       rel="noopener noreferrer"
                       className="text-2xs text-blue-500 hover:underline inline-flex items-center gap-1 mt-2"
                     >
-                      <ExternalLink className="w-2.5 h-2.5" /> Docs
+                      <ExternalLink className="w-2.5 h-2.5" /> {t("settings.extensions.docs")}
                     </a>
                   )}
                 </div>
@@ -6069,7 +6020,7 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
                       {installing === r.id
                         ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         : <Upload className="w-3.5 h-3.5" />}
-                      {installing === r.id ? "Installing…" : "Install"}
+                      {installing === r.id ? t("settings.extensions.installing") : t("settings.extensions.install")}
                     </button>
                   )}
                   {r.deps.all_met && !r.loaded && (
@@ -6078,7 +6029,7 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
                       onClick={refresh}
                       className="px-3 py-1.5 text-xs rounded-md font-medium bg-muted hover:bg-muted/70 inline-flex items-center gap-1.5"
                     >
-                      <RefreshCw className="w-3.5 h-3.5" /> Re-check
+                      <RefreshCw className="w-3.5 h-3.5" /> {t("settings.extensions.recheck")}
                     </button>
                   )}
                 </div>
@@ -6097,10 +6048,11 @@ function ExtensionsTab({ toast }: { toast: (text: string, kind?: "info" | "succe
 /** error_log stores UTC without a zone; show it in local time. */
 function fmtLogTime(ts: string): string {
   const d = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(ts) ? ts : ts.replace(" ", "T") + "Z");
-  return isNaN(d.getTime()) ? ts.replace("T", " ") : d.toLocaleString();
+  return isNaN(d.getTime()) ? ts.replace("T", " ") : d.toLocaleString(locale());
 }
 
 function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const [data, setData] = useState<ErrorsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
@@ -6125,12 +6077,12 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
       if (msg.includes("403") || /admin/i.test(msg)) {
         setForbidden(true);
       } else {
-        toast(`Could not load logs: ${msg}`, "error");
+        toast(t("settings.logs.loadFailed", { msg }), "error");
       }
     } finally {
       setLoading(false);
     }
-  }, [level, limit, toast]);
+  }, [level, limit, toast, t]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -6144,8 +6096,8 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
 
   function copyCorr(corr: string) {
     navigator.clipboard.writeText(corr).then(
-      () => toast(`Copied ${corr}`, "success"),
-      () => toast("Copy failed", "error"),
+      () => toast(t("settings.logs.copied", { id: corr }), "success"),
+      () => toast(t("settings.logs.copyFailed"), "error"),
     );
   }
 
@@ -6162,11 +6114,9 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
     <div>
       <header className="mb-6 flex items-baseline justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Logs</h1>
+          <h1 className="text-2xl font-semibold">{t("settings.logs.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Recent warnings and errors from Yorik's server, newest first, in your
-            local time. The full log is in the system journal on the host
-            (<code className="text-xs">journalctl -u yorik</code>).
+            {t("settings.logs.introBefore")}<code className="text-xs">journalctl -u yorik</code>{t("settings.logs.introAfter")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -6175,10 +6125,10 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
             onChange={e => setLevel(e.target.value as typeof level)}
             className={cn(inputClass, "h-8 text-xs w-auto")}
           >
-            <option value="">All levels</option>
-            <option value="WARNING">Warning</option>
-            <option value="ERROR">Error</option>
-            <option value="CRITICAL">Critical</option>
+            <option value="">{t("settings.logs.allLevels")}</option>
+            <option value="WARNING">{t("settings.logs.levels.warning")}</option>
+            <option value="ERROR">{t("settings.logs.levels.error")}</option>
+            <option value="CRITICAL">{t("settings.logs.levels.critical")}</option>
           </select>
           <select
             value={limit}
@@ -6193,7 +6143,7 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
           <button
             onClick={refresh}
             className="w-8 h-8 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition flex items-center justify-center"
-            title="Reload"
+            title={t("settings.logs.reload")}
           >
             <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
           </button>
@@ -6201,13 +6151,11 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
       </header>
 
       {forbidden && (
-        <Card title="Admin only">
+        <Card title={t("settings.logs.adminOnly")}>
           <div className="flex items-start gap-3 py-2 text-sm">
             <Shield className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
             <div className="text-muted-foreground">
-              The logs view is restricted to administrators because error
-              messages can hint at infrastructure (LLM endpoint, IMAP host)
-              we don't want to surface to lower-privilege roles.
+              {t("settings.logs.adminOnlyNote")}
             </div>
           </div>
         </Card>
@@ -6221,9 +6169,9 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
 
       {!forbidden && data && (
         <div className="space-y-6">
-          <Card title="By level">
+          <Card title={t("settings.logs.byLevel")}>
             {Object.keys(data.summary).length === 0 ? (
-              <EmptyMetric icon={Info} label="No warnings or errors recorded. Quiet is good." />
+              <EmptyMetric icon={Info} label={t("settings.logs.noneRecorded")} />
             ) : (
               <div className="flex flex-wrap items-center gap-2">
                 {(["CRITICAL", "ERROR", "WARNING"] as const).map(lvl => {
@@ -6246,9 +6194,9 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
             )}
           </Card>
 
-          <Card title={`Recent ${level ? level.toLowerCase() : "entries"} (${data.errors.length})`}>
+          <Card title={t(`settings.logs.recent.${level || "all"}`, { count: data.errors.length })}>
             {data.errors.length === 0 ? (
-              <EmptyMetric icon={ScrollText} label="No entries matching this filter." />
+              <EmptyMetric icon={ScrollText} label={t("settings.logs.noneMatching")} />
             ) : (
               <div className="divide-y divide-border">
                 {data.errors.map(row => {
@@ -6289,17 +6237,17 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
                         <div className="mt-2 ml-7 space-y-2 text-xs">
                           {row.request_path && (
                             <div className="flex items-baseline gap-2">
-                              <span className="text-muted-foreground shrink-0">path:</span>
+                              <span className="text-muted-foreground shrink-0">{t("settings.logs.path")}</span>
                               <code className="font-mono break-all">{row.request_path}</code>
                             </div>
                           )}
                           {row.corr_id && (
                             <div className="flex items-center gap-2">
-                              <span className="text-muted-foreground shrink-0">corr:</span>
+                              <span className="text-muted-foreground shrink-0">{t("settings.logs.corr")}</span>
                               <code className="font-mono">{row.corr_id}</code>
                               <button
                                 onClick={() => copyCorr(row.corr_id!)}
-                                title="Copy correlation id"
+                                title={t("settings.logs.copyCorr")}
                                 className="text-muted-foreground hover:text-foreground"
                               >
                                 <Copy className="w-3 h-3" />
@@ -6317,7 +6265,7 @@ function LogsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | 
                           )}
                           {!row.traceback && !row.corr_id && !row.request_path && (
                             <div className="text-muted-foreground italic">
-                              No traceback or request context attached.
+                              {t("settings.logs.noContext")}
                             </div>
                           )}
                         </div>
@@ -6395,6 +6343,7 @@ interface UserRow { id: string; name: string; email: string; role: string }
 interface Workspace { id: number; name: string; kind: "family" | "business"; owner_user_id: string }
 
 function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const auth = useAuth();
   const isAdmin = auth.user.role === "admin" || auth.user.role === "platform_admin";
 
@@ -6420,11 +6369,11 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
         setSelectedSpaceId(first.id);
       }
     } catch (e: any) {
-      toast(`Could not load spaces: ${e?.message || e}`, "error");
+      toast(t("settings.spaces.loadFailed", { msg: e?.message || e }), "error");
     } finally {
       setLoading(false);
     }
-  }, [selectedSpaceId, toast]);
+  }, [selectedSpaceId, toast, t]);
 
   useEffect(() => { void refreshSpaces(); }, [refreshSpaces]);
 
@@ -6435,17 +6384,17 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
         const d = await api.get<SpaceDetail>(`/api/spaces/${selectedSpaceId}`);
         setDetail(d);
       } catch (e: any) {
-        toast(`Could not load space: ${e?.message || e}`, "error");
+        toast(t("settings.spaces.loadOneFailed", { msg: e?.message || e }), "error");
         setDetail(null);
       }
     })();
-  }, [selectedSpaceId, toast]);
+  }, [selectedSpaceId, toast, t]);
 
   // Lazy-load users only when admin opens the add-member picker.
   async function ensureUsers() {
     if (allUsers.length > 0) return;
     try { setAllUsers(await api.get<UserRow[]>("/api/users")); }
-    catch (e: any) { toast(`Could not list users: ${e?.message || e}`, "error"); }
+    catch (e: any) { toast(t("settings.spaces.listUsersFailed", { msg: e?.message || e }), "error"); }
   }
 
   async function setWorkspaceKind(kind: "family" | "business") {
@@ -6453,9 +6402,9 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
     try {
       const next = await api.patch<Workspace>("/api/workspaces/current", { kind });
       setWorkspace(next);
-      toast(`Workspace kind set to ${kind}.`, "success");
+      toast(t("settings.spaces.kindSet", { kind: t(`settings.spaces.kinds.${kind}`) }), "success");
     } catch (e: any) {
-      toast(`Could not update workspace: ${e?.message || e}`, "error");
+      toast(t("settings.spaces.updateWorkspaceFailed", { msg: e?.message || e }), "error");
     }
   }
 
@@ -6466,22 +6415,22 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
       await refreshSpaces();
       setSelectedSpaceId(d.id);
       setCreating(false);
-      toast(`Created space "${d.name}".`, "success");
+      toast(t("settings.spaces.created", { name: d.name }), "success");
     } catch (e: any) {
-      toast(`Could not create space: ${e?.message || e}`, "error");
+      toast(t("settings.spaces.createFailed", { msg: e?.message || e }), "error");
     }
   }
 
   async function deleteSpace(s: Space) {
     if (!isAdmin) return;
-    if (!confirm(`Delete space "${s.name}"? This can't be undone.`)) return;
+    if (!confirm(t("settings.spaces.deleteConfirm", { name: s.name }))) return;
     try {
       await api.delete(`/api/spaces/${s.id}`);
       setSelectedSpaceId(null);
       await refreshSpaces();
-      toast(`Deleted "${s.name}".`, "success");
+      toast(t("settings.spaces.deleted", { name: s.name }), "success");
     } catch (e: any) {
-      toast(`Could not delete: ${e?.message || e}`, "error");
+      toast(t("settings.spaces.deleteFailed", { msg: e?.message || e }), "error");
     }
   }
 
@@ -6492,9 +6441,9 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
         { user_id, level });
       setDetail(d);
       await refreshSpaces();
-      toast(`Added member.`, "success");
+      toast(t("settings.spaces.memberAdded"), "success");
     } catch (e: any) {
-      toast(`Could not add member: ${e?.message || e}`, "error");
+      toast(t("settings.spaces.addMemberFailed", { msg: e?.message || e }), "error");
     }
   }
 
@@ -6505,7 +6454,7 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
         `/api/spaces/${detail.id}/members/${user_id}`, { level });
       setDetail(d);
     } catch (e: any) {
-      toast(`Could not update level: ${e?.message || e}`, "error");
+      toast(t("settings.spaces.updateLevelFailed", { msg: e?.message || e }), "error");
     }
   }
 
@@ -6517,12 +6466,12 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
       setDetail(d);
       await refreshSpaces();
     } catch (e: any) {
-      toast(`Could not remove: ${e?.message || e}`, "error");
+      toast(t("settings.spaces.removeFailed", { msg: e?.message || e }), "error");
     }
   }
 
   if (loading && !workspace) {
-    return <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Loading spaces…</div>;
+    return <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> {t("settings.spaces.loading")}</div>;
   }
 
   return (
@@ -6530,12 +6479,12 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
       {/* Workspace kind */}
       {workspace && (
         <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="text-xs text-muted-foreground font-semibold mb-2">This household</div>
+          <div className="text-xs text-muted-foreground font-semibold mb-2">{t("settings.spaces.household")}</div>
           <div className="flex items-center gap-3">
             <div className="flex-1 min-w-0">
               <div className="font-medium text-base truncate">{workspace.name}</div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                Family: a new person sees the family calendar and the shared to-dos right away. Business: they start with only their own.
+                {t("settings.spaces.kindNote")}
               </div>
             </div>
             <div className="flex gap-1 shrink-0">
@@ -6551,8 +6500,8 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
                       : "border-border hover:bg-muted",
                     !isAdmin && "opacity-50 cursor-not-allowed",
                   )}
-                  title={!isAdmin ? "Admin only" : ""}
-                >{k}</button>
+                  title={!isAdmin ? t("settings.spaces.adminOnly") : ""}
+                >{t(`settings.spaces.kinds.${k}`)}</button>
               ))}
             </div>
           </div>
@@ -6563,12 +6512,12 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
       <div className="grid md:grid-cols-[280px_1fr] gap-4">
         <div className="space-y-1">
           <div className="flex items-center justify-between mb-2">
-            <div className="text-xs text-muted-foreground font-semibold">Spaces</div>
+            <div className="text-xs text-muted-foreground font-semibold">{t("settings.spaces.title")}</div>
             {isAdmin && (
               <button
                 onClick={() => setCreating(true)}
                 className="text-xs text-blue-600 dark:text-blue-300 hover:underline"
-              >+ New</button>
+              >{t("settings.spaces.new")}</button>
             )}
           </div>
           {spaces.map(s => (
@@ -6589,7 +6538,7 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">{s.name}</div>
                 <div className="text-2xs text-muted-foreground">
-                  {s.kind === "shared" ? `${s.members_count} member${s.members_count === 1 ? "" : "s"}` : "personal"}
+                  {s.kind === "shared" ? t("settings.spaces.members", { count: s.members_count }) : t("settings.spaces.personal")}
                 </div>
               </div>
             </button>
@@ -6611,7 +6560,7 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
               onDelete={() => deleteSpace(detail)}
             />
           ) : (
-            <div className="text-sm text-muted-foreground italic">Pick a space on the left.</div>
+            <div className="text-sm text-muted-foreground italic">{t("settings.spaces.pickOne")}</div>
           )}
         </div>
       </div>
@@ -6620,32 +6569,33 @@ function SpacesTab({ toast }: { toast: (text: string, kind?: "info" | "success" 
 }
 
 function CreateSpaceForm({ onCancel, onCreate }: { onCancel: () => void; onCreate: (n: string, s: string) => void }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
-      <div className="text-xs text-muted-foreground font-semibold mb-3">New shared space</div>
+      <div className="text-xs text-muted-foreground font-semibold mb-3">{t("settings.spaces.create.title")}</div>
       <div className="space-y-3">
         <div>
-          <label className="text-xs text-muted-foreground">Name</label>
+          <label className="text-xs text-muted-foreground">{t("settings.spaces.create.name")}</label>
           <input
             value={name}
             onChange={e => setName(e.target.value)}
-            placeholder="Customers"
+            placeholder={t("settings.spaces.create.namePlaceholder")}
             className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
             autoFocus
           />
         </div>
         <div>
-          <label className="text-xs text-muted-foreground">Slug (lowercase, optional)</label>
+          <label className="text-xs text-muted-foreground">{t("settings.spaces.create.slug")}</label>
           <input
             value={slug}
             onChange={e => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
-            placeholder="customers"
+            placeholder={t("settings.spaces.create.slugPlaceholder")}
             className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono"
           />
           <div className="text-2xs text-muted-foreground mt-1">
-            Used by Paperless + Immich for the matching group / album name.
+            {t("settings.spaces.create.slugNote")}
           </div>
         </div>
         <div className="flex gap-2 pt-1">
@@ -6653,11 +6603,11 @@ function CreateSpaceForm({ onCancel, onCreate }: { onCancel: () => void; onCreat
             onClick={() => onCreate(name.trim(), slug.trim())}
             disabled={!name.trim()}
             className="px-4 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-          >Create</button>
+          >{t("settings.spaces.create.create")}</button>
           <button
             onClick={onCancel}
             className="px-4 py-1.5 rounded-md border border-border text-sm hover:bg-muted"
-          >Cancel</button>
+          >{t("settings.spaces.create.cancel")}</button>
         </div>
       </div>
     </div>
@@ -6677,6 +6627,7 @@ function SpaceDetailPanel({
   onRemoveMember: (uid: string) => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const [adding, setAdding] = useState(false);
   const [pickUserId, setPickUserId] = useState<string>("");
   const [pickLevel, setPickLevel] = useState<"read" | "write" | "admin">("write");
@@ -6691,15 +6642,15 @@ function SpaceDetailPanel({
         <div className="flex-1 min-w-0">
           <div className="text-base font-semibold">{detail.name}</div>
           <div className="text-xs text-muted-foreground mt-0.5">
-            {isPersonal ? "Personal space: its owner, plus whoever they share something with (listed below)." :
-              `Shared space${detail.slug ? ` · slug "${detail.slug}"` : ""} · ${detail.members.length} member${detail.members.length === 1 ? "" : "s"}`}
+            {isPersonal ? t("settings.spaces.detail.personalIntro") :
+              `${t("settings.spaces.detail.sharedSpace")}${detail.slug ? ` · ${t("settings.spaces.detail.slug", { slug: detail.slug })}` : ""} · ${t("settings.spaces.members", { count: detail.members.length })}`}
           </div>
         </div>
         {isAdmin && !isPersonal && detail.slug !== "household" && detail.slug !== "finance" && (
           <button
             onClick={onDelete}
             className="text-xs text-rose-600 dark:text-rose-400 hover:underline shrink-0"
-          >Delete space</button>
+          >{t("settings.spaces.detail.delete")}</button>
         )}
       </div>
 
@@ -6720,7 +6671,7 @@ function SpaceDetailPanel({
                 )}
                 {!m.paperless_user_id && !m.immich_user_id && (
                   <span className="ml-2 text-2xs text-amber-600 dark:text-amber-400">
-                    · no external accounts linked
+                    · {t("settings.spaces.detail.noExternalAccounts")}
                   </span>
                 )}
               </div>
@@ -6732,27 +6683,27 @@ function SpaceDetailPanel({
                   onChange={e => onPatchLevel(m.user_id, e.target.value as any)}
                   className="text-xs px-2 py-1 rounded border border-border bg-background"
                 >
-                  <option value="read">can see</option>
-                  <option value="write">can edit</option>
-                  <option value="admin">can edit (admin)</option>
+                  <option value="read">{t("settings.spaces.detail.levels.read")}</option>
+                  <option value="write">{t("settings.spaces.detail.levels.write")}</option>
+                  <option value="admin">{t("settings.spaces.detail.levels.admin")}</option>
                 </select>
                 <button
                   onClick={() => onRemoveMember(m.user_id)}
                   className="text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 p-1.5 rounded"
-                  title="Remove member"
+                  title={t("settings.spaces.detail.removeMember")}
                 >
                   <X className="w-4 h-4" />
                 </button>
               </>
             ) : (
               <span className="text-xs text-muted-foreground">
-                {m.level}
+                {t(`settings.spaces.detail.levelShort.${m.level}`)}
               </span>
             )}
           </div>
         ))}
         {detail.members.length === 0 && (
-          <div className="text-sm text-muted-foreground italic px-3 py-2">No members yet.</div>
+          <div className="text-sm text-muted-foreground italic px-3 py-2">{t("settings.spaces.detail.noMembers")}</div>
         )}
       </div>
 
@@ -6763,7 +6714,7 @@ function SpaceDetailPanel({
               onClick={async () => { await ensureUsers(); setAdding(true); }}
               className="text-sm text-blue-600 dark:text-blue-300 hover:underline inline-flex items-center gap-1"
             >
-              <UserPlus className="w-4 h-4" /> Add member
+              <UserPlus className="w-4 h-4" /> {t("settings.spaces.detail.addMember")}
             </button>
           ) : (
             <div className="flex items-center gap-2">
@@ -6772,7 +6723,7 @@ function SpaceDetailPanel({
                 onChange={e => setPickUserId(e.target.value)}
                 className="flex-1 px-2 py-1.5 rounded border border-border bg-background text-sm"
               >
-                <option value="">— pick user —</option>
+                <option value="">{t("settings.spaces.detail.pickUser")}</option>
                 {availableUsers.map(u => (
                   <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
                 ))}
@@ -6782,9 +6733,9 @@ function SpaceDetailPanel({
                 onChange={e => setPickLevel(e.target.value as any)}
                 className="px-2 py-1.5 rounded border border-border bg-background text-sm"
               >
-                <option value="read">can see</option>
-                <option value="write">can edit</option>
-                <option value="admin">can edit (admin)</option>
+                <option value="read">{t("settings.spaces.detail.levels.read")}</option>
+                <option value="write">{t("settings.spaces.detail.levels.write")}</option>
+                <option value="admin">{t("settings.spaces.detail.levels.admin")}</option>
               </select>
               <button
                 disabled={!pickUserId}
@@ -6796,11 +6747,11 @@ function SpaceDetailPanel({
                   setPickLevel("write");
                 }}
                 className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-sm disabled:opacity-50"
-              >Add</button>
+              >{t("settings.spaces.detail.add")}</button>
               <button
                 onClick={() => { setAdding(false); setPickUserId(""); }}
                 className="px-3 py-1.5 rounded border border-border text-sm hover:bg-muted"
-              >Cancel</button>
+              >{t("settings.spaces.detail.cancel")}</button>
             </div>
           )}
         </div>
@@ -6828,6 +6779,7 @@ interface InstalledV2App {
 }
 
 function InstalledAppsTab({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const [apps, setApps] = useState<InstalledV2App[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [installPath, setInstallPath] = useState("");
@@ -6840,9 +6792,9 @@ function InstalledAppsTab({ toast }: { toast: (text: string, kind?: "info" | "su
       setApps(Array.isArray(list) ? list : []);
     } catch (e: any) {
       setApps([]);
-      if (e?.status && e.status !== 403) toast("Could not load installed apps", "error");
+      if (e?.status && e.status !== 403) toast(t("settings.installedApps.loadFailed"), "error");
     }
-  }, [toast]);
+  }, [toast, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -6851,10 +6803,10 @@ function InstalledAppsTab({ toast }: { toast: (text: string, kind?: "info" | "su
     setBusy(app.app_id);
     try {
       await api.delete(`/api/apps/${app.app_id}?wipe_data=true`);
-      toast(`${app.manifest?.name || app.app_id} uninstalled`, "success");
+      toast(t("settings.installedApps.uninstalled", { name: app.manifest?.name || app.app_id }), "success");
       await load();
     } catch {
-      toast(`Failed to uninstall ${app.app_id}`, "error");
+      toast(t("settings.installedApps.uninstallFailed", { name: app.app_id }), "error");
     } finally {
       setBusy(null);
     }
@@ -6863,17 +6815,16 @@ function InstalledAppsTab({ toast }: { toast: (text: string, kind?: "info" | "su
   return (
     <div>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Installed apps</h1>
+        <h1 className="text-2xl font-semibold">{t("settings.installedApps.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Community apps installed against the Phase E platform — each one
-          owns a Postgres schema and a per-app role scoped to its own data.
+          {t("settings.installedApps.intro")}
         </p>
       </header>
 
       {/* Install-from-path admin form */}
       <div className="mb-5 rounded-xl border border-border bg-card p-4">
         <div className="text-2xs font-semibold text-muted-foreground mb-2">
-          Install from source directory
+          {t("settings.installedApps.installFromDir")}
         </div>
         <div className="flex gap-2">
           <input
@@ -6893,25 +6844,24 @@ function InstalledAppsTab({ toast }: { toast: (text: string, kind?: "info" | "su
             )}
           >
             <Plus className="w-3.5 h-3.5" />
-            Preview & install
+            {t("settings.installedApps.previewInstall")}
           </button>
         </div>
         <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-          Opens the consent dialog with the parsed manifest. Use this for dev
-          installs from outside the marketplace catalog.
+          {t("settings.installedApps.installFromDirNote")}
         </p>
       </div>
 
       {apps === null && (
-        <div className="text-sm text-muted-foreground">Loading…</div>
+        <div className="text-sm text-muted-foreground">{t("settings.installedApps.loading")}</div>
       )}
 
       {apps && apps.length === 0 && (
         <div className="bg-card border border-border rounded-xl p-8 text-sm text-muted-foreground text-center">
           <Package className="w-6 h-6 mx-auto mb-2 opacity-50" />
-          <div>No v2 community apps installed.</div>
+          <div>{t("settings.installedApps.emptyTitle")}</div>
           <div className="mt-1 text-xs">
-            Apps from the catalogue above are listed there; this list shows apps built for the newer app format.
+            {t("settings.installedApps.emptyHint")}
           </div>
         </div>
       )}
@@ -6934,7 +6884,7 @@ function InstalledAppsTab({ toast }: { toast: (text: string, kind?: "info" | "su
           sourceDir={consentSourceDir}
           onClose={() => setConsentSourceDir(null)}
           onInstalled={(appId) => {
-            toast(`${appId} installed`, "success");
+            toast(t("settings.installedApps.installed", { name: appId }), "success");
             void load();
             setInstallPath("");
           }}
@@ -6957,6 +6907,7 @@ function InstalledAppUninstallConfirmModal({ app, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
   const name = app.manifest?.name || app.app_id;
   return createPortal(
     <div
@@ -6968,34 +6919,34 @@ function InstalledAppUninstallConfirmModal({ app, onClose, onConfirm }: {
         onClick={(e) => e.stopPropagation()}
       >
         <header className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <div className="font-semibold">Uninstall {name}?</div>
-          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground" aria-label="Close">
+          <div className="font-semibold">{t("settings.installedApps.uninstallModal.question", { name })}</div>
+          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground" aria-label={t("settings.installedApps.uninstallModal.close")}>
             <X className="w-4 h-4" />
           </button>
         </header>
         <div className="p-5 space-y-4">
           <div className="text-sm text-muted-foreground leading-relaxed">
-            This removes <span className="font-mono text-xs">{app.app_id}</span> and
-            <strong className="text-foreground"> wipes its Postgres schema</strong>
+            {t("settings.installedApps.uninstallModal.removesBefore")}<span className="font-mono text-xs">{app.app_id}</span>{t("settings.installedApps.uninstallModal.removesMiddle")}
+            <strong className="text-foreground">{t("settings.installedApps.uninstallModal.wipesSchema")}</strong>
             {" "}<span className="font-mono text-xs">{app.owned_schema}</span>
-            {" "}plus the data dir at
+            {t("settings.installedApps.uninstallModal.plusDataDir")}
             <span className="font-mono text-xs"> data/apps/{app.app_id}/</span>.
           </div>
           <div className="text-xs text-muted-foreground">
-            Reinstall is possible from the Marketplace, but the data does not come back.
+            {t("settings.installedApps.uninstallModal.reinstallNote")}
           </div>
           <div className="flex gap-2 pt-2">
             <button
               onClick={onClose}
               className="flex-1 px-3 py-2 rounded-md text-sm font-medium border border-border hover:bg-muted transition"
             >
-              Keep installed
+              {t("settings.installedApps.uninstallModal.keep")}
             </button>
             <button
               onClick={onConfirm}
               className="flex-1 px-3 py-2 rounded-md text-sm font-medium bg-destructive text-white hover:opacity-90 transition"
             >
-              Uninstall and wipe
+              {t("settings.installedApps.uninstallModal.confirm")}
             </button>
           </div>
         </div>
@@ -7008,6 +6959,7 @@ function InstalledAppUninstallConfirmModal({ app, onClose, onConfirm }: {
 function InstalledAppCard({
   app, busy, onUninstall,
 }: { app: InstalledV2App; busy: boolean; onUninstall: () => void }) {
+  const { t } = useTranslation();
   const perms = app.granted_permissions || {};
   const reads = perms.reads || [];
   const skills = perms.invokes_skills || [];
@@ -7043,19 +6995,19 @@ function InstalledAppCard({
             busy && "opacity-50 cursor-wait",
           )}
         >
-          {busy ? "Uninstalling…" : "Uninstall"}
+          {busy ? t("settings.installedApps.card.uninstalling") : t("settings.installedApps.card.uninstall")}
         </button>
       </div>
 
       <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
         <PermFact
-          label="Owned schema"
+          label={t("settings.installedApps.card.ownedSchema")}
           value={
             <span className="font-mono text-xs">{app.owned_schema}</span>
           }
         />
         <PermFact
-          label="Tables"
+          label={t("settings.installedApps.card.tables")}
           value={
             ownedTables.length > 0 ? (
               <span className="font-mono text-xs">{ownedTables.join(", ")}</span>
@@ -7063,26 +7015,26 @@ function InstalledAppCard({
           }
         />
         <PermFact
-          label={`Reads (${reads.length})`}
+          label={t("settings.installedApps.card.reads", { count: reads.length })}
           value={
             reads.length > 0 ? (
               <span className="text-foreground">
                 {reads.map((r: any) => r.table).join(", ")}
               </span>
-            ) : <span className="text-muted-foreground">none</span>
+            ) : <span className="text-muted-foreground">{t("settings.installedApps.card.none")}</span>
           }
         />
         <PermFact
-          label={`Skills (${skills.length})`}
+          label={t("settings.installedApps.card.skills", { count: skills.length })}
           value={
             skills.length > 0 ? (
               <span className="text-foreground">{skills.join(", ")}</span>
-            ) : <span className="text-muted-foreground">none</span>
+            ) : <span className="text-muted-foreground">{t("settings.installedApps.card.none")}</span>
           }
         />
         {realtime.length > 0 && (
           <PermFact
-            label="Realtime"
+            label={t("settings.installedApps.card.realtime")}
             value={
               <span className="font-mono text-xs">{realtime.join(", ")}</span>
             }
@@ -7090,7 +7042,7 @@ function InstalledAppCard({
         )}
         {app.source_dir && (
           <PermFact
-            label="Source"
+            label={t("settings.installedApps.card.source")}
             value={
               <span className="font-mono text-2xs text-muted-foreground break-all">
                 {app.source_dir}

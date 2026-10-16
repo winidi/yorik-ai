@@ -7,8 +7,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Server, Mail, FileText, Database, RefreshCw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import i18n from "@/i18n";
 import { WorkersStatus } from "@/components/WorkersStatus";
 import { PhonesAccessCard } from "@/components/PhonesAccessCard";
 import { UpdateCard } from "@/components/UpdateCard";
@@ -40,34 +42,34 @@ export function healthIssues(status: SystemStatus | null, workers: WorkerLite[])
   const out: HealthIssue[] = [];
   const dl = status?.llm.download;
   if (dl?.status === "downloading") {
-    out.push({ tone: "warn", text: `The AI model is still downloading${dl.percent != null ? ` (${dl.percent}%)` : ""}; the chat answers once it is done` });
+    out.push({ tone: "warn", text: i18n.t("settings.health.downloading", { pct: dl.percent != null ? ` (${dl.percent}%)` : "" }) });
   } else if (dl?.status === "failed") {
-    out.push({ tone: "error", text: "The AI model download stopped; restarting Yorik tries again" });
+    out.push({ tone: "error", text: i18n.t("settings.health.downloadStopped") });
   } else if (status && !status.llm.reachable) {
-    out.push({ tone: "error", text: "Yorik can't think right now" });
+    out.push({ tone: "error", text: i18n.t("settings.health.cantThink") });
   }
   for (const w of workers) {
     if (w.name.startsWith("backup_")) continue;
-    if (w.status === "error") out.push({ tone: "error", text: `${workerLabel(w.name)} stopped` });
+    if (w.status === "error") out.push({ tone: "error", text: i18n.t("settings.health.workerStopped", { name: workerLabel(w.name) }) });
   }
   if (status?.backup && !status.backup.configured) {
-    out.push({ tone: "warn", text: "Backup isn't set up yet" });
+    out.push({ tone: "warn", text: i18n.t("settings.health.backupNotSetUp") });
   } else if (status?.backup?.last?.status === "failed") {
-    out.push({ tone: "error", text: "The last backup failed" });
+    out.push({ tone: "error", text: i18n.t("settings.health.lastBackupFailed") });
   }
   for (const w of workers) {
     if (w.name.startsWith("backup_")) continue;
-    if (w.status === "warn") out.push({ tone: "warn", text: `${workerLabel(w.name)} needs a look` });
+    if (w.status === "warn") out.push({ tone: "warn", text: i18n.t("settings.health.workerNeedsLook", { name: workerLabel(w.name) }) });
   }
   return out;
 }
 
 function workerLabel(name: string): string {
-  if (/^email_account_/.test(name) || name === "email_supervisor") return "Email";
-  if (name.startsWith("whatsapp_")) return "WhatsApp";
-  if (name.startsWith("paperless")) return "Documents";
-  if (name.startsWith("calendar")) return "Calendar sync";
-  if (name === "bank-sync") return "Bank sync";
+  if (/^email_account_/.test(name) || name === "email_supervisor") return i18n.t("settings.health.workers.email");
+  if (name.startsWith("whatsapp_")) return i18n.t("settings.health.workers.whatsapp");
+  if (name.startsWith("paperless")) return i18n.t("settings.health.workers.documents");
+  if (name.startsWith("calendar")) return i18n.t("settings.health.workers.calendar");
+  if (name === "bank-sync") return i18n.t("settings.health.workers.bank");
   const s = name.replace(/[_-]+/g, " ").trim();
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -106,6 +108,7 @@ export function useHouseHealth(isAdmin: boolean) {
 }
 
 export function SystemStatusPanel() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -125,10 +128,10 @@ export function SystemStatusPanel() {
     setDocsBusy(true); setDocsNote(null);
     try {
       const r = await api.post<{ ok?: boolean; error?: string; checked?: number }>("/api/documents/sync-paperless");
-      setDocsNote(r.error ? r.error : `Connected. ${r.checked ?? 0} document(s) in the archive.`);
+      setDocsNote(r.error ? r.error : t("settings.connections.docsConnected", { count: r.checked ?? 0 }));
       refresh();
     } catch (e: any) {
-      setDocsNote(e?.message || "That didn't work.");
+      setDocsNote(e?.message || t("settings.connections.failed"));
     } finally { setDocsBusy(false); }
   }
 
@@ -136,17 +139,15 @@ export function SystemStatusPanel() {
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Health & updates</h1>
+          <h1 className="text-2xl font-semibold">{t("settings.health.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Is everything behind Yorik running, is there a new version, and can the
-            phones reach Yorik from outside. Only admins see this page; everyone
-            else gets one line on Home when something needs attention.
+            {t("settings.health.intro")}
           </p>
         </div>
         <button
           onClick={refresh}
           className="text-muted-foreground hover:text-foreground transition shrink-0 mt-1"
-          title="Refresh status"
+          title={t("settings.health.refresh")}
         >
           <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
         </button>
@@ -154,36 +155,36 @@ export function SystemStatusPanel() {
 
       <section>
         <h2 className="text-xs text-muted-foreground font-semibold mb-3">
-          Services
+          {t("settings.health.services")}
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
           <StatusChip
             icon={Server}
-            label="AI model"
+            label={t("settings.health.aiModel")}
             detail={status?.llm.model || "—"}
             tone={!status ? "loading" : status.llm.reachable ? "ok" : "error"}
-            hint={status?.llm.reachable ? "Reachable" : "Unreachable"}
+            hint={status?.llm.reachable ? t("settings.health.reachable") : t("settings.health.unreachable")}
           />
           <StatusChip
             icon={Mail}
-            label="Email"
-            detail={status?.email?.kinds?.[0] || "Not configured"}
+            label={t("settings.health.email")}
+            detail={status?.email?.kinds?.[0] || t("settings.health.notConfigured")}
             tone={!status ? "loading" : status.email?.configured ? "ok" : "off"}
-            hint={status?.email?.configured ? "Ready" : "Optional"}
+            hint={status?.email?.configured ? t("settings.health.ready") : t("settings.health.optional")}
           />
           <StatusChip
             icon={FileText}
-            label="Documents"
-            detail={status?.paperless?.admin_token_set ? "Linked" : "Not linked"}
+            label={t("settings.health.documents")}
+            detail={status?.paperless?.admin_token_set ? t("settings.health.linked") : t("settings.health.notLinked")}
             tone={!status ? "loading" : status?.paperless?.admin_token_set ? "ok" : "off"}
-            hint={status?.paperless?.admin_token_set ? "Connected to the document archive" : "Optional"}
+            hint={status?.paperless?.admin_token_set ? t("settings.health.docsConnected") : t("settings.health.optional")}
           />
           <StatusChip
             icon={Database}
-            label="Backup"
+            label={t("settings.health.backup")}
             detail={backupSummary(status)}
             tone={!status ? "loading" : status.backup?.last?.status === "failed" ? "error" : status.backup?.configured ? "ok" : "off"}
-            hint={status?.backup?.last?.status === "failed" ? (status.backup.last.error || "Last run failed") : (status?.backup?.last?.finished_at || "")}
+            hint={status?.backup?.last?.status === "failed" ? (status.backup.last.error || t("settings.health.lastRunFailed")) : (status?.backup?.last?.finished_at || "")}
           />
         </div>
       </section>
@@ -193,19 +194,19 @@ export function SystemStatusPanel() {
       <PhonesAccessCard />
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">Repair</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">{t("settings.health.repair")}</h2>
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={reconnectDocs}
             disabled={docsBusy}
             className="px-3 py-2 rounded-lg border border-border bg-card hover:border-foreground/20 text-sm transition disabled:opacity-60"
           >
-            {docsBusy ? "Reconnecting…" : "Reconnect documents"}
+            {docsBusy ? t("settings.health.reconnecting") : t("settings.health.reconnectDocs")}
           </button>
           {docsNote && <span className="text-sm text-muted-foreground">{docsNote}</span>}
         </div>
         <p className="text-xs text-muted-foreground">
-          Makes Yorik fetch a fresh key from the document archive and sync the list again. Safe to press any time.
+          {t("settings.health.reconnectHint")}
         </p>
       </section>
 
@@ -245,16 +246,16 @@ function StatusChip({ icon: Icon, label, detail, tone, hint }: {
 
 function backupSummary(s: SystemStatus | null): string {
   if (!s || !s.backup) return "—";
-  if (!s.backup.configured) return "Not set up";
-  if (!s.backup.last) return "No runs yet";
-  if (s.backup.last.status === "failed") return "Last run failed";
-  if (s.backup.last.status === "running") return "Running now";
+  if (!s.backup.configured) return i18n.t("settings.health.notSetUp");
+  if (!s.backup.last) return i18n.t("settings.health.noRuns");
+  if (s.backup.last.status === "failed") return i18n.t("settings.health.lastRunFailed");
+  if (s.backup.last.status === "running") return i18n.t("settings.health.runningNow");
   const ts = s.backup.last?.finished_at || s.backup.last?.started_at;
-  if (!ts) return "Configured";
+  if (!ts) return i18n.t("settings.health.configured");
   const d = new Date(ts.replace(" ", "T") + (ts.includes("T") ? "" : "Z"));
-  if (isNaN(d.getTime())) return "Configured";
+  if (isNaN(d.getTime())) return i18n.t("settings.health.configured");
   const diffMin = (Date.now() - d.getTime()) / 60_000;
-  if (diffMin < 60)        return `${Math.round(diffMin)}m ago`;
-  if (diffMin < 60 * 24)   return `${Math.round(diffMin / 60)}h ago`;
-  return `${Math.round(diffMin / (60 * 24))}d ago`;
+  if (diffMin < 60)        return i18n.t("settings.health.minAgo", { n: Math.round(diffMin) });
+  if (diffMin < 60 * 24)   return i18n.t("settings.health.hoursAgo", { n: Math.round(diffMin / 60) });
+  return i18n.t("settings.health.daysAgo", { n: Math.round(diffMin / (60 * 24)) });
 }

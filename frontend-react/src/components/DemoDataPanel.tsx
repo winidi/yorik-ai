@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Sparkles, X, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthGate";
@@ -41,6 +42,7 @@ interface OnboardingState {
 }
 
 export function DemoDataPanel() {
+  const { t } = useTranslation();
   const auth = useAuth();
   const isAdmin = auth.user.role === "admin" || auth.user.role === "platform_admin";
   const [status, setStatus] = useState<DemoStatus | null>(null);
@@ -81,22 +83,22 @@ export function DemoDataPanel() {
       // through each one.
       window.location.reload();
     } catch (e: any) {
-      alert(`Couldn't load demo data: ${e?.message || e}`);
+      alert(t("settings.demo.seedFailed", { msg: e?.message || e }));
       setBusy(false);
     }
-  }, []);
+  }, [t]);
 
   const remove = useCallback(async () => {
-    if (!confirm("Remove all demo data? Anything you added on top stays untouched.")) return;
+    if (!confirm(t("settings.demo.removeConfirm"))) return;
     setBusy(true);
     try {
       await api.delete("/api/demo");
       window.location.reload();
     } catch (e: any) {
-      alert(`Couldn't remove demo data: ${e?.message || e}`);
+      alert(t("settings.demo.removeFailed", { msg: e?.message || e }));
       setBusy(false);
     }
-  }, []);
+  }, [t]);
 
   // Non-admins: never render — this CTA + the seed endpoint are admin-only.
   if (!isAdmin) return null;
@@ -109,8 +111,8 @@ export function DemoDataPanel() {
       <div className="mb-4 px-3 py-2 rounded-lg bg-violet-500/[0.06] border border-violet-500/30 text-xs flex items-center gap-2">
         <Sparkles className="w-3.5 h-3.5 text-violet-500 shrink-0" />
         <div className="flex-1">
-          <span className="font-medium text-violet-500">Demo data loaded</span>
-          <span className="text-muted-foreground"> · {status.total} example items across calendar, tasks, bills.</span>
+          <span className="font-medium text-violet-500">{t("settings.demo.loaded")}</span>
+          <span className="text-muted-foreground"> · {t("settings.demo.items", { count: status.total })}</span>
         </div>
         <button
           onClick={remove}
@@ -118,7 +120,7 @@ export function DemoDataPanel() {
           className="text-xs px-2 py-0.5 rounded border border-violet-500/30 hover:bg-violet-500/10 transition flex items-center gap-1 disabled:opacity-50"
         >
           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-          Remove
+          {t("settings.demo.remove")}
         </button>
       </div>
     );
@@ -135,12 +137,9 @@ export function DemoDataPanel() {
           <Sparkles className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-semibold mb-1">Want to try Yorik with example data?</div>
+          <div className="font-semibold mb-1">{t("settings.demo.title")}</div>
           <div className="text-sm text-muted-foreground leading-relaxed">
-            We'll add ~20 realistic calendar events, tasks, and bills so
-            you can see how Yorik feels populated. Everything is dated
-            relative to today and can be removed in one click from here
-            or Settings.
+            {t("settings.demo.intro")}
           </div>
           <button
             onClick={seed}
@@ -152,8 +151,8 @@ export function DemoDataPanel() {
             )}
           >
             {busy
-              ? <><Loader2 className="w-4 h-4 animate-spin" /> Adding…</>
-              : <><Sparkles className="w-4 h-4" /> Add example data</>}
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> {t("settings.demo.adding")}</>
+              : <><Sparkles className="w-4 h-4" /> {t("settings.demo.add")}</>}
           </button>
         </div>
       </div>

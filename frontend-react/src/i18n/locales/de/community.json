@@ -1,0 +1,9 @@
+{
+  "loadCodeFailed": "App-Code konnte nicht geladen werden (HTTP {{status}})",
+  "codeEmpty": "App-Code ist leer",
+  "loadFailed": "App konnte nicht geladen werden",
+  "appFailed": "{{app}} konnte nicht geladen werden",
+  "failedHint": "Der Quellcode der App fehlt vielleicht, die Installation auf dem Server ist fehlgeschlagen, oder dein Netzwerk hat die Anfrage blockiert.",
+  "retry": "Noch mal versuchen",
+  "backHome": "Zurück zu Home"
+}

@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   X, Send, Loader2, Minus, AlertCircle, UsersRound, Trash2,
   Bold as BoldIcon, Italic as ItalicIcon, Underline as UnderlineIcon,
@@ -173,6 +174,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export function Composer({ accounts, initial, onClose, onSent }: Props) {
+  const { t } = useTranslation();
   // Several accounts and none marked as default: pick nothing, so the
   // person chooses the sender instead of mail silently leaving from the
   // first one (Dirk 2026-09-29).
@@ -238,7 +240,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
       }),
       Underline,
       Link.configure({ openOnClick: false, autolink: true }),
-      Placeholder.configure({ placeholder: "Write your message…" }),
+      Placeholder.configure({ placeholder: t("email.composer.bodyPlaceholder") }),
     ],
     content: initialHtml,
     editorProps: {
@@ -305,7 +307,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
     for (let i = 0; i < arr.length; i++) {
       const f = arr[i];
       if (total + f.size > MAX_TOTAL_ATTACHMENT_BYTES) {
-        setError(`Attachments exceed 25 MB total (${f.name} pushed past the cap).`);
+        setError(t("email.composer.tooLarge", { name: f.name }));
         break;
       }
       try {
@@ -319,7 +321,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
         });
         total += f.size;
       } catch (err: any) {
-        setError(`Couldn't attach ${f.name}: ${err?.message || err}`);
+        setError(t("email.composer.attachFailed", { name: f.name, error: err?.message || err }));
       }
     }
     setAttachments(next);
@@ -360,7 +362,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
               if (typeof d === "string") why += ` — ${d}`;
               else if (d) why += ` — ${JSON.stringify(d)}`;
             } catch {}
-            setError(`Couldn't fetch ${p.filename}: ${why}`);
+            setError(t("email.composer.fetchFailed", { name: p.filename, error: why }));
             continue;
           }
           const blob = await r.blob();
@@ -374,7 +376,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
           const msg = typeof err === "string"
             ? err
             : (err?.message || err?.toString?.() || JSON.stringify(err));
-          setError(`Couldn't fetch ${p.filename}: ${msg}`);
+          setError(t("email.composer.fetchFailed", { name: p.filename, error: msg }));
         }
       }
       if (files.length) await addFiles(files, sources);
@@ -412,7 +414,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
       onSent();
       onClose();
     } catch (e: any) {
-      setError(e.message || "send failed");
+      setError(e.message || t("email.composer.sendFailed"));
     } finally {
       setSending(false);
     }
@@ -439,7 +441,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
         className="fixed bottom-[var(--dock-clearance)] right-4 z-40 bg-card border border-border rounded-md px-4 py-2 text-sm font-medium shadow-lg flex items-center gap-2 hover:bg-muted max-w-[calc(100vw-2rem)]"
       >
         <Send className="w-3.5 h-3.5" />
-        {subject || "(no subject)"} ↑
+        {subject || t("email.list.noSubject")} ↑
       </button>
     );
   }
@@ -475,18 +477,18 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
       )}
     >
       <div className="flex items-center justify-between px-4 py-2 bg-secondary/40 md:rounded-t-lg border-b border-border">
-        <span className="text-sm font-medium truncate">{subject || "New message"}</span>
+        <span className="text-sm font-medium truncate">{subject || t("email.composer.newMessage")}</span>
         <div className="flex gap-1">
           {/* Minimize hidden on mobile — full-screen composer can't be
               minimised to a corner, the corner doesn't exist on mobile. */}
-          <button onClick={() => setMinimized(true)} className="hidden md:inline-flex p-1 hover:bg-muted rounded" title="Minimize">
+          <button onClick={() => setMinimized(true)} className="hidden md:inline-flex p-1 hover:bg-muted rounded" title={t("email.composer.minimize")}>
             <Minus className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={onClose}
             className="p-2.5 md:p-1 hover:bg-muted rounded min-w-[40px] min-h-[40px] md:min-w-0 md:min-h-0 inline-flex items-center justify-center"
-            title="Close (draft kept)"
-            aria-label="Close"
+            title={t("email.composer.closeKeep")}
+            aria-label={t("common.close")}
           >
             <X className="w-5 h-5 md:w-3.5 md:h-3.5" />
           </button>
@@ -495,13 +497,13 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
 
       {restoredHint && (
         <div className="px-3 py-1.5 text-xs bg-emerald-500/[0.06] border-b border-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-between">
-          <span>Restored your last draft.</span>
+          <span>{t("email.composer.restored")}</span>
           <button
             onClick={() => { discardDraft(); }}
             className="text-emerald-700/80 dark:text-emerald-400/80 hover:underline"
-            title="Throw away the restored draft and close"
+            title={t("email.composer.discardRestoredTitle")}
           >
-            discard
+            {t("email.composer.discardLink")}
           </button>
         </div>
       )}
@@ -509,14 +511,14 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
       <div className="p-3 space-y-2 border-b border-border text-sm">
         {accounts.length > 1 && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground w-12">From</span>
+            <span className="text-xs text-muted-foreground w-12">{t("email.composer.from")}</span>
             <select
               value={accountId || ""}
               onChange={e => setAccountId(+e.target.value)}
               className={cn("flex-1 h-7 px-2 rounded bg-muted text-sm focus:outline-none",
                             !accountId && "ring-1 ring-amber-500/60")}
             >
-              <option value="" disabled>Choose the account to send from…</option>
+              <option value="" disabled>{t("email.composer.chooseAccount")}</option>
               {accounts.map(a => (
                 <option key={a.id} value={a.id}>
                   {a.display_name || a.email} ({a.email})
@@ -534,30 +536,30 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
                   } catch { /* stays as it was; nothing lost */ }
                 }}
                 className="text-2xs text-muted-foreground hover:text-foreground whitespace-nowrap"
-                title="Always pre-select this account"
+                title={t("email.composer.makeDefaultTitle")}
               >
-                {defaultSaved ? "✓ default" : "Make default"}
+                {defaultSaved ? `✓ ${t("email.composer.isDefault")}` : t("email.composer.makeDefault")}
               </button>
             )}
           </div>
         )}
-        <RecipientField label="To" value={to} onChange={setTo} />
+        <RecipientField label={t("email.composer.to")} value={to} onChange={setTo} />
         {!showCc && (
           <div className="text-right">
             <button onClick={() => setShowCc(true)} className="text-xs text-muted-foreground hover:text-foreground">
-              + Cc
+              {t("email.composer.addCc")}
             </button>
           </div>
         )}
         {showCc && (
-          <RecipientField label="Cc" value={cc} onChange={setCc} />
+          <RecipientField label={t("email.composer.cc")} value={cc} onChange={setCc} />
         )}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground w-12">Subject</span>
+          <span className="text-xs text-muted-foreground w-12">{t("email.composer.subject")}</span>
           <input
             value={subject}
             onChange={e => setSubject(e.target.value)}
-            placeholder="Subject"
+            placeholder={t("email.composer.subject")}
             className="flex-1 h-7 px-2 bg-transparent text-sm focus:outline-none font-medium"
           />
         </div>
@@ -632,7 +634,7 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
 
       {dragOver && (
         <div className="px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400 text-center border-t border-amber-500/20 bg-amber-500/[0.05]">
-          Drop to attach
+          {t("email.composer.dropToAttach")}
         </div>
       )}
 
@@ -650,12 +652,12 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
           className="px-4 h-9 text-sm rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
         >
           {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-          Send
+          {t("email.composer.send")}
         </button>
         <button
           onClick={() => (document.getElementById("yorik-email-attach-input") as HTMLInputElement)?.click()}
           className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition"
-          title="Attach file"
+          title={t("email.composer.attachFile")}
         >
           <Paperclip className="w-4 h-4" />
         </button>
@@ -670,14 +672,14 @@ export function Composer({ accounts, initial, onClose, onSent }: Props) {
           }}
         />
         <span className="text-xs text-muted-foreground ml-auto">
-          {sending ? "sending…" : "⌘/Ctrl+Enter to send · drop files anywhere"}
+          {sending ? t("email.composer.sending") : t("email.composer.sendHint")}
         </span>
         <button
           onClick={discardDraft}
           disabled={sending}
           className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-muted transition disabled:opacity-50"
-          title="Discard draft"
-          aria-label="Discard draft"
+          title={t("email.composer.discardDraft")}
+          aria-label={t("email.composer.discardDraft")}
         >
           <Trash2 className="w-4 h-4" />
         </button>
@@ -715,33 +717,34 @@ function EditorToolbar({ editor, onAttachClick }: {
   editor: Editor | null;
   onAttachClick: () => void;
 }) {
+  const { t } = useTranslation();
   if (!editor) return <div className="h-9 border-b border-border" />;
   return (
     <div className="px-2 py-1 border-b border-border flex items-center gap-0.5">
       <TBtn active={editor.isActive("bold")}
             onClick={() => editor.chain().focus().toggleBold().run()}
-            title="Bold"><BoldIcon className="w-3.5 h-3.5" /></TBtn>
+            title={t("email.composer.toolbar.bold")}><BoldIcon className="w-3.5 h-3.5" /></TBtn>
       <TBtn active={editor.isActive("italic")}
             onClick={() => editor.chain().focus().toggleItalic().run()}
-            title="Italic"><ItalicIcon className="w-3.5 h-3.5" /></TBtn>
+            title={t("email.composer.toolbar.italic")}><ItalicIcon className="w-3.5 h-3.5" /></TBtn>
       <TBtn active={editor.isActive("underline")}
             onClick={() => editor.chain().focus().toggleUnderline().run()}
-            title="Underline"><UnderlineIcon className="w-3.5 h-3.5" /></TBtn>
+            title={t("email.composer.toolbar.underline")}><UnderlineIcon className="w-3.5 h-3.5" /></TBtn>
       <div className="w-px h-4 bg-border mx-1" />
       <TBtn active={editor.isActive("bulletList")}
             onClick={() => editor.chain().focus().toggleBulletList().run()}
-            title="Bulleted list"><ListIcon className="w-3.5 h-3.5" /></TBtn>
+            title={t("email.composer.toolbar.bulletList")}><ListIcon className="w-3.5 h-3.5" /></TBtn>
       <TBtn active={editor.isActive("orderedList")}
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            title="Numbered list"><ListOrdered className="w-3.5 h-3.5" /></TBtn>
+            title={t("email.composer.toolbar.numberedList")}><ListOrdered className="w-3.5 h-3.5" /></TBtn>
       <TBtn active={editor.isActive("blockquote")}
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            title="Quote"><Quote className="w-3.5 h-3.5" /></TBtn>
+            title={t("email.composer.toolbar.quote")}><Quote className="w-3.5 h-3.5" /></TBtn>
       <div className="w-px h-4 bg-border mx-1" />
       <TBtn active={editor.isActive("link")}
             onClick={() => {
               const prev = editor.getAttributes("link").href as string | undefined;
-              const url = window.prompt("Link URL", prev || "https://");
+              const url = window.prompt(t("email.composer.toolbar.linkUrl"), prev || "https://");
               if (url === null) return;
               if (url === "") {
                 editor.chain().focus().extendMarkRange("link").unsetLink().run();
@@ -749,9 +752,9 @@ function EditorToolbar({ editor, onAttachClick }: {
                 editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
               }
             }}
-            title="Link"><LinkIcon className="w-3.5 h-3.5" /></TBtn>
+            title={t("email.composer.toolbar.link")}><LinkIcon className="w-3.5 h-3.5" /></TBtn>
       <div className="flex-1" />
-      <TBtn onClick={onAttachClick} title="Attach file">
+      <TBtn onClick={onAttachClick} title={t("email.composer.attachFile")}>
         <Paperclip className="w-3.5 h-3.5" />
       </TBtn>
     </div>
@@ -810,11 +813,12 @@ function AttachmentChip({ att, onOpen, onRemove }: {
   onOpen: () => void;
   onRemove: () => void;
 }) {
+  const { t } = useTranslation();
   const isPdf = att.mimetype === "application/pdf";
   return (
     <div
       className="inline-flex items-center gap-2 max-w-[220px] pl-2 pr-1 py-1 rounded-md border border-border bg-card text-xs"
-      title={isPdf ? `${att.filename} — anklicken zum Bearbeiten` : `${att.filename} — anklicken zum Ansehen`}
+      title={isPdf ? t("email.composer.chipEdit", { name: att.filename }) : t("email.composer.chipView", { name: att.filename })}
     >
       <Paperclip className="w-3 h-3 text-muted-foreground shrink-0" />
       <button
@@ -829,7 +833,7 @@ function AttachmentChip({ att, onOpen, onRemove }: {
         type="button"
         onClick={onRemove}
         className="p-0.5 rounded text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10"
-        title="Remove"
+        title={t("email.composer.remove")}
       >
         <X className="w-3 h-3" />
       </button>
@@ -858,6 +862,7 @@ function RecipientField({ label, value, onChange }: {
   value: string;
   onChange: (next: string) => void;
 }) {
+  const { t } = useTranslation();
   const [suggestions, setSuggestions] = useState<ContactSuggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -943,14 +948,14 @@ function RecipientField({ label, value, onChange }: {
           value={value}
           onChange={e => onChange(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="recipient@…"
+          placeholder={t("email.composer.recipientPlaceholder")}
           className="flex-1 h-7 px-2 bg-transparent text-sm focus:outline-none"
         />
       </div>
       {open && suggestions.length > 0 && (
         <div className="absolute left-14 right-0 top-full mt-1 z-50 max-w-md rounded-md border border-border bg-popover shadow-lg overflow-hidden">
           <div className="px-3 py-1 text-2xs text-muted-foreground font-semibold flex items-center gap-1 border-b border-border bg-muted/30">
-            <UsersRound className="w-2.5 h-2.5" /> Contacts matching "{partial}"
+            <UsersRound className="w-2.5 h-2.5" /> {t("email.composer.contactsMatching", { query: partial })}
           </div>
           {suggestions.map((s, i) => (
             <button
@@ -1007,6 +1012,7 @@ interface NewEmailDraftPanelProps {
 export function NewEmailDraftPanel({
   to, subject, attachments, onPick, onSuggestSubject,
 }: NewEmailDraftPanelProps) {
+  const { t, i18n } = useTranslation();
   const statesApi = useApi<Array<{
     key: string; label_en: string; label_de: string; tone: string;
   }>>("/api/email/draft-states", []);
@@ -1023,7 +1029,7 @@ export function NewEmailDraftPanel({
 
   async function generate(overrideState?: string | null) {
     if (!intent.trim()) {
-      setErr("Type a quick intent first — what should Yorik write?");
+      setErr(t("email.composer.ai.noIntent"));
       return;
     }
     const effective = overrideState === undefined ? activeState : overrideState;
@@ -1053,7 +1059,7 @@ export function NewEmailDraftPanel({
       const msg = typeof e === "string"
         ? e
         : (e?.message || e?.toString?.() || JSON.stringify(e));
-      setErr(`Couldn't generate drafts: ${msg}`);
+      setErr(t("email.composer.ai.generateFailed", { error: msg }));
     } finally {
       setGenerating(false);
     }
@@ -1067,11 +1073,11 @@ export function NewEmailDraftPanel({
         className="w-full px-3 py-2 flex items-center gap-2 text-xs font-medium text-foreground/80 hover:bg-violet-500/[0.06] transition"
       >
         <Sparkles className="w-3.5 h-3.5 text-violet-500" />
-        <span className="">AI drafts</span>
+        <span className="">{t("email.drafts.title")}</span>
         <span className="text-muted-foreground font-normal normal-case tracking-normal">
           {open
-            ? "— pick a tone, describe the intent, get 3 suggestions"
-            : "click to expand"}
+            ? t("email.composer.ai.expandedHint")
+            : t("email.composer.ai.collapsedHint")}
         </span>
       </button>
       {open && (
@@ -1099,7 +1105,7 @@ export function NewEmailDraftPanel({
                     isActive ? tint.active : tint.idle,
                   )}
                 >
-                  {s.label_en || s.label_de}
+                  {i18n.language === "de" ? (s.label_de || s.label_en) : (s.label_en || s.label_de)}
                 </button>
               );
             })}
@@ -1108,7 +1114,7 @@ export function NewEmailDraftPanel({
           <textarea
             value={intent}
             onChange={e => setIntent(e.target.value)}
-            placeholder='What should it say? e.g. "Politely follow up on whether the invoice has been paid."'
+            placeholder={t("email.composer.ai.intentPlaceholder")}
             className="w-full rounded-md border border-border bg-background px-2.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/30 min-h-[60px] resize-y"
             disabled={generating}
           />
@@ -1121,8 +1127,8 @@ export function NewEmailDraftPanel({
               className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-violet-500 hover:bg-violet-600 text-white shadow-sm transition disabled:opacity-50"
             >
               {generating
-                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</>
-                : <><Sparkles className="w-3.5 h-3.5" /> {variants.length ? "Regenerate" : "Generate 3 drafts"}</>}
+                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("email.composer.ai.generating")}</>
+                : <><Sparkles className="w-3.5 h-3.5" /> {variants.length ? t("email.composer.ai.regenerate") : t("email.composer.ai.generate")}</>}
             </button>
             {variants.length > 0 && (
               <button
@@ -1130,7 +1136,7 @@ export function NewEmailDraftPanel({
                 onClick={() => { setVariants([]); setErr(null); }}
                 className="text-xs text-muted-foreground hover:text-foreground transition px-1.5 py-1"
               >
-                Discard
+                {t("email.composer.ai.discard")}
               </button>
             )}
           </div>
@@ -1157,7 +1163,7 @@ export function NewEmailDraftPanel({
                     {v.text}
                   </div>
                   <div className="text-2xs text-muted-foreground mt-2 italic">
-                    Click to use this draft
+                    {t("email.composer.ai.clickToUse")}
                   </div>
                 </button>
               ))}

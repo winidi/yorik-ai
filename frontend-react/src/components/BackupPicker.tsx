@@ -21,9 +21,11 @@ import {
   Loader2, Shield, AlertTriangle, Check, Clock, HardDrive,
   Play, KeyRound, RefreshCw,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
+import i18n, { locale } from "@/i18n";
 
 interface BackupConfig {
   target_path: string;
@@ -66,10 +68,10 @@ function fmtDateRel(iso?: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
   const ms = Date.now() - d.getTime();
-  if (ms < 60_000)   return "just now";
-  if (ms < 3600_000) return `${Math.round(ms / 60_000)}m ago`;
-  if (ms < 86_400_000) return `${Math.round(ms / 3600_000)}h ago`;
-  return d.toLocaleDateString();
+  if (ms < 60_000)   return i18n.t("settings.backup.justNow");
+  if (ms < 3600_000) return i18n.t("settings.backup.minAgo", { n: Math.round(ms / 60_000) });
+  if (ms < 86_400_000) return i18n.t("settings.backup.hoursAgo", { n: Math.round(ms / 3600_000) });
+  return d.toLocaleDateString(locale());
 }
 
 export function BackupPicker({
@@ -77,6 +79,7 @@ export function BackupPicker({
 }: {
   compact?: boolean;
 }) {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const [volumes, setVolumes] = useState<Volume[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,11 +126,11 @@ export function BackupPicker({
 
   async function save() {
     if (passphrase && passphrase.length < 8) {
-      toast("Passphrase must be at least 8 characters.");
+      toast(t("settings.backup.phraseTooShort"));
       return;
     }
     if (!effectiveTarget) {
-      toast("Pick a backup target.");
+      toast(t("settings.backup.pickTarget"));
       return;
     }
     setBusy("saving");
@@ -143,30 +146,30 @@ export function BackupPicker({
       setPassphrase("");
       await refresh();
     } catch (e: any) {
-      toast(`Save failed: ${e?.message || e}`);
+      toast(t("settings.backup.saveFailed", { msg: e?.message || e }));
     } finally { setBusy(null); }
   }
 
   async function runNow() {
     if (!status?.config.passphrase_set && !passphrase) {
-      toast("Set a passphrase first.");
+      toast(t("settings.backup.setPhraseFirst"));
       return;
     }
     setBusy("running");
     try {
       const r = await api.post<{ ok: boolean; size_bytes?: number; error?: string }>("/api/backup/run", {});
-      if (r.ok) toast(`✓ Backup done — ${fmtBytes(r.size_bytes)}`);
-      else      toast(`Backup failed: ${r.error}`);
+      if (r.ok) toast(t("settings.backup.done", { size: fmtBytes(r.size_bytes) }));
+      else      toast(t("settings.backup.failed", { msg: r.error }));
       await refresh();
     } catch (e: any) {
-      toast(`Run failed: ${e?.message || e}`);
+      toast(t("settings.backup.runFailed", { msg: e?.message || e }));
     } finally { setBusy(null); }
   }
 
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground py-6 justify-center">
-        <Loader2 className="w-4 h-4 animate-spin" /> Loading backup status…
+        <Loader2 className="w-4 h-4 animate-spin" /> {t("settings.backup.loading")}
       </div>
     );
   }
@@ -195,17 +198,17 @@ export function BackupPicker({
           <div className="flex-1 min-w-0">
             <div className="font-medium">
               {!status.config.passphrase_set
-                ? "No passphrase set — backups can't run."
+                ? t("settings.backup.noPhrase")
                 : !status.config.schedule
-                  ? "Backups are manual-only (no schedule)."
+                  ? t("settings.backup.manualOnly")
                   : status.target.available
-                    ? `Auto-backup at ${status.config.schedule} daily.`
-                    : "Backup target unreachable."}
+                    ? t("settings.backup.autoAt", { time: status.config.schedule })
+                    : t("settings.backup.unreachable")}
             </div>
             {status.history.length > 0 && (
               <div className="text-xs text-muted-foreground mt-0.5">
-                Last run: {fmtDateRel(status.history[0].started_at)}
-                {status.history[0].status === "ok" ? " ✓" : status.history[0].status === "running" ? " — running" : " — failed"}
+                {t("settings.backup.lastRun", { when: fmtDateRel(status.history[0].started_at) })}
+                {status.history[0].status === "ok" ? " ✓" : status.history[0].status === "running" ? ` — ${t("settings.backup.running")}` : ` — ${t("settings.backup.failedWord")}`}
               </div>
             )}
           </div>
@@ -216,19 +219,18 @@ export function BackupPicker({
       <div>
         <div className="text-xs text-muted-foreground font-semibold mb-1.5 flex items-center gap-1">
           <KeyRound className="w-3 h-3" />
-          {status?.config.passphrase_set ? "Change passphrase (optional)" : "Set a passphrase"}
+          {status?.config.passphrase_set ? t("settings.backup.changePhrase") : t("settings.backup.setPhrase")}
         </div>
         <input
           type="password"
           value={passphrase}
           onChange={e => setPassphrase(e.target.value)}
-          placeholder={status?.config.passphrase_set ? "leave blank to keep current" : "at least 8 characters"}
+          placeholder={status?.config.passphrase_set ? t("settings.backup.keepCurrent") : t("settings.backup.minChars")}
           className="w-full h-9 px-3 bg-background border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring/40"
         />
         {!compact && (
           <p className="text-2xs text-muted-foreground mt-1">
-            Snapshots are encrypted with this passphrase (age + scrypt). <strong>Lose it and the snapshots are unrecoverable</strong> —
-            write it down in a password manager NOW.
+            {t("settings.backup.phraseHintBefore")}<strong>{t("settings.backup.phraseHintStrong")}</strong>{t("settings.backup.phraseHintAfter")}
           </p>
         )}
       </div>
@@ -236,7 +238,7 @@ export function BackupPicker({
       {/* Target */}
       <div>
         <div className="text-xs text-muted-foreground font-semibold mb-1.5">
-          Backup target
+          {t("settings.backup.target")}
         </div>
         {volumes.length > 0 && (
           <div className="space-y-1.5 mb-2">
@@ -261,7 +263,7 @@ export function BackupPicker({
                   <div className="text-sm font-medium">
                     {v.label || v.name}
                     {v.size && <span className="ml-2 text-xs text-muted-foreground">{v.size}</span>}
-                    {v.hotplug && <span className="ml-2 text-2xs px-1 rounded bg-sky-500/15 text-sky-500">external</span>}
+                    {v.hotplug && <span className="ml-2 text-2xs px-1 rounded bg-sky-500/15 text-sky-500">{t("settings.backup.external")}</span>}
                   </div>
                   <div className="text-2xs text-muted-foreground font-mono break-all">{v.suggested_target}</div>
                 </div>
@@ -280,7 +282,7 @@ export function BackupPicker({
             className="accent-primary mt-1"
           />
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium">Custom path</div>
+            <div className="text-sm font-medium">{t("settings.backup.customPath")}</div>
             <input
               value={targetPath}
               onChange={e => setTargetPath(e.target.value)}
@@ -289,8 +291,7 @@ export function BackupPicker({
               className="mt-1 w-full h-8 px-2 bg-background border border-border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ring/40"
             />
             <p className="text-2xs text-muted-foreground mt-1">
-              Local dir, NAS mount, or anywhere else readable. You can also point this at a
-              folder you rsync to cloud — backups are age-encrypted so the cloud sees only ciphertext.
+              {t("settings.backup.customPathHint")}
             </p>
           </div>
         </label>
@@ -300,9 +301,7 @@ export function BackupPicker({
           <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5 text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <div>
-              This target is on the SAME disk as your live data. Backups will protect you from
-              accidental deletion + corruption, but NOT from disk failure or theft. Consider syncing
-              this folder to cloud storage too.
+              {t("settings.backup.sameDisk")}
             </div>
           </div>
         )}
@@ -311,7 +310,7 @@ export function BackupPicker({
       {/* Schedule */}
       <div>
         <div className="text-xs text-muted-foreground font-semibold mb-1.5 flex items-center gap-1">
-          <Clock className="w-3 h-3" /> Schedule
+          <Clock className="w-3 h-3" /> {t("settings.backup.schedule")}
         </div>
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input
@@ -320,7 +319,7 @@ export function BackupPicker({
             onChange={e => setScheduleEnabled(e.target.checked)}
             className="accent-primary"
           />
-          Run daily at
+          {t("settings.backup.runDailyAt")}
           <input
             type="time"
             value={scheduleTime}
@@ -328,35 +327,34 @@ export function BackupPicker({
             disabled={!scheduleEnabled}
             className="h-8 px-2 bg-background border border-border rounded text-sm focus:outline-none disabled:opacity-50"
           />
-          <span className="text-xs text-muted-foreground">(local time)</span>
+          <span className="text-xs text-muted-foreground">{t("settings.backup.localTime")}</span>
         </label>
       </div>
 
       {/* Includes */}
       <div>
         <div className="text-xs text-muted-foreground font-semibold mb-1.5">
-          What to include
+          {t("settings.backup.include")}
         </div>
         <div className="space-y-1">
           <div className="text-xs text-muted-foreground mb-2">
-            <strong>Always:</strong> calendar, contacts, tasks, bills, chat history, settings, encryption key.
-            The toggles below add HEAVY data on top — expect snapshots in the GB range when on.
+            <strong>{t("settings.backup.always")}</strong> {t("settings.backup.alwaysList")}
           </div>
           <IncludeToggle
-            label="Photos (Immich library + Postgres dump)"
-            desc="JPEGs + albums + faces + AI search metadata. Big — usually most of the backup."
+            label={t("settings.backup.photos")}
+            desc={t("settings.backup.photosDesc")}
             checked={includePhotos}
             onChange={setIncludePhotos}
           />
           <IncludeToggle
-            label="Documents (PDFs + scans)"
-            desc="Filed documents + OCR. Sizeable; grows with your filing rate."
+            label={t("settings.backup.documents")}
+            desc={t("settings.backup.documentsDesc")}
             checked={includePaperless}
             onChange={setIncludePaperless}
           />
           <IncludeToggle
-            label="WhatsApp session (pairing secrets)"
-            desc="Without this, a restored Yorik forgets which phone is paired — you'd re-scan the QR code."
+            label={t("settings.backup.whatsapp")}
+            desc={t("settings.backup.whatsappDesc")}
             checked={includeWhatsapp}
             onChange={setIncludeWhatsapp}
           />
@@ -371,7 +369,7 @@ export function BackupPicker({
           className="flex-1 h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {busy === "saving" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          Save
+          {t("settings.backup.save")}
         </button>
         {!compact && (
           <button
@@ -380,7 +378,7 @@ export function BackupPicker({
             className="h-10 px-4 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted disabled:opacity-50 flex items-center gap-2"
           >
             {busy === "running" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            Run now
+            {t("settings.backup.runNow")}
           </button>
         )}
       </div>
@@ -389,13 +387,13 @@ export function BackupPicker({
       {!compact && status && status.history.length > 0 && (
         <div>
           <div className="text-xs text-muted-foreground font-semibold mb-1.5 mt-2">
-            Recent runs
+            {t("settings.backup.recentRuns")}
           </div>
           <div className="space-y-1">
             {status.history.slice(0, 5).map(h => (
               <div key={h.id} className="flex items-center gap-2 text-xs py-1 px-2 rounded bg-muted/30">
                 {h.status === "ok" ? <Check className="w-3 h-3 text-emerald-500" /> : h.status === "running" ? <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" /> : <AlertTriangle className="w-3 h-3 text-red-500" />}
-                <span>{new Date(h.started_at).toLocaleString()}</span>
+                <span>{new Date(h.started_at).toLocaleString(locale())}</span>
                 {h.size_bytes && <span className="text-muted-foreground">· {fmtBytes(h.size_bytes)}</span>}
                 {h.error && <span className="text-red-500 truncate">· {h.error}</span>}
               </div>
@@ -410,7 +408,7 @@ export function BackupPicker({
           onClick={refresh}
           className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
         >
-          <RefreshCw className="w-3 h-3" /> Refresh
+          <RefreshCw className="w-3 h-3" /> {t("settings.backup.refresh")}
         </button>
       )}
     </div>

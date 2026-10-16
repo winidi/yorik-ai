@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { PersonAvatar } from "@/components/PersonAvatar";
 
@@ -17,9 +18,8 @@ interface Ev { owner_id: string | null; shared: boolean; starts_at: string; all_
 interface Task { due_date: string | null; done: boolean; assignee_ids: string[] }
 interface Feed { today: string; people: Person[]; events: Ev[]; tasks: Task[] }
 
-function plural(n: number, one: string, many: string) { return `${n} ${n === 1 ? one : many}`; }
-
 export function FamilyRow() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [feed, setFeed] = useState<Feed | null>(null);
 
@@ -36,10 +36,10 @@ export function FamilyRow() {
     const todos = feed.tasks.filter(t =>
       !t.done && t.assignee_ids?.includes(p.id) && (!t.due_date || t.due_date <= today)).length;
     const parts = [
-      events ? plural(events, "event", "events") : "",
-      todos ? plural(todos, "to-do", "to-dos") : "",
+      events ? t("apps.family.events", { count: events }) : "",
+      todos ? t("apps.family.todos", { count: todos }) : "",
     ].filter(Boolean);
-    return { p, line: parts.length ? parts.join(", ") : "Free today" };
+    return { p, line: parts.length ? parts.join(", ") : t("apps.family.freeToday") };
   });
 
   return (
@@ -50,7 +50,7 @@ export function FamilyRow() {
             key={p.id}
             onClick={() => navigate("/board")}
             className="flex flex-col items-center gap-1.5 min-w-[72px] group"
-            title={`${p.first_name || p.name}: ${line}. Open the family board`}
+            title={t("apps.family.openBoard", { name: p.first_name || p.name, line })}
           >
             <PersonAvatar
               name={p.name} color={p.color} avatarUrl={p.avatar_url} size={48}

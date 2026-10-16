@@ -13,6 +13,7 @@
  * unmounts the pad.
  */
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Loader2, Delete } from "lucide-react";
 
@@ -37,6 +38,7 @@ interface Props {
 const PIN_LEN = 4;
 
 export function PinPad({ prompt, subline, onSubmit, onCancel, busy = false, errorText }: Props) {
+  const { t } = useTranslation();
   const [pin, setPin] = useState("");
   const [shaking, setShaking] = useState(false);
   // Internal busy mirrors parent busy so we can show the spinner during
@@ -148,7 +150,7 @@ export function PinPad({ prompt, subline, onSubmit, onCancel, busy = false, erro
             disabled={isDisabled}
             className="h-20 rounded-xl text-sm font-medium bg-transparent hover:bg-muted/40 transition disabled:opacity-40"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
         ) : <div /> /* spacer when no cancel */}
         <button
@@ -164,7 +166,7 @@ export function PinPad({ prompt, subline, onSubmit, onCancel, busy = false, erro
           disabled={isDisabled || pin.length === 0}
           onClick={handleDelete}
           className="h-20 rounded-xl bg-transparent hover:bg-muted/40 flex items-center justify-center transition disabled:opacity-40"
-          aria-label="Delete last digit"
+          aria-label={t("onboarding.pin.deleteDigit")}
         >
           {innerBusy
             ? <Loader2 className="w-6 h-6 animate-spin" />

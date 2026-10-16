@@ -90,6 +90,7 @@
     "fieldName": "Wofür",
     "fieldNameHint": "Strom März",
     "fieldAmount": "Betrag ({{currency}})",
+    "fieldAmountHint": "0,00",
     "fieldDue": "Fällig am",
     "fieldPayee": "Empfänger (optional)",
     "fieldPayeeHint": "Stadtwerke",

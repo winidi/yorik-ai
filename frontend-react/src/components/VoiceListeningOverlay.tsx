@@ -13,8 +13,10 @@
  * own pointer-events to receive the tap.
  */
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export function VoiceListeningOverlay() {
+  const { t } = useTranslation();
   const [listening, setListening] = useState(false);
   const [continuous, setContinuous] = useState(false);
   const levelsRef = useRef<number[]>(new Array(24).fill(0));
@@ -73,7 +75,7 @@ export function VoiceListeningOverlay() {
               <span className="absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75 animate-ping" />
               <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" />
             </span>
-            <span className="text-sm font-medium tracking-wide">Listening…</span>
+            <span className="text-sm font-medium tracking-wide">{t("chat.overlay.listening")}</span>
           </div>
           <div
             ref={barsRef}
@@ -99,7 +101,7 @@ export function VoiceListeningOverlay() {
           }}
           className="pointer-events-auto px-4 py-1.5 rounded-full bg-black/65 backdrop-blur-md text-white text-xs font-medium tracking-wide hover:bg-black/80 transition border border-white/15"
         >
-          Conversation mode · tap to end
+          {t("chat.overlay.conversationMode")}
         </button>
       )}
     </div>

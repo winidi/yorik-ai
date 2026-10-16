@@ -97,16 +97,16 @@ export function AvatarPinFallback({ users, transcript, retryMessage, onClose, on
         }
         return true;
       }
-      setError("Switch failed — try again");
+      setError(t("board.pin.switchFailed"));
       return false;
     } catch (err: any) {
       const msg = err instanceof ApiError ? err.message : String(err);
       if (msg.includes("401") || msg.toLowerCase().includes("wrong pin")) {
-        setError("Wrong PIN");
+        setError(t("board.pin.wrong"));
         return false;
       }
       if (msg.includes("429") || msg.toLowerCase().includes("too many")) {
-        setError("Too many attempts — wait a minute");
+        setError(t("board.pin.tooMany"));
         return false;
       }
       setError(msg);
@@ -123,7 +123,7 @@ export function AvatarPinFallback({ users, transcript, retryMessage, onClose, on
         type="button"
         onClick={onClose}
         className="absolute top-6 right-6 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
-        aria-label="Cancel"
+        aria-label={t("common.cancel")}
       >
         <X className="w-5 h-5" />
       </button>
@@ -131,7 +131,7 @@ export function AvatarPinFallback({ users, transcript, retryMessage, onClose, on
       {!picked && (
         <>
           <div className="text-2xl font-light mb-2 text-center">
-            Who's there?
+            {t("board.pin.whoThere")}
           </div>
           {transcript && (
             <div className="text-sm text-white/60 mb-8 max-w-md text-center italic">
@@ -174,18 +174,18 @@ export function AvatarPinFallback({ users, transcript, retryMessage, onClose, on
             onClick={() => { setPicked(null); setError(undefined); }}
             className="mb-6 text-sm text-white/70 hover:text-white"
           >
-            ← Not me
+            {t("board.pin.notMe")}
           </button>
           <PinPad
-            prompt={`Hi ${picked.first_name || picked.name}, enter your PIN`}
-            subline="4 digits"
+            prompt={t("board.pin.prompt", { name: picked.first_name || picked.name })}
+            subline={t("board.pin.fourDigits")}
             errorText={errorText}
             busy={busy}
             onSubmit={trySwitch}
           />
           {busy && (
             <div className="mt-4 text-white/60 text-xs inline-flex items-center gap-1.5">
-              <Loader2 className="w-3 h-3 animate-spin" /> verifying…
+              <Loader2 className="w-3 h-3 animate-spin" /> {t("board.pin.verifying")}
             </div>
           )}
         </div>
@@ -202,7 +202,7 @@ export function AvatarPinFallback({ users, transcript, retryMessage, onClose, on
           onClick={onSignInWithPassword}
           className="absolute bottom-6 left-6 h-10 px-4 rounded-full bg-white/10 hover:bg-white/20 text-sm text-white/80"
         >
-          Sign in with password
+          {t("board.pin.signInPassword")}
         </button>
       )}
 

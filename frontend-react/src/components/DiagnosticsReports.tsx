@@ -30,9 +30,9 @@ export function DiagnosticsSection({ toast }: { toast: (text: string, kind?: "in
     try {
       setReports((await api.get<{ reports: Report[] }>("/api/diagnostics/reports?limit=100")).reports);
     } catch (e: any) {
-      toast(e?.message || "Could not load", "error");
+      toast(e?.message || t("settings.diagnostics.loadFailed"), "error");
     } finally { setLoading(false); }
-  }, [toast]);
+  }, [toast, t]);
   useEffect(() => { refresh(); }, [refresh]);
 
   const current = reports?.find(r => r.id === open) || null;

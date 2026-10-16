@@ -64,7 +64,7 @@ function Overview() {
       <div className="flex items-center justify-between mb-2 max-md:pr-12">
         <div className="flex items-center gap-2.5">
           <Workflow className="w-5 h-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">Pipelines</h1>
+          <h1 className="text-lg font-semibold">{t("apps.pipelines")}</h1>
         </div>
         {me?.enabled !== false && (
           <button

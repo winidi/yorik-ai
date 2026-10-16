@@ -18,6 +18,28 @@ from typing import Any, Optional
 log = logging.getLogger("yorik.messages")
 
 MESSAGES: dict[str, dict[str, str]] = {
+    # ── WhatsApp: stand-in preview for a media-only last message ─────
+    "whatsapp.preview.photo": {"en": "Photo", "de": "Foto"},
+    "whatsapp.preview.video": {"en": "Video", "de": "Video"},
+    "whatsapp.preview.voice": {"en": "Voice message", "de": "Sprachnachricht"},
+    "whatsapp.preview.document": {"en": "Document", "de": "Dokument"},
+    "whatsapp.preview.sticker": {"en": "Sticker", "de": "Sticker"},
+    # ── Briefing: the one-line summary over the sections ─────────────
+    "briefing.summary.event": {"en": "{{n}} event", "de": "{{n}} Termin"},
+    "briefing.summary.events": {"en": "{{n}} events", "de": "{{n}} Termine"},
+    "briefing.summary.tasks_mixed": {"en": "{{open}} open + {{done}} done tasks",
+                                     "de": "{{open}} offene + {{done}} erledigte Aufgaben"},
+    "briefing.summary.task_open": {"en": "{{n}} task", "de": "{{n}} Aufgabe"},
+    "briefing.summary.tasks_open": {"en": "{{n}} tasks", "de": "{{n}} Aufgaben"},
+    "briefing.summary.task_done": {"en": "{{n}} task done", "de": "{{n}} Aufgabe erledigt"},
+    "briefing.summary.tasks_done": {"en": "{{n}} tasks done", "de": "{{n}} Aufgaben erledigt"},
+    "briefing.summary.bill_due": {"en": "{{n}} bill due", "de": "{{n}} Rechnung fällig"},
+    "briefing.summary.bills_due": {"en": "{{n}} bills due", "de": "{{n}} Rechnungen fällig"},
+    "briefing.summary.photo": {"en": "{{n}} photo", "de": "{{n}} Foto"},
+    "briefing.summary.photos": {"en": "{{n}} photos", "de": "{{n}} Fotos"},
+    "briefing.summary.email_ready": {"en": "email digest ready", "de": "E-Mail-Überblick fertig"},
+    "briefing.summary.whatsapp_ready": {"en": "WhatsApp digest ready", "de": "WhatsApp-Überblick fertig"},
+    "briefing.summary.nothing": {"en": "Nothing to brief — all clear.", "de": "Nichts zu berichten — alles ruhig."},
     # ── Emergency access: told to the other adults ───────────────────
     "emergency.on.title": {"en": "{{name}} turned on emergency access",
                            "de": "{{name}} hat den Notfall-Zugriff eingeschaltet"},

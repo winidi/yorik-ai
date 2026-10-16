@@ -20,6 +20,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import {
   X, CheckCircle2, AlertTriangle, Lock, Globe, Download,
   ShieldCheck, Loader2,
@@ -74,6 +75,7 @@ interface Props {
 export function AppInstallConsentDialog({
   manifest, sourceDir, onClose, onInstalled,
 }: Props) {
+  const { t } = useTranslation();
   const [data, setData] = useState<PreflightResponse | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [installing, setInstalling] = useState(false);
@@ -93,17 +95,17 @@ export function AppInstallConsentDialog({
         if (cancelled) return;
         setLoadErr(
           e instanceof ApiError
-            ? e.message || `Preflight failed (HTTP ${e.status})`
-            : "Preflight request failed",
+            ? e.message || t("settings.appInstall.preflightFailedHttp", { status: e.status })
+            : t("settings.appInstall.preflightFailed"),
         );
       }
     })();
     return () => { cancelled = true; };
-  }, [manifest, sourceDir]);
+  }, [manifest, sourceDir, t]);
 
   const handleInstall = useCallback(async () => {
     if (!sourceDir) {
-      setInstallErr("No source directory — preview mode only.");
+      setInstallErr(t("settings.appInstall.noSourceDir"));
       return;
     }
     setInstalling(true);
@@ -118,12 +120,12 @@ export function AppInstallConsentDialog({
     } catch (e) {
       setInstallErr(
         e instanceof ApiError
-          ? e.message || `Install failed (HTTP ${e.status})`
-          : "Install request failed",
+          ? e.message || t("settings.appInstall.installFailedHttp", { status: e.status })
+          : t("settings.appInstall.installFailed"),
       );
       setInstalling(false);
     }
-  }, [sourceDir, data?.summary, onInstalled, onClose]);
+  }, [sourceDir, data?.summary, onInstalled, onClose, t]);
 
   return createPortal(
     <div
@@ -136,12 +138,12 @@ export function AppInstallConsentDialog({
       >
         <header className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div className="font-semibold">
-            {data ? `Install ${data.summary.app.name ?? "app"}?` : "Loading…"}
+            {data ? t("settings.appInstall.installQuestion", { name: data.summary.app.name ?? t("settings.appInstall.app") }) : t("settings.appInstall.loading")}
           </div>
           <button
             onClick={onClose}
             className="p-1.5 hover:bg-muted rounded-md text-muted-foreground"
-            aria-label="Close"
+            aria-label={t("settings.appInstall.close")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -153,7 +155,7 @@ export function AppInstallConsentDialog({
           {!data && !loadErr && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Reading manifest…
+              {t("settings.appInstall.readingManifest")}
             </div>
           )}
 
@@ -178,7 +180,7 @@ export function AppInstallConsentDialog({
               installing && "opacity-50 cursor-wait",
             )}
           >
-            Cancel
+            {t("settings.appInstall.cancel")}
           </button>
           <button
             onClick={handleInstall}
@@ -195,12 +197,12 @@ export function AppInstallConsentDialog({
             {installing ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Installing…
+                {t("settings.appInstall.installing")}
               </>
             ) : (
               <>
                 <Download className="w-3.5 h-3.5" />
-                Install
+                {t("settings.appInstall.install")}
               </>
             )}
           </button>
@@ -228,6 +230,7 @@ function ConsentBody({ data }: { data: PreflightResponse }) {
 }
 
 function AppHeader({ app }: { app: PreflightSummary["app"] }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-start gap-3">
       <div className="min-w-0">
@@ -239,7 +242,7 @@ function AppHeader({ app }: { app: PreflightSummary["app"] }) {
         </div>
         {(app.author || app.license || app.homepage) && (
           <div className="text-xs text-muted-foreground mt-0.5">
-            {app.author && <>by {app.author}</>}
+            {app.author && <>{t("settings.appInstall.by", { author: app.author })}</>}
             {app.author && app.license && <> · </>}
             {app.license && <>{app.license}</>}
             {app.homepage && (
@@ -251,7 +254,7 @@ function AppHeader({ app }: { app: PreflightSummary["app"] }) {
                   rel="noopener noreferrer"
                   className="underline hover:text-foreground"
                 >
-                  source
+                  {t("settings.appInstall.source")}
                 </a>
               </>
             )}
@@ -270,12 +273,13 @@ function AppHeader({ app }: { app: PreflightSummary["app"] }) {
 function OwnedDataBlock({
   schema, tables,
 }: { schema: string | null; tables: string[] }) {
+  const { t } = useTranslation();
   return (
-    <Section title="Its own data">
+    <Section title={t("settings.appInstall.ownData")}>
       <div className="text-[13px] flex items-start gap-2">
         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
         <span>
-          Private database tables in{" "}
+          {t("settings.appInstall.privateTables")}{" "}
           <span className="font-mono text-xs text-muted-foreground">
             {schema}
           </span>
@@ -294,8 +298,9 @@ function OwnedDataBlock({
 }
 
 function ScopesBlock({ scopes }: { scopes: PreflightSummary["scopes"] }) {
+  const { t } = useTranslation();
   return (
-    <Section title="It wants to">
+    <Section title={t("settings.appInstall.wantsTo")}>
       <ul className="space-y-1.5 text-[13px]">
         {scopes.map((s, i) => (
           <li key={i} className="flex items-start gap-2">
@@ -313,10 +318,11 @@ function ScopesBlock({ scopes }: { scopes: PreflightSummary["scopes"] }) {
 }
 
 function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
+  const { t } = useTranslation();
   if (scope.kind === "read") {
     return (
       <>
-        <strong>Read</strong> your{" "}
+        <strong>{t("settings.appInstall.read")}</strong> {t("settings.appInstall.your")}{" "}
         <span className="font-mono text-xs">{scope.table}</span>
         {scope.columns.length > 0 && (
           <>
@@ -327,7 +333,7 @@ function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
         )}
         {scope.purpose && (
           <div className="text-xs text-muted-foreground mt-0.5">
-            Why: {scope.purpose}
+            {t("settings.appInstall.why")} {scope.purpose}
           </div>
         )}
       </>
@@ -336,10 +342,10 @@ function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
   if (scope.kind === "write_rejected") {
     return (
       <>
-        <strong className="text-red-600 dark:text-red-400">Write</strong> to{" "}
+        <strong className="text-red-600 dark:text-red-400">{t("settings.appInstall.write")}</strong> {t("settings.appInstall.to")}{" "}
         <span className="font-mono text-xs">{scope.table}</span>{" "}
         <span className="text-xs text-muted-foreground">
-          (not allowed in v1 — declared but ignored)
+          {t("settings.appInstall.writeRejected")}
         </span>
       </>
     );
@@ -347,7 +353,7 @@ function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
   if (scope.kind === "skill") {
     return (
       <>
-        Ask Yorik to run{" "}
+        {t("settings.appInstall.runSkill")}{" "}
         <span className="font-mono text-xs">{scope.skill}</span>
       </>
     );
@@ -355,16 +361,16 @@ function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
   if (scope.kind === "connector") {
     return (
       <>
-        Use the{" "}
+        {t("settings.appInstall.useThe")}{" "}
         <span className="font-mono text-xs">{scope.connector}</span>{" "}
-        connector
+        {t("settings.appInstall.connector")}
       </>
     );
   }
   if (scope.kind === "realtime") {
     return (
       <>
-        Get realtime updates for{" "}
+        {t("settings.appInstall.realtime")}{" "}
         <span className="font-mono text-xs">{scope.table}</span>
       </>
     );
@@ -372,12 +378,12 @@ function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
   if (scope.kind === "scheduled") {
     return (
       <>
-        Run <span className="font-mono text-xs">{scope.invokes}</span>{" "}
-        on schedule{" "}
+        {t("settings.appInstall.run")} <span className="font-mono text-xs">{scope.invokes}</span>{" "}
+        {t("settings.appInstall.onSchedule")}{" "}
         <span className="text-muted-foreground">({scope.cron})</span>
         {scope.purpose && (
           <div className="text-xs text-muted-foreground mt-0.5">
-            Why: {scope.purpose}
+            {t("settings.appInstall.why")} {scope.purpose}
           </div>
         )}
       </>
@@ -386,11 +392,11 @@ function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
   // webhook
   return (
     <>
-      Expose webhook at{" "}
+      {t("settings.appInstall.webhook")}{" "}
       <span className="font-mono text-xs">{scope.path}</span>
       {scope.purpose && (
         <div className="text-xs text-muted-foreground mt-0.5">
-          Why: {scope.purpose}
+          {t("settings.appInstall.why")} {scope.purpose}
         </div>
       )}
     </>
@@ -398,21 +404,22 @@ function ScopeLine({ scope }: { scope: PreflightSummary["scopes"][number] }) {
 }
 
 function NetworkBlock({ network }: { network: PreflightSummary["network"] }) {
+  const { t } = useTranslation();
   if (network.talks_only_to_yorik) {
     return (
-      <Section title="Network">
+      <Section title={t("settings.appInstall.network")}>
         <div className="flex items-start gap-2 text-[13px]">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-          <span>This app only talks to your Yorik box.</span>
+          <span>{t("settings.appInstall.onlyYorik")}</span>
         </div>
       </Section>
     );
   }
   return (
-    <Section title="Network">
+    <Section title={t("settings.appInstall.network")}>
       <div className="text-[13px] mb-1.5 flex items-start gap-2">
         <Globe className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-        <span>This app may also contact:</span>
+        <span>{t("settings.appInstall.mayContact")}</span>
       </div>
       <ul className="space-y-1 text-[13px] ml-5">
         {network.outbound.map((o, i) => (
@@ -429,8 +436,9 @@ function NetworkBlock({ network }: { network: PreflightSummary["network"] }) {
 }
 
 function CannotBlock({ cannot }: { cannot: string[] }) {
+  const { t } = useTranslation();
   return (
-    <Section title="This app cannot">
+    <Section title={t("settings.appInstall.cannot")}>
       <ul className="space-y-1 text-[13px] text-muted-foreground">
         {cannot.map((line, i) => (
           <li key={i} className="flex items-start gap-2">
@@ -444,8 +452,9 @@ function CannotBlock({ cannot }: { cannot: string[] }) {
 }
 
 function CspBlock({ csp }: { csp: string }) {
+  const { t } = useTranslation();
   return (
-    <Section title="Browser sandbox (Content-Security-Policy)">
+    <Section title={t("settings.appInstall.csp")}>
       <div className="font-mono text-2xs text-muted-foreground bg-muted/40 rounded p-2 break-all leading-relaxed">
         {csp}
       </div>
@@ -465,10 +474,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function ManifestErrors({ errors }: { errors: string[] }) {
+  const { t } = useTranslation();
   return (
     <div className="rounded-md border border-red-500/30 bg-red-500/5 p-3">
       <div className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1.5">
-        Manifest errors
+        {t("settings.appInstall.manifestErrors")}
       </div>
       <ul className="text-[13px] space-y-1">
         {errors.map((e, i) => (
@@ -479,7 +489,7 @@ function ManifestErrors({ errors }: { errors: string[] }) {
         ))}
       </ul>
       <div className="text-xs text-muted-foreground mt-2">
-        Install is disabled while errors are present.
+        {t("settings.appInstall.installDisabled")}
       </div>
     </div>
   );

@@ -261,7 +261,7 @@ function AddBillForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
         </label>
         <label className="text-xs text-muted-foreground">
           {t("finance.bills.fieldAmount", { currency: householdCurrency() })}
-          <input inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} className={cn(field, "mt-1")} placeholder="0,00" />
+          <input inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} className={cn(field, "mt-1")} placeholder={t("finance.bills.fieldAmountHint")} />
         </label>
         <label className="text-xs text-muted-foreground">
           {t("finance.bills.fieldDue")}

@@ -26,6 +26,7 @@ import {
   Loader2, AtSign, Slash, UsersRound, CalendarDays, FileText,
   CornerDownLeft,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import i18n from "@/i18n";
 import { api } from "@/lib/api";
@@ -63,41 +64,29 @@ export interface MentionPick {
 // expanded text like any other user input.
 
 interface SlashCommand {
-  name: string;       // shown after the slash, e.g. "event"
-  label: string;      // human-friendly title
-  description: string;
+  name: string;       // shown after the slash, e.g. "event"; also the
+                      // translation key under chat.mention.slash.<name>
   /** Templated text replacing the composer (will auto-send). */
   fullMessage?: string;
   /** Text prefix to seed the composer with; user types the rest. */
   template?: string;
 }
 
+// Label and description are resolved at render through
+// `chat.mention.slash.<name>.label|desc` so they follow the language.
 const SLASH_COMMANDS: SlashCommand[] = [
-  { name: "today",  label: "What's on today",
-    description: "Show today's calendar + open tasks",
-    fullMessage: "messages.slash.today" },
-  { name: "week",  label: "This week",
-    description: "Week overview",
-    fullMessage: "messages.slash.week" },
-  { name: "tasks", label: "Open tasks",
-    description: "List currently open tasks",
-    fullMessage: "messages.slash.tasks" },
-  { name: "event", label: "New calendar event",
-    description: "Add an event — type the rest after the prefix",
-    template: "messages.slash.event" },
-  { name: "task",  label: "New task",
-    description: "Add a task — type the rest after the prefix",
-    template: "messages.slash.task" },
-  { name: "letter", label: "Write a letter",
-    description: "Draft a letter — type the recipient + topic after",
-    template: "messages.slash.letter" },
-  { name: "find", label: "Find a document",
-    description: "Search your filing cabinet",
-    template: "messages.slash.find" },
-  { name: "contact", label: "Find a contact",
-    description: "Search contacts by name",
-    template: "messages.slash.contact" },
+  { name: "today",   fullMessage: "messages.slash.today" },
+  { name: "week",    fullMessage: "messages.slash.week" },
+  { name: "tasks",   fullMessage: "messages.slash.tasks" },
+  { name: "event",   template: "messages.slash.event" },
+  { name: "task",    template: "messages.slash.task" },
+  { name: "letter",  template: "messages.slash.letter" },
+  { name: "find",    template: "messages.slash.find" },
+  { name: "contact", template: "messages.slash.contact" },
 ];
+
+const slashLabel = (c: SlashCommand) => i18n.t(`chat.mention.slash.${c.name}.label`);
+const slashDesc  = (c: SlashCommand) => i18n.t(`chat.mention.slash.${c.name}.desc`);
 
 
 interface Props {
@@ -125,11 +114,12 @@ function SlashPanel({ prefix, onPick, onCancel }: {
   onPick: (pick: MentionPick) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const matches = useMemo(() => {
     const q = prefix.toLowerCase();
     if (!q) return SLASH_COMMANDS;
     return SLASH_COMMANDS.filter(
-      c => c.name.startsWith(q) || c.label.toLowerCase().includes(q),
+      c => c.name.startsWith(q) || slashLabel(c).toLowerCase().includes(q),
     );
   }, [prefix]);
   const [highlight, setHighlight] = useState(0);
@@ -147,10 +137,10 @@ function SlashPanel({ prefix, onPick, onCancel }: {
   }, onCancel);
 
   return (
-    <Shell title="Slash commands" icon={<Slash className="w-3 h-3" />}>
+    <Shell title={t("chat.mention.slashTitle")} icon={<Slash className="w-3 h-3" />}>
       {matches.length === 0 ? (
         <div className="px-3 py-4 text-xs text-muted-foreground text-center italic">
-          No commands match.
+          {t("chat.mention.noCommands")}
         </div>
       ) : matches.map((c, i) => (
         <button
@@ -170,10 +160,10 @@ function SlashPanel({ prefix, onPick, onCancel }: {
           <div className="flex-1 min-w-0">
             <div className="font-medium text-foreground flex items-center gap-1.5">
               <code className="text-2xs bg-muted px-1 rounded">/{c.name}</code>
-              <span>{c.label}</span>
+              <span>{slashLabel(c)}</span>
             </div>
             <div className="text-2xs text-muted-foreground mt-0.5 truncate">
-              {c.description}
+              {slashDesc(c)}
             </div>
           </div>
           {i === highlight && (
@@ -193,6 +183,7 @@ function AtPanel({ prefix, onPick, onCancel }: {
   onPick: (pick: MentionPick) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [results, setResults] = useState<MentionResults>(
     { contact: [], event: [], doc: [] },
   );
@@ -242,16 +233,16 @@ function AtPanel({ prefix, onPick, onCancel }: {
   }, onCancel);
 
   return (
-    <Shell title={`Mention${prefix ? ` "${prefix}"` : ""}`}
+    <Shell title={prefix ? t("chat.mention.mentionPrefix", { prefix }) : t("chat.mention.mentionTitle")}
            icon={<AtSign className="w-3 h-3" />}>
       {loading && flat.length === 0 && (
         <div className="px-3 py-3 text-xs text-muted-foreground inline-flex items-center gap-1.5">
-          <Loader2 className="w-3 h-3 animate-spin" /> searching…
+          <Loader2 className="w-3 h-3 animate-spin" /> {t("chat.mention.searching")}
         </div>
       )}
       {!loading && flat.length === 0 && (
         <div className="px-3 py-4 text-xs text-muted-foreground text-center italic">
-          No matches{prefix && ` for "${prefix}"`}.
+          {prefix ? t("chat.mention.noMatchesFor", { prefix }) : t("chat.mention.noMatches")}
         </div>
       )}
       {(["contact", "event", "doc"] as const).map(kind => {
@@ -263,7 +254,7 @@ function AtPanel({ prefix, onPick, onCancel }: {
               {kind === "contact" && <UsersRound className="w-2.5 h-2.5" />}
               {kind === "event"   && <CalendarDays className="w-2.5 h-2.5" />}
               {kind === "doc"     && <FileText className="w-2.5 h-2.5" />}
-              {kind === "contact" ? "Contacts" : kind === "event" ? "Events" : "Documents"}
+              {kind === "contact" ? t("chat.mention.contacts") : kind === "event" ? t("chat.mention.events") : t("chat.mention.documents")}
             </div>
             {items.map(it => {
               const i = flat.findIndex(f => f.kind === kind && f.item.id === it.id);

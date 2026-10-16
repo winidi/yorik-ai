@@ -25,7 +25,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { formatDate } from "@/i18n/format";
 import {
@@ -51,11 +51,12 @@ const ROLE = "admin";
 
 // Prompts behind the "Smart tools" presets (desktop chips + mobile
 // sheet). Kept here so the wording stays in one place — the same query
-// runs whichever surface dispatches it.
-const SMART_PRESETS: Array<{ label: string; q: string }> = [
-  { label: "Estimate missing durations", q: "estimate durations for tasks that don't have one yet" },
-  { label: "Auto-prioritise",            q: "set priority on each task based on the title and due date" },
-  { label: "Auto-categorise",            q: "suggest a category for each uncategorised task" },
+// runs whichever surface dispatches it. Labels are catalogue keys
+// (tasks.presets.*), resolved at render.
+const SMART_PRESETS: Array<{ labelKey: string; q: string }> = [
+  { labelKey: "tasks.presets.estimate",   q: "estimate durations for tasks that don't have one yet" },
+  { labelKey: "tasks.presets.prioritise", q: "set priority on each task based on the title and due date" },
+  { labelKey: "tasks.presets.categorise", q: "suggest a category for each uncategorised task" },
 ];
 
 // View tabs replace the old Open/Done/All filter — matches the
@@ -264,20 +265,21 @@ export function TasksApp() {
         const matches = magicResult.filtered_ids
           .map(id => byId.get(id))
           .filter(Boolean) as ExtendedTask[];
-        if (matches.length > 0) return [{ label: "Matches", tasks: matches }];
+        if (matches.length > 0) return [{ label: t("tasks.matches"), tasks: matches }];
       }
       return grouped;
     }
 
     return buildGroups(filteredByMode, grouping);
-  }, [filteredByMode, grouping, magicResult]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredByMode, grouping, magicResult, i18n.language]);
 
   const toggle = useCallback(async (t: ExtendedTask) => {
     try {
       await api.patch(`/api/tasks/${t.id}?role=${ROLE}`, { done: t.done ? 0 : 1 });
       if (t.started_at) announceFocusChange();
       tasksApi.refetch();
-    } catch (e: any) { toast(`Failed: ${e?.message || e}`); }
+    } catch (e: any) { toast(i18n.t("tasks.errors.failed", { error: e?.message || e })); }
   }, [tasksApi]);
 
   // Create a subtask under `parent`. Mirrors the structured-field shape
@@ -298,17 +300,17 @@ export function TasksApp() {
       });
       tasksApi.refetch();
     } catch (e: any) {
-      toast(`Failed to add subtask: ${e?.message || e}`);
+      toast(t("tasks.errors.addSubtask", { error: e?.message || e }));
       throw e;
     }
   }, [tasksApi]);
 
   const remove = useCallback(async (t: ExtendedTask) => {
-    if (!confirm(`Delete task "${t.title}"?`)) return;
+    if (!confirm(i18n.t("tasks.confirmDelete", { title: t.title }))) return;
     try {
       await api.delete(`/api/tasks/${t.id}?role=${ROLE}`);
       tasksApi.refetch();
-    } catch (e: any) { toast(`Failed: ${e?.message || e}`); }
+    } catch (e: any) { toast(i18n.t("tasks.errors.failed", { error: e?.message || e })); }
   }, [tasksApi]);
 
   // Snooze — patch due_date forward by the given ISO date. Used by
@@ -317,7 +319,7 @@ export function TasksApp() {
     try {
       await api.patch(`/api/tasks/${t.id}?role=${ROLE}`, { due_date: newDue });
       tasksApi.refetch();
-    } catch (e: any) { toast(`Snooze failed: ${e?.message || e}`); }
+    } catch (e: any) { toast(i18n.t("tasks.errors.snooze", { error: e?.message || e })); }
   }, [tasksApi]);
 
   // Long-press start / stop on the active-timer. Backend enforces the
@@ -329,7 +331,7 @@ export function TasksApp() {
       await api.post(`/api/tasks/${t.id}/${endpoint}?role=${ROLE}`);
       tasksApi.refetch();
       announceFocusChange();
-    } catch (e: any) { toast(`Timer failed: ${e?.message || e}`); }
+    } catch (e: any) { toast(i18n.t("tasks.errors.timer", { error: e?.message || e })); }
   }, [tasksApi]);
 
   const addTask = useCallback(async () => {
@@ -373,14 +375,14 @@ export function TasksApp() {
       //    user can see the LLM's interpretation before the row
       //    appears in the list. Cleared after ~3.5s.
       const bits: string[] = [];
-      if (parsed.due_date) bits.push(`due ${parsed.due_date}`);
-      if (parsed.priority === 2) bits.push("high priority");
-      if (parsed.priority === 0) bits.push("low priority");
+      if (parsed.due_date) bits.push(t("tasks.understood.due", { date: parsed.due_date }));
+      if (parsed.priority === 2) bits.push(t("tasks.understood.high"));
+      if (parsed.priority === 0) bits.push(t("tasks.understood.low"));
       if (parsed.category) bits.push(`#${parsed.category}`);
       if (parsed.estimated_minutes) bits.push(`${parsed.estimated_minutes} min`);
       if (parsed.recurrence_rule) bits.push(`↻ ${parsed.recurrence_rule}`);
       if (bits.length) {
-        setParseHint("Yorik understood: " + bits.join(" · "));
+        setParseHint(t("tasks.understood.prefix") + bits.join(" · "));
         if (parseHintTimerRef.current) clearTimeout(parseHintTimerRef.current);
         parseHintTimerRef.current = window.setTimeout(() => setParseHint(null), 3500);
       } else {
@@ -389,8 +391,9 @@ export function TasksApp() {
 
       setInputText("");
       tasksApi.refetch();
-    } catch (e: any) { toast(`Failed: ${e?.message || e}`); }
+    } catch (e: any) { toast(t("tasks.errors.failed", { error: e?.message || e })); }
     finally { setAdding(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputText, tasksApi, setDefaultAction]);
 
   const runMagic = useCallback(async () => {
@@ -402,8 +405,9 @@ export function TasksApp() {
       const r = await api.post<AskResponse>("/api/tasks/ask", { query: q });
       setMagicResult(r);
     } catch (e: any) {
-      toast(`Magic search failed: ${e?.message || e}`);
+      toast(t("tasks.errors.magic", { error: e?.message || e }));
     } finally { setMagicLoading(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputText, setDefaultAction]);
 
   // X button on the bar — abort the current magic flow. Clears both
@@ -445,13 +449,14 @@ export function TasksApp() {
       // Clear the highlight after the flash animation finishes.
       setTimeout(() => setRecentlyUpdated(new Set()), 2200);
       if (r.rejected > 0) {
-        toast(`Applied ${r.applied}, rejected ${r.rejected}.`);
+        toast(t("tasks.applied", { applied: r.applied, rejected: r.rejected }));
       }
     } catch (e: any) {
-      toast(`Apply failed: ${e?.message || e}`);
+      toast(t("tasks.errors.apply", { error: e?.message || e }));
     } finally {
       setApplying(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [magicResult, tasksApi]);
 
   // Quick-action presets to make the update path discoverable. Tapping
@@ -466,8 +471,9 @@ export function TasksApp() {
       const r = await api.post<AskResponse>("/api/tasks/ask", { query: q });
       setMagicResult(r);
     } catch (e: any) {
-      toast(`Magic failed: ${e?.message || e}`);
+      toast(t("tasks.errors.magicShort", { error: e?.message || e }));
     } finally { setMagicLoading(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setDefaultAction]);
 
   // Mobile-only toggle for the smart-tools sheet. The same three
@@ -543,7 +549,7 @@ export function TasksApp() {
     <div className="h-screen overflow-y-auto flex flex-col bg-background">
       {/* Phone: the shared app bar; the big icon and prose heading are
           desktop-only, the count line stays small. */}
-      <MobileTopBar title="Tasks" />
+      <MobileTopBar title={t("tasks.title")} />
       {/* pt: tighter on mobile so the heading + bar don't eat the first
           viewport. pb: reserves room for the dock + iOS home indicator
           (env safe-area). Used to also reserve ~88px for the sticky
@@ -562,14 +568,14 @@ export function TasksApp() {
             // keeps the full prose H1 unchanged.
             <h1 className="text-sm font-medium sm:text-3xl sm:font-semibold leading-tight">
               <span className="sm:hidden text-muted-foreground">
-                <span className="text-emerald-500 font-semibold">{openCount}</span> open task{openCount !== 1 ? "s" : ""}
+                <Trans i18nKey="tasks.header.openShort" count={openCount} components={{ n: <span className="text-emerald-500 font-semibold" /> }} />
               </span>
               <span className="hidden sm:inline">
-                You have <span className="text-emerald-500">{openCount}</span> open task{openCount !== 1 ? "s" : ""}.
+                <Trans i18nKey="tasks.header.open" count={openCount} components={{ n: <span className="text-emerald-500" /> }} />
               </span>
             </h1>
           ) : (
-            <h1 className="text-xl sm:text-3xl font-semibold leading-tight">All clear.</h1>
+            <h1 className="text-xl sm:text-3xl font-semibold leading-tight">{t("tasks.header.allClear")}</h1>
           )}
           {/* Today's load chip — view-independent ("what do I owe today"
               regardless of which tab is active). High-signal so it shows
@@ -582,7 +588,7 @@ export function TasksApp() {
             <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
               {dailyLoad.openMin > 0 && (
                 <span
-                  title={`${formatMinutes(dailyLoad.openMin)} of estimated work due today or overdue`}
+                  title={t("tasks.header.loadTitle", { time: formatMinutes(dailyLoad.openMin) })}
                   className={cn(
                     "inline-flex items-center gap-1.5 px-2 py-1 rounded-md font-medium",
                     dailyLoad.openMin > 360
@@ -593,7 +599,7 @@ export function TasksApp() {
                   )}
                 >
                   <Clock className="w-3 h-3" />
-                  Today: {formatMinutes(dailyLoad.openMin)}
+                  {t("tasks.header.today", { time: formatMinutes(dailyLoad.openMin) })}
                 </span>
               )}
               {dailyLoad.unestimated > 0 && (
@@ -604,19 +610,19 @@ export function TasksApp() {
                   )}
                   disabled={magicLoading}
                   className="text-muted-foreground hover:text-violet-500 underline-offset-2 hover:underline transition disabled:opacity-50 inline-flex items-center gap-1"
-                  title="Run the LLM to estimate the missing durations"
+                  title={t("tasks.header.estimateTitle")}
                 >
-                  + {dailyLoad.unestimated} unestimated
+                  {t("tasks.header.unestimated", { count: dailyLoad.unestimated })}
                   <Sparkles className="w-3 h-3 text-violet-500" />
                 </button>
               )}
               {dailyLoad.doneMin > 0 && (
                 <span
-                  title={`${formatMinutes(dailyLoad.doneMin)} of estimated work already done today`}
+                  title={t("tasks.header.doneTitle", { time: formatMinutes(dailyLoad.doneMin) })}
                   className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"
                 >
                   <Check className="w-3 h-3" />
-                  {formatMinutes(dailyLoad.doneMin)} done
+                  {t("tasks.header.done", { time: formatMinutes(dailyLoad.doneMin) })}
                 </span>
               )}
             </div>
@@ -629,8 +635,8 @@ export function TasksApp() {
               info than the daily-load chip above. */}
           <p className="hidden md:block text-sm text-muted-foreground mt-2">
             {totalEstimate > 0
-              ? <>About <span className="text-foreground font-medium">{formatMinutes(totalEstimate)}</span> of estimated work in this view.</>
-              : <>Add estimates to see how much work you're carrying.</>}
+              ? <Trans i18nKey="tasks.header.about" values={{ time: formatMinutes(totalEstimate) }} components={{ n: <span className="text-foreground font-medium" /> }} />
+              : <>{t("tasks.header.addEstimates")}</>}
           </p>
         </header>
 
@@ -655,8 +661,8 @@ export function TasksApp() {
             ref={inputRef}
             value={inputText}
             onChange={e => setInputText(e.target.value)}
-            placeholder="Add a task or ask Yorik anything…"
-            aria-label="Add a task or ask Yorik"
+            placeholder={t("tasks.bar.placeholder")}
+            aria-label={t("tasks.bar.aria")}
             className="flex-1 min-w-0 h-11 md:h-9 px-2 bg-transparent text-sm focus:outline-none"
             disabled={magicLoading || adding}
           />
@@ -665,8 +671,8 @@ export function TasksApp() {
               type="button"
               onClick={clearMagic}
               className="h-11 md:h-9 px-2 text-muted-foreground hover:text-foreground inline-flex items-center shrink-0"
-              title="Clear magic filter"
-              aria-label="Clear magic filter"
+              title={t("tasks.bar.clearMagic")}
+              aria-label={t("tasks.bar.clearMagic")}
             >
               <X className="w-4 h-4" />
             </button>
@@ -675,7 +681,7 @@ export function TasksApp() {
             type="button"
             onClick={addTask}
             disabled={magicLoading || adding || !inputText.trim()}
-            title={defaultAction === "add" ? "Add task (Enter)" : "Add task"}
+            title={defaultAction === "add" ? t("tasks.bar.addEnter") : t("tasks.bar.add")}
             className={cn(
               "h-11 md:h-9 px-3 sm:px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5 shrink-0 transition",
               defaultAction === "add" && "ring-2 ring-primary/40",
@@ -691,14 +697,14 @@ export function TasksApp() {
             type="button"
             onClick={runMagic}
             disabled={magicLoading || adding || !inputText.trim()}
-            title={defaultAction === "ask" ? "Ask Yorik (Enter)" : "Ask Yorik"}
+            title={defaultAction === "ask" ? t("tasks.bar.askEnter") : t("tasks.bar.askTitle")}
             className={cn(
               "h-11 md:h-9 px-3 sm:px-4 rounded-md bg-violet-500 text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5 shrink-0 transition",
               defaultAction === "ask" && "ring-2 ring-violet-500/40",
             )}
           >
             {magicLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            <span className="hidden sm:inline">Ask</span>
+            <span className="hidden sm:inline">{t("tasks.bar.ask")}</span>
             {defaultAction === "ask" && !magicLoading && (
               <span className="hidden md:inline text-2xs opacity-70" aria-hidden="true">↵</span>
             )}
@@ -720,8 +726,8 @@ export function TasksApp() {
             {doneToday >= 1 && (
               <span className="text-muted-foreground">
                 {doneToday >= 5
-                  ? <>Done today: <span className="text-emerald-500 font-medium">{doneToday} ✓</span> — solid run.</>
-                  : <>Done today: <span className="text-emerald-500 font-medium">{doneToday} ✓</span></>}
+                  ? <Trans i18nKey="tasks.bar.doneTodayRun" values={{ count: doneToday }} components={{ n: <span className="text-emerald-500 font-medium" /> }} />
+                  : <Trans i18nKey="tasks.bar.doneToday" values={{ count: doneToday }} components={{ n: <span className="text-emerald-500 font-medium" /> }} />}
               </span>
             )}
           </div>
@@ -744,7 +750,7 @@ export function TasksApp() {
                   disabled={magicLoading}
                 >
                   <Sparkles className="w-3 h-3 text-violet-500" />
-                  {p.label}
+                  {t(p.labelKey)}
                 </button>
               ))}
             </div>
@@ -757,7 +763,7 @@ export function TasksApp() {
                 className="h-8 px-3 rounded-full bg-card border border-border text-xs text-foreground hover:border-violet-500/30 transition inline-flex items-center gap-1.5"
               >
                 <Sparkles className="w-3.5 h-3.5 text-violet-500" />
-                Smart tools
+                {t("tasks.bar.smartTools")}
                 <ChevronDown className={cn(
                   "w-3.5 h-3.5 text-muted-foreground transition",
                   mobileToolsOpen && "rotate-180",
@@ -780,7 +786,7 @@ export function TasksApp() {
                       className="text-xs h-10 px-3 rounded-lg bg-card border border-border text-left text-foreground hover:border-violet-500/30 transition flex items-center gap-2 disabled:opacity-50"
                     >
                       <Sparkles className="w-3.5 h-3.5 text-violet-500 shrink-0" />
-                      {p.label}
+                      {t(p.labelKey)}
                     </button>
                   ))}
                 </div>
@@ -791,7 +797,7 @@ export function TasksApp() {
 
         {magicResult && magicResult.mode === "view" && (
           <div className="mb-4 px-3 py-2 rounded-lg bg-violet-500/[0.06] border border-violet-500/20 text-xs panel-enter">
-            <span className="font-medium text-violet-500">Yorik:</span>{" "}
+            <span className="font-medium text-violet-500">{t("tasks.bar.yorik")}</span>{" "}
             <span className="text-foreground">{magicResult.summary}</span>
           </div>
         )}
@@ -815,18 +821,18 @@ export function TasksApp() {
         <div className="flex flex-nowrap md:flex-wrap gap-2 mb-3 md:mb-4 items-center overflow-x-auto md:overflow-visible -mx-4 px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <div className="flex gap-1.5 mr-auto flex-nowrap md:flex-wrap shrink-0">
             <ViewTab icon={<Sun className="w-3 h-3" />}
-                     label="Today"    count={viewCounts.today}
+                     label={t("tasks.tabs.today")}    count={viewCounts.today}
                      danger={viewCounts.overdue}
-                     dangerTitle={`${viewCounts.overdue} overdue`}
+                     dangerTitle={t("tasks.tabs.overdue", { count: viewCounts.overdue })}
                      active={view === "today"}    onClick={() => setView("today")} />
             <ViewTab icon={<InboxIcon className="w-3 h-3" />}
-                     label="Inbox"    count={viewCounts.inbox}
+                     label={t("tasks.tabs.inbox")}    count={viewCounts.inbox}
                      active={view === "inbox"}    onClick={() => setView("inbox")} />
             <ViewTab icon={<CalendarRange className="w-3 h-3" />}
-                     label="Upcoming" count={viewCounts.upcoming}
+                     label={t("tasks.tabs.upcoming")} count={viewCounts.upcoming}
                      active={view === "upcoming"} onClick={() => setView("upcoming")} />
             <ViewTab icon={<Layers className="w-3 h-3" />}
-                     label="All"      count={viewCounts.all}
+                     label={t("tasks.tabs.all")}      count={viewCounts.all}
                      active={view === "all"}      onClick={() => setView("all")} />
           </div>
           <button
@@ -837,12 +843,12 @@ export function TasksApp() {
                 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400"
                 : "bg-card border-border text-muted-foreground hover:text-foreground",
             )}
-            title={showDone ? "Hide completed tasks" : "Show completed tasks"}
-            aria-label={showDone ? "Hide completed tasks" : "Show completed tasks"}
+            title={showDone ? t("tasks.tabs.hideDone") : t("tasks.tabs.showDone")}
+            aria-label={showDone ? t("tasks.tabs.hideDone") : t("tasks.tabs.showDone")}
             aria-pressed={showDone}
           >
             {showDone ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-            Done ({doneCount})
+            {t("tasks.tabs.done", { count: doneCount })}
           </button>
           {(othersCount > 0 || showOthers) && (
             <button
@@ -853,11 +859,11 @@ export function TasksApp() {
                   ? "bg-violet-500/10 border-violet-500/30 text-violet-700 dark:text-violet-300"
                   : "bg-card border-border text-muted-foreground hover:text-foreground",
               )}
-              title={showOthers ? "Show only my tasks" : "Also show tasks of other household members"}
+              title={showOthers ? t("tasks.tabs.onlyMine") : t("tasks.tabs.alsoOthers")}
               aria-pressed={showOthers}
             >
               {showOthers ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-              Others ({othersCount})
+              {t("tasks.tabs.others", { count: othersCount })}
             </button>
           )}
           {!magicResult && (
@@ -865,13 +871,13 @@ export function TasksApp() {
               <select
                 value={grouping}
                 onChange={e => setGrouping(e.target.value as GroupMode)}
-                aria-label="Group tasks by"
+                aria-label={t("tasks.tabs.groupBy")}
                 className="text-xs h-9 md:h-7 pl-3 pr-8 rounded-full bg-card border border-border text-muted-foreground hover:text-foreground focus:outline-none appearance-none cursor-pointer"
               >
-                <option value="due">Group · by due date</option>
-                <option value="category">Group · by category</option>
-                <option value="person">Group · by person</option>
-                <option value="flat">Group · none (flat)</option>
+                <option value="due">{t("tasks.tabs.group.due")}</option>
+                <option value="category">{t("tasks.tabs.group.category")}</option>
+                <option value="person">{t("tasks.tabs.group.person")}</option>
+                <option value="flat">{t("tasks.tabs.group.flat")}</option>
               </select>
               <ChevronDown className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
             </div>
@@ -887,18 +893,18 @@ export function TasksApp() {
           {!tasksApi.loading && renderedGroups.length === 0 && (
             <div className="text-center py-12 text-muted-foreground text-sm">
               <div className="italic">
-                {magicResult ? "Magic search returned nothing — try different wording." :
-                 view === "today"    ? "Nothing on your plate today." :
-                 view === "inbox"    ? "Inbox empty — type a task below to capture." :
-                 view === "upcoming" ? "No upcoming tasks scheduled." :
-                                       "You haven't added any tasks yet."}
+                {magicResult ? t("tasks.empty.magic") :
+                 view === "today"    ? t("tasks.empty.today") :
+                 view === "inbox"    ? t("tasks.empty.inbox") :
+                 view === "upcoming" ? t("tasks.empty.upcoming") :
+                                       t("tasks.empty.all")}
               </div>
               {view === "today" && !magicResult && (
                 <button
                   onClick={() => setView("all")}
                   className="mt-3 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition"
                 >
-                  View all tasks
+                  {t("tasks.empty.viewAll")}
                 </button>
               )}
             </div>
@@ -1023,16 +1029,19 @@ export function TasksApp() {
 // ────────────────────────── grouping helpers ─────────────────────────
 
 function buildGroups(tasks: ExtendedTask[], mode: GroupMode): Array<{ label: string; tasks: ExtendedTask[] }> {
+  // Group labels are resolved here, at call time, so they follow the
+  // person's language.
+  const g = (k: string) => i18n.t(`tasks.groups.${k}`);
   if (mode === "flat") {
-    return [{ label: "All", tasks: sortForFlat(tasks) }];
+    return [{ label: g("all"), tasks: sortForFlat(tasks) }];
   }
   if (mode === "category") {
-    return groupBy(tasks, t => t.category || "Uncategorised", labelOrder("category"));
+    return groupBy(tasks, t => t.category || g("uncategorised"), labelOrder("category"));
   }
   if (mode === "person") {
     return groupBy(tasks, t => {
       const names = t.assignees?.map(a => a.name).join(", ");
-      return names || t.person || "Unassigned";
+      return names || t.person || g("unassigned");
     });
   }
   // due (default)
@@ -1041,14 +1050,14 @@ function buildGroups(tasks: ExtendedTask[], mode: GroupMode): Array<{ label: str
   const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + 7);
 
   return groupBy(tasks, t => {
-    if (!t.due_date) return "No date";
+    if (!t.due_date) return g("noDate");
     const d = new Date(t.due_date.slice(0, 10) + "T00:00:00");
-    if (d < today) return "Overdue";
-    if (d.getTime() === today.getTime()) return "Today";
-    if (d.getTime() === tomorrow.getTime()) return "Tomorrow";
-    if (d < weekEnd) return "This week";
-    return "Later";
-  }, ["Overdue", "Today", "Tomorrow", "This week", "Later", "No date"]);
+    if (d < today) return g("overdue");
+    if (d.getTime() === today.getTime()) return g("today");
+    if (d.getTime() === tomorrow.getTime()) return g("tomorrow");
+    if (d < weekEnd) return g("thisWeek");
+    return g("later");
+  }, [g("overdue"), g("today"), g("tomorrow"), g("thisWeek"), g("later"), g("noDate")]);
 }
 
 function groupBy<T>(
@@ -1074,7 +1083,7 @@ function groupBy<T>(
 }
 
 function labelOrder(mode: GroupMode): string[] {
-  if (mode === "category") return ["Uncategorised"];
+  if (mode === "category") return [i18n.t("tasks.groups.uncategorised")];
   return [];
 }
 
@@ -1175,13 +1184,14 @@ function isoNextWeekday(target: number): string {
 }
 
 function SnoozeChip({ label, onClick }: { label: string; onClick: () => void }) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       className="text-xs md:text-2xs px-2 py-1 md:px-1.5 md:py-0.5 rounded bg-muted/60 hover:bg-violet-500/15 hover:text-violet-500 text-muted-foreground transition"
-      title="Snooze: push the due date forward"
-      aria-label={`Snooze to ${label}`}
+      title={t("tasks.snooze.title")}
+      aria-label={t("tasks.snooze.aria", { label })}
     >
       {label}
     </button>
@@ -1213,6 +1223,7 @@ function TaskRow({
    *  editor as "+ Add subtask". */
   onAddSubtask?: (title: string) => Promise<void> | void;
 }) {
+  const { t } = useTranslation();
   const dueOverdue = task.due_date && !task.done
     ? new Date(task.due_date) < new Date(new Date().toISOString().slice(0, 10))
     : false;
@@ -1350,8 +1361,8 @@ function TaskRow({
         <button
           onClick={(e) => { e.stopPropagation(); onToggle(); }}
           className="shrink-0 inline-flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 -m-2 md:m-0 p-2 md:p-0 rounded"
-          title={task.done ? "Mark as not done" : "Mark as done"}
-          aria-label={task.done ? "Mark as not done" : "Mark as done"}
+          title={task.done ? t("tasks.row.markNotDone") : t("tasks.row.markDone")}
+          aria-label={task.done ? t("tasks.row.markNotDone") : t("tasks.row.markDone")}
           role="checkbox"
           aria-checked={!!task.done}
         >
@@ -1397,7 +1408,7 @@ function TaskRow({
             {task.recurrence_rule && (
               <span
                 className="hidden md:flex items-center gap-1 text-violet-500"
-                title={`Recurring: ${task.recurrence_rule}`}
+                title={t("tasks.row.recurring", { rule: task.recurrence_rule })}
               >
                 <Repeat className="w-3 h-3" /> {task.recurrence_rule}
               </span>
@@ -1415,13 +1426,13 @@ function TaskRow({
                   phase === "way-over" && "text-rose-600 dark:text-rose-400",
                 )}
                 title={estMin > 0
-                  ? `${Math.floor(displayMin)} of ${estMin} estimated minutes (incl. ${priorMin}m from prior sessions)`
-                  : `${Math.floor(displayMin)} minutes total (incl. ${priorMin}m from prior sessions, no estimate set)`}
+                  ? t("tasks.row.runningTitle", { elapsed: Math.floor(displayMin), estimate: estMin, prior: priorMin })
+                  : t("tasks.row.runningTitleNoEstimate", { elapsed: Math.floor(displayMin), prior: priorMin })}
               >
                 <Clock className="w-3 h-3" />
                 {estMin > 0
                   ? `${formatMinutes(Math.floor(displayMin))} / ${formatMinutes(estMin)}`
-                  : `running · ${formatMinutes(Math.floor(displayMin))}`}
+                  : t("tasks.row.running", { time: formatMinutes(Math.floor(displayMin)) })}
               </span>
             ) : task.done && priorMin > 0 ? (
               // Done-task post-mortem chip. With estimate: "took 14m / 30m"
@@ -1436,13 +1447,13 @@ function TaskRow({
                   estMin > 0 && phase === "way-over" && "text-rose-600/80 dark:text-rose-400/80",
                 )}
                 title={estMin > 0
-                  ? `Took ${priorMin} of ${estMin} estimated minutes`
-                  : `Took ${priorMin} minutes (no estimate was set)`}
+                  ? t("tasks.row.tookTitle", { prior: priorMin, estimate: estMin })
+                  : t("tasks.row.tookTitleNoEstimate", { prior: priorMin })}
               >
                 <Clock className="w-3 h-3" />
                 {estMin > 0
-                  ? `took ${formatMinutes(priorMin)} / ${formatMinutes(estMin)}`
-                  : `took ${formatMinutes(priorMin)}`}
+                  ? t("tasks.row.tookOf", { time: formatMinutes(priorMin), estimate: formatMinutes(estMin) })
+                  : t("tasks.row.took", { time: formatMinutes(priorMin) })}
               </span>
             ) : task.estimated_minutes ? (
               <span className="hidden md:flex items-center gap-1">
@@ -1453,7 +1464,7 @@ function TaskRow({
             {kidsTotal > 0 && (
               <span
                 className="opacity-60 flex items-center gap-1"
-                title={`${kidsDone} of ${kidsTotal} subtasks done`}
+                title={t("tasks.row.subtasksDone", { done: kidsDone, total: kidsTotal })}
               >
                 <ListTodo className="w-3 h-3" /> {kidsDone}/{kidsTotal}
               </span>
@@ -1472,14 +1483,14 @@ function TaskRow({
             resting row uncluttered. */}
         {onSnooze && !task.done && (
           <div className="flex md:hidden items-center gap-1 shrink-0">
-            <SnoozeChip label="+1d"  onClick={() => onSnooze(isoDaysFromNow(1))} />
+            <SnoozeChip label={t("tasks.snooze.day")}  onClick={() => onSnooze(isoDaysFromNow(1))} />
           </div>
         )}
         {onSnooze && !task.done && (
           <div className="hidden md:group-hover:flex items-center gap-1 shrink-0">
-            <SnoozeChip label="+1d" onClick={() => onSnooze(isoDaysFromNow(1))} />
-            <SnoozeChip label="Next Mon" onClick={() => onSnooze(isoNextWeekday(1))} />
-            <SnoozeChip label="+1w" onClick={() => onSnooze(isoDaysFromNow(7))} />
+            <SnoozeChip label={t("tasks.snooze.day")} onClick={() => onSnooze(isoDaysFromNow(1))} />
+            <SnoozeChip label={t("tasks.snooze.nextMon")} onClick={() => onSnooze(isoNextWeekday(1))} />
+            <SnoozeChip label={t("tasks.snooze.week")} onClick={() => onSnooze(isoDaysFromNow(7))} />
           </div>
         )}
         {/* Trash hidden on mobile — accidental flicks on a dense list
@@ -1498,8 +1509,8 @@ function TaskRow({
                 ? "inline-flex text-emerald-500 hover:bg-emerald-500/10"
                 : "hidden md:group-hover:inline-flex text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10",
             )}
-            title={task.started_at ? "Pause focus" : "Focus on this task"}
-            aria-label={task.started_at ? "Pause focus" : "Focus on this task"}
+            title={task.started_at ? t("tasks.row.pauseFocus") : t("tasks.row.focusThis")}
+            aria-label={task.started_at ? t("tasks.row.pauseFocus") : t("tasks.row.focusThis")}
           >
             {task.started_at ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
           </button>
@@ -1507,16 +1518,16 @@ function TaskRow({
         <button
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
           className="hidden md:group-hover:inline-flex shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition"
-          title="Delete task"
-          aria-label="Delete task"
+          title={t("tasks.row.delete")}
+          aria-label={t("tasks.row.delete")}
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onClick(); }}
           className="shrink-0 inline-flex items-center justify-center min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 -m-2 md:m-0 p-2 md:p-0 rounded text-muted-foreground hover:text-foreground"
-          title={expanded ? "Collapse" : "Expand"}
-          aria-label={expanded ? "Collapse task" : "Expand task"}
+          title={expanded ? t("tasks.row.collapse") : t("tasks.row.expand")}
+          aria-label={expanded ? t("tasks.row.collapseTask") : t("tasks.row.expandTask")}
           aria-expanded={expanded}
         >
           <ChevronRight className={cn(
@@ -1555,7 +1566,7 @@ function TaskRow({
                 Reuses groupEstimate which prefixes a " · " and skips
                 empty totals, so a parent with no estimates stays at
                 "Subtasks · 2/5". */}
-            Subtasks · {kidsDone}/{kidsTotal}{groupEstimate(kids.filter(c => !c.done))}
+            {t("tasks.row.subtasks")}{kidsDone}/{kidsTotal}{groupEstimate(kids.filter(c => !c.done))}
           </button>
           {childrenOpen && (
             // Bumped from pl-2 + 1px border to pl-4 + 2px coloured
@@ -1566,8 +1577,8 @@ function TaskRow({
                   <button
                     onClick={() => toggleChild?.(c)}
                     className="shrink-0 inline-flex items-center justify-center min-w-[40px] min-h-[40px] md:min-w-0 md:min-h-0 -m-2 md:m-0 p-2 md:p-0 rounded"
-                    title={c.done ? "Mark as not done" : "Mark as done"}
-                    aria-label={c.done ? "Mark subtask as not done" : "Mark subtask as done"}
+                    title={c.done ? t("tasks.row.markNotDone") : t("tasks.row.markDone")}
+                    aria-label={c.done ? t("tasks.row.markSubtaskNotDone") : t("tasks.row.markSubtaskDone")}
                     role="checkbox"
                     aria-checked={!!c.done}
                   >
@@ -1582,7 +1593,7 @@ function TaskRow({
                   {c.estimated_minutes != null && c.estimated_minutes > 0 && (
                     <span
                       className="text-xs md:text-2xs text-muted-foreground shrink-0 inline-flex items-center gap-0.5"
-                      title={`Estimated ${formatMinutes(c.estimated_minutes)}`}
+                      title={t("tasks.row.estimated", { time: formatMinutes(c.estimated_minutes) })}
                     >
                       <Clock className="w-3 h-3 md:w-2.5 md:h-2.5" />
                       {formatMinutes(c.estimated_minutes)}
@@ -1599,8 +1610,8 @@ function TaskRow({
                   <button
                     onClick={() => removeChild?.(c)}
                     className="shrink-0 p-2 md:p-1 rounded text-muted-foreground hover:text-red-500 md:opacity-0 md:group-hover/c:opacity-100 transition"
-                    title="Delete subtask"
-                    aria-label="Delete subtask"
+                    title={t("tasks.row.deleteSubtask")}
+                    aria-label={t("tasks.row.deleteSubtask")}
                   >
                     <Trash2 className="w-3.5 h-3.5 md:w-3 md:h-3" />
                   </button>
@@ -1629,6 +1640,7 @@ function TaskInlineEditor({
    *  editor renders an inline "+ Add subtask" row at the bottom. */
   onAddSubtask?: (title: string) => Promise<void> | void;
 }) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState(task.title);
   const [dueDate, setDueDate] = useState(task.due_date?.slice(0, 10) || "");
   const [notes, setNotes] = useState(task.notes || "");
@@ -1654,7 +1666,7 @@ function TaskInlineEditor({
       });
       onSaved();
     } catch (e: any) {
-      toast(`Failed: ${e?.message || e}`);
+      toast(t("tasks.errors.failed", { error: e?.message || e }));
     } finally { setSaving(false); }
   }
 
@@ -1676,38 +1688,38 @@ function TaskInlineEditor({
           // NotAllowedError thrown on browsers that don't support it.
           onClick={e => { try { (e.currentTarget as any).showPicker?.(); } catch {} }}
           className="h-8 px-2 text-xs bg-background border border-border rounded-md focus:outline-none cursor-pointer"
-          title="Due date"
+          title={t("tasks.editor.dueDate")}
         />
         <input
           type="number"
           min={5} step={5}
           value={estimate}
           onChange={e => setEstimate(e.target.value)}
-          placeholder="estimate min"
+          placeholder={t("tasks.editor.estimatePlaceholder")}
           className="h-8 px-2 text-xs bg-background border border-border rounded-md focus:outline-none"
-          title="Estimated minutes"
+          title={t("tasks.editor.estimateTitle")}
         />
         <select
           value={priority}
           onChange={e => setPriority(parseInt(e.target.value, 10))}
           className="h-8 px-2 text-xs bg-background border border-border rounded-md focus:outline-none"
-          title="Priority"
+          title={t("tasks.editor.priority")}
         >
-          <option value={0}>Low</option>
-          <option value={1}>Normal</option>
-          <option value={2}>High</option>
+          <option value={0}>{t("tasks.priority.low")}</option>
+          <option value={1}>{t("tasks.priority.normal")}</option>
+          <option value={2}>{t("tasks.priority.high")}</option>
         </select>
         <input
           value={category}
           onChange={e => setCategory(e.target.value)}
-          placeholder="category"
+          placeholder={t("tasks.editor.categoryPlaceholder")}
           className="h-8 px-2 text-xs bg-background border border-border rounded-md focus:outline-none"
         />
       </div>
       <input
         value={notes}
         onChange={e => setNotes(e.target.value)}
-        placeholder="Notes…"
+        placeholder={t("tasks.editor.notesPlaceholder")}
         className="w-full h-8 px-2 text-xs bg-background border border-border rounded-md focus:outline-none"
       />
       {/* Recurrence — chips for the common cases (covers ~95% of
@@ -1732,10 +1744,10 @@ function TaskInlineEditor({
             type="button"
             onClick={onDelete}
             className="text-xs h-9 px-3 rounded-md border border-rose-500/30 text-rose-600 hover:bg-rose-500/10 transition flex items-center gap-1 mr-auto"
-            title="Delete task"
-            aria-label="Delete task"
+            title={t("tasks.row.delete")}
+            aria-label={t("tasks.row.delete")}
           >
-            <Trash2 className="w-3.5 h-3.5" /> Delete
+            <Trash2 className="w-3.5 h-3.5" /> {t("tasks.editor.delete")}
           </button>
         )}
         {onToggleTimer && (
@@ -1751,15 +1763,15 @@ function TaskInlineEditor({
             )}
           >
             {task.started_at
-              ? <><Pause className="w-3.5 h-3.5" /> Pause focus</>
-              : <><Play className="w-3.5 h-3.5" /> Focus</>}
+              ? <><Pause className="w-3.5 h-3.5" /> {t("tasks.editor.pauseFocus")}</>
+              : <><Play className="w-3.5 h-3.5" /> {t("tasks.editor.focus")}</>}
           </button>
         )}
         <button
           onClick={onCancel}
           className="text-xs h-9 px-3 rounded-md border border-border hover:bg-muted flex items-center gap-1"
         >
-          <X className="w-3 h-3" /> Cancel
+          <X className="w-3 h-3" /> {t("tasks.editor.cancel")}
         </button>
         <button
           onClick={save}
@@ -1767,7 +1779,7 @@ function TaskInlineEditor({
           className="text-xs h-9 px-3 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
         >
           {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-          Save
+          {t("tasks.editor.save")}
         </button>
       </div>
     </div>
@@ -1782,6 +1794,7 @@ function TaskInlineEditor({
 function SubtaskComposer({ onAdd }: {
   onAdd: (title: string) => Promise<void> | void;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1816,7 +1829,7 @@ function SubtaskComposer({ onAdd }: {
         className="text-xs h-7 px-2.5 rounded-full border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-emerald-500/40 transition inline-flex items-center gap-1"
       >
         <Plus className="w-3 h-3" />
-        Add subtask
+        {t("tasks.subtask.add")}
       </button>
     );
   }
@@ -1832,8 +1845,8 @@ function SubtaskComposer({ onAdd }: {
           if (e.key === "Enter") { e.preventDefault(); submit(); }
           if (e.key === "Escape") { e.preventDefault(); setOpen(false); setText(""); }
         }}
-        placeholder="Subtask title — Enter to add, Esc to close"
-        aria-label="New subtask title"
+        placeholder={t("tasks.subtask.placeholder")}
+        aria-label={t("tasks.subtask.aria")}
         disabled={saving}
         className="flex-1 h-8 px-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500/40"
       />
@@ -1844,14 +1857,14 @@ function SubtaskComposer({ onAdd }: {
         className="text-xs h-8 px-3 rounded-md bg-emerald-500 text-white hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
       >
         {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-        Add
+        {t("tasks.subtask.addButton")}
       </button>
       <button
         type="button"
         onClick={() => { setOpen(false); setText(""); }}
         disabled={saving}
         className="text-xs h-8 px-2 rounded-md border border-border hover:bg-muted text-muted-foreground disabled:opacity-50"
-        aria-label="Close subtask composer"
+        aria-label={t("tasks.subtask.close")}
       >
         <X className="w-3 h-3" />
       </button>
@@ -1862,14 +1875,15 @@ function SubtaskComposer({ onAdd }: {
 // Canonical strings the recurrence parser in
 // `backend/tasks_recurrence.py` definitely accepts. Keep these strings
 // in sync with that parser — they're matched case-insensitively against
-// `tasks.recurrence_rule` when deciding which chip to highlight.
-const REPEAT_PRESETS: Array<{ label: string; value: string }> = [
-  { label: "Daily",         value: "daily" },
-  { label: "Weekdays",      value: "every Mon,Tue,Wed,Thu,Fri" },
-  { label: "Weekly",        value: "weekly" },
-  { label: "Every 2 weeks", value: "every 2 weeks" },
-  { label: "Monthly",       value: "monthly" },
-  { label: "Yearly",        value: "yearly" },
+// `tasks.recurrence_rule` when deciding which chip to highlight. Labels
+// are catalogue keys (tasks.repeat.*), resolved at render.
+const REPEAT_PRESETS: Array<{ labelKey: string; value: string }> = [
+  { labelKey: "tasks.repeat.daily",    value: "daily" },
+  { labelKey: "tasks.repeat.weekdays", value: "every Mon,Tue,Wed,Thu,Fri" },
+  { labelKey: "tasks.repeat.weekly",   value: "weekly" },
+  { labelKey: "tasks.repeat.biweekly", value: "every 2 weeks" },
+  { labelKey: "tasks.repeat.monthly",  value: "monthly" },
+  { labelKey: "tasks.repeat.yearly",   value: "yearly" },
 ];
 
 function matchedPreset(rule: string): string | null {
@@ -1885,6 +1899,7 @@ function RepeatPicker({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { t } = useTranslation();
   const preset = matchedPreset(value);
   const isCustom = value.trim() !== "" && preset === null;
   // Custom field is auto-open when the existing rule isn't a preset
@@ -1907,7 +1922,7 @@ function RepeatPicker({
     <div className="space-y-1.5">
       <div className="flex flex-wrap gap-1.5 items-center">
         <span className="text-2xs text-muted-foreground mr-1 flex items-center gap-1">
-          <Repeat className="w-3 h-3" /> Repeat
+          <Repeat className="w-3 h-3" /> {t("tasks.repeat.label")}
         </span>
         {REPEAT_PRESETS.map(p => {
           const active = preset === p.value;
@@ -1924,7 +1939,7 @@ function RepeatPicker({
                   : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-violet-500/30",
               )}
             >
-              {p.label}
+              {t(p.labelKey)}
             </button>
           );
         })}
@@ -1944,14 +1959,14 @@ function RepeatPicker({
               : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-violet-500/30",
           )}
         >
-          Custom…
+          {t("tasks.repeat.custom")}
         </button>
         {value.trim() !== "" && (
           <button
             type="button"
             onClick={() => { onChange(""); setShowCustom(false); }}
-            title="Clear recurrence (one-shot)"
-            aria-label="Clear recurrence"
+            title={t("tasks.repeat.clearTitle")}
+            aria-label={t("tasks.repeat.clear")}
             className="text-xs h-9 md:h-7 px-2 rounded-full text-muted-foreground hover:text-foreground"
           >
             <X className="w-3 h-3" />
@@ -1962,9 +1977,9 @@ function RepeatPicker({
         <input
           value={value}
           onChange={e => onChange(e.target.value)}
-          placeholder='e.g. "every Mon,Wed,Fri", "every 3 days", "quarterly"'
+          placeholder={t("tasks.repeat.customPlaceholder")}
           className="w-full h-8 px-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring/40"
-          title="Recurrence rule (empty = one-shot)"
+          title={t("tasks.repeat.customTitle")}
         />
       )}
     </div>
@@ -1980,6 +1995,7 @@ function UpdateConfirmPanel({
   onApply: (updates: ProposedUpdate[]) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const items = result.updates
     .map(u => ({ task: tasksById.get(u.id), changes: u.changes }))
     .filter(it => !!it.task) as Array<{ task: ExtendedTask; changes: ProposedUpdate["changes"] }>;
@@ -2039,9 +2055,9 @@ function UpdateConfirmPanel({
   if (items.length === 0) {
     return (
       <div className="mb-4 px-3 py-2 rounded-lg bg-amber-500/[0.06] border border-amber-500/30 text-xs">
-        <span className="font-medium text-amber-600">Yorik:</span>{" "}
+        <span className="font-medium text-amber-600">{t("tasks.panel.yorik")}</span>{" "}
         <span className="text-foreground">{result.summary}</span>
-        <button onClick={onCancel} className="ml-2 underline">dismiss</button>
+        <button onClick={onCancel} className="ml-2 underline">{t("tasks.panel.dismiss")}</button>
       </div>
     );
   }
@@ -2050,10 +2066,10 @@ function UpdateConfirmPanel({
     <div className="mb-4 rounded-xl bg-violet-500/[0.06] border border-violet-500/30 overflow-hidden panel-enter">
       <div className="px-3 py-2 border-b border-violet-500/20 text-xs flex items-center justify-between">
         <div>
-          <span className="font-medium text-violet-500">Yorik proposes:</span>{" "}
+          <span className="font-medium text-violet-500">{t("tasks.panel.proposes")}</span>{" "}
           <span className="text-foreground">{result.summary}</span>
         </div>
-        <span className="text-2xs text-muted-foreground">{items.length} change{items.length !== 1 ? "s" : ""}</span>
+        <span className="text-2xs text-muted-foreground">{t("tasks.panel.changes", { count: items.length })}</span>
       </div>
       <div className="max-h-80 overflow-y-auto divide-y divide-violet-500/10">
         {items.map(({ task, changes }) => {
@@ -2083,7 +2099,7 @@ function UpdateConfirmPanel({
                         });
                       }}
                       disabled={applying}
-                      aria-label={`Estimated minutes for ${task.title}`}
+                      aria-label={t("tasks.panel.minutesFor", { title: task.title })}
                       className="w-12 px-1.5 py-0.5 bg-transparent text-right text-violet-500 font-medium focus:outline-none focus:bg-violet-500/10"
                     />
                     <span className="pr-1.5">m</span>
@@ -2096,7 +2112,7 @@ function UpdateConfirmPanel({
                     changes.priority === 0 ? "bg-muted text-muted-foreground" :
                                              "bg-blue-500/15 text-blue-500",
                   )}>
-                    {changes.priority === 2 ? "High" : changes.priority === 0 ? "Low" : "Normal"}
+                    {changes.priority === 2 ? t("tasks.priority.high") : changes.priority === 0 ? t("tasks.priority.low") : t("tasks.priority.normal")}
                   </span>
                 )}
                 {changes.category && (
@@ -2108,12 +2124,12 @@ function UpdateConfirmPanel({
               <button
                 onClick={() => applyOne(task.id, changes)}
                 disabled={applying || !minsValid}
-                title="Apply just this one"
-                aria-label={`Apply update for ${task.title}`}
+                title={t("tasks.panel.applyOneTitle")}
+                aria-label={t("tasks.panel.applyOneAria", { title: task.title })}
                 className="text-2xs px-2 py-1 rounded-md border border-violet-500/40 text-violet-500 hover:bg-violet-500/10 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
               >
                 <Check className="w-3 h-3" />
-                Apply
+                {t("tasks.panel.apply")}
               </button>
             </div>
           );
@@ -2125,7 +2141,7 @@ function UpdateConfirmPanel({
           disabled={applying}
           className="text-xs px-3 py-1.5 rounded-md border border-border bg-card hover:bg-muted disabled:opacity-50"
         >
-          Cancel
+          {t("tasks.panel.cancel")}
         </button>
         <button
           onClick={applyAll}
@@ -2135,7 +2151,7 @@ function UpdateConfirmPanel({
           {applying
             ? <Loader2 className="w-3 h-3 animate-spin" />
             : <Check className="w-3 h-3" />}
-          Apply all
+          {t("tasks.panel.applyAll")}
         </button>
       </div>
     </div>

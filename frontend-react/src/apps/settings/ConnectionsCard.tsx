@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Mail, CalendarDays, MessageCircle, Landmark, Image, FileText, ChevronRight, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -15,6 +16,7 @@ interface Status {
 }
 
 export function ConnectionsCard() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [st, setSt] = useState<Status | null>(null);
   const [docsBusy, setDocsBusy] = useState(false);
@@ -28,31 +30,31 @@ export function ConnectionsCard() {
     setDocsBusy(true); setDocsNote(null);
     try {
       const r = await api.post<{ error?: string; checked?: number }>("/api/documents/sync-paperless");
-      setDocsNote(r.error ? r.error : `Connected. ${r.checked ?? 0} document(s) in the archive.`);
+      setDocsNote(r.error ? r.error : t("settings.connections.docsConnected", { count: r.checked ?? 0 }));
     } catch (e: any) {
-      setDocsNote(e?.message || "That didn't work.");
+      setDocsNote(e?.message || t("settings.connections.failed"));
     } finally { setDocsBusy(false); }
   }
 
   const rows: { icon: React.ComponentType<{ className?: string }>; name: string; text: string; state?: string; action: string; go: () => void }[] = [
-    { icon: Mail, name: "Email", text: "Everyone connects their own mailboxes in the Email app (Gmail, GMX, iCloud …).",
-      state: st?.email ? (st.email.configured ? st.email.kinds[0] || "connected" : "none yet") : undefined,
-      action: "Add a mailbox", go: () => navigate("/email?add=1") },
-    { icon: CalendarDays, name: "Calendar", text: "Bring in the dates from Google or an iPhone; they stay in sync.",
-      action: "Bring in a calendar", go: () => navigate("/calendar?import=1") },
-    { icon: MessageCircle, name: "WhatsApp", text: "Turn WhatsApp on above, then link the phone in the WhatsApp app with a code.",
-      action: "Open WhatsApp", go: () => navigate("/whatsapp") },
-    { icon: Landmark, name: "Bank", text: "Turn Finance on above, then add the account in the Finance app.",
-      action: "Open Finance", go: () => navigate("/finance") },
-    { icon: Image, name: "Photos from phones", text: "Each phone backs up its photos with the Immich app; the Photos app shows how.",
-      action: "Open Photos", go: () => navigate("/photos") },
+    { icon: Mail, name: t("settings.connections.email.name"), text: t("settings.connections.email.text"),
+      state: st?.email ? (st.email.configured ? st.email.kinds[0] || t("settings.connections.connected") : t("settings.connections.noneYet")) : undefined,
+      action: t("settings.connections.email.action"), go: () => navigate("/email?add=1") },
+    { icon: CalendarDays, name: t("settings.connections.calendar.name"), text: t("settings.connections.calendar.text"),
+      action: t("settings.connections.calendar.action"), go: () => navigate("/calendar?import=1") },
+    { icon: MessageCircle, name: t("settings.connections.whatsapp.name"), text: t("settings.connections.whatsapp.text"),
+      action: t("settings.connections.whatsapp.action"), go: () => navigate("/whatsapp") },
+    { icon: Landmark, name: t("settings.connections.bank.name"), text: t("settings.connections.bank.text"),
+      action: t("settings.connections.bank.action"), go: () => navigate("/finance") },
+    { icon: Image, name: t("settings.connections.photos.name"), text: t("settings.connections.photos.text"),
+      action: t("settings.connections.photos.action"), go: () => navigate("/photos") },
   ];
 
   return (
     <section>
-      <h2 className="text-lg font-semibold">Connections</h2>
+      <h2 className="text-lg font-semibold">{t("settings.connections.title")}</h2>
       <p className="text-sm text-muted-foreground mt-1 mb-4">
-        Where Yorik gets your mail, dates, messages and photos from. Each one is connected in the app that uses it.
+        {t("settings.connections.intro")}
       </p>
       <div className="space-y-2">
         {rows.map(r => (
@@ -78,15 +80,15 @@ export function ConnectionsCard() {
           <FileText className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium">
-              Documents
+              {t("settings.connections.documents.name")}
               {st?.paperless && (
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  {st.paperless.admin_token_set ? "connected" : "not connected"}
+                  {st.paperless.admin_token_set ? t("settings.connections.connected") : t("settings.connections.notConnected")}
                 </span>
               )}
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">
-              The document archive comes with Yorik and is connected by itself. If the Documents app stays empty, reconnect it.
+              {t("settings.connections.documents.text")}
             </div>
             {docsNote && <div className="text-xs mt-1">{docsNote}</div>}
           </div>
@@ -96,7 +98,7 @@ export function ConnectionsCard() {
             className="text-xs px-2.5 py-1.5 rounded-md border border-border hover:bg-muted transition shrink-0 inline-flex items-center gap-1.5 disabled:opacity-60"
           >
             {docsBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            Reconnect
+            {t("settings.connections.documents.action")}
           </button>
         </div>
       </div>

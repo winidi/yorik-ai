@@ -13,6 +13,7 @@
  */
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import i18n from "@/i18n";
 import { ScrollPage } from "@/components/ScrollPage";
 
 interface Props { children: ReactNode }
@@ -54,11 +55,9 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-red-500/15 text-red-500 flex items-center justify-center text-lg">!</div>
               <div>
-                <h1 className="text-lg font-semibold leading-tight">Something broke</h1>
+                <h1 className="text-lg font-semibold leading-tight">{i18n.t("apps.error.title")}</h1>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  The page hit a render error. Try Reset; if it keeps
-                  happening, copy the details below to share with Yorik
-                  maintainers.
+                  {i18n.t("apps.error.body")}
                 </p>
               </div>
             </div>
@@ -75,13 +74,13 @@ export class ErrorBoundary extends Component<Props, State> {
                 onClick={this.reset}
                 className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
               >
-                Reset
+                {i18n.t("apps.error.reset")}
               </button>
               <button
                 onClick={() => window.location.reload()}
                 className="px-4 py-2 rounded-md bg-muted text-foreground text-sm font-medium hover:bg-muted/80 transition"
               >
-                Reload page
+                {i18n.t("apps.error.reload")}
               </button>
             </div>
           </div>

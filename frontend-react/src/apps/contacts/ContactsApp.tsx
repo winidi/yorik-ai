@@ -41,6 +41,8 @@ import type {
 } from "./types";
 import { useApi } from "@/lib/useApi";
 import { toast } from "@/components/Toast";
+import { useTranslation } from "react-i18next";
+import i18n, { locale } from "@/i18n";
 
 type Tab = "active" | "pending" | "spam";
 
@@ -63,6 +65,7 @@ const CHANNEL_ICONS: Record<ChannelKind, ReactElement> = {
 };
 
 export function ContactsApp() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("active");
   // Bumped whenever something OTHER than AutoClassifyButton kicks the
   // auto-classify pass — currently the "Re-review archived" button
@@ -87,11 +90,11 @@ export function ContactsApp() {
         "/api/contacts/proposals/scan-signatures", {},
       );
       toast(r.proposals > 0
-        ? `${r.proposals} suggestion${r.proposals === 1 ? "" : "s"} from ${r.messages} emails of ${r.contacts} contacts.`
-        : `No new suggestions in ${r.messages} emails of ${r.contacts} contacts.`);
+        ? t("contacts.toolbar.scanResult", { count: r.proposals, messages: r.messages, contacts: r.contacts })
+        : t("contacts.toolbar.scanNone", { messages: r.messages, contacts: r.contacts }));
       setProposalsKey(k => k + 1);
     } catch (e: any) {
-      toast(`Scan failed: ${e?.message || e}`);
+      toast(t("contacts.toolbar.scanFailed", { error: e?.message || e }));
     } finally {
       setScanning(false);
     }
@@ -110,11 +113,14 @@ export function ContactsApp() {
       );
       const touched = (r.updated_chats || 0) + (r.updated_contacts || 0) + (r.updated_channels || 0);
       toast(touched > 0
-        ? `${r.updated_chats || 0} chat${r.updated_chats === 1 ? "" : "s"} and ${r.updated_contacts || 0} contact${r.updated_contacts === 1 ? "" : "s"} renamed from WhatsApp.`
-        : `Nothing to rename — the ${r.inspected || 0} WhatsApp contacts already carry WhatsApp's name.`);
+        ? t("contacts.toolbar.waRenamed", {
+            chats: t("contacts.toolbar.waChats", { count: r.updated_chats || 0 }),
+            contacts: t("contacts.toolbar.waContacts", { count: r.updated_contacts || 0 }),
+          })
+        : t("contacts.toolbar.waNothing", { count: r.inspected || 0 }));
       await refresh();
     } catch (e: any) {
-      toast(`Refresh failed: ${e?.message || e}`);
+      toast(t("contacts.toolbar.waRefreshFailed", { error: e?.message || e }));
     } finally {
       setRefreshingWaNames(false);
     }
@@ -127,7 +133,7 @@ export function ContactsApp() {
       if (!picked?.length) return;
       const esc = (v: string) => String(v || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
       const cards = picked.map(c => {
-        const name = (c.name && c.name[0]) || (c.tel && c.tel[0]) || (c.email && c.email[0]) || "Unknown";
+        const name = (c.name && c.name[0]) || (c.tel && c.tel[0]) || (c.email && c.email[0]) || t("contacts.toolbar.unknownName");
         const lines = ["BEGIN:VCARD", "VERSION:3.0", `FN:${esc(name)}`];
         for (const t of c.tel || []) lines.push(`TEL;TYPE=CELL:${esc(t)}`);
         for (const e of c.email || []) lines.push(`EMAIL:${esc(e)}`);
@@ -136,7 +142,7 @@ export function ContactsApp() {
       });
       setPhoneVcf(cards.join("\n"));
     } catch (e: any) {
-      if (e?.name !== "AbortError") toast(`Couldn't read contacts: ${e?.message || e}`);
+      if (e?.name !== "AbortError") toast(t("contacts.toolbar.pickFailed", { error: e?.message || e }));
     }
   }
   // Lifted up from TriageButton so AutoClassifyButton can auto-open
@@ -276,9 +282,9 @@ export function ContactsApp() {
       setContacts(prev => prev.map(x => x.id === c.id ? { ...x, pinned: !c.pinned } : x));
       void refresh();
     } catch (err: any) {
-      toast(`Pin failed: ${err?.message || err}`);
+      toast(t("contacts.list.pinFailed", { error: err?.message || err }));
     }
-  }, [refresh]);
+  }, [refresh, t]);
 
   // Drill-down state for mobile: when the user has tapped a row OR
   // hit "New contact", we hide the list and show the detail full-
@@ -299,10 +305,10 @@ export function ContactsApp() {
             </div>
           </div>
           <h1 className="text-xl sm:text-3xl font-semibold leading-tight">
-            {counts.active} contact{counts.active !== 1 ? "s" : ""}
+            {t("contacts.header.count", { count: counts.active })}
             {counts.pending > 0 && (
               <span className="text-amber-500 text-base font-normal ml-3">
-                · {counts.pending} pending
+                {t("contacts.header.pending", { count: counts.pending })}
               </span>
             )}
           </h1>
@@ -310,8 +316,7 @@ export function ContactsApp() {
               the fold on a 667px-tall phone for little gain. Active
               count above is the load-bearing info. */}
           <p className="hidden md:block text-sm text-muted-foreground mt-2">
-            People and businesses Yorik knows about. Yorik looks up addresses and
-            phone numbers here instead of guessing.
+            {t("contacts.header.subtitle")}
           </p>
         </header>
 
@@ -322,27 +327,27 @@ export function ContactsApp() {
           "flex flex-wrap gap-2 mb-4 items-center",
           mobileDetailOpen && "hidden lg:flex",
         )}>
-          {(["active", "pending", "spam"] as Tab[]).map(t => (
+          {(["active", "pending", "spam"] as Tab[]).map(tb => (
             <button
-              key={t}
-              onClick={() => { setTab(t); setSelectedId(null); }}
+              key={tb}
+              onClick={() => { setTab(tb); setSelectedId(null); }}
               className={cn(
                 "text-xs px-3 py-1.5 rounded-full border transition flex items-center gap-1.5",
-                tab === t
+                tab === tb
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-card border-border text-muted-foreground hover:text-foreground",
               )}
             >
-              {t === "active"  && `Active · ${counts.active}`}
-              {t === "pending" && (
+              {tb === "active"  && t("contacts.tabs.active", { count: counts.active })}
+              {tb === "pending" && (
                 <>
-                  Pending · {counts.pending}
+                  {t("contacts.tabs.pending", { count: counts.pending })}
                   {counts.pending > 0 && tab !== "pending" && (
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                   )}
                 </>
               )}
-              {t === "spam"    && <><ShieldAlert className="w-3 h-3" />Spam · {counts.spam}</>}
+              {tb === "spam"    && <><ShieldAlert className="w-3 h-3" />{t("contacts.tabs.spam", { count: counts.spam })}</>}
             </button>
           ))}
 
@@ -383,43 +388,43 @@ export function ContactsApp() {
               onClick={scanSignatures}
               disabled={scanning}
               className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5 disabled:opacity-60"
-              title="Look for phone numbers in the signatures of mail already on file and suggest matches"
+              title={t("contacts.toolbar.scanSignaturesTitle")}
             >
               {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-              Scan signatures
+              {t("contacts.toolbar.scanSignatures")}
             </button>
           )}
           {canPickFromPhone && (
             <button
               onClick={pickFromPhone}
               className="flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5"
-              title="Pick contacts from this phone's address book"
+              title={t("contacts.toolbar.fromPhoneTitle")}
             >
-              <Upload className="w-3.5 h-3.5" /> From phone
+              <Upload className="w-3.5 h-3.5" /> {t("contacts.toolbar.fromPhone")}
             </button>
           )}
           {LEGACY_CONTACT_TOOLS && <button
             onClick={refreshWhatsappNames}
             disabled={refreshingWaNames}
             className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5 disabled:opacity-60"
-            title="Ask WhatsApp for the address book again and rename chats and contacts that still show a number"
+            title={t("contacts.toolbar.whatsappNamesTitle")}
           >
             {refreshingWaNames
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              : <RefreshCw className="w-3.5 h-3.5" />} WhatsApp names
+              : <RefreshCw className="w-3.5 h-3.5" />} {t("contacts.toolbar.whatsappNames")}
           </button>}
           <button
             onClick={() => { setImporting(true); }}
             className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5"
-            title="Import contacts from a .vcf file"
+            title={t("contacts.toolbar.importTitle")}
           >
-            <Upload className="w-3.5 h-3.5" /> Import .vcf
+            <Upload className="w-3.5 h-3.5" /> {t("contacts.toolbar.import")}
           </button>
           <button
             onClick={() => { setCreating(true); setSelectedId(null); }}
             className="hidden md:flex text-xs h-8 px-3 rounded-md bg-primary text-primary-foreground hover:opacity-90 items-center gap-1.5"
           >
-            <Plus className="w-3.5 h-3.5" /> New contact
+            <Plus className="w-3.5 h-3.5" /> {t("contacts.toolbar.newContact")}
           </button>
         </div>
 
@@ -435,8 +440,8 @@ export function ContactsApp() {
             onChange={e => setQuery(e.target.value)}
             // Short placeholder fits a 375px viewport without clipping;
             // aria-label keeps the longer hint for assistive tech.
-            placeholder="Search contacts…"
-            aria-label='Search by name, alias, or notes — "Grandma", "Example LLC", "plumber"'
+            placeholder={t("contacts.search.placeholder")}
+            aria-label={t("contacts.search.ariaLabel")}
             className="w-full h-11 md:h-10 pl-10 pr-3 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-ring/40"
           />
         </div>
@@ -458,9 +463,9 @@ export function ContactsApp() {
             )}
             {!loading && contacts.length === 0 && (
               <div className="text-center py-12 text-muted-foreground text-sm italic">
-                {tab === "active"  && (query ? "No matches." : "No contacts yet. Add one with the button above.")}
-                {tab === "pending" && "Nothing to check. New people from email and WhatsApp land here first."}
-                {tab === "spam"    && "No contacts marked as spam."}
+                {tab === "active"  && (query ? t("contacts.list.noMatches") : t("contacts.list.emptyActive"))}
+                {tab === "pending" && t("contacts.list.emptyPending")}
+                {tab === "spam"    && t("contacts.list.emptySpam")}
               </div>
             )}
             {(() => {
@@ -494,7 +499,7 @@ export function ContactsApp() {
                         if (selectedId === c.id) setSelectedId(null);
                         await refresh();
                       } catch (err: any) {
-                        toast(`Delete failed: ${err?.message || err}`);
+                        toast(t("contacts.list.deleteFailed", { error: err?.message || err }));
                       }
                     } : undefined}
                   />
@@ -504,9 +509,9 @@ export function ContactsApp() {
               return groups.map(([label, rows]) => (
                 <div key={label} className="mb-2">
                   <div className="px-2 pt-2 pb-1 text-2xs text-muted-foreground font-semibold flex items-center gap-1.5">
-                    {label === "Pinned" && <Star className="w-2.5 h-2.5 text-rose-500" />}
-                    {label === "Recent" && <Clock className="w-2.5 h-2.5" />}
-                    {label}
+                    {label === "pinned" && <Star className="w-2.5 h-2.5 text-rose-500" />}
+                    {label === "recent" && <Clock className="w-2.5 h-2.5" />}
+                    {t(`contacts.list.group.${label}`)}
                     <span className="opacity-60">· {rows.length}</span>
                   </div>
                   {rows.map(c => (
@@ -546,10 +551,10 @@ export function ContactsApp() {
                 type="button"
                 onClick={closeMobileDetail}
                 className="lg:hidden mb-3 -ml-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-                aria-label="Back to contact list"
+                aria-label={t("contacts.list.backToListAria")}
               >
                 <ChevronRight className="w-4 h-4 rotate-180" />
-                Back to contacts
+                {t("contacts.list.backToList")}
               </button>
             )}
             {creating ? (
@@ -578,7 +583,7 @@ export function ContactsApp() {
               />
             ) : (
               <div className="h-full flex items-center justify-center text-sm text-muted-foreground italic">
-                Select a contact to view or edit.
+                {t("contacts.list.selectHint")}
               </div>
             )}
           </div>
@@ -594,8 +599,8 @@ export function ContactsApp() {
           type="button"
           onClick={() => { setCreating(true); setSelectedId(null); }}
           className="lg:hidden fixed left-4 bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] z-30 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:opacity-90 active:scale-95 transition"
-          aria-label="New contact"
-          title="New contact"
+          aria-label={t("contacts.toolbar.newContact")}
+          title={t("contacts.toolbar.newContact")}
         >
           <Plus className="w-6 h-6" strokeWidth={2.5} />
         </button>
@@ -605,7 +610,7 @@ export function ContactsApp() {
       {phoneVcf && (
         <VcardImportModal
           initialText={phoneVcf}
-          sourceLabel="From this phone"
+          sourceLabel={t("contacts.toolbar.fromPhoneSource")}
           onClose={() => setPhoneVcf(null)}
           onApplied={async () => { setPhoneVcf(null); await refresh(); }}
         />
@@ -649,6 +654,7 @@ function ContactAvatar({
   size: "sm" | "lg";
   className?: string;
 }) {
+  const { t } = useTranslation();
   const jid = (contact.channels || [])
     .find(ch => ch.kind === "whatsapp")?.value;
 
@@ -717,7 +723,7 @@ function ContactAvatar({
         {imgLoaded !== true && (
           contact.kind === "business"
             ? <Briefcase className={iconSize} />
-            : <span>{bestContactName(contact) === UNKNOWN_WA ? "?" : initials(bestContactName(contact))}</span>
+            : <span>{bestContactName(contact) === unknownWa() ? "?" : initials(bestContactName(contact))}</span>
         )}
       </div>
       {contact.yorik_assist_enabled && (
@@ -726,8 +732,8 @@ function ContactAvatar({
             "absolute -bottom-0.5 -right-0.5 rounded-full bg-emerald-500 ring-2 ring-card",
             assistDotSize,
           )}
-          title="Yorik assist enabled — new messages from this contact may surface suggestions"
-          aria-label="Yorik assist enabled"
+          title={t("contacts.avatar.assistTitle")}
+          aria-label={t("contacts.avatar.assistAria")}
         />
       )}
     </div>
@@ -759,6 +765,7 @@ function ContactListRow({
    *  fuller flow. Undefined = button not rendered. */
   onDelete?: () => void;
 }) {
+  const { t } = useTranslation();
   const primaryChannel = contact.channels[0];
   const emailCh = contact.channels.find(c => c.kind === "email");
   const waCh    = contact.channels.find(c => c.kind === "whatsapp");
@@ -801,14 +808,14 @@ function ContactListRow({
         <div className="text-sm font-medium truncate flex items-center gap-1.5">
           {bestContactName(contact)}
           {contact.status === "pending" && (
-            <span className="text-2xs px-1 rounded bg-amber-500/15 text-amber-500">pending</span>
+            <span className="text-2xs px-1 rounded bg-amber-500/15 text-amber-500">{t("contacts.row.pendingBadge")}</span>
           )}
         </div>
         <div className="text-xs text-muted-foreground truncate flex items-center gap-1.5">
           {employerName && (
             <span className="inline-flex items-center gap-1 text-blue-500/80">
               <Briefcase className="w-2.5 h-2.5" />
-              at {employerName}
+              {t("contacts.row.at", { name: employerName })}
             </span>
           )}
           {contact.relation && (
@@ -840,28 +847,28 @@ function ContactListRow({
       )}>
         <RowActionIcon
           icon={contact.pinned ? <PinOff className="w-3.5 h-3.5" /> : <PinIcon className="w-3.5 h-3.5" />}
-          title={contact.pinned ? "Unpin from top" : "Pin to top"}
+          title={contact.pinned ? t("contacts.row.unpin") : t("contacts.row.pin")}
           onClick={(e) => { e.stopPropagation(); onTogglePin(); }}
           enabled
           tone={contact.pinned ? "rose" : undefined}
         />
         <RowActionIcon
           icon={<FileText className="w-3.5 h-3.5" />}
-          title="Write a letter to this contact"
+          title={t("contacts.row.writeLetter")}
           onClick={(e) => go(e, "letter")}
           enabled
           tone="violet"
         />
         <RowActionIcon
           icon={<Mail className="w-3.5 h-3.5" />}
-          title={emailCh ? `Email ${emailCh.value}` : "No email on file — click to add one"}
+          title={emailCh ? t("contacts.row.email", { address: emailCh.value }) : t("contacts.row.noEmail")}
           onClick={(e) => go(e, "email")}
           enabled={!!emailCh}
           tone="blue"
         />
         <RowActionIcon
           icon={<MessageCircle className="w-3.5 h-3.5" />}
-          title={waCh ? `Open WhatsApp chat with ${contact.display_name}` : "No WhatsApp on file — click to add one"}
+          title={waCh ? t("contacts.row.openWhatsapp", { name: contact.display_name }) : t("contacts.row.noWhatsapp")}
           onClick={(e) => go(e, "whatsapp")}
           enabled={!!waCh}
           tone="emerald"
@@ -869,10 +876,10 @@ function ContactListRow({
         {onDelete && (
           <RowActionIcon
             icon={<Trash2 className="w-3.5 h-3.5" />}
-            title="Delete this contact (asks for confirmation)"
+            title={t("contacts.row.deleteTitle")}
             onClick={(e) => {
               e.stopPropagation();
-              if (confirm(`Delete "${contact.display_name}"? This can't be undone.`)) {
+              if (confirm(t("contacts.row.deleteConfirm", { name: contact.display_name }))) {
                 onDelete();
               }
             }}
@@ -934,15 +941,16 @@ const CHANNEL_NAME_PRIORITY: ReadonlyArray<string> = [
 // @s.whatsapp.net suffix and prepends a + so it looks like the number
 // it represents. @lid stays as a short fingerprint — there's no
 // phone number to recover. Used for the last-resort fallback when
-// no name is available anywhere.
-const UNKNOWN_WA = "Unknown WhatsApp contact";
+// no name is available anywhere. Resolved at call time so it follows
+// the current language.
+function unknownWa(): string { return i18n.t("contacts.name.unknownWa"); }
 
 // A channel value as a person reads it: WhatsApp JIDs become the phone
 // number (or "WhatsApp, no number" for an @lid, which has none); mail
 // addresses and plain numbers stay as they are.
 function channelDisplay(value: string): string {
   if (value.endsWith("@s.whatsapp.net")) return formatJidForDisplay(value);
-  if (value.endsWith("@lid")) return "WhatsApp, no number";
+  if (value.endsWith("@lid")) return i18n.t("contacts.name.waNoNumber");
   return value;
 }
 
@@ -955,7 +963,7 @@ function formatJidForDisplay(jid: string): string {
   if (jid.endsWith("@lid")) {
     const digits = jid.slice(0, jid.length - "@lid".length);
     // No phone number behind an @lid; the digits mean nothing to a person.
-    return digits ? UNKNOWN_WA : jid;
+    return digits ? unknownWa() : jid;
   }
   return jid;
 }
@@ -1004,7 +1012,7 @@ function renderNotesWithDocLinks(notes: string): React.ReactNode {
         key={`${m.index}-${docId}`}
         href={`/r/documents?doc=${encodeURIComponent(docId)}&source=paperless`}
         className="text-violet-500 hover:underline"
-        title="Open the source document"
+        title={i18n.t("contacts.notes.openSource")}
       >
         {m[1]}
       </a>
@@ -1018,10 +1026,11 @@ function renderNotesWithDocLinks(notes: string): React.ReactNode {
 
 /** Bucket contacts into Pinned / Recent (warm in the last ~30 days) /
  *  Contacts (the rest, alphabetical). Empty buckets are dropped so
- *  the sidebar doesn't show headers with nothing under them. */
+ *  the sidebar doesn't show headers with nothing under them. The
+ *  first tuple element is the group key (contacts.list.group.*). */
 function groupContacts(
   list: Contact[],
-): Array<[string, Contact[]]> {
+): Array<["pinned" | "recent" | "contacts", Contact[]]> {
   const pinned: Contact[] = [];
   const recent: Contact[] = [];
   const rest:   Contact[] = [];
@@ -1056,10 +1065,10 @@ function groupContacts(
     (a, b) => a.display_name.localeCompare(b.display_name),
   );
 
-  const out: Array<[string, Contact[]]> = [];
-  if (pinned.length)    out.push(["Pinned", pinned]);
-  if (recentTop.length) out.push(["Recent", recentTop]);
-  if (allRest.length)   out.push(["Contacts", allRest]);
+  const out: Array<["pinned" | "recent" | "contacts", Contact[]]> = [];
+  if (pinned.length)    out.push(["pinned", pinned]);
+  if (recentTop.length) out.push(["recent", recentTop]);
+  if (allRest.length)   out.push(["contacts", allRest]);
   return out;
 }
 
@@ -1080,6 +1089,7 @@ function groupContacts(
 // to the LLM. This is the contact-level privacy gate from the
 // 3-layer hierarchy (master → source → contact).
 function YorikAssistRow({ contact }: { contact: Contact }) {
+  const { t } = useTranslation();
   const [enabled, setEnabled] = useState<boolean>(!!contact.yorik_assist_enabled);
   const [saving, setSaving] = useState(false);
 
@@ -1094,7 +1104,7 @@ function YorikAssistRow({ contact }: { contact: Contact }) {
       await api.patch(`/api/contacts/${contact.id}`, { yorik_assist_enabled: next });
     } catch (e: any) {
       setEnabled(!next);
-      toast(e?.message || "Failed to save");
+      toast(e?.message || t("contacts.assist.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -1103,9 +1113,9 @@ function YorikAssistRow({ contact }: { contact: Contact }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card/40 px-3 py-2">
       <div className="text-xs">
-        <div className="font-medium">Yorik assist</div>
+        <div className="font-medium">{t("contacts.assist.title")}</div>
         <div className="text-muted-foreground">
-          Let Yorik analyse messages from this contact and suggest one-click actions.
+          {t("contacts.assist.description")}
         </div>
       </div>
       <button
@@ -1117,7 +1127,7 @@ function YorikAssistRow({ contact }: { contact: Contact }) {
           saving && "opacity-60 cursor-wait",
         )}
         aria-pressed={enabled}
-        title={enabled ? "Disable Yorik assist for this contact" : "Enable Yorik assist for this contact"}
+        title={enabled ? t("contacts.assist.disable") : t("contacts.assist.enable")}
       >
         <span className={cn(
           "inline-block h-3.5 w-3.5 transform rounded-full bg-white transition",
@@ -1136,18 +1146,21 @@ function ContactView({
   onTogglePin: () => void;
   onStatusChange?: () => void;
 }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [busyAction, setBusyAction] = useState<"promote" | "spam" | null>(null);
   // A pending row (new person from mail or WhatsApp) is decided here on
   // the card: it is a contact, or it is not. No editor, no triage list.
   async function decide(action: "promote" | "spam") {
-    if (action === "spam" && !confirm(`Mark "${contact.display_name}" as spam? Future messages from their channels are dropped.`)) return;
+    if (action === "spam" && !confirm(t("contacts.card.spamConfirm", { name: contact.display_name }))) return;
     setBusyAction(action);
     try {
       await api.post(`/api/contacts/${contact.id}/${action}`);
       onStatusChange?.();
     } catch (e: any) {
-      toast(`${action === "promote" ? "Confirm" : "Mark spam"} failed: ${e?.message || e}`);
+      toast(action === "promote"
+        ? t("contacts.card.confirmFailed", { error: e?.message || e })
+        : t("contacts.card.markSpamFailed", { error: e?.message || e }));
     } finally { setBusyAction(null); }
   }
   const timelineApi = useApi<ContactTimeline>(`/api/contacts/${contact.id}/timeline?limit=8`, [contact.id]);
@@ -1194,16 +1207,16 @@ function ContactView({
               <PinIcon className="w-3.5 h-3.5 text-rose-500" />
             )}
             {contact.status === "pending" && (
-              <span className="text-2xs px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-medium">pending</span>
+              <span className="text-2xs px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-medium">{t("contacts.card.pending")}</span>
             )}
             {contact.status === "spam" && (
               <span className="text-2xs px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-500 font-medium flex items-center gap-1">
-                <ShieldAlert className="w-3 h-3" />spam
+                <ShieldAlert className="w-3 h-3" />{t("contacts.card.spam")}
               </span>
             )}
           </div>
           <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
-            <span>{contact.kind === "business" ? "Business" : "Person"}</span>
+            <span>{contact.kind === "business" ? t("contacts.card.business") : t("contacts.card.person")}</span>
             {contact.role && (
               <><span className="opacity-40">·</span><span>{contact.role}</span></>
             )}
@@ -1227,18 +1240,18 @@ function ContactView({
                 ? "bg-rose-500/15 text-rose-500 border-rose-500/30 hover:bg-rose-500/20"
                 : "border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted",
             )}
-            title={contact.pinned ? "Unpin from top" : "Pin to top"}
-            aria-label={contact.pinned ? "Unpin contact" : "Pin contact"}
+            title={contact.pinned ? t("contacts.row.unpin") : t("contacts.row.pin")}
+            aria-label={contact.pinned ? t("contacts.card.unpinAria") : t("contacts.card.pinAria")}
           >
             {contact.pinned ? <PinOff className="w-4 h-4 md:w-3.5 md:h-3.5" /> : <PinIcon className="w-4 h-4 md:w-3.5 md:h-3.5" />}
           </button>
           <button
             onClick={onEdit}
             className="h-10 md:h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-border bg-card text-foreground hover:bg-muted text-xs"
-            title="Edit contact details"
-            aria-label="Edit contact"
+            title={t("contacts.card.editTitle")}
+            aria-label={t("contacts.card.editAria")}
           >
-            <Pencil className="w-4 h-4 md:w-3.5 md:h-3.5" /> Edit
+            <Pencil className="w-4 h-4 md:w-3.5 md:h-3.5" /> {t("contacts.card.edit")}
           </button>
         </div>
       </header>
@@ -1251,7 +1264,7 @@ function ContactView({
             className="h-10 md:h-8 px-3 rounded-md bg-emerald-500 text-white hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             {busyAction === "promote" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-            Confirm contact
+            {t("contacts.card.confirm")}
           </button>
           <button
             onClick={() => decide("spam")}
@@ -1259,7 +1272,7 @@ function ContactView({
             className="h-10 md:h-8 px-3 rounded-md border border-border bg-card hover:bg-muted disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             {busyAction === "spam" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldAlert className="w-3.5 h-3.5" />}
-            Not a contact
+            {t("contacts.card.notAContact")}
           </button>
         </div>
       )}
@@ -1276,14 +1289,14 @@ function ContactView({
           type="button"
           onClick={() => navigate(`/contacts?contact=${employer.id}`)}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border bg-blue-500/5 hover:bg-blue-500/10 hover:border-blue-500/40 transition text-left"
-          title={`Open ${employer.display_name}`}
+          title={t("contacts.card.openEmployer", { name: employer.display_name })}
         >
           <div className="w-8 h-8 rounded-full bg-blue-500/15 text-blue-500 flex items-center justify-center shrink-0">
             <Briefcase className="w-4 h-4" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-2xs text-muted-foreground/80 font-semibold">
-              Works at
+              {t("contacts.card.worksAt")}
             </div>
             <div className="text-sm font-medium truncate">
               {employer.display_name}
@@ -1297,22 +1310,22 @@ function ContactView({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <BigActionBtn
           icon={<Mail className="w-4 h-4" />}
-          label="Email"
+          label={t("contacts.card.actionEmail")}
           sub={email?.value}
-          disabledHint={email ? undefined : "No email on file"}
+          disabledHint={email ? undefined : t("contacts.card.noEmail")}
           onClick={() => { if (email) navigate(`/email?to=${encodeURIComponent(email.value)}`); else onEdit(); }}
         />
         <BigActionBtn
           icon={<FileText className="w-4 h-4" />}
-          label="Letter"
-          sub={contact.addresses[0]?.city || "via Compose"}
+          label={t("contacts.card.actionLetter")}
+          sub={contact.addresses[0]?.city || t("contacts.card.viaCompose")}
           onClick={() => navigate(`/compose?contact_id=${contact.id}`)}
         />
         <BigActionBtn
           icon={<MessageCircle className="w-4 h-4" />}
-          label="WhatsApp"
+          label={t("contacts.card.actionWhatsapp")}
           sub={wa ? channelDisplay(wa.value) : undefined}
-          disabledHint={wa ? undefined : "No WhatsApp on file"}
+          disabledHint={wa ? undefined : t("contacts.card.noWhatsapp")}
           onClick={() => {
             if (!wa) { onEdit(); return; }
             const jid = wa.value.includes("@") ? wa.value : `${wa.value}@s.whatsapp.net`;
@@ -1321,9 +1334,9 @@ function ContactView({
         />
         <BigActionBtn
           icon={<PhoneIcon className="w-4 h-4" />}
-          label="Call"
+          label={t("contacts.card.actionCall")}
           sub={phone?.value}
-          disabledHint={phone ? undefined : "No phone on file"}
+          disabledHint={phone ? undefined : t("contacts.card.noPhone")}
           href={phone ? `tel:${phone.value}` : undefined}
           onClick={phone ? undefined : onEdit}
         />
@@ -1333,17 +1346,17 @@ function ContactView({
           Loads lazily; collapses gracefully when there's nothing. */}
       <section>
         <div className="text-2xs text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
-          <Clock className="w-2.5 h-2.5" /> Activity
+          <Clock className="w-2.5 h-2.5" /> {t("contacts.card.activity")}
           {timeline && timeline.total > 0 && (
             <span className="opacity-60">· {timeline.total}</span>
           )}
         </div>
         {timelineApi.loading && !timeline && (
-          <div className="text-xs text-muted-foreground italic py-2">Loading…</div>
+          <div className="text-xs text-muted-foreground italic py-2">{t("contacts.card.loading")}</div>
         )}
         {timeline && timeline.items.length === 0 && (
           <div className="text-xs text-muted-foreground italic py-2">
-            No emails, events, or drafts with this contact yet.
+            {t("contacts.card.noActivity")}
           </div>
         )}
         {timeline && timeline.items.length > 0 && (
@@ -1358,7 +1371,7 @@ function ContactView({
       {contact.kind === "business" && employees.length > 0 && (
         <section>
           <h3 className="text-2xs text-muted-foreground/80 font-semibold mb-2">
-            People here · {employees.length}
+            {t("contacts.card.peopleHere", { count: employees.length })}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {employees.map(p => (
@@ -1443,6 +1456,7 @@ function BigActionBtn({
 
 
 function TimelineList({ items }: { items: ContactTimelineItem[] }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const iconFor = (kind: ContactTimelineItem["kind"]) => {
     if (kind === "email") return <Mail className="w-3 h-3" />;
@@ -1464,7 +1478,7 @@ function TimelineList({ items }: { items: ContactTimelineItem[] }) {
             <div className="text-xs font-medium truncate flex items-center gap-1.5">
               {it.title}
               {it.direction === "outgoing" && (
-                <span className="text-2xs opacity-60">sent</span>
+                <span className="text-2xs opacity-60">{t("contacts.card.sent")}</span>
               )}
             </div>
             {it.sub && (
@@ -1501,18 +1515,15 @@ function YorikAssistBulkButton({
   counts: { active: number; pending: number; spam: number; archived: number };
   onDone: () => Promise<void> | void;
 }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   if (tab === "spam") return null;
   const visibleCount = tab === "active" ? counts.active : counts.pending;
   if (visibleCount === 0) return null;
 
   async function run(enabled: boolean) {
-    const verb = enabled ? "Enable" : "Disable";
-    if (!confirm(
-      `${verb} Yorik assist for all ${visibleCount} ${tab} contact${visibleCount === 1 ? "" : "s"}?\n\n` +
-      `When enabled, Yorik may analyse new messages from these contacts and suggest one-click actions ` +
-      `(replies, meeting slots). Toggle individual contacts off any time.`
-    )) return;
+    const verb = enabled ? t("contacts.legacy.bulkAssist.enable") : t("contacts.legacy.bulkAssist.disable");
+    if (!confirm(t("contacts.legacy.bulkAssist.confirm", { verb, count: visibleCount, tab }))) return;
     setBusy(true);
     try {
       await api.post<{ updated_count: number }>(
@@ -1521,7 +1532,7 @@ function YorikAssistBulkButton({
       );
       await onDone();
     } catch (e: any) {
-      toast("Couldn't update: " + (e?.message || e));
+      toast(t("contacts.legacy.bulkAssist.updateFailed", { error: e?.message || e }));
     } finally {
       setBusy(false);
     }
@@ -1532,15 +1543,16 @@ function YorikAssistBulkButton({
       onClick={() => run(true)}
       disabled={busy}
       className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5 disabled:opacity-50"
-      title={`Enable Yorik assist for all ${visibleCount} ${tab} contacts`}
+      title={t("contacts.legacy.bulkAssist.title", { count: visibleCount, tab })}
     >
-      <Sparkles className="w-3.5 h-3.5" /> Enable AI · {visibleCount}
+      <Sparkles className="w-3.5 h-3.5" /> {t("contacts.legacy.bulkAssist.button", { count: visibleCount })}
     </button>
   );
 }
 
 
 function EnrichButton() {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [worker, setWorker] = useState<{ status: string; detail: string;
     last_heartbeat_age_s: number | null } | null>(null);
@@ -1572,18 +1584,13 @@ function EnrichButton() {
   const running = !!worker && !terminal && (worker.status === "starting" || (worker.status === "ok" && fresh));
 
   async function start() {
-    if (!confirm(
-      "Enrich every contact by scanning emails, WhatsApp messages, and Paperless docs?\n\n" +
-      "Proposals land in the edit-contact form as pre-filled fields + dropdowns of alternatives. " +
-      "Nothing is changed until you save a contact. ~5-15 minutes for a couple hundred contacts " +
-      "on a local LLM; runs in the background, safe to close this page."
-    )) return;
+    if (!confirm(t("contacts.legacy.enrich.confirm"))) return;
     setBusy(true);
     try {
       await api.post("/api/contacts/enrich", {});
       refresh();
     } catch (e: any) {
-      toast("Couldn't queue enrichment: " + (e?.message || e));
+      toast(t("contacts.legacy.enrich.queueFailed", { error: e?.message || e }));
     } finally {
       setBusy(false);
     }
@@ -1595,7 +1602,7 @@ function EnrichButton() {
       await api.post("/api/contacts/enrich-cancel", {});
       refresh();
     } catch (e: any) {
-      toast("Couldn't stop: " + (e?.message || e));
+      toast(t("contacts.legacy.enrich.stopFailed", { error: e?.message || e }));
     } finally {
       setBusy(false);
     }
@@ -1606,11 +1613,11 @@ function EnrichButton() {
       <button
         onClick={stop}
         disabled={busy}
-        title={detail || "Enricher running…"}
+        title={detail || t("contacts.legacy.enrich.running")}
         className="hidden md:flex text-xs h-8 px-3 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 items-center gap-1.5 max-w-[260px]"
       >
         <StopCircle className="w-3.5 h-3.5 shrink-0" />
-        <span className="truncate">{detail.slice(0, 40) || "Enriching…"}</span>
+        <span className="truncate">{detail.slice(0, 40) || t("contacts.legacy.enrich.enriching")}</span>
       </button>
     );
   }
@@ -1619,10 +1626,10 @@ function EnrichButton() {
       onClick={start}
       disabled={busy}
       className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5"
-      title="LLM-fill contact info from your emails, WhatsApp, and documents"
+      title={t("contacts.legacy.enrich.title")}
     >
       {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
-      Enrich
+      {t("contacts.legacy.enrich.button")}
     </button>
   );
 }
@@ -1670,13 +1677,14 @@ type TriageListResponse = {
 };
 
 function TriageButton({ onOpen }: { onOpen: () => void }) {
+  const { t } = useTranslation();
   return (
     <button
       onClick={onOpen}
       className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5"
-      title="Fast keyboard-driven approval/dismiss for pending contacts"
+      title={t("contacts.triage.buttonTitle")}
     >
-      <Check className="w-3.5 h-3.5" /> Triage
+      <Check className="w-3.5 h-3.5" /> {t("contacts.triage.button")}
     </button>
   );
 }
@@ -1685,6 +1693,7 @@ function TriageModal({ onClose, onApplied }: {
   onClose: () => void;
   onApplied: () => Promise<void> | void;
 }) {
+  const { t } = useTranslation();
   const [items, setItems] = useState<TriageItem[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -1755,11 +1764,11 @@ function TriageModal({ onClose, onApplied }: {
       console.error("triage: fetch failed", err);
       setItems([]);
       setTotal(0);
-      toast("Couldn't load triage list: " + (err?.message || err));
+      toast(t("contacts.triage.loadFailed", { error: err?.message || err }));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { fetchPage(0, null); }, [fetchPage]);
 
@@ -1840,11 +1849,11 @@ function TriageModal({ onClose, onApplied }: {
         `${r.archived} archived, ${r.spam} spam.`,
       );
     } catch (err: any) {
-      toast("Apply failed: " + (err?.message || err));
+      toast(t("contacts.triage.applyFailed", { error: err?.message || err }));
     } finally {
       setApplying(false);
     }
-  }, [decisions, onApplied, fetchPage, kindFilter]);
+  }, [decisions, onApplied, fetchPage, kindFilter, t]);
 
   // Keyboard shortcuts. Tied to the cursor row.
   //   p / 1   → active_person
@@ -1917,15 +1926,15 @@ function TriageModal({ onClose, onApplied }: {
         {/* Header */}
         <header className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="font-semibold">Triage pending contacts</div>
+            <div className="font-semibold">{t("contacts.triage.title")}</div>
             <div className="text-xs text-muted-foreground mt-0.5 truncate">
-              {total} pending{kindFilter ? ` ${kindFilter}` : ""} ·
-              {" "}showing {items.length} ·
-              {" "}{pendingChanges} decision{pendingChanges === 1 ? "" : "s"} ready
-              {personCount   > 0 && <span className="text-emerald-600 dark:text-emerald-400"> · {personCount} person</span>}
-              {businessCount > 0 && <span className="text-sky-600 dark:text-sky-400"> · {businessCount} business</span>}
-              {archivedCount > 0 && <span className="text-muted-foreground"> · {archivedCount} archive</span>}
-              {spamCount     > 0 && <span className="text-rose-600 dark:text-rose-400"> · {spamCount} spam</span>}
+              {t("contacts.triage.pendingCount", { count: total, kind: kindFilter ? ` ${kindFilter === "person" ? t("contacts.triage.filterPerson") : t("contacts.triage.filterBusiness")}` : "" })} ·
+              {" "}{t("contacts.triage.showing", { count: items.length })} ·
+              {" "}{t("contacts.triage.decisionsReady", { count: pendingChanges })}
+              {personCount   > 0 && <span className="text-emerald-600 dark:text-emerald-400">{t("contacts.triage.personCount", { count: personCount })}</span>}
+              {businessCount > 0 && <span className="text-sky-600 dark:text-sky-400">{t("contacts.triage.businessCount", { count: businessCount })}</span>}
+              {archivedCount > 0 && <span className="text-muted-foreground">{t("contacts.triage.archiveCount", { count: archivedCount })}</span>}
+              {spamCount     > 0 && <span className="text-rose-600 dark:text-rose-400">{t("contacts.triage.spamCount", { count: spamCount })}</span>}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1944,7 +1953,7 @@ function TriageModal({ onClose, onApplied }: {
                       : "border-border text-muted-foreground hover:text-foreground hover:bg-muted",
                   )}
                 >
-                  {k}
+                  {k === "all" ? t("contacts.triage.filterAll") : k === "person" ? t("contacts.triage.filterPerson") : t("contacts.triage.filterBusiness")}
                 </button>
               );
             })}
@@ -1952,7 +1961,7 @@ function TriageModal({ onClose, onApplied }: {
               onClick={onClose}
               disabled={applying}
               className="p-1.5 hover:bg-muted rounded-md text-muted-foreground disabled:opacity-50"
-              aria-label="Close"
+              aria-label={t("contacts.triage.close")}
             >
               <X className="w-4 h-4" />
             </button>
@@ -1962,7 +1971,7 @@ function TriageModal({ onClose, onApplied }: {
         {/* Filter row — narrow bulk actions to rows with specific data */}
         <div className="px-5 py-2 border-b border-border/60 flex items-center flex-wrap gap-x-4 gap-y-1.5 bg-muted/15">
           <span className="text-2xs text-muted-foreground/70 font-semibold shrink-0">
-            Filter (bulk acts on rows that have ALL checked):
+            {t("contacts.triage.filterLabel")}
           </span>
           <label className={cn(
             "inline-flex items-center gap-1.5 text-xs cursor-pointer select-none px-2 py-1 rounded transition",
@@ -1975,7 +1984,7 @@ function TriageModal({ onClose, onApplied }: {
               className="accent-primary"
             />
             <Mail className="w-3 h-3" />
-            Email
+            {t("contacts.triage.filterEmail")}
           </label>
           <label className={cn(
             "inline-flex items-center gap-1.5 text-xs cursor-pointer select-none px-2 py-1 rounded transition",
@@ -1988,7 +1997,7 @@ function TriageModal({ onClose, onApplied }: {
               className="accent-primary"
             />
             <Phone className="w-3 h-3" />
-            Phone
+            {t("contacts.triage.filterPhone")}
           </label>
           <label className={cn(
             "inline-flex items-center gap-1.5 text-xs cursor-pointer select-none px-2 py-1 rounded transition",
@@ -2001,19 +2010,19 @@ function TriageModal({ onClose, onApplied }: {
               className="accent-primary"
             />
             <MapPin className="w-3 h-3" />
-            Address
+            {t("contacts.triage.filterAddress")}
           </label>
           {filterActive && (
             <button
               onClick={() => { setRequireEmail(false); setRequirePhone(false); setRequireAddress(false); }}
               className="text-xs text-muted-foreground hover:underline ml-auto"
             >
-              Clear filter
+              {t("contacts.triage.clearFilter")}
             </button>
           )}
           {filterActive && (
             <span className="text-xs text-muted-foreground">
-              {matchingItems.length} of {items.length} on page match
+              {t("contacts.triage.matchCount", { matching: matchingItems.length, total: items.length })}
             </span>
           )}
         </div>
@@ -2029,48 +2038,48 @@ function TriageModal({ onClose, onApplied }: {
               !matchingItems.some(it => it.triage_verdict)
             }
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-primary/50 bg-primary/10 text-primary hover:bg-primary/15 disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Trust Yorik's per-row verdicts and pre-fill all decisions on this page"
+            title={t("contacts.triage.acceptVerdictsTitle")}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            Accept Yorik's verdicts
+            {t("contacts.triage.acceptVerdicts")}
           </button>
           <button
             onClick={approveAll}
             disabled={matchingItems.length === 0 || applying || loading}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
             title={filterActive
-              ? "Mark every matching row as Person"
-              : "Mark every visible row as Person"}
+              ? t("contacts.triage.allPersonMatching")
+              : t("contacts.triage.allPersonVisible")}
           >
             <Check className="w-3.5 h-3.5" />
-            All as person
+            {t("contacts.triage.allPerson")}
           </button>
           <button
             onClick={dismissAll}
             disabled={matchingItems.length === 0 || applying || loading}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300 hover:bg-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
             title={filterActive
-              ? "Mark every matching row as Spam"
-              : "Mark every visible row as Spam"}
+              ? t("contacts.triage.allSpamMatching")
+              : t("contacts.triage.allSpamVisible")}
           >
             <X className="w-3.5 h-3.5" />
-            All as spam
+            {t("contacts.triage.allSpam")}
           </button>
           <button
             onClick={clearPage}
             disabled={applying || loading}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
-            title="Clear all decisions on this page"
+            title={t("contacts.triage.clearPageTitle")}
           >
-            Clear page
+            {t("contacts.triage.clearPage")}
           </button>
           <span className="ml-auto text-xs text-muted-foreground text-right hidden md:inline">
-            <kbd className="font-mono px-1 rounded bg-muted/60">P</kbd>=person ·
-            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">B</kbd>=business ·
-            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">A</kbd>=archive ·
-            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">S</kbd>=spam ·
-            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">↑↓</kbd>=move ·
-            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">⌘↵</kbd>=apply
+            <kbd className="font-mono px-1 rounded bg-muted/60">P</kbd>{t("contacts.triage.keyPerson")}
+            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">B</kbd>{t("contacts.triage.keyBusiness")}
+            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">A</kbd>{t("contacts.triage.keyArchive")}
+            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">S</kbd>{t("contacts.triage.keySpam")}
+            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">↑↓</kbd>{t("contacts.triage.keyMove")}
+            {" "}<kbd className="font-mono px-1 rounded bg-muted/60">⌘↵</kbd>{t("contacts.triage.keyApply")}
           </span>
         </div>
 
@@ -2078,12 +2087,12 @@ function TriageModal({ onClose, onApplied }: {
         <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
           {loading && (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading…
+              <Loader2 className="w-4 h-4 animate-spin mr-2" /> {t("contacts.triage.loading")}
             </div>
           )}
           {!loading && items.length === 0 && (
             <div className="text-center py-12 text-muted-foreground italic">
-              No pending {kindFilter ?? "contact"}s. Inbox zero.
+              {t("contacts.triage.empty", { kind: kindFilter === "person" ? t("contacts.triage.filterPerson") : kindFilter === "business" ? t("contacts.triage.filterBusiness") : t("contacts.triage.emptyKindFallback") })}
             </div>
           )}
           {!loading && items.map((it, idx) => {
@@ -2117,10 +2126,10 @@ function TriageModal({ onClose, onApplied }: {
                   <div className="flex items-baseline gap-2 flex-wrap">
                     <span className="text-sm font-semibold truncate">{it.name}</span>
                     <span className="text-2xs text-muted-foreground/70 px-1.5 py-0.5 rounded bg-muted/40">
-                      {it.kind}
+                      {it.kind === "business" ? t("contacts.triage.filterBusiness") : t("contacts.triage.filterPerson")}
                     </span>
                     {!hasData && (
-                      <span className="text-2xs text-muted-foreground/50 italic">name only</span>
+                      <span className="text-2xs text-muted-foreground/50 italic">{t("contacts.triage.nameOnly")}</span>
                     )}
                   </div>
 
@@ -2134,7 +2143,7 @@ function TriageModal({ onClose, onApplied }: {
                     <div className="mt-1.5 text-xs flex items-start gap-1.5 text-foreground/70 leading-snug">
                       <Sparkles className="w-3 h-3 text-primary/70 mt-[2px] shrink-0" />
                       <span className="italic">
-                        Yorik: {it.triage_reason}
+                        {t("contacts.triage.yorikReason", { reason: it.triage_reason })}
                         {it.triage_confidence && (
                           <span className="ml-1 text-2xs text-muted-foreground/70 not-italic">
                             · {it.triage_confidence}
@@ -2186,7 +2195,7 @@ function TriageModal({ onClose, onApplied }: {
                       className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
                     >
                       <Mail className="w-3 h-3" />
-                      {expandedId === it.id ? "Hide emails" : "Show emails"}
+                      {expandedId === it.id ? t("contacts.triage.hideEmails") : t("contacts.triage.showEmails")}
                       <ChevronRight className={cn(
                         "w-3 h-3 transition-transform",
                         expandedId === it.id && "rotate-90",
@@ -2203,7 +2212,7 @@ function TriageModal({ onClose, onApplied }: {
                     Clicking the active chip clears the decision. */}
                 <div className="flex items-center gap-1 shrink-0 self-start pt-0.5">
                   <TriageChip
-                    label="Person"
+                    label={t("contacts.triage.chipPerson")}
                     shortcut="P"
                     icon={Check}
                     active={decision === "active_person"}
@@ -2212,7 +2221,7 @@ function TriageModal({ onClose, onApplied }: {
                     suggested={it.triage_verdict === "active_person"}
                   />
                   <TriageChip
-                    label="Business"
+                    label={t("contacts.triage.chipBusiness")}
                     shortcut="B"
                     icon={Globe}
                     active={decision === "active_business"}
@@ -2221,7 +2230,7 @@ function TriageModal({ onClose, onApplied }: {
                     suggested={it.triage_verdict === "active_business"}
                   />
                   <TriageChip
-                    label="Archive"
+                    label={t("contacts.triage.chipArchive")}
                     shortcut="A"
                     icon={MapPin}
                     active={decision === "archived"}
@@ -2230,7 +2239,7 @@ function TriageModal({ onClose, onApplied }: {
                     suggested={it.triage_verdict === "archived"}
                   />
                   <TriageChip
-                    label="Spam"
+                    label={t("contacts.triage.chipSpam")}
                     shortcut="S"
                     icon={X}
                     active={decision === "spam"}
@@ -2252,17 +2261,17 @@ function TriageModal({ onClose, onApplied }: {
               disabled={offset === 0 || loading || applying}
               className="px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-30"
             >
-              ← Prev
+              {t("contacts.triage.prev")}
             </button>
             <span>
-              {offset + 1}–{offset + items.length} of {total}
+              {t("contacts.triage.range", { from: offset + 1, to: offset + items.length, total })}
             </span>
             <button
               onClick={() => fetchPage(offset + PAGE_SIZE, kindFilter)}
               disabled={offset + items.length >= total || loading || applying}
               className="px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-30"
             >
-              Next →
+              {t("contacts.triage.next")}
             </button>
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -2271,7 +2280,7 @@ function TriageModal({ onClose, onApplied }: {
               disabled={applying}
               className="px-3 py-2 rounded-md text-sm font-medium border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
             >
-              Close
+              {t("contacts.triage.close")}
             </button>
             <button
               onClick={apply}
@@ -2279,7 +2288,7 @@ function TriageModal({ onClose, onApplied }: {
               className="px-4 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {applying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {applying ? "Applying…" : `Apply ${pendingChanges} change${pendingChanges === 1 ? "" : "s"}`}
+              {applying ? t("contacts.triage.applying") : t("contacts.triage.apply", { count: pendingChanges })}
             </button>
           </div>
         </footer>
@@ -2300,6 +2309,7 @@ function TriageModal({ onClose, onApplied }: {
 // /api/contacts/{id}/timeline endpoint the contact detail view uses,
 // filtered to email items only.
 function TriageEmailPreview({ contactId }: { contactId: number }) {
+  const { t } = useTranslation();
   const api_ = useApi<ContactTimeline>(
     `/api/contacts/${contactId}/timeline?limit=5`,
     [contactId],
@@ -2309,14 +2319,14 @@ function TriageEmailPreview({ contactId }: { contactId: number }) {
   if (api_.loading) {
     return (
       <div className="mt-2 text-xs text-muted-foreground italic">
-        Loading emails…
+        {t("contacts.triage.loadingEmails")}
       </div>
     );
   }
   if (items.length === 0) {
     return (
       <div className="mt-2 text-xs text-muted-foreground italic">
-        No emails found from this sender.
+        {t("contacts.triage.noEmails")}
       </div>
     );
   }
@@ -2341,7 +2351,7 @@ function TriageEmailPreview({ contactId }: { contactId: number }) {
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             className="block group text-xs leading-snug rounded px-1.5 -mx-1.5 py-0.5 hover:bg-muted/50 transition cursor-pointer"
-            title="Open this email in a new tab"
+            title={t("contacts.triage.openEmailTitle")}
           >
             <div className="flex items-baseline gap-2">
               <span className={cn(
@@ -2350,7 +2360,7 @@ function TriageEmailPreview({ contactId }: { contactId: number }) {
                   ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                   : "bg-muted text-muted-foreground",
               )}>
-                {it.direction === "outgoing" ? "sent" : "in"}
+                {it.direction === "outgoing" ? t("contacts.triage.sent") : t("contacts.triage.in")}
               </span>
               <span className="font-medium truncate group-hover:underline">{it.title}</span>
               <ExternalLink className="w-2.5 h-2.5 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0" />
@@ -2382,6 +2392,7 @@ function TriageChip({
   suggested?: boolean;
   onClick: (e: React.MouseEvent) => void;
 }) {
+  const { t } = useTranslation();
   // Tailwind v4 JIT requires the full class strings — can't interpolate.
   const toneActive: Record<typeof tone, string> = {
     emerald: "border-emerald-500/60 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
@@ -2398,7 +2409,7 @@ function TriageChip({
   return (
     <button
       onClick={onClick}
-      title={`${label} (${shortcut})${suggested ? " — Yorik's verdict" : ""}`}
+      title={t("contacts.triage.chipTitle", { label, shortcut }) + (suggested ? t("contacts.triage.yorikVerdict") : "")}
       className={cn(
         "inline-flex items-center gap-1 px-2 py-1.5 rounded-md border text-xs font-medium transition min-w-[28px] justify-center",
         active ? toneActive[tone] : `border-border text-muted-foreground ${toneHover[tone]}`,
@@ -2431,6 +2442,7 @@ function AutoClassifyButton({ onDone, externalKick, onComplete }: {
   // Triage to see the LLM verdicts.
   onComplete?: () => void;
 }) {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<{ status: string; total: number; done: number; last_error?: string | null } | null>(null);
   const [starting, setStarting] = useState(false);
 
@@ -2483,7 +2495,7 @@ function AutoClassifyButton({ onDone, externalKick, onComplete }: {
       // we poll — otherwise the button briefly shows "Idle" again.
       setTimeout(refreshStatus, 250);
     } catch (e: any) {
-      toast("Couldn't start auto-classify: " + (e?.message || e));
+      toast(t("contacts.triage.autoClassify.startFailed", { error: e?.message || e }));
     } finally {
       setStarting(false);
     }
@@ -2503,10 +2515,10 @@ function AutoClassifyButton({ onDone, externalKick, onComplete }: {
             ? "border-primary/40 bg-primary/5 text-primary"
             : "bg-card border-border text-foreground hover:bg-muted",
         )}
-        title="Run the LLM over every pending contact and pre-fill triage verdicts"
+        title={t("contacts.triage.autoClassify.title")}
       >
         {(running || starting) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-        {running ? `Auto-classifying ${status!.done}/${status!.total}` : "Auto-classify"}
+        {running ? t("contacts.triage.autoClassify.running", { done: status!.done, total: status!.total }) : t("contacts.triage.autoClassify.button")}
       </button>
       {running && (
         <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
@@ -2529,13 +2541,12 @@ function ReclassifyArchivedButton({
   archivedCount: number;
   onDone: () => Promise<void> | void;
 }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
 
   async function run() {
     if (busy) return;
-    const ok = window.confirm(
-      `Move ${archivedCount} archived contact${archivedCount === 1 ? "" : "s"} back to Pending and re-run Yorik's triage on them? They'll get fresh verdicts based on the current signal collectors.`,
-    );
+    const ok = window.confirm(t("contacts.triage.reclassify.confirm", { count: archivedCount }));
     if (!ok) return;
     setBusy(true);
     let moved = 0;
@@ -2561,17 +2572,14 @@ function ReclassifyArchivedButton({
         // Browsers swallow confirms after async; alert is the
         // load-bearing UX feedback that "yes, it's running now,
         // watch the progress bar on the Auto-classify button."
-        toast(
-          `Moved ${moved} contact${moved === 1 ? "" : "s"} back to Pending. ` +
-          `Yorik is re-classifying them now — watch the Auto-classify button for progress.`,
-        );
+        toast(t("contacts.triage.reclassify.movedRunning", { count: moved }));
       } else if (moved > 0) {
-        toast(`Moved ${moved} contact${moved === 1 ? "" : "s"} back to Pending.`);
+        toast(t("contacts.triage.reclassify.moved", { count: moved }));
       } else {
-        toast("Nothing to move.");
+        toast(t("contacts.triage.reclassify.nothing"));
       }
     } catch (e: any) {
-      toast("Re-classify failed: " + (e?.message || e));
+      toast(t("contacts.triage.reclassify.failed", { error: e?.message || e }));
     } finally {
       setBusy(false);
     }
@@ -2582,21 +2590,22 @@ function ReclassifyArchivedButton({
       onClick={run}
       disabled={busy}
       className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5"
-      title={`Move ${archivedCount} archived contacts back to Pending and re-run Yorik's triage with the current signal collectors`}
+      title={t("contacts.triage.reclassify.title", { count: archivedCount })}
     >
       {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-      {busy ? "Re-classifying…" : `Re-review ${archivedCount} archived`}
+      {busy ? t("contacts.triage.reclassify.busy") : t("contacts.triage.reclassify.button", { count: archivedCount })}
     </button>
   );
 }
 
 
 function DetailsBlock({ contact }: { contact: Contact }) {
+  const { t } = useTranslation();
   const channelGroups: Array<{ label: string; items: typeof contact.channels }> = [
-    { label: "Email",    items: contact.channels.filter(c => c.kind === "email") },
-    { label: "Phone",    items: contact.channels.filter(c => c.kind === "phone") },
-    { label: "WhatsApp", items: contact.channels.filter(c => c.kind === "whatsapp") },
-    { label: "Other",    items: contact.channels.filter(c =>
+    { label: t("contacts.details.email"),    items: contact.channels.filter(c => c.kind === "email") },
+    { label: t("contacts.details.phone"),    items: contact.channels.filter(c => c.kind === "phone") },
+    { label: t("contacts.details.whatsapp"), items: contact.channels.filter(c => c.kind === "whatsapp") },
+    { label: t("contacts.details.other"),    items: contact.channels.filter(c =>
       !["email", "phone", "whatsapp"].includes(c.kind)) },
   ].filter(g => g.items.length > 0);
 
@@ -2608,7 +2617,7 @@ function DetailsBlock({ contact }: { contact: Contact }) {
   return (
     <section className="border-t border-border pt-4 space-y-3">
       <div className="text-2xs text-muted-foreground font-semibold">
-        Details
+        {t("contacts.details.title")}
       </div>
       {channelGroups.map(g => (
         <div key={g.label}>
@@ -2640,7 +2649,7 @@ function DetailsBlock({ contact }: { contact: Contact }) {
       {contact.addresses.length > 0 && (
         <div>
           <div className="text-2xs text-muted-foreground/80 mb-0.5 flex items-center gap-1">
-            <MapPin className="w-2.5 h-2.5" /> Addresses
+            <MapPin className="w-2.5 h-2.5" /> {t("contacts.details.addresses")}
           </div>
           {contact.addresses.map(a => {
             const addr = [a.line1, a.line2, [a.postcode, a.city].filter(Boolean).join(" "), a.country]
@@ -2658,7 +2667,7 @@ function DetailsBlock({ contact }: { contact: Contact }) {
                 >
                   {addr}
                 </a>
-                {a.kind && <span className="ml-2 text-muted-foreground text-xs">({a.kind})</span>}
+                {a.kind && <span className="ml-2 text-muted-foreground text-xs">({t(`contacts.addresses.kind.${a.kind}`, { defaultValue: a.kind })})</span>}
               </div>
             );
           })}
@@ -2666,7 +2675,7 @@ function DetailsBlock({ contact }: { contact: Contact }) {
       )}
       {contact.notes && (
         <div>
-          <div className="text-2xs text-muted-foreground/80 mb-1">Notes</div>
+          <div className="text-2xs text-muted-foreground/80 mb-1">{t("contacts.details.notes")}</div>
           <div className="text-xs whitespace-pre-wrap leading-relaxed text-foreground/90">
             {renderNotesWithDocLinks(contact.notes)}
           </div>
@@ -2674,9 +2683,9 @@ function DetailsBlock({ contact }: { contact: Contact }) {
       )}
       {contact.kind === "business" && (contact.legal_name || contact.tax_id || contact.iban) && (
         <div className="rounded-md border border-blue-500/20 bg-blue-500/[0.04] p-2 space-y-0.5">
-          {contact.legal_name && <div className="text-xs"><span className="text-muted-foreground">Legal:</span> {contact.legal_name}</div>}
-          {contact.tax_id     && <div className="text-xs"><span className="text-muted-foreground">Tax ID:</span> {contact.tax_id}</div>}
-          {contact.iban       && <div className="text-xs"><span className="text-muted-foreground">IBAN:</span> {contact.iban}</div>}
+          {contact.legal_name && <div className="text-xs"><span className="text-muted-foreground">{t("contacts.details.legal")}</span> {contact.legal_name}</div>}
+          {contact.tax_id     && <div className="text-xs"><span className="text-muted-foreground">{t("contacts.details.taxId")}</span> {contact.tax_id}</div>}
+          {contact.iban       && <div className="text-xs"><span className="text-muted-foreground">{t("contacts.details.iban")}</span> {contact.iban}</div>}
         </div>
       )}
     </section>
@@ -2690,14 +2699,14 @@ function fmtShortDate(iso: string | null | undefined): string {
   if (Number.isNaN(d.getTime())) return "";
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   }
   const y = new Date(now); y.setDate(y.getDate() - 1);
-  if (d.toDateString() === y.toDateString()) return "yesterday";
+  if (d.toDateString() === y.toDateString()) return i18n.t("contacts.date.yesterday");
   if (now.getFullYear() === d.getFullYear()) {
-    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+    return d.toLocaleDateString(locale(), { month: "short", day: "numeric" });
   }
-  return d.toLocaleDateString([], { year: "2-digit", month: "short", day: "numeric" });
+  return d.toLocaleDateString(locale(), { year: "2-digit", month: "short", day: "numeric" });
 }
 
 
@@ -2712,6 +2721,7 @@ function ContactEditor({
   onDeleted: () => void;
   onStatusChange?: () => void;
 }) {
+  const { t } = useTranslation();
   const isNew = !contact;
 
   const [displayName, setDisplayName] = useState(contact?.display_name || "");
@@ -2932,7 +2942,7 @@ function ContactEditor({
         : await api.patch<Contact>(`/api/contacts/${contact!.id}`, body);
       onSaved(saved);
     } catch (e: any) {
-      toast(`Save failed: ${e?.message || e}`);
+      toast(t("contacts.editor.saveFailed", { error: e?.message || e }));
     } finally {
       setSaving(false);
     }
@@ -2946,32 +2956,32 @@ function ContactEditor({
       onSaved(c);
       onStatusChange?.();
     } catch (e: any) {
-      toast(`Promote failed: ${e?.message || e}`);
+      toast(t("contacts.editor.promoteFailed", { error: e?.message || e }));
     } finally { setBusyAction(null); }
   }
 
   async function markSpam() {
     if (!contact) return;
-    if (!confirm(`Mark "${contact.display_name}" as spam? Future inbound from their channels will be silently dropped (channels stay indexed).`)) return;
+    if (!confirm(t("contacts.editor.spamConfirm", { name: contact.display_name }))) return;
     setBusyAction("spam");
     try {
       const c = await api.post<Contact>(`/api/contacts/${contact.id}/spam`);
       onSaved(c);
       onStatusChange?.();
     } catch (e: any) {
-      toast(`Mark spam failed: ${e?.message || e}`);
+      toast(t("contacts.editor.markSpamFailed", { error: e?.message || e }));
     } finally { setBusyAction(null); }
   }
 
   async function handleDelete() {
     if (!contact) return;
-    if (!confirm(`Delete "${contact.display_name}" permanently? This removes the contact and all their channels + addresses. (To merely silence them, use Mark spam.)`)) return;
+    if (!confirm(t("contacts.editor.deleteConfirm", { name: contact.display_name }))) return;
     setBusyAction("delete");
     try {
       await api.delete(`/api/contacts/${contact.id}`);
       onDeleted();
     } catch (e: any) {
-      toast(`Delete failed: ${e?.message || e}`);
+      toast(t("contacts.editor.deleteFailed", { error: e?.message || e }));
     } finally { setBusyAction(null); }
   }
 
@@ -2987,13 +2997,13 @@ function ContactEditor({
             <input
               value={firstName}
               onChange={e => updateFirst(e.target.value)}
-              placeholder="First name (required)"
+              placeholder={t("contacts.editor.firstName")}
               className="flex-1 min-w-[120px] h-11 md:h-9 px-2 bg-transparent text-lg font-semibold border-b border-border focus:outline-none focus:border-primary"
             />
             <input
               value={lastName}
               onChange={e => updateLast(e.target.value)}
-              placeholder="Last name (optional)"
+              placeholder={t("contacts.editor.lastName")}
               className="flex-1 min-w-[120px] h-11 md:h-9 px-2 bg-transparent text-lg font-semibold border-b border-border focus:outline-none focus:border-primary"
             />
           </div>
@@ -3002,21 +3012,21 @@ function ContactEditor({
             <input
               value={displayName}
               onChange={e => updateDisplayName(e.target.value)}
-              placeholder="Business name (required)"
+              placeholder={t("contacts.editor.businessName")}
               className="w-full h-11 md:h-9 px-2 bg-transparent text-lg font-semibold border-b border-border focus:outline-none focus:border-primary"
             />
           </div>
         )}
         <div className="flex gap-1 rounded-md bg-muted p-0.5">
-          <KindToggle current={kind} value="person"   label="Person"   icon={<UserIcon className="w-3 h-3" />}   onSelect={setKind} />
-          <KindToggle current={kind} value="business" label="Business" icon={<Briefcase className="w-3 h-3" />} onSelect={setKind} />
+          <KindToggle current={kind} value="person"   label={t("contacts.editor.person")}   icon={<UserIcon className="w-3 h-3" />}   onSelect={setKind} />
+          <KindToggle current={kind} value="business" label={t("contacts.editor.business")} icon={<Briefcase className="w-3 h-3" />} onSelect={setKind} />
         </div>
         {contact?.status === "pending" && (
-          <span className="text-2xs px-2 py-1 rounded-full bg-amber-500/15 text-amber-500 font-medium">pending</span>
+          <span className="text-2xs px-2 py-1 rounded-full bg-amber-500/15 text-amber-500 font-medium">{t("contacts.editor.pending")}</span>
         )}
         {contact?.status === "spam" && (
           <span className="text-2xs px-2 py-1 rounded-full bg-red-500/15 text-red-500 font-medium flex items-center gap-1">
-            <ShieldAlert className="w-3 h-3" />spam
+            <ShieldAlert className="w-3 h-3" />{t("contacts.editor.spam")}
           </span>
         )}
       </div>
@@ -3031,24 +3041,24 @@ function ContactEditor({
             className="px-3 py-1.5 rounded-md bg-emerald-500 text-white hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
           >
             {busyAction === "promote" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Star className="w-3 h-3" />}
-            Confirm contact
+            {t("contacts.editor.confirm")}
           </button>
           <button
             onClick={markSpam}
             disabled={!!busyAction}
             className="px-3 py-1.5 rounded-md border border-border bg-card hover:bg-muted disabled:opacity-50 flex items-center gap-1.5"
           >
-            <ShieldAlert className="w-3 h-3" /> Mark spam
+            <ShieldAlert className="w-3 h-3" /> {t("contacts.editor.markSpam")}
           </button>
         </div>
       )}
 
       {/* Basics grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <LabelledInput label="Aliases (comma-separated)"
-          value={aliasesStr} onChange={setAliasesStr} placeholder="Oma, Grossmutter" />
-        <LabelledInput label="Relation"
-          value={relation} onChange={setRelation} placeholder="grandmother, plumber, vendor"
+        <LabelledInput label={t("contacts.editor.aliases")}
+          value={aliasesStr} onChange={setAliasesStr} placeholder={t("contacts.editor.aliasesPlaceholder")} />
+        <LabelledInput label={t("contacts.editor.relation")}
+          value={relation} onChange={setRelation} placeholder={t("contacts.editor.relationPlaceholder")}
           proposals={proposalsByField.relation} />
         <BirthdayField
           value={birthday}
@@ -3056,7 +3066,7 @@ function ContactEditor({
           contactId={contact?.id}
         />
         <ChipField
-          label="Language"
+          label={t("contacts.editor.language")}
           value={languagePref}
           onChange={setLanguagePref}
           options={[
@@ -3069,14 +3079,14 @@ function ContactEditor({
           allowFreeText
         />
         <ChipField
-          label="Salutation"
+          label={t("contacts.editor.salutation")}
           value={salutationPref}
           onChange={setSalutationPref}
           options={[
             { value: "du", label: "du" },
             { value: "Sie", label: "Sie" },
-            { value: "first-name", label: "First name" },
-            { value: "formal", label: "Formal" },
+            { value: "first-name", label: t("contacts.editor.salutationFirstName") },
+            { value: "formal", label: t("contacts.editor.salutationFormal") },
           ]}
         />
       </div>
@@ -3084,24 +3094,24 @@ function ContactEditor({
       {/* Business-only fields */}
       {kind === "business" && (
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <LabelledInput label="Legal name" value={legalName} onChange={setLegalName}
-            placeholder="Acme Real Estate LLC"
+          <LabelledInput label={t("contacts.editor.legalName")} value={legalName} onChange={setLegalName}
+            placeholder={t("contacts.editor.legalNamePlaceholder")}
             proposals={proposalsByField.legal_name} />
-          <LabelledInput label="Tax ID / VAT / EIN" value={taxId} onChange={setTaxId}
+          <LabelledInput label={t("contacts.editor.taxId")} value={taxId} onChange={setTaxId}
             proposals={proposalsByField.tax_id} />
-          <LabelledInput label="IBAN" value={iban} onChange={setIban}
+          <LabelledInput label={t("contacts.editor.iban")} value={iban} onChange={setIban}
             proposals={proposalsByField.iban} />
         </div>
       )}
 
       {/* Notes */}
       <div>
-        <Label>Notes</Label>
+        <Label>{t("contacts.editor.notes")}</Label>
         <textarea
           value={notes}
           onChange={e => setNotes(e.target.value)}
           rows={3}
-          placeholder="Anything Yorik should remember — preferred greeting, things to ask, recent context."
+          placeholder={t("contacts.editor.notesPlaceholder")}
           className="w-full px-2 py-1.5 bg-background border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring/40"
         />
         <ProposalDropdown proposals={proposalsByField.notes} currentValue={notes} onPick={setNotes} />
@@ -3117,7 +3127,7 @@ function ContactEditor({
 
       {isNew && (
         <p className="text-xs text-muted-foreground italic">
-          Save first — then you can add channels (email, phone, WhatsApp) and addresses.
+          {t("contacts.editor.saveFirst")}
         </p>
       )}
 
@@ -3131,22 +3141,22 @@ function ContactEditor({
           className="text-xs px-4 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 flex items-center gap-1.5"
         >
           {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-          {isNew ? "Create contact" : "Save changes"}
+          {isNew ? t("contacts.editor.create") : t("contacts.editor.save")}
         </button>
         <button
           onClick={onCancel}
           className="text-xs px-3 py-1.5 rounded-md border border-border bg-card hover:bg-muted"
         >
-          <X className="w-3 h-3 inline-block mr-1" /> Close
+          <X className="w-3 h-3 inline-block mr-1" /> {t("contacts.editor.close")}
         </button>
         {contact && (
           enriching ? (
             <button
               onClick={stopEnrich}
               className="text-xs px-3 py-1.5 rounded-md border border-red-500/40 bg-red-500/10 hover:bg-red-500/15 text-red-700 dark:text-red-300 flex items-center gap-1.5"
-              title="Stop waiting for the LLM (the call may still finish in the background)"
+              title={t("contacts.enrich.stopTitle")}
             >
-              <StopCircle className="w-3 h-3" /> Stop enrichment
+              <StopCircle className="w-3 h-3" /> {t("contacts.enrich.stop")}
             </button>
           ) : (
             <button
@@ -3154,14 +3164,14 @@ function ContactEditor({
               className="text-xs px-3 py-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center gap-1.5"
               title={
                 sourcesAvailable
-                  ? `${sourcesAvailable.emails} email(s), ${sourcesAvailable.whatsapp} WA msg(s), ${sourcesAvailable.documents} doc(s), ${sourcesAvailable.calendar} event(s) on file. ~5–30s LLM call.`
-                  : "Re-scan emails, WhatsApp, docs, and calendar for fresh suggestions for THIS contact"
+                  ? t("contacts.enrich.titleSources", { emails: sourcesAvailable.emails, whatsapp: sourcesAvailable.whatsapp, documents: sourcesAvailable.documents, calendar: sourcesAvailable.calendar })
+                  : t("contacts.enrich.title")
               }
             >
-              <Wand2 className="w-3 h-3" /> Enrich this contact
+              <Wand2 className="w-3 h-3" /> {t("contacts.enrich.button")}
               {sourcesAvailable && (
                 <span className="ml-1 opacity-70 text-2xs tabular-nums">
-                  ({sourcesAvailable.emails}e · {sourcesAvailable.whatsapp}wa · {sourcesAvailable.documents}d · {sourcesAvailable.calendar}cal)
+                  {t("contacts.enrich.sourcesShort", { emails: sourcesAvailable.emails, whatsapp: sourcesAvailable.whatsapp, documents: sourcesAvailable.documents, calendar: sourcesAvailable.calendar })}
                 </span>
               )}
             </button>
@@ -3174,7 +3184,7 @@ function ContactEditor({
             className="text-xs px-3 py-1.5 ml-auto rounded-md border border-border bg-card hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-500 disabled:opacity-50 flex items-center gap-1.5"
           >
             {busyAction === "spam" ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldAlert className="w-3 h-3" />}
-            Mark spam
+            {t("contacts.editor.markSpam")}
           </button>
         )}
         {contact && (
@@ -3187,7 +3197,7 @@ function ContactEditor({
             )}
           >
             {busyAction === "delete" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-            Delete
+            {t("contacts.editor.delete")}
           </button>
         )}
       </div>
@@ -3203,13 +3213,10 @@ function ContactEditor({
         <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground flex items-start gap-2">
           <UserIcon className="w-4 h-4 shrink-0 mt-0.5 opacity-60" />
           <div className="flex-1 leading-relaxed">
-            <strong className="text-foreground/80">Nothing on file yet</strong> — Yorik hasn't
-            seen this contact in any emails, WhatsApp chats, documents, or calendar events,
-            so running Enrich won't find anything to suggest. Add an email or WhatsApp
-            channel below first, OR wait until you've exchanged a few messages with them.
+            <strong className="text-foreground/80">{t("contacts.enrich.nothingTitle")}</strong>{t("contacts.enrich.nothingBody")}
             {sourcesAvailable.seeds.length > 0 && (
               <div className="mt-1 text-2xs opacity-70 font-mono">
-                Tried search seeds: {sourcesAvailable.seeds.join(" · ")}
+                {t("contacts.enrich.seeds", { seeds: sourcesAvailable.seeds.join(" · ") })}
               </div>
             )}
           </div>
@@ -3231,11 +3238,9 @@ function ContactEditor({
             <>
               <Loader2 className="w-4 h-4 animate-spin shrink-0 mt-0.5" />
               <div className="flex-1">
-                <div className="font-medium">Scanning data for {displayName || "this contact"}…</div>
+                <div className="font-medium">{t("contacts.enrich.runningTitle", { name: displayName || t("contacts.enrich.thisContact") })}</div>
                 <div className="text-xs mt-1 opacity-80 leading-relaxed">
-                  Reading recent emails, WhatsApp messages, Paperless documents, and calendar events.
-                  Then asking the LLM to extract address, birthday, relation, and other field
-                  suggestions with source citations. Usually 5–30 seconds.
+                  {t("contacts.enrich.runningBody")}
                 </div>
               </div>
             </>
@@ -3245,17 +3250,18 @@ function ContactEditor({
               <Check className="w-4 h-4 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <div className="font-medium">
-                  {enrichBanner.written} new suggestion{enrichBanner.written === 1 ? "" : "s"} —
-                  fields above are highlighted with a ⌄ chip.
+                  {t("contacts.enrich.successTitle", { count: enrichBanner.written })}
                 </div>
                 <div className="text-xs mt-1 opacity-80">
-                  Scanned {enrichBanner.scanned.emails || 0} email{enrichBanner.scanned.emails === 1 ? "" : "s"},
-                  {" "}{enrichBanner.scanned.whatsapp || 0} WhatsApp message{enrichBanner.scanned.whatsapp === 1 ? "" : "s"},
-                  {" "}{enrichBanner.scanned.documents || 0} document{enrichBanner.scanned.documents === 1 ? "" : "s"},
-                  {" "}{enrichBanner.scanned.calendar || 0} calendar event{enrichBanner.scanned.calendar === 1 ? "" : "s"}.
+                  {t("contacts.enrich.scanned", {
+                    emails: t("contacts.enrich.scannedEmails", { count: enrichBanner.scanned.emails || 0 }),
+                    whatsapp: t("contacts.enrich.scannedWhatsapp", { count: enrichBanner.scanned.whatsapp || 0 }),
+                    documents: t("contacts.enrich.scannedDocuments", { count: enrichBanner.scanned.documents || 0 }),
+                    calendar: t("contacts.enrich.scannedCalendar", { count: enrichBanner.scanned.calendar || 0 }),
+                  })}
                 </div>
               </div>
-              <button onClick={() => setEnrichBanner(null)} className="p-0.5 hover:opacity-70" aria-label="Dismiss">
+              <button onClick={() => setEnrichBanner(null)} className="p-0.5 hover:opacity-70" aria-label={t("contacts.enrich.dismiss")}>
                 <X className="w-3 h-3" />
               </button>
             </>
@@ -3264,16 +3270,18 @@ function ContactEditor({
             <>
               <UserIcon className="w-4 h-4 shrink-0 mt-0.5 opacity-60" />
               <div className="flex-1">
-                <div className="font-medium">No new information found.</div>
+                <div className="font-medium">{t("contacts.enrich.emptyTitle")}</div>
                 <div className="text-xs mt-1 opacity-80">
-                  Scanned {enrichBanner.scanned.emails || 0} email{enrichBanner.scanned.emails === 1 ? "" : "s"},
-                  {" "}{enrichBanner.scanned.whatsapp || 0} WhatsApp message{enrichBanner.scanned.whatsapp === 1 ? "" : "s"},
-                  {" "}{enrichBanner.scanned.documents || 0} document{enrichBanner.scanned.documents === 1 ? "" : "s"},
-                  {" "}{enrichBanner.scanned.calendar || 0} calendar event{enrichBanner.scanned.calendar === 1 ? "" : "s"}.
-                  Either nothing new since the last run, or the LLM couldn't confidently extract anything.
+                  {t("contacts.enrich.scanned", {
+                    emails: t("contacts.enrich.scannedEmails", { count: enrichBanner.scanned.emails || 0 }),
+                    whatsapp: t("contacts.enrich.scannedWhatsapp", { count: enrichBanner.scanned.whatsapp || 0 }),
+                    documents: t("contacts.enrich.scannedDocuments", { count: enrichBanner.scanned.documents || 0 }),
+                    calendar: t("contacts.enrich.scannedCalendar", { count: enrichBanner.scanned.calendar || 0 }),
+                  })}
+                  {" "}{t("contacts.enrich.emptyHint")}
                 </div>
               </div>
-              <button onClick={() => setEnrichBanner(null)} className="p-0.5 hover:opacity-70" aria-label="Dismiss">
+              <button onClick={() => setEnrichBanner(null)} className="p-0.5 hover:opacity-70" aria-label={t("contacts.enrich.dismiss")}>
                 <X className="w-3 h-3" />
               </button>
             </>
@@ -3282,12 +3290,12 @@ function ContactEditor({
             <>
               <StopCircle className="w-4 h-4 shrink-0 mt-0.5 opacity-60" />
               <div className="flex-1">
-                <div className="font-medium">Stopped.</div>
+                <div className="font-medium">{t("contacts.enrich.stoppedTitle")}</div>
                 <div className="text-xs mt-1 opacity-80">
-                  The LLM may still finish in the background — if proposals appear, refresh this contact to see them.
+                  {t("contacts.enrich.stoppedBody")}
                 </div>
               </div>
-              <button onClick={() => setEnrichBanner(null)} className="p-0.5 hover:opacity-70" aria-label="Dismiss">
+              <button onClick={() => setEnrichBanner(null)} className="p-0.5 hover:opacity-70" aria-label={t("contacts.enrich.dismiss")}>
                 <X className="w-3 h-3" />
               </button>
             </>
@@ -3296,10 +3304,10 @@ function ContactEditor({
             <>
               <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <div className="font-medium">Enrich failed</div>
+                <div className="font-medium">{t("contacts.enrich.errorTitle")}</div>
                 <div className="text-xs mt-1 opacity-90 font-mono break-all">{enrichBanner.message}</div>
               </div>
-              <button onClick={() => setEnrichBanner(null)} className="p-0.5 hover:opacity-70" aria-label="Dismiss">
+              <button onClick={() => setEnrichBanner(null)} className="p-0.5 hover:opacity-70" aria-label={t("contacts.enrich.dismiss")}>
                 <X className="w-3 h-3" />
               </button>
             </>
@@ -3399,6 +3407,7 @@ function ProposalDropdown({
   currentValue: string;
   onPick: (value: string) => void;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   if (!proposals || proposals.length === 0) return null;
   return (
@@ -3407,10 +3416,10 @@ function ProposalDropdown({
         type="button"
         onClick={() => setOpen(o => !o)}
         className="mt-1 inline-flex items-center gap-1 text-2xs text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 px-1.5 py-0.5 rounded transition"
-        title="Suggestions from the LLM contact enricher"
+        title={t("contacts.proposals.title")}
       >
         <Wand2 className="w-2.5 h-2.5" />
-        {proposals.length} suggestion{proposals.length === 1 ? "" : "s"}
+        {t("contacts.proposals.count", { count: proposals.length })}
         <ChevronDown className={cn("w-3 h-3 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
@@ -3465,8 +3474,9 @@ function BirthdayField({
   // shown in the input varies wildly across browsers/locales; the
   // preview row eliminates the "wait, is that month-day or day-month?"
   // moment users have on first encounter.
+  const { t } = useTranslation();
   const preview = value
-    ? new Date(value + "T00:00:00").toLocaleDateString(undefined, {
+    ? new Date(value + "T00:00:00").toLocaleDateString(locale(), {
         day: "numeric", month: "long", year: "numeric",
       })
     : "";
@@ -3515,7 +3525,7 @@ function BirthdayField({
 
   return (
     <div>
-      <Label>Birthday</Label>
+      <Label>{t("contacts.editor.birthday")}</Label>
       <input
         type="date"
         value={value}
@@ -3530,12 +3540,12 @@ function BirthdayField({
           type="button"
           onClick={applySuggestion}
           className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs bg-violet-500/10 border border-violet-500/30 text-violet-600 hover:bg-violet-500/15 transition"
-          title={`Detected from ${suggestion.evidence_count} birthday message${suggestion.evidence_count === 1 ? "" : "s"} you sent`}
+          title={t("contacts.editor.birthdayDetected", { count: suggestion.evidence_count })}
         >
           <Star className="w-2.5 h-2.5" />
-          Likely {new Date("2000-" + suggestion.month_day + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "long" })}
+          {t("contacts.editor.birthdayLikely", { date: new Date("2000-" + suggestion.month_day + "T00:00:00").toLocaleDateString(locale(), { day: "numeric", month: "long" }) })}
           {suggestion.evidence_count > 1 && (
-            <span className="opacity-60">· {suggestion.evidence_count} msgs</span>
+            <span className="opacity-60">{t("contacts.editor.birthdayMsgs", { count: suggestion.evidence_count })}</span>
           )}
         </button>
       )}
@@ -3557,6 +3567,7 @@ function ChipField({
    * preset list. */
   allowFreeText?: boolean;
 }) {
+  const { t } = useTranslation();
   const isPreset = options.some(o => o.value === value);
   const showFreeText = allowFreeText && !!value && !isPreset;
   return (
@@ -3582,7 +3593,7 @@ function ChipField({
           <input
             value={showFreeText ? value : ""}
             onChange={e => onChange(e.target.value)}
-            placeholder="other…"
+            placeholder={t("contacts.editor.otherPlaceholder")}
             maxLength={12}
             className={cn(
               "h-7 w-24 px-2 rounded-full text-xs focus:outline-none transition",
@@ -3606,6 +3617,7 @@ function ChannelsPanel({
   onChanged: () => void;
   onContactReload: (c: Contact) => void;
 }) {
+  const { t } = useTranslation();
   const [kind, setKind] = useState<ChannelKind>("email");
   const [value, setValue] = useState("");
   const [label, setLabel] = useState("");
@@ -3623,14 +3635,14 @@ function ChannelsPanel({
       onChanged();
     } catch (e: any) {
       const msg = e instanceof ApiError && e.status === 409
-        ? `That ${kind} is already on another contact: ${e.message}`
-        : `Add channel failed: ${e?.message || e}`;
+        ? t("contacts.channels.duplicate", { kind: t(`contacts.channels.kind.${kind}`, { defaultValue: kind }), error: e.message })
+        : t("contacts.channels.addFailed", { error: e?.message || e });
       toast(msg);
     } finally { setAdding(false); }
   }
 
   async function remove(ch: ContactChannel) {
-    if (!confirm(`Remove ${ch.kind} ${ch.value}?`)) return;
+    if (!confirm(t("contacts.channels.removeConfirm", { kind: t(`contacts.channels.kind.${ch.kind}`, { defaultValue: ch.kind }), value: ch.value }))) return;
     try {
       await api.delete(`/api/contacts/channels/${ch.id}`);
       // Refetch the contact to get the new channels list.
@@ -3638,16 +3650,16 @@ function ChannelsPanel({
       onContactReload(c);
       onChanged();
     } catch (e: any) {
-      toast(`Remove failed: ${e?.message || e}`);
+      toast(t("contacts.channels.removeFailed", { error: e?.message || e }));
     }
   }
 
   return (
     <div>
-      <Label>Channels — how to reach them</Label>
+      <Label>{t("contacts.channels.label")}</Label>
       <div className="space-y-1">
         {contact.channels.length === 0 && (
-          <div className="text-xs text-muted-foreground italic px-2 py-1.5">No channels yet.</div>
+          <div className="text-xs text-muted-foreground italic px-2 py-1.5">{t("contacts.channels.empty")}</div>
         )}
         {contact.channels.map(ch => (
           <div key={ch.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md border border-border bg-background text-sm">
@@ -3658,7 +3670,7 @@ function ChannelsPanel({
             <button
               onClick={() => remove(ch)}
               className="p-1 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-              title="Remove channel"
+              title={t("contacts.channels.remove")}
             >
               <Trash2 className="w-3 h-3" />
             </button>
@@ -3671,14 +3683,14 @@ function ChannelsPanel({
           onChange={e => setKind(e.target.value as ChannelKind)}
           className="h-11 md:h-8 px-2 bg-background border border-border rounded-md text-xs focus:outline-none"
         >
-          <option value="email">Email</option>
-          <option value="phone">Phone</option>
-          <option value="whatsapp">WhatsApp</option>
-          <option value="signal">Signal</option>
-          <option value="telegram">Telegram</option>
-          <option value="sms">SMS</option>
-          <option value="website">Website</option>
-          <option value="social">Social</option>
+          <option value="email">{t("contacts.channels.kind.email")}</option>
+          <option value="phone">{t("contacts.channels.kind.phone")}</option>
+          <option value="whatsapp">{t("contacts.channels.kind.whatsapp")}</option>
+          <option value="signal">{t("contacts.channels.kind.signal")}</option>
+          <option value="telegram">{t("contacts.channels.kind.telegram")}</option>
+          <option value="sms">{t("contacts.channels.kind.sms")}</option>
+          <option value="website">{t("contacts.channels.kind.website")}</option>
+          <option value="social">{t("contacts.channels.kind.social")}</option>
         </select>
         <input
           value={value}
@@ -3687,14 +3699,14 @@ function ChannelsPanel({
             kind === "email"   ? "oma@example.com" :
             kind === "phone"   ? "+49 30 1234 5678" :
             kind === "website" ? "https://…" :
-                                 "value"
+                                 t("contacts.channels.valuePlaceholder")
           }
           className="flex-1 min-w-[180px] h-11 md:h-8 px-2 bg-background border border-border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring/40"
         />
         <input
           value={label}
           onChange={e => setLabel(e.target.value)}
-          placeholder="label (mobile, work…)"
+          placeholder={t("contacts.channels.labelPlaceholder")}
           className="w-32 h-11 md:h-8 px-2 bg-background border border-border rounded-md text-xs focus:outline-none"
         />
         <button
@@ -3702,7 +3714,7 @@ function ChannelsPanel({
           disabled={adding || !value.trim()}
           className="text-xs h-8 px-3 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
         >
-          {adding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Add
+          {adding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} {t("contacts.channels.add")}
         </button>
       </div>
 
@@ -3727,6 +3739,7 @@ function InboxSuggestions({
   contactId: number;
   onPick: (addr: string) => void;
 }) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Array<{
     from_email: string; from_name: string;
@@ -3761,26 +3774,26 @@ function InboxSuggestions({
     <div className="mt-2 rounded-md border border-dashed border-border bg-muted/20 p-2">
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <div className="text-2xs text-muted-foreground font-semibold flex items-center gap-1">
-          <Mail className="w-3 h-3" /> From your inbox
+          <Mail className="w-3 h-3" /> {t("contacts.inbox.title")}
         </div>
         <div className="relative">
           <Search className="w-3 h-3 absolute left-1.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="search emails…"
+            placeholder={t("contacts.inbox.searchPlaceholder")}
             className="h-6 pl-5 pr-2 w-44 bg-background border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-ring/30"
           />
         </div>
       </div>
       {loading && (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground py-1">
-          <Loader2 className="w-3 h-3 animate-spin" /> Searching…
+          <Loader2 className="w-3 h-3 animate-spin" /> {t("contacts.inbox.searching")}
         </div>
       )}
       {!loading && hasRun && results.length === 0 && (
         <div className="text-xs text-muted-foreground italic py-1">
-          {query ? "No matches in inbox." : "Nothing in your inbox matched this name — try searching above."}
+          {query ? t("contacts.inbox.noMatches") : t("contacts.inbox.noneMatched")}
         </div>
       )}
       {!loading && results.map(r => (
@@ -3789,7 +3802,7 @@ function InboxSuggestions({
           type="button"
           onClick={() => onPick(r.from_email)}
           className="w-full text-left px-2 py-1.5 rounded hover:bg-muted/60 transition flex items-start gap-2"
-          title="Click to fill the email field above"
+          title={t("contacts.inbox.pickTitle")}
         >
           <Mail className="w-3 h-3 mt-0.5 text-muted-foreground shrink-0" />
           <div className="min-w-0 flex-1">
@@ -3798,11 +3811,11 @@ function InboxSuggestions({
               {r.from_name && <span className="text-muted-foreground truncate">· {r.from_name}</span>}
             </div>
             <div className="text-2xs text-muted-foreground truncate flex items-center gap-1.5">
-              <span>{r.msg_count} message{r.msg_count === 1 ? "" : "s"}</span>
+              <span>{t("contacts.inbox.messages", { count: r.msg_count })}</span>
               {r.last_seen && (
                 <>
                   <span className="opacity-40">·</span>
-                  <span>last on {new Date(r.last_seen).toLocaleDateString()}</span>
+                  <span>{t("contacts.inbox.lastOn", { date: new Date(r.last_seen).toLocaleDateString(locale()) })}</span>
                 </>
               )}
               {r.last_subject && (
@@ -3833,6 +3846,7 @@ function AddressesPanel({
    *  events often only carry a city). */
   proposals?: Proposal[];
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<AddressKind>("home");
   const [line1, setLine1] = useState("");
@@ -3856,10 +3870,10 @@ function AddressesPanel({
         parts = { line1: p.proposed_value };
       }
       const summary = [parts.line1, parts.postcode, parts.city, parts.country]
-        .filter(Boolean).join(", ") || "(incomplete)";
+        .filter(Boolean).join(", ") || t("contacts.addresses.incomplete");
       return { proposal: p, parts, summary };
     });
-  }, [proposals]);
+  }, [proposals, t]);
 
   function applyProposal(parts: { line1?: string; line2?: string;
                                   postcode?: string; city?: string;
@@ -3890,29 +3904,29 @@ function AddressesPanel({
       onContactReload(c);
       onChanged();
     } catch (e: any) {
-      toast(`Add address failed: ${e?.message || e}`);
+      toast(t("contacts.addresses.addFailed", { error: e?.message || e }));
     } finally { setAdding(false); }
   }
 
   async function remove(a: ContactAddress) {
-    if (!confirm(`Remove ${a.kind} address?`)) return;
+    if (!confirm(t("contacts.addresses.removeConfirm", { kind: t(`contacts.addresses.kind.${a.kind}`, { defaultValue: a.kind }) }))) return;
     try {
       await api.delete(`/api/contacts/addresses/${a.id}`);
       const c = await api.get<Contact>(`/api/contacts/${contact.id}`);
       onContactReload(c);
       onChanged();
     } catch (e: any) {
-      toast(`Remove failed: ${e?.message || e}`);
+      toast(t("contacts.addresses.removeFailed", { error: e?.message || e }));
     }
   }
 
   return (
     <div>
-      <Label>Addresses</Label>
+      <Label>{t("contacts.addresses.label")}</Label>
       {parsedProposals.length > 0 && (
         <div className="mb-2 p-2 rounded-md bg-amber-500/5 border border-amber-500/20">
           <div className="text-2xs text-amber-700 dark:text-amber-300 mb-1.5 flex items-center gap-1">
-            <Wand2 className="w-2.5 h-2.5" /> Suggested addresses · click to pre-fill
+            <Wand2 className="w-2.5 h-2.5" /> {t("contacts.addresses.suggested")}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {parsedProposals.map(({ proposal, parts, summary }) => (
@@ -3921,8 +3935,8 @@ function AddressesPanel({
                 type="button"
                 onClick={() => applyProposal(parts)}
                 title={proposal.source_snippet
-                  ? `"${proposal.source_snippet}" — from ${proposal.source_kind.replace(/_/g, " ")}`
-                  : `From ${proposal.source_kind.replace(/_/g, " ")}`}
+                  ? t("contacts.addresses.snippetFromSource", { snippet: proposal.source_snippet, source: proposal.source_kind.replace(/_/g, " ") })
+                  : t("contacts.addresses.fromSource", { source: proposal.source_kind.replace(/_/g, " ") })}
                 className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-card border border-amber-500/30 hover:bg-amber-500/10 hover:border-amber-500/50 transition text-left"
               >
                 <MapPin className="w-2.5 h-2.5 text-amber-600 shrink-0" />
@@ -3934,26 +3948,26 @@ function AddressesPanel({
             ))}
           </div>
           <div className="text-2xs text-muted-foreground mt-1.5 italic">
-            Picking fills only what was found — type the rest yourself (e.g. street number for a city-only suggestion). You can always paste in a fresh address you got via phone.
+            {t("contacts.addresses.suggestedHint")}
           </div>
         </div>
       )}
       <div className="space-y-1">
         {contact.addresses.length === 0 && (
-          <div className="text-xs text-muted-foreground italic px-2 py-1.5">No addresses yet.</div>
+          <div className="text-xs text-muted-foreground italic px-2 py-1.5">{t("contacts.addresses.empty")}</div>
         )}
         {contact.addresses.map(a => (
           <div key={a.id} className="flex items-start gap-2 px-2 py-1.5 rounded-md border border-border bg-background text-sm">
             <MapPin className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
             <div className="flex-1 leading-tight">
-              <div className="text-2xs text-muted-foreground">{a.kind}{a.label ? ` · ${a.label}` : ""}</div>
+              <div className="text-2xs text-muted-foreground">{t(`contacts.addresses.kind.${a.kind}`, { defaultValue: a.kind })}{a.label ? ` · ${a.label}` : ""}</div>
               <div>{[a.line1, a.line2].filter(Boolean).join(", ")}</div>
               <div className="text-xs text-muted-foreground">{[a.postcode, a.city, a.region, a.country].filter(Boolean).join(" · ")}</div>
             </div>
             <button
               onClick={() => remove(a)}
               className="p-1 rounded text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-              title="Remove address"
+              title={t("contacts.addresses.remove")}
             >
               <Trash2 className="w-3 h-3" />
             </button>
@@ -3965,7 +3979,7 @@ function AddressesPanel({
           onClick={() => setOpen(true)}
           className="mt-2 text-xs h-8 px-3 rounded-md border border-border bg-card hover:bg-muted flex items-center gap-1.5"
         >
-          <Plus className="w-3 h-3" /> Add address
+          <Plus className="w-3 h-3" /> {t("contacts.addresses.add")}
         </button>
       )}
       {open && (
@@ -3978,19 +3992,19 @@ function AddressesPanel({
             onChange={e => setKind(e.target.value as AddressKind)}
             className="col-span-2 sm:col-span-1 h-11 md:h-8 px-2 bg-background border border-border rounded-md text-xs focus:outline-none"
           >
-            <option value="home">Home</option>
-            <option value="work">Work</option>
-            <option value="billing">Billing</option>
-            <option value="shipping">Shipping</option>
-            <option value="other">Other</option>
+            <option value="home">{t("contacts.addresses.kind.home")}</option>
+            <option value="work">{t("contacts.addresses.kind.work")}</option>
+            <option value="billing">{t("contacts.addresses.kind.billing")}</option>
+            <option value="shipping">{t("contacts.addresses.kind.shipping")}</option>
+            <option value="other">{t("contacts.addresses.kind.other")}</option>
           </select>
-          <input value={line1} onChange={e => setLine1(e.target.value)} placeholder="Street + number"
+          <input value={line1} onChange={e => setLine1(e.target.value)} placeholder={t("contacts.addresses.street")}
             className="col-span-2 sm:col-span-3 h-11 md:h-8 px-2 bg-background border border-border rounded-md text-sm focus:outline-none" />
-          <input value={line2} onChange={e => setLine2(e.target.value)} placeholder="Line 2 (optional)"
+          <input value={line2} onChange={e => setLine2(e.target.value)} placeholder={t("contacts.addresses.line2")}
             className="col-span-2 sm:col-span-4 h-11 md:h-8 px-2 bg-background border border-border rounded-md text-sm focus:outline-none" />
-          <input value={postcode} onChange={e => setPostcode(e.target.value)} placeholder="Postcode"
+          <input value={postcode} onChange={e => setPostcode(e.target.value)} placeholder={t("contacts.addresses.postcode")}
             className="h-11 md:h-8 px-2 bg-background border border-border rounded-md text-sm focus:outline-none" />
-          <input value={city} onChange={e => setCity(e.target.value)} placeholder="City"
+          <input value={city} onChange={e => setCity(e.target.value)} placeholder={t("contacts.addresses.city")}
             className="col-span-2 h-11 md:h-8 px-2 bg-background border border-border rounded-md text-sm focus:outline-none" />
           <input value={country} onChange={e => setCountry(e.target.value)} placeholder="DE"
             maxLength={2}
@@ -4016,14 +4030,14 @@ function AddressesPanel({
               onClick={() => setOpen(false)}
               className="text-xs px-3 py-1.5 rounded-md border border-border bg-card hover:bg-muted"
             >
-              Cancel
+              {t("contacts.addresses.cancel")}
             </button>
             <button
               onClick={add}
               disabled={adding || !(line1 || postcode || city)}
               className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
             >
-              {adding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
+              {adding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} {t("contacts.addresses.save")}
             </button>
           </div>
         </div>
@@ -4059,6 +4073,7 @@ function AddressScrapePanel({
     candidates: AddressCandidate[];
     passages_scanned?: number;
   }>({ scraped_at: null, candidates: [] });
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState(false);
 
@@ -4082,7 +4097,7 @@ function AddressScrapePanel({
       const r = await api.post<typeof data>(`/api/contacts/${contactId}/scrape-addresses`);
       setData(r);
     } catch (e: any) {
-      toast(`Scrape failed: ${e.message || e}`);
+      toast(t("contacts.scrape.failed", { error: e.message || e }));
     } finally { setScraping(false); }
   }
 
@@ -4092,7 +4107,7 @@ function AddressScrapePanel({
     <div className="rounded-md border border-dashed border-violet-500/30 bg-violet-500/5 p-2">
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <div className="text-2xs text-violet-600 font-semibold flex items-center gap-1">
-          <Star className="w-3 h-3" /> From your messages
+          <Star className="w-3 h-3" /> {t("contacts.scrape.title")}
         </div>
         <button
           type="button"
@@ -4100,24 +4115,24 @@ function AddressScrapePanel({
           disabled={scraping}
           className="text-xs px-2 py-1 rounded-md bg-violet-500 text-white hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
           title={data.scraped_at
-            ? `Last scraped ${new Date(data.scraped_at).toLocaleString()}`
-            : "Yorik will scan WhatsApp + emails with this contact for any postal address"}
+            ? t("contacts.scrape.lastScraped", { date: new Date(data.scraped_at).toLocaleString(locale()) })
+            : t("contacts.scrape.scanTitle")}
         >
           {scraping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
-          {data.scraped_at ? "Re-scan" : "Search messages"}
+          {data.scraped_at ? t("contacts.scrape.rescan") : t("contacts.scrape.search")}
         </button>
       </div>
 
       {!scraping && data.scraped_at && data.candidates.length === 0 && (
         <div className="text-xs text-muted-foreground italic py-1">
-          Yorik scanned the history and didn't find a postal address.
+          {t("contacts.scrape.none")}
         </div>
       )}
 
       {scraping && (
         <div className="text-xs text-muted-foreground py-1 flex items-center gap-1.5">
           <Loader2 className="w-3 h-3 animate-spin" />
-          Scanning {data.passages_scanned || ""} messages with Yorik — usually 3–5s…
+          {t("contacts.scrape.scanning", { count: data.passages_scanned || "" })}
         </div>
       )}
 
@@ -4127,7 +4142,7 @@ function AddressScrapePanel({
           type="button"
           onClick={() => onUse(c)}
           className="w-full text-left mt-1 px-2 py-1.5 rounded border border-violet-500/20 bg-background hover:bg-violet-500/10 transition flex items-start gap-2"
-          title="Click to fill the address fields above"
+          title={t("contacts.scrape.pickTitle")}
         >
           <MapPin className="w-3 h-3 mt-0.5 text-violet-500 shrink-0" />
           <div className="min-w-0 flex-1">
@@ -4139,7 +4154,7 @@ function AddressScrapePanel({
               {c.confidence != null && (
                 <span className="ml-2 opacity-60">· {Math.round(c.confidence * 100)}%</span>
               )}
-              <span className="ml-2 opacity-60">· from {c.source_kind}</span>
+              <span className="ml-2 opacity-60">{t("contacts.scrape.from", { source: c.source_kind })}</span>
             </div>
             {c.excerpt && (
               <div className="text-2xs text-muted-foreground/80 italic mt-0.5 line-clamp-1">

@@ -275,7 +275,7 @@ export function Dock({ activeAppId }: Props) {
           </div>
         )}
         <nav
-          aria-label="App tabs"
+          aria-label={i18n.t("apps.dock.tabsAria")}
           data-tour="dock"
           className={cn(
             "fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom)]",
@@ -306,7 +306,7 @@ export function Dock({ activeAppId }: Props) {
 
   return (
     <nav
-      aria-label="App dock"
+      aria-label={i18n.t("apps.dock.dockAria")}
       data-tour="dock"
       className={cn(
         // bottom-3.5 keeps the desktop position. On iOS the home-
@@ -332,8 +332,8 @@ export function Dock({ activeAppId }: Props) {
       <button
         onClick={() => openHelp()}
         data-tour="help"
-        title="Help"
-        aria-label="Help"
+        title={i18n.t("apps.help")}
+        aria-label={i18n.t("apps.help")}
         className="inline-flex items-center justify-center w-12 h-12 rounded-2xl shrink-0 ring-1 ring-border/60 bg-card/40 hover:-translate-y-1.5 hover:scale-110 transition-[transform] duration-150"
       >
         <CircleHelp className="w-[22px] h-[22px] text-muted-foreground" strokeWidth={2.25} aria-hidden />

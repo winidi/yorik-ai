@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   HardDrive, ArrowRightLeft, Loader2, AlertTriangle, Check, RefreshCw,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
@@ -60,6 +61,7 @@ export function StoragePicker({
   /** Compact mode for the onboarding wizard — no header/footer chrome. */
   compact?: boolean;
 }) {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<StorageStatus | null>(null);
   const [volumes, setVolumes] = useState<Volume[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,40 +92,33 @@ export function StoragePicker({
 
   async function moveToExternal() {
     if (!targetPath) return;
-    if (!confirm(
-      `Move the photo library to ${targetPath}?\n\n` +
-      `This may take a while for large libraries (a 50 GB photo library typically takes 5–15 min on USB-C). ` +
-      `Photos, documents and the other bundled services are stopped during the move and start again afterwards.`
-    )) return;
+    if (!confirm(t("settings.storage.moveConfirm", { path: targetPath }))) return;
     setBusy("moving");
     try {
       await api.post("/api/storage/move", { target_root: targetPath });
       await refresh();
-      toast(`✓ Moved. Your photos now live on ${targetPath}.`);
+      toast(t("settings.storage.moved", { path: targetPath }));
     } catch (e: any) {
-      toast(`Move failed: ${e?.message || e}`);
+      toast(t("settings.storage.moveFailed", { msg: e?.message || e }));
     } finally { setBusy(null); }
   }
 
   async function restoreToInternal() {
-    if (!confirm(
-      "Move the photo library BACK to the internal disk?\n\n" +
-      "Make sure the internal disk has room for it. The copy on the external drive stays put — you can delete it yourself once everything works."
-    )) return;
+    if (!confirm(t("settings.storage.restoreConfirm"))) return;
     setBusy("restoring");
     try {
       await api.post("/api/storage/restore");
       await refresh();
-      toast("✓ Restored to internal storage.");
+      toast(t("settings.storage.restored"));
     } catch (e: any) {
-      toast(`Restore failed: ${e?.message || e}`);
+      toast(t("settings.storage.restoreFailed", { msg: e?.message || e }));
     } finally { setBusy(null); }
   }
 
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground py-6 justify-center">
-        <Loader2 className="w-4 h-4 animate-spin" /> Loading storage status…
+        <Loader2 className="w-4 h-4 animate-spin" /> {t("settings.storage.loading")}
       </div>
     );
   }
@@ -131,8 +126,7 @@ export function StoragePicker({
   if (status?.runtime && status.runtime !== "classic") {
     return (
       <p className="text-sm text-muted-foreground">
-        In this install the photos live in a Docker volume, which Yorik can't move from here.
-        To use another drive, move Docker's own storage there (Docker Desktop: Settings › Resources).
+        {t("settings.storage.dockerNote")}
       </p>
     );
   }
@@ -157,17 +151,17 @@ export function StoragePicker({
             <div className="flex-1 min-w-0">
               <div className="font-medium">
                 {!status.all_healthy
-                  ? "Storage problem detected"
+                  ? t("settings.storage.problem")
                   : isOnExternal
-                    ? "External storage"
-                    : "Internal storage"}
+                    ? t("settings.storage.external")
+                    : t("settings.storage.internal")}
               </div>
               <div className="text-xs text-muted-foreground mt-0.5 break-all">
                 {!status.all_healthy
-                  ? "One or more relocated subtrees can't be reached. Reconnect the SSD or restore to internal."
+                  ? t("settings.storage.problemHint")
                   : isOnExternal
-                    ? <>Documents + photos live at <code className="font-mono">{status.storage_root}</code></>
-                    : "Everything lives under the project's data/ directory. Fine for small households; an external SSD is recommended once your photo library passes ~10 GB."}
+                    ? <>{t("settings.storage.liveAt")} <code className="font-mono">{status.storage_root}</code></>
+                    : t("settings.storage.internalHint")}
               </div>
             </div>
           </div>
@@ -193,7 +187,7 @@ export function StoragePicker({
       {!isOnExternal && (
         <div className="space-y-3">
           <div className="text-xs text-muted-foreground font-semibold">
-            Move to external storage
+            {t("settings.storage.moveTitle")}
           </div>
           {volumes.length > 0 ? (
             <div className="space-y-1.5">
@@ -218,7 +212,7 @@ export function StoragePicker({
                     <div className="text-sm font-medium">
                       {v.label || v.name}
                       {v.size && <span className="ml-2 text-xs text-muted-foreground">{v.size}</span>}
-                      {v.hotplug && <span className="ml-2 text-2xs px-1 rounded bg-sky-500/15 text-sky-500">external</span>}
+                      {v.hotplug && <span className="ml-2 text-2xs px-1 rounded bg-sky-500/15 text-sky-500">{t("settings.storage.externalBadge")}</span>}
                     </div>
                     <div className="text-2xs text-muted-foreground font-mono break-all">{v.suggested_target}</div>
                   </div>
@@ -227,7 +221,7 @@ export function StoragePicker({
             </div>
           ) : (
             <div className="text-xs text-muted-foreground italic">
-              No external volumes detected. Plug in an SSD or use a custom path below.
+              {t("settings.storage.noVolumes")}
             </div>
           )}
 
@@ -243,7 +237,7 @@ export function StoragePicker({
               className="accent-primary mt-1"
             />
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium">Custom path</div>
+              <div className="text-sm font-medium">{t("settings.storage.customPath")}</div>
               <input
                 value={customPath}
                 onChange={e => setCustomPath(e.target.value)}
@@ -252,7 +246,7 @@ export function StoragePicker({
                 className="mt-1 w-full h-8 px-2 bg-background border border-border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ring/40"
               />
               <div className="text-2xs text-muted-foreground mt-1">
-                Must already exist and be on a different filesystem than the project. Yorik creates a <code className="font-mono">yorik/</code> subdir under it.
+                {t("settings.storage.customPathHint")} <code className="font-mono">yorik/</code>{t("settings.storage.customPathHintAfter")}
               </div>
             </div>
           </label>
@@ -272,7 +266,7 @@ export function StoragePicker({
             {busy === "moving"
               ? <Loader2 className="w-4 h-4 animate-spin" />
               : <ArrowRightLeft className="w-4 h-4" />}
-            Move to external storage
+            {t("settings.storage.moveTitle")}
           </button>
         </div>
       )}
@@ -292,7 +286,7 @@ export function StoragePicker({
           {busy === "restoring"
             ? <Loader2 className="w-4 h-4 animate-spin" />
             : <ArrowRightLeft className="w-4 h-4" />}
-          Move back to internal storage
+          {t("settings.storage.moveBack")}
         </button>
       )}
 
@@ -302,7 +296,7 @@ export function StoragePicker({
           onClick={refresh}
           className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
         >
-          <RefreshCw className="w-3 h-3" /> Refresh
+          <RefreshCw className="w-3 h-3" /> {t("settings.storage.refresh")}
         </button>
       )}
     </div>

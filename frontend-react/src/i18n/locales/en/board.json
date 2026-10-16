@@ -98,10 +98,35 @@
     "doneTitle": "Afterwards the wall is just the wall again",
     "done": "Done",
     "doneName": "Done, {{name}}",
-    "recordDinner": "Record dinner"
+    "recordDinner": "Record dinner",
+    "tapAnywhere": "Tap anywhere to sign in",
+    "wallLabel": "Wall",
+    "kioskCheckFailed": "Couldn't verify kiosk status: {{error}}",
+    "startFailed": "Ambient failed to start",
+    "openSettings": "Open Settings",
+    "hiName": "Hi {{name}}",
+    "voiceRecognised": "Voice recognised",
+    "greetNight": "Good night.",
+    "greetMorning": "Good morning.",
+    "greetAfternoon": "Good afternoon.",
+    "greetEvening": "Good evening."
   },
   "pin": {
     "notKiosk": "This wall isn't allowed to load the names right now — it isn't a kiosk device yet. On this tablet: Settings › Sign-in & devices › “Make this device the family wall”.",
-    "noPins": "Nobody in the household has set a kiosk PIN yet. Go to Settings › Sign-in & devices on any device, set a PIN, then tap again."
+    "noPins": "Nobody in the household has set a kiosk PIN yet. Go to Settings › Sign-in & devices on any device, set a PIN, then tap again.",
+    "whoThere": "Who's there?",
+    "switchFailed": "Switch failed — try again",
+    "wrong": "Wrong PIN",
+    "tooMany": "Too many attempts — wait a minute",
+    "notMe": "← Not me",
+    "prompt": "Hi {{name}}, enter your PIN",
+    "fourDigits": "4 digits",
+    "verifying": "verifying…",
+    "signInPassword": "Sign in with password"
+  },
+  "ok": "OK",
+  "agenda": {
+    "empty": "Nothing on the wall today",
+    "emptyHint": "Nobody in the household has events today, or nobody's flipped \"show my appointments on the household wall\" in Settings → Profile yet."
   }
 }

@@ -1,0 +1,9 @@
+{
+  "loadCodeFailed": "could not load app code (HTTP {{status}})",
+  "codeEmpty": "app code is empty",
+  "loadFailed": "Could not load app",
+  "appFailed": "{{app}} couldn't load",
+  "failedHint": "The app's source may be missing, its server-side install may have failed, or your network blocked the request.",
+  "retry": "Try again",
+  "backHome": "Back to home"
+}

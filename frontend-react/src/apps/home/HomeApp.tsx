@@ -22,6 +22,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import { MobileTopBar } from "@/components/MobileShell";
 import {
   Sparkles, Calendar, MessageSquare, FolderOpen, FilePlus,
@@ -55,7 +57,8 @@ interface AppTile {
   route: string;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
-  blurb: string;
+  /** Catalogue key of the one-line description (resolved at render). */
+  blurbKey: string;
   /** Render as an external link instead of an in-app navigation. */
   external?: boolean;
   /** Only show if /api/apps lists this id. Use for integrations that
@@ -64,18 +67,21 @@ interface AppTile {
   optional?: boolean;
 }
 
+// `label` is the English fallback; the shown name comes from apps.<id>
+// (the Dock's id, see DOCK_ID) and the blurb from apps.blurb.<id>, both
+// resolved at render so a language switch takes effect.
 const APPS: AppTile[] = [
-  { id: "chat",      label: "Chat",       route: "/chat",      icon: MessageSquare, color: "from-violet-500/30 to-blue-500/30 text-violet-500",     blurb: "Ask Yorik anything in plain language." },
-  { id: "calendar",  label: "Calendar",   route: "/calendar",  icon: Calendar,      color: "from-blue-500/30 to-cyan-500/30 text-blue-500",         blurb: "Events, tasks, drag-to-create blocks." },
-  { id: "tasks",     label: "Tasks",      route: "/tasks",     icon: ListTodo,      color: "from-emerald-500/30 to-teal-500/30 text-emerald-500",   blurb: "Add, complete, and triage your to-dos." },
-  { id: "documents", label: "Documents",  route: "/documents", icon: FolderOpen,    color: "from-amber-500/30 to-orange-500/30 text-amber-500",     blurb: "Letters, bills and papers, easy to find." },
-  { id: "write",     label: "Write",      route: "/write",     icon: FilePlus,      color: "from-rose-500/30 to-pink-500/30 text-rose-500",         blurb: "Letters and invoices on your letterhead.", optional: true },
-  { id: "contacts",  label: "Contacts",   route: "/contacts",  icon: Users,         color: "from-orange-500/30 to-amber-500/30 text-orange-500",    blurb: "Everyone Yorik knows, with numbers and addresses.", optional: true },
-  { id: "whatsapp",  label: "WhatsApp",   route: "/whatsapp",  icon: MessageCircle, color: "from-emerald-500/30 to-green-500/30 text-emerald-500", blurb: "Your chats, with replies Yorik suggests.", optional: true },
-  { id: "email",     label: "Email",      route: "/email",     icon: Inbox,         color: "from-sky-500/30 to-blue-500/30 text-sky-500",           blurb: "Your inbox, sorted and summarized." },
-  { id: "photos",    label: "Photos",     route: "/photos",    icon: Camera,        color: "from-emerald-500/30 to-teal-500/30 text-emerald-500",   blurb: "The family's photos and videos." },
-  { id: "briefing",  label: "Briefing",   route: "/briefing",  icon: Newspaper,     color: "from-fuchsia-500/30 to-purple-500/30 text-fuchsia-500", blurb: "Your morning digest in one screen." },
-  { id: "settings",  label: "Settings",   route: "/settings",  icon: Cog,           color: "from-slate-500/30 to-zinc-500/30 text-slate-500",       blurb: "Your profile, family and connections." },
+  { id: "chat",      label: "Chat",       route: "/chat",      icon: MessageSquare, color: "from-violet-500/30 to-blue-500/30 text-violet-500",     blurbKey: "apps.blurb.chat" },
+  { id: "calendar",  label: "Calendar",   route: "/calendar",  icon: Calendar,      color: "from-blue-500/30 to-cyan-500/30 text-blue-500",         blurbKey: "apps.blurb.calendar" },
+  { id: "tasks",     label: "Tasks",      route: "/tasks",     icon: ListTodo,      color: "from-emerald-500/30 to-teal-500/30 text-emerald-500",   blurbKey: "apps.blurb.tasks" },
+  { id: "documents", label: "Documents",  route: "/documents", icon: FolderOpen,    color: "from-amber-500/30 to-orange-500/30 text-amber-500",     blurbKey: "apps.blurb.documents" },
+  { id: "write",     label: "Write",      route: "/write",     icon: FilePlus,      color: "from-rose-500/30 to-pink-500/30 text-rose-500",         blurbKey: "apps.blurb.write", optional: true },
+  { id: "contacts",  label: "Contacts",   route: "/contacts",  icon: Users,         color: "from-orange-500/30 to-amber-500/30 text-orange-500",    blurbKey: "apps.blurb.contacts", optional: true },
+  { id: "whatsapp",  label: "WhatsApp",   route: "/whatsapp",  icon: MessageCircle, color: "from-emerald-500/30 to-green-500/30 text-emerald-500", blurbKey: "apps.blurb.whatsapp", optional: true },
+  { id: "email",     label: "Email",      route: "/email",     icon: Inbox,         color: "from-sky-500/30 to-blue-500/30 text-sky-500",           blurbKey: "apps.blurb.email" },
+  { id: "photos",    label: "Photos",     route: "/photos",    icon: Camera,        color: "from-emerald-500/30 to-teal-500/30 text-emerald-500",   blurbKey: "apps.blurb.photos" },
+  { id: "briefing",  label: "Briefing",   route: "/briefing",  icon: Newspaper,     color: "from-fuchsia-500/30 to-purple-500/30 text-fuchsia-500", blurbKey: "apps.blurb.briefing" },
+  { id: "settings",  label: "Settings",   route: "/settings",  icon: Cog,           color: "from-slate-500/30 to-zinc-500/30 text-slate-500",       blurbKey: "apps.blurb.settings" },
 ];
 
 
@@ -89,6 +95,7 @@ function tileVisual(app: AppTile): string {
 }
 
 export function HomeApp() {
+  const { t } = useTranslation();
   const auth = useAuth();
   const navigate = useNavigate();
   const isAdmin = auth.user.role === "admin" || auth.user.role === "platform_admin";
@@ -124,7 +131,7 @@ export function HomeApp() {
     && (!kid || KID_ORDER.includes(DOCK_ID[app.id] || app.id)),
   );
 
-  const firstName = (auth.user.name || "").split(" ")[0] || "there";
+  const firstName = (auth.user.name || "").split(" ")[0] || t("apps.homeScreen.fallbackName");
   const greeting = pickGreeting();
 
   return (
@@ -143,7 +150,7 @@ export function HomeApp() {
               }));
             }}
             className="w-11 h-11 rounded-md flex items-center justify-center text-muted-foreground"
-            aria-label="Search everything"
+            aria-label={t("apps.homeScreen.searchAria")}
           >
             <Search className="w-[22px] h-[22px]" />
           </button>
@@ -164,7 +171,7 @@ export function HomeApp() {
               {greeting}, <span className="bg-gradient-to-r from-violet-500 to-blue-500 bg-clip-text text-transparent">{firstName}</span>.
             </h1>
             <p className="text-sm text-muted-foreground mt-2 max-w-md leading-relaxed">
-              Everything stays at home. Pick an app, or just ask.
+              {t("apps.homeScreen.tagline")}
             </p>
           </div>
 
@@ -176,10 +183,10 @@ export function HomeApp() {
                 }));
               }}
               className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/40 hover:bg-muted text-xs text-muted-foreground hover:text-foreground transition"
-              title="Search everything — email, photos, documents, calendar"
+              title={t("apps.homeScreen.searchTitle")}
             >
               <Search className="w-3.5 h-3.5" />
-              <span>Search</span>
+              <span>{t("apps.homeScreen.search")}</span>
               <kbd className="text-2xs px-1.5 py-0.5 rounded bg-background border border-border">
                 {navigator.platform.includes("Mac") ? "⌘K" : "Ctrl K"}
               </kbd>
@@ -187,16 +194,16 @@ export function HomeApp() {
             <button
               onClick={() => openHelp()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/40 hover:bg-muted text-xs text-muted-foreground hover:text-foreground transition"
-              title="Help: how Yorik works, step by step"
+              title={t("apps.homeScreen.helpTitle")}
             >
               <CircleHelp className="w-3.5 h-3.5" />
-              <span>Help</span>
+              <span>{t("apps.help")}</span>
             </button>
             <button
               onClick={refresh}
               className="p-2 -m-2 text-muted-foreground hover:text-foreground transition"
-              title="Refresh"
-              aria-label="Refresh"
+              title={t("common.refresh")}
+              aria-label={t("common.refresh")}
             >
               <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
             </button>
@@ -217,9 +224,9 @@ export function HomeApp() {
               <Sparkles className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-semibold mb-0.5">Ask Yorik anything</div>
+              <div className="font-semibold mb-0.5">{t("apps.homeScreen.askTitle")}</div>
               <div className="text-sm text-muted-foreground">
-                "Schedule the dentist Friday at 2pm", "find my insurance policy", "write to the landlord about the heating"…
+                {t("apps.homeScreen.askExamples")}
               </div>
             </div>
             <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition shrink-0" />
@@ -235,7 +242,7 @@ export function HomeApp() {
         {/* App grid */}
         <section className="mb-10">
           <h2 className="text-sm font-semibold text-muted-foreground mb-3">
-            Apps
+            {t("apps.homeScreen.appsHeading")}
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {visibleApps.map(app => {
@@ -261,9 +268,9 @@ export function HomeApp() {
                       </span>
                     )}
                   </div>
-                  <div className="font-medium text-sm">{app.label}</div>
+                  <div className="font-medium text-sm">{t(`apps.${DOCK_ID[app.id] || app.id}`, { defaultValue: app.label })}</div>
                   <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-snug">
-                    {app.blurb}
+                    {t(app.blurbKey)}
                   </div>
                 </>
               );
@@ -305,22 +312,22 @@ export function HomeApp() {
         {/* Quick actions */}
         <section>
           <h2 className="text-sm font-semibold text-muted-foreground mb-3">
-            Quick actions
+            {t("apps.homeScreen.quickActions")}
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <QuickAction
               icon={FilePlus}
-              label="Write a letter or invoice"
+              label={t("apps.homeScreen.quick.write")}
               onClick={() => navigate("/write")}
             />
             <QuickAction
               icon={Plus}
-              label="Add a calendar event"
+              label={t("apps.homeScreen.quick.event")}
               onClick={() => navigate("/calendar")}
             />
             <QuickAction
               icon={Search}
-              label="Find a document"
+              label={t("apps.homeScreen.quick.document")}
               onClick={() => navigate("/documents")}
             />
           </div>
@@ -352,13 +359,14 @@ function HealthLine({ issues, isAdmin, onOpen }: {
   isAdmin: boolean;
   onOpen: () => void;
 }) {
+  const { t } = useTranslation();
   const shown = isAdmin ? issues : issues.filter(i => i.tone === "error" && i.text.startsWith("Yorik"));
   if (!isAdmin && shown.length === 0) return null;
   const worst = shown.some(i => i.tone === "error") ? "error" : shown.length ? "warn" : "ok";
   const text =
-    shown.length === 0 ? "Everything is running" :
+    shown.length === 0 ? t("apps.homeScreen.health.allRunning") :
     shown.length === 1 ? shown[0].text :
-    `${shown.length} things need you: ${shown.map(i => i.text.charAt(0).toLowerCase() + i.text.slice(1)).join(", ")}`;
+    t("apps.homeScreen.health.needYou", { count: shown.length, list: shown.map(i => i.text.charAt(0).toLowerCase() + i.text.slice(1)).join(", ") });
   const body = (
     <>
       <span className={cn(
@@ -376,7 +384,7 @@ function HealthLine({ issues, isAdmin, onOpen }: {
                        "bg-red-500/10 border border-red-500/25",
   );
   return isAdmin
-    ? <button onClick={onOpen} className={cn(cls, "group hover:border-foreground/20")} title="Open Settings › Health & updates">{body}</button>
+    ? <button onClick={onOpen} className={cn(cls, "group hover:border-foreground/20")} title={t("apps.homeScreen.health.openSettings")}>{body}</button>
     : <div className={cls}>{body}</div>;
 }
 
@@ -402,9 +410,9 @@ function QuickAction({ icon: Icon, label, onClick }: {
 
 function pickGreeting(): string {
   const h = new Date().getHours();
-  if (h < 5)  return "Up late";
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  if (h < 22) return "Good evening";
-  return "Good night";
+  if (h < 5)  return i18n.t("apps.homeScreen.greeting.late");
+  if (h < 12) return i18n.t("apps.homeScreen.greeting.morning");
+  if (h < 17) return i18n.t("apps.homeScreen.greeting.afternoon");
+  if (h < 22) return i18n.t("apps.homeScreen.greeting.evening");
+  return i18n.t("apps.homeScreen.greeting.night");
 }

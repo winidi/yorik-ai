@@ -13,8 +13,10 @@ import {
   Search, Mail, MessageSquare, FileText, Image as ImageIcon,
   Calendar, X, Loader2, ArrowRight, CheckSquare, Users, Mic, PenLine, Landmark,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { locale } from "@/i18n";
 
 interface SearchHit {
   source: "email" | "whatsapp" | "paperless" | "immich" | "calendar"
@@ -34,19 +36,21 @@ interface SearchResponse {
   results: Record<string, SearchHit[]>;
 }
 
-const SOURCE_META: Record<string, { label: string; icon: any; tint: string }> = {
-  email:     { label: "Email",     icon: Mail,         tint: "text-blue-500" },
-  whatsapp:  { label: "WhatsApp",  icon: MessageSquare, tint: "text-emerald-500" },
-  paperless: { label: "Documents", icon: FileText,     tint: "text-amber-500" },
-  immich:    { label: "Photos",    icon: ImageIcon,    tint: "text-pink-500" },
-  calendar:  { label: "Calendar",  icon: Calendar,     tint: "text-violet-500" },
-  tasks:     { label: "Tasks",     icon: CheckSquare,  tint: "text-teal-500" },
-  contacts:  { label: "Contacts",  icon: Users,        tint: "text-orange-500" },
-  recordings: { label: "Recordings", icon: Mic,        tint: "text-rose-500" },
-  drafts:    { label: "Letters & drafts", icon: PenLine, tint: "text-sky-500" },
-  letters:   { label: "Write",     icon: PenLine,      tint: "text-sky-500" },
-  bank:      { label: "Bank",      icon: Landmark,     tint: "text-lime-600" },
-  pipelines: { label: "Follow-ups", icon: ArrowRight,  tint: "text-indigo-500" },
+// `labelKey` is resolved at render (sourceLabel) so the group heading
+// follows the person's language.
+const SOURCE_META: Record<string, { labelKey: string; icon: any; tint: string }> = {
+  email:     { labelKey: "apps.email",     icon: Mail,         tint: "text-blue-500" },
+  whatsapp:  { labelKey: "apps.whatsapp",  icon: MessageSquare, tint: "text-emerald-500" },
+  paperless: { labelKey: "apps.docs",      icon: FileText,     tint: "text-amber-500" },
+  immich:    { labelKey: "apps.photos",    icon: ImageIcon,    tint: "text-pink-500" },
+  calendar:  { labelKey: "apps.calendar",  icon: Calendar,     tint: "text-violet-500" },
+  tasks:     { labelKey: "apps.tasks",     icon: CheckSquare,  tint: "text-teal-500" },
+  contacts:  { labelKey: "apps.contacts",  icon: Users,        tint: "text-orange-500" },
+  recordings: { labelKey: "apps.recordings", icon: Mic,        tint: "text-rose-500" },
+  drafts:    { labelKey: "apps.search.source.drafts", icon: PenLine, tint: "text-sky-500" },
+  letters:   { labelKey: "apps.write",     icon: PenLine,      tint: "text-sky-500" },
+  bank:      { labelKey: "apps.search.source.bank", icon: Landmark, tint: "text-lime-600" },
+  pipelines: { labelKey: "apps.search.source.pipelines", icon: ArrowRight, tint: "text-indigo-500" },
 };
 
 const SOURCE_ORDER: Array<keyof typeof SOURCE_META> = [
@@ -81,6 +85,7 @@ function orderedSources(data: SearchResponse | null, query: string): Array<keyof
 }
 
 export function CommandPalette() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [data, setData] = useState<SearchResponse | null>(null);
@@ -189,7 +194,7 @@ export function CommandPalette() {
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search everything: mail, WhatsApp, documents, calendar, tasks, contacts, recordings…"
+            placeholder={t("apps.search.placeholder")}
             className="flex-1 h-9 bg-transparent text-base placeholder:text-muted-foreground focus:outline-none"
           />
           {loading && <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />}
@@ -203,11 +208,11 @@ export function CommandPalette() {
             <Hint />
           ) : !data ? (
             <div className="p-8 text-center text-sm text-muted-foreground">
-              {loading ? "Searching…" : "No results yet — try a longer query."}
+              {loading ? t("apps.search.searching") : t("apps.search.noResultsYet")}
             </div>
           ) : data.total === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">
-              No matches for "{query}".
+              {t("apps.search.noMatches", { query })}
             </div>
           ) : (
             <>
@@ -219,7 +224,7 @@ export function CommandPalette() {
                   <div key={source}>
                     <div className="px-4 py-1.5 text-2xs text-muted-foreground font-semibold flex items-center gap-2 bg-muted/30">
                       <meta.icon className={cn("w-3 h-3", meta.tint)} />
-                      {meta.label} · {hits.length}
+                      {t(meta.labelKey)} · {hits.length}
                     </div>
                     {hits.map(hit => {
                       const globalIdx = flat.indexOf(hit);
@@ -243,7 +248,7 @@ export function CommandPalette() {
                             <meta.icon className={cn("w-4 h-4 mt-1 shrink-0", meta.tint)} />
                           )}
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate">{hit.title || "(untitled)"}</div>
+                            <div className="text-sm font-medium truncate">{hit.title || t("apps.search.untitled")}</div>
                             {hit.subtitle && (
                               <div className="text-xs text-muted-foreground truncate">{hit.subtitle}</div>
                             )}
@@ -268,10 +273,10 @@ export function CommandPalette() {
         </div>
 
         <div className="px-4 py-2 border-t border-border text-2xs text-muted-foreground flex items-center gap-3">
-          <span>↑↓ navigate</span>
-          <span>↵ open</span>
-          <span>ESC close</span>
-          {data && <span className="ml-auto">{data.total} result{data.total !== 1 ? "s" : ""}</span>}
+          <span>{t("apps.search.footerNavigate")}</span>
+          <span>{t("apps.search.footerOpen")}</span>
+          <span>{t("apps.search.footerClose")}</span>
+          {data && <span className="ml-auto">{t("apps.search.results", { count: data.total })}</span>}
         </div>
       </div>
     </div>,
@@ -280,11 +285,12 @@ export function CommandPalette() {
 }
 
 function Hint() {
+  const { t } = useTranslation();
   return (
     <div className="p-8 text-center text-sm text-muted-foreground">
       <Search className="w-8 h-8 mx-auto mb-3 opacity-40" />
-      <div>Search everything you may see — mail, WhatsApp, documents, photos, calendar, tasks, contacts, recordings, letters.</div>
-      <div className="mt-2 text-xs opacity-70">Try a name, a topic or an invoice number. Words need not match exactly; Yorik also finds by meaning.</div>
+      <div>{t("apps.search.hintTitle")}</div>
+      <div className="mt-2 text-xs opacity-70">{t("apps.search.hintSub")}</div>
     </div>
   );
 }
@@ -301,10 +307,10 @@ function formatTs(ts?: string | number): string {
   if (isNaN(d.getTime())) return "";
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   }
   if (d.getFullYear() === now.getFullYear()) {
-    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+    return d.toLocaleDateString(locale(), { month: "short", day: "numeric" });
   }
-  return d.toLocaleDateString([], { year: "2-digit", month: "short" });
+  return d.toLocaleDateString(locale(), { year: "2-digit", month: "short" });
 }

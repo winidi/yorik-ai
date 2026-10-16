@@ -299,10 +299,11 @@ export function PipelineDetail({ id }: { id: number }) {
 }
 
 function BackLink() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   return (
     <button onClick={() => navigate("/pipelines")} className="flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground">
-      <ArrowLeft className="w-4 h-4" /> Pipelines
+      <ArrowLeft className="w-4 h-4" /> {t("apps.pipelines")}
     </button>
   );
 }

@@ -1,0 +1,44 @@
+{
+  "app": {
+    "title": "Fotos",
+    "backUpPhone": "Dieses Handy sichern",
+    "openImmichTitle": "Immich in neuem Tab öffnen",
+    "newTab": "Neuer Tab",
+    "downTitle": "Die Fotos sind gerade nicht erreichbar",
+    "downBody": "Die Fotosammlung auf diesem Yorik läuft nicht. Deine Fotos sind sicher, nur im Moment nicht erreichbar.",
+    "forAdmin": "Für den Admin",
+    "cantReach": "Yorik erreicht Immich unter <code>{{url}}</code> nicht. Starte es im Ordner yorik-ai:",
+    "runningElsewhere": "Läuft es woanders? Setze <code>HOMEOS_IMMICH_BASE_URL</code> in <code>config.env</code>.",
+    "jsRequired": "Für Immich muss JavaScript eingeschaltet sein."
+  },
+  "banner": {
+    "ready": "Foto aus dem Chat bereit",
+    "notWired": "Automatisch an {{app}} anhängen geht noch nicht. Öffne das Bild und zieh es hinein – oder füge es ein, falls du es vorher kopiert hast.",
+    "openImage": "Bild öffnen",
+    "dismiss": "Ausblenden"
+  },
+  "phoneSetup": {
+    "hide": "Verbergen",
+    "show": "Zeigen",
+    "copy": "{{label}} kopieren",
+    "loadFailed": "Konnte nicht geladen werden.",
+    "close": "Schließen",
+    "title": "Die Fotos dieses Handys sichern",
+    "subtitle": "Neue Bilder landen von selbst auf dem Yorik deiner Familie, nicht in einer Cloud.",
+    "step1": "1. Hol dir die Immich-App",
+    "appStore": "Immich im App Store",
+    "googlePlay": "Immich bei Google Play",
+    "otherStore": "Immich für dein Handy",
+    "step2": "2. Sag ihr, wo deine Fotos liegen",
+    "serverAddress": "Server-Adresse (dort einfügen, wo die App danach fragt)",
+    "needsPublish": "Ein Admin muss die Fotosammlung erst in Tailscale freigeben (Hilfe → Fotos).",
+    "step3": "3. Anmelden",
+    "signInHint": "Zeigt die App <b>Mit Yorik anmelden</b>, tippe darauf. Sonst:",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "samePassword": "Passwort: dasselbe wie für Yorik.",
+    "step4": "4. Sicherung einschalten",
+    "backupHint": "Tippe in Immich oben auf das Wolken-Symbol, wähle <b>Zuletzt</b> (oder alle Alben) und schalte <b>Sicherung</b> ein. Erlaube den Zugriff auf alle Fotos, wenn das Handy fragt.",
+    "done": "Fertig"
+  }
+}

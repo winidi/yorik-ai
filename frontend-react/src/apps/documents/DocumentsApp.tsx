@@ -13,6 +13,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { Trans, useTranslation } from "react-i18next";
+import i18n, { locale } from "@/i18n";
 import {
   Loader2, Upload, Search, RefreshCw, RotateCw, Download, FileText,
   X, ExternalLink, Eye, FolderOpen, Sparkles, FileImage, FileCode,
@@ -57,6 +59,7 @@ interface DocsListResponse {
 }
 
 export function DocumentsApp() {
+  const { t } = useTranslation();
   const { data: me } = useApi<{ user?: { id: number; name: string; role: string } }>("/api/auth/me", []);
   const role = me?.user?.role || "admin";
   // Uploading is for the adults (admins and members); children and
@@ -188,14 +191,14 @@ export function DocumentsApp() {
       return {
         id: selectedId,
         source: "paperless",
-        title: `Document ${Math.abs(selectedId)}`,
+        title: t("documents.app.stubTitle", { id: Math.abs(selectedId) }),
         mime_type: "application/pdf",
         bytes: null,
         created_at: null,
       } as any as YorikDocument;
     }
     return null;
-  }, [docs, selectedId, directDocApi.data]);
+  }, [docs, selectedId, directDocApi.data, t]);
 
   // No auto-select. Browse mode means: user lands on the card grid,
   // sees their docs as thumbnails, and chooses what to open. Auto-
@@ -250,7 +253,7 @@ export function DocumentsApp() {
   // ─── upload ────────────────────────────────────────────────────────────
   const uploadFiles = useCallback(async (files: FileList | File[]) => {
     if ((role !== "admin" && role !== "platform_admin")) {
-      toast("Only admins can upload documents.");
+      toast(t("documents.upload.adminsOnly"));
       return;
     }
     setUploading(true);
@@ -275,11 +278,11 @@ export function DocumentsApp() {
       }
       await listApi.refetch();
     } catch (err: any) {
-      toast("Upload failed: " + err.message);
+      toast(t("documents.upload.failed", { error: err.message }));
     } finally {
       setUploading(false);
     }
-  }, [role, listApi]);
+  }, [role, listApi, t]);
 
   // Force an immediate Paperless reconcile. The scheduled reconciler
   // runs only every 6 hours; a doc dropped into Paperless's consume
@@ -298,30 +301,28 @@ export function DocumentsApp() {
         error?: string;
       }>("/api/documents/sync-paperless");
       if (r.error) {
-        toast("Couldn't sync documents: " + r.error);
+        toast(t("documents.sync.failed", { error: r.error }));
       } else if ((r.checked ?? 0) === 0) {
         // Paperless returned zero documents — almost always a token /
         // auth issue, NOT "Paperless is empty". Distinguish from the
         // legitimate "everything in sync" case below.
-        toast(
-          "No documents came back from the archive. If you expected some, an admin " +
-          "can press Reconnect under Settings › Apps & accounts › Documents."
-        );
+        toast(t("documents.sync.none"));
       } else if ((r.ingested ?? 0) === 0 && (r.missing ?? 0) === 0) {
-        toast(`Already in sync — Paperless has ${r.checked} document(s), all mirrored locally.`);
+        toast(t("documents.sync.inSync", { count: r.checked }));
       } else {
-        toast(
-          `Synced ${r.ingested ?? 0} new document(s) from Paperless ` +
-          `(${r.checked} checked${r.failed ? `, ${r.failed} failed` : ""}).`
-        );
+        toast(t("documents.sync.done", {
+          ingested: r.ingested ?? 0,
+          checked: r.checked,
+          failedPart: r.failed ? t("documents.sync.failedPart", { count: r.failed }) : "",
+        }));
       }
       await listApi.refetch();
     } catch (err: any) {
-      toast("Paperless sync failed: " + (err?.message || "unknown"));
+      toast(t("documents.sync.error", { error: err?.message || t("documents.sync.unknown") }));
     } finally {
       setSyncing(false);
     }
-  }, [listApi]);
+  }, [listApi, t]);
 
   // Global drag overlay — desktop only. On touch-primary devices the
   // dragenter events fire inconsistently and the amber overlay would
@@ -377,9 +378,9 @@ export function DocumentsApp() {
               <FolderOpen className="w-4 h-4 text-amber-500" />
             </div>
             <div>
-              <div className="font-semibold leading-none">Documents</div>
+              <div className="font-semibold leading-none">{t("documents.app.title")}</div>
               <div className="text-2xs text-muted-foreground mt-0.5">
-                {(docsResp?.total ?? docs.length).toLocaleString()} file{(docsResp?.total ?? docs.length) === 1 ? "" : "s"}
+                {t("documents.app.fileCount", { count: docsResp?.total ?? docs.length })}
               </div>
             </div>
           </div>
@@ -388,8 +389,8 @@ export function DocumentsApp() {
               onClick={syncFromPaperless}
               disabled={(role !== "admin" && role !== "platform_admin") || syncing}
               title={(role === "admin" || role === "platform_admin")
-                ? "Sync from Paperless now (picks up files dropped in the consume folder before the next 6h reconcile)"
-                : "Admin only"}
+                ? t("documents.app.syncTitle")
+                : t("documents.app.adminOnly")}
               className={cn(
                 "w-10 h-10 md:w-8 md:h-8 inline-flex items-center justify-center rounded-lg transition",
                 (role === "admin" || role === "platform_admin")
@@ -403,7 +404,7 @@ export function DocumentsApp() {
               href="/paperless/"
               target="_blank"
               rel="noopener noreferrer"
-              title="Open Paperless (tags, correspondents, bulk operations)"
+              title={t("documents.app.openPaperlessTitle")}
               className="w-10 h-10 md:w-8 md:h-8 inline-flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition"
             >
               <ExternalLink className="w-5 h-5 md:w-4 md:h-4" />
@@ -411,7 +412,7 @@ export function DocumentsApp() {
             <button
               onClick={() => setShowUploadDialog(true)}
               disabled={!canUpload || uploading}
-              title={canUpload ? "Upload documents" : "Adults of the household can upload"}
+              title={canUpload ? t("documents.app.uploadTitle") : t("documents.app.adultsUpload")}
               className={cn(
                 "w-10 h-10 md:w-8 md:h-8 inline-flex items-center justify-center rounded-lg transition",
                 canUpload
@@ -444,7 +445,7 @@ export function DocumentsApp() {
                 }
                 if (e.key === "Escape") clearSearch();
               }}
-              placeholder="Search your documents…"
+              placeholder={t("documents.app.searchPlaceholder")}
               className="w-full h-9 pl-9 pr-8 rounded-full bg-muted/70 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
             />
             {searchQuery && (
@@ -495,11 +496,11 @@ export function DocumentsApp() {
         />
 
         <footer className="border-t border-border px-4 py-3 text-xs text-muted-foreground flex items-center justify-between">
-          <span>{me?.user?.name ? `Signed in as ${me.user.name.split(" ")[0]}` : "Loading…"}</span>
+          <span>{me?.user?.name ? t("documents.app.signedInAs", { name: me.user.name.split(" ")[0] }) : t("documents.app.loading")}</span>
           <button
             onClick={() => listApi.refetch()}
-            title="Reload list"
-            aria-label="Reload list"
+            title={t("documents.app.reloadList")}
+            aria-label={t("documents.app.reloadList")}
             className="p-2 -m-2 text-muted-foreground hover:text-foreground transition"
           >
             <RotateCw className={cn("w-3.5 h-3.5", listApi.loading && "animate-spin")} />
@@ -510,10 +511,10 @@ export function DocumentsApp() {
       {/* ── Center pane: preview or search results ──────────── */}
       <section className="flex-1 flex flex-col bg-background min-w-0 docs-bg">
         <MobileTopBar
-          title={selected?.title || "Documents"}
+          title={selected?.title || t("documents.app.title")}
           onMenuClick={() => tri.setLeftOpen(true)}
           onContextClick={() => tri.setRightOpen(true)}
-          contextLabel="Details"
+          contextLabel={t("documents.app.details")}
         />
         {searchHits !== null ? (
           <SearchResultsPane
@@ -588,8 +589,8 @@ export function DocumentsApp() {
               <span className="absolute inset-0 rounded-full bg-amber-500/15 docs-drop-ring docs-drop-ring-delay" />
               <Upload className="w-16 h-16 text-amber-500 relative docs-drop-bounce" />
             </div>
-            <div className="text-2xl font-semibold text-amber-500">Drop to upload</div>
-            <div className="text-sm text-muted-foreground mt-1.5">PDFs, Word docs, markdown, images — anything you'd file away.</div>
+            <div className="text-2xl font-semibold text-amber-500">{t("documents.upload.dropTitle")}</div>
+            <div className="text-sm text-muted-foreground mt-1.5">{t("documents.upload.dropHint")}</div>
           </div>
         </div>
       )}
@@ -613,7 +614,7 @@ export function DocumentsApp() {
         <button
           onClick={() => setShowUploadDialog(true)}
           disabled={uploading}
-          aria-label="Upload documents"
+          aria-label={t("documents.app.uploadTitle")}
           className="md:hidden fixed left-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] z-40 w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-500/30 flex items-center justify-center transition disabled:opacity-60"
         >
           {uploading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Upload className="w-6 h-6" />}
@@ -686,6 +687,7 @@ function DocumentList({
   onSelect: (id: number) => void;
   onVisibilityChanged: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="flex-1 overflow-y-auto px-2 pb-2">
       {loading && docs.length === 0 && (
@@ -704,16 +706,16 @@ function DocumentList({
       {!loading && docs.length === 0 && (
         <div className="px-4 py-12 text-center text-xs text-muted-foreground">
           <FolderOpen className="w-8 h-8 mx-auto mb-3 opacity-30" />
-          No documents yet.<br/>
-          <span className="hidden md:inline">Drop a file anywhere — or use the + above.</span>
-          <span className="md:hidden">Tap the upload button to add one.</span>
+          {t("documents.list.empty")}<br/>
+          <span className="hidden md:inline">{t("documents.list.emptyDesktop")}</span>
+          <span className="md:hidden">{t("documents.list.emptyMobile")}</span>
           <a
             href="/paperless/"
             target="_blank"
             rel="noopener noreferrer"
             className="mt-3 inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition"
           >
-            <ExternalLink className="w-3 h-3" /> Open Paperless
+            <ExternalLink className="w-3 h-3" /> {t("documents.list.openPaperless")}
           </a>
         </div>
       )}
@@ -741,6 +743,7 @@ function DocumentRow({ doc, active, onClick, onVisibilityChanged }:
   const { color, bg } = pickDocPalette(doc.mime_type, doc.title);
   const bucket = useDocBucket();
   const inBucket = bucket.has(doc.id);
+  const { t } = useTranslation();
   return (
     <div
       onClick={onClick}
@@ -765,8 +768,8 @@ function DocumentRow({ doc, active, onClick, onVisibilityChanged }:
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); bucket.toggle(doc.id); }}
-          title={inBucket ? "Aus Bucket entfernen" : "In Bucket — dann „Chat about this“"}
-          aria-label={inBucket ? "Remove from chat bucket" : "Add to chat bucket"}
+          title={inBucket ? t("documents.list.bucketRemoveTitle") : t("documents.list.bucketAddTitle")}
+          aria-label={inBucket ? t("documents.list.bucketRemove") : t("documents.list.bucketAdd")}
           className={cn(
             "absolute right-2 top-2.5 p-2 md:p-1 rounded transition",
             inBucket
@@ -786,13 +789,13 @@ function DocumentRow({ doc, active, onClick, onVisibilityChanged }:
             </>
           )}
           {doc.source === "paperless"
-            ? <span className="opacity-70">in Paperless</span>
-            : <span>{doc.chunk_count} chunk{doc.chunk_count === 1 ? "" : "s"}</span>}
+            ? <span className="opacity-70">{t("documents.list.inPaperless")}</span>
+            : <span>{t("documents.list.chunks", { count: doc.chunk_count })}</span>}
           {doc.source !== "paperless" && !doc.indexed_at && (
             <>
               <span className="w-0.5 h-0.5 rounded-full bg-current opacity-50" />
               <span className="text-amber-500 inline-flex items-center gap-1">
-                <AlertCircle className="w-2.5 h-2.5" /> pending
+                <AlertCircle className="w-2.5 h-2.5" /> {t("documents.list.pending")}
               </span>
             </>
           )}
@@ -813,18 +816,23 @@ function DocumentRow({ doc, active, onClick, onVisibilityChanged }:
 // popover with the three options + a brief description so the user
 // learns the model in one read instead of having to dig into docs.
 
-const VISIBILITY_META: Record<DocVisibility, {
-  label: string; Icon: React.ComponentType<{ className?: string }>; color: string; desc: string;
-}> = {
-  private:  { label: "Private",  Icon: Lock, color: "bg-red-500/15 text-red-500",
-              desc: "Only you see this." },
-  parents:  { label: "Parents",  Icon: UsersRound, color: "bg-violet-500/15 text-violet-500",
-              desc: "Visible to the adults of the household, not to the children's accounts." },
-  business: { label: "Business", Icon: Briefcase, color: "bg-blue-500/15 text-blue-500",
-              desc: "Visible to everyone in the business group." },
-  shared:   { label: "Shared",   Icon: House, color: "bg-emerald-500/15 text-emerald-500",
-              desc: "Visible to the whole household, the children's accounts included." },
+// Labels and descriptions are resolved at render time (i18n.t) so a
+// language switch never leaves a frozen English copy behind.
+const VISIBILITY_ICON: Record<DocVisibility, { Icon: React.ComponentType<{ className?: string }>; color: string }> = {
+  private:  { Icon: Lock,       color: "bg-red-500/15 text-red-500" },
+  parents:  { Icon: UsersRound, color: "bg-violet-500/15 text-violet-500" },
+  business: { Icon: Briefcase,  color: "bg-blue-500/15 text-blue-500" },
+  shared:   { Icon: House,      color: "bg-emerald-500/15 text-emerald-500" },
 };
+function visibilityMeta(v: DocVisibility): {
+  label: string; Icon: React.ComponentType<{ className?: string }>; color: string; desc: string;
+} {
+  return {
+    ...VISIBILITY_ICON[v],
+    label: i18n.t(`documents.visibility.${v}`),
+    desc:  i18n.t(`documents.visibility.${v}Desc`),
+  };
+}
 
 function VisibilityChip({
   doc, onChanged,
@@ -835,8 +843,9 @@ function VisibilityChip({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const popRef = useRef<HTMLDivElement | null>(null);
+  const { t } = useTranslation();
   const current = doc.visibility || "private";
-  const meta = VISIBILITY_META[current];
+  const meta = visibilityMeta(current);
 
   useEffect(() => {
     if (!open) return;
@@ -856,7 +865,7 @@ function VisibilityChip({
       onChanged();
       setOpen(false);
     } catch (e: any) {
-      toast(`Visibility change failed: ${e.message || e}`);
+      toast(t("documents.visibility.changeFailed", { error: e.message || e }));
     } finally { setBusy(false); }
   }
 
@@ -870,7 +879,7 @@ function VisibilityChip({
           meta.color,
           open && "ring-1 ring-foreground/30",
         )}
-        title={`${meta.label} — ${meta.desc} (click to change)`}
+        title={t("documents.visibility.chipTitle", { label: meta.label, desc: meta.desc })}
       >
         <meta.Icon className="w-3 h-3" />
         <span className="">{meta.label}</span>
@@ -881,7 +890,7 @@ function VisibilityChip({
           onClick={(e) => e.stopPropagation()}
         >
           {(["private", "parents", "shared", "business"] as DocVisibility[]).map(v => {
-            const m = VISIBILITY_META[v];
+            const m = visibilityMeta(v);
             return (
               <button
                 key={v}
@@ -927,6 +936,7 @@ function rawUrl(doc: YorikDocument, role: string, download = false): string {
 }
 
 function PreviewPane({ doc, role }: { doc: YorikDocument; role: string }) {
+  const { t } = useTranslation();
   return (
     <>
       <header className="h-16 px-4 md:px-6 border-b border-border flex items-center justify-between bg-background/80 backdrop-blur shrink-0 gap-2">
@@ -946,7 +956,7 @@ function PreviewPane({ doc, role }: { doc: YorikDocument; role: string }) {
           href={rawUrl(doc, role, true)}
           className="inline-flex items-center gap-1.5 text-sm md:text-xs h-10 md:h-auto px-4 md:px-3 md:py-1.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 transition shrink-0"
         >
-          <Download className="w-4 h-4 md:w-3.5 md:h-3.5" /> Download
+          <Download className="w-4 h-4 md:w-3.5 md:h-3.5" /> {t("documents.preview.download")}
         </a>
       </header>
 
@@ -958,6 +968,7 @@ function PreviewPane({ doc, role }: { doc: YorikDocument; role: string }) {
 }
 
 function PreviewBody({ doc, role }: { doc: YorikDocument; role: string }) {
+  const { t } = useTranslation();
   const src = rawUrl(doc, role, false);
   const mime = (doc.mime_type || "").toLowerCase();
   const isPdf   = mime.includes("pdf");
@@ -991,19 +1002,20 @@ function PreviewBody({ doc, role }: { doc: YorikDocument; role: string }) {
     <div className="w-full h-full rounded-xl bg-muted/40 border border-border flex flex-col items-center justify-center gap-3 text-center px-6">
       <FileIcon className="w-14 h-14 text-muted-foreground/40" />
       <div className="text-sm text-muted-foreground">
-        No inline preview for <code className="text-foreground/80">{mime || "this file type"}</code>.
+        <Trans i18nKey="documents.preview.noInline" values={{ kind: mime || t("documents.preview.thisFileType") }} components={{ code: <code className="text-foreground/80" /> }} />
       </div>
       <a
         href={rawUrl(doc, role, true)}
         className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition shadow-md"
       >
-        <Download className="w-4 h-4" /> Download
+        <Download className="w-4 h-4" /> {t("documents.preview.download")}
       </a>
     </div>
   );
 }
 
 function TextPreview({ src, title }: { src: string; title: string }) {
+  const { t } = useTranslation();
   const [text, setText] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -1024,7 +1036,7 @@ function TextPreview({ src, title }: { src: string; title: string }) {
   if (err) {
     return (
       <div className="w-full h-full rounded-xl bg-muted/40 border border-border flex items-center justify-center text-sm text-muted-foreground">
-        Could not load preview: {err}
+        {t("documents.preview.loadFailed", { error: err })}
       </div>
     );
   }
@@ -1084,6 +1096,7 @@ function FacetTypeNav({
   counts: Record<FacetKind, number>;
   onPick: (k: FacetKind) => void;
 }) {
+  const { t } = useTranslation();
   const row = (kind: FacetKind, label: string, Icon: typeof TagIcon) => {
     const isActive = active === kind;
     const n = counts[kind] || 0;
@@ -1107,12 +1120,12 @@ function FacetTypeNav({
   return (
     <div className="px-2 py-2 space-y-0.5 border-b border-border/60">
       <div className="px-2 pb-1 text-2xs font-semibold text-muted-foreground">
-        Browse by
+        {t("documents.facets.browseBy")}
       </div>
-      {row("tag",           "Tags",           TagIcon)}
-      {row("correspondent", "Correspondents", UserIcon2)}
-      {row("document_type", "Types",          FilesIcon)}
-      {row("year",          "Years",          CalIcon)}
+      {row("tag",           t("documents.facets.tags"),           TagIcon)}
+      {row("correspondent", t("documents.facets.correspondents"), UserIcon2)}
+      {row("document_type", t("documents.facets.types"),          FilesIcon)}
+      {row("year",          t("documents.facets.years"),          CalIcon)}
     </div>
   );
 }
@@ -1133,6 +1146,7 @@ function FacetSideList({
   activeId: number | null;
   onPick: (node: FacetNode) => void;
 }) {
+  const { t } = useTranslation();
   const items: Array<{ id: number; name: string; count: number }> = (() => {
     if (!facets) return [];
     if (kind === "tag")            return (facets.tags || []).map(x => ({ id: x.id, name: x.name, count: x.document_count }));
@@ -1151,9 +1165,9 @@ function FacetSideList({
   if (items.length === 0) {
     return (
       <div className="flex-1 px-4 py-6 text-center text-xs text-muted-foreground leading-relaxed">
-        No {labelForKind(kind).toLowerCase()}s yet.
+        {t("documents.facets.noneYet", { kind: pluralForKind(kind) })}
         {kind === "tag" && (
-          <> Documents get tags as they are filed.</>
+          <>{t("documents.facets.tagsFiledHint")}</>
         )}
       </div>
     );
@@ -1201,6 +1215,7 @@ function Breadcrumb({
   onBack?: () => void;
   total?: number;
 }) {
+  const { t } = useTranslation();
   // Three rendering modes:
   //   - No facet, no doc → "All documents · N"
   //   - Facet set, no doc → "All ▸ Tags: Rechnung"
@@ -1209,9 +1224,9 @@ function Breadcrumb({
     <div className="h-12 px-6 border-b border-border bg-background/85 backdrop-blur flex items-center gap-1.5 text-sm shrink-0 overflow-x-auto">
       {!activeFacet && !docTitle ? (
         <>
-          <span className="text-foreground font-medium">All documents</span>
+          <span className="text-foreground font-medium">{t("documents.breadcrumb.allDocuments")}</span>
           {typeof total === "number" && (
-            <span className="text-muted-foreground text-xs">· {total.toLocaleString()}</span>
+            <span className="text-muted-foreground text-xs">· {total.toLocaleString(locale())}</span>
           )}
         </>
       ) : (
@@ -1221,14 +1236,14 @@ function Breadcrumb({
               onClick={onBack}
               className="mr-2 -ml-2 inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-foreground hover:bg-muted transition shrink-0"
             >
-              <ArrowLeft className="w-4 h-4" /> Back
+              <ArrowLeft className="w-4 h-4" /> {t("documents.breadcrumb.back")}
             </button>
           )}
           <button
             onClick={onAll}
             className="text-muted-foreground hover:text-foreground transition"
           >
-            All
+            {t("documents.breadcrumb.all")}
           </button>
           {activeFacet && (
             <>
@@ -1274,6 +1289,7 @@ function FolderCardGrid({
   canUpload: boolean;
   onUpload: () => void;
 }) {
+  const { t } = useTranslation();
   const items: Array<{ id: number; name: string; count: number; color?: string | null }> = (() => {
     if (!facets) return [];
     if (kind === "tag")           return (facets.tags || []).map(x => ({ id: x.id, name: x.name, count: x.document_count, color: x.color }));
@@ -1287,7 +1303,7 @@ function FolderCardGrid({
       <div className="h-12 px-6 border-b border-border bg-background/85 backdrop-blur flex items-center justify-between shrink-0">
         <div className="font-semibold text-sm flex items-center gap-2">
           <FolderOpen className="w-4 h-4 text-amber-500" />
-          {labelForKind(kind)}s
+          {headingForKind(kind)}
           {items.length > 0 && (
             <span className="text-muted-foreground text-xs font-normal">· {items.length}</span>
           )}
@@ -1302,18 +1318,18 @@ function FolderCardGrid({
         {!loading && items.length === 0 && (
           <div className="py-16 text-center text-muted-foreground">
             <FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <div className="font-medium text-foreground/80">No {labelForKind(kind).toLowerCase()}s yet</div>
+            <div className="font-medium text-foreground/80">{t("documents.facets.noneYetHeading", { kind: pluralForKind(kind) })}</div>
             <div className="text-xs mt-1.5 max-w-md mx-auto leading-relaxed">
               {kind === "tag"
-                ? "Tags appear after you run the autotagger from Settings → Embeddings, or once you add tags directly in Paperless."
-                : `Paperless has no ${labelForKind(kind).toLowerCase()}s yet — they appear as you ingest documents with that metadata.`}
+                ? t("documents.facets.tagsEmptyHint")
+                : t("documents.facets.otherEmptyHint", { kind: pluralForKind(kind) })}
             </div>
             {canUpload && kind === "tag" && (
               <button
                 onClick={onUpload}
                 className="mt-4 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 transition"
               >
-                <Upload className="w-3 h-3" /> Upload a document
+                <Upload className="w-3 h-3" /> {t("documents.facets.uploadOne")}
               </button>
             )}
           </div>
@@ -1335,7 +1351,7 @@ function FolderCardGrid({
                   <FolderOpen className={cn("w-7 h-7 mb-3", tone.text)} strokeWidth={2.25} />
                   <div className="font-semibold text-sm leading-snug line-clamp-2">{it.name}</div>
                   <div className="absolute bottom-3 left-4 text-xs text-muted-foreground tabular-nums">
-                    {it.count} doc{it.count === 1 ? "" : "s"}
+                    {t("documents.facets.docCount", { count: it.count })}
                   </div>
                 </button>
               );
@@ -1371,6 +1387,7 @@ function DocCardGrid({
   canUpload: boolean;
   onUpload: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <>
       <Breadcrumb
@@ -1390,8 +1407,8 @@ function DocCardGrid({
             <FileIcon className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <div>
               {facet
-                ? `No documents in this ${labelForKind(facetKind).toLowerCase()}.`
-                : "No documents in your library yet."}
+                ? t(`documents.grid.emptyInFolder.${facetKind}`)
+                : t("documents.grid.emptyLibrary")}
             </div>
             <div className="mt-4 inline-flex items-center gap-2 flex-wrap justify-center">
               {!facet && canUpload && (
@@ -1399,7 +1416,7 @@ function DocCardGrid({
                   onClick={onUpload}
                   className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 transition"
                 >
-                  <Upload className="w-3 h-3" /> Upload a document
+                  <Upload className="w-3 h-3" /> {t("documents.grid.uploadOne")}
                 </button>
               )}
               <a
@@ -1408,7 +1425,7 @@ function DocCardGrid({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition"
               >
-                <ExternalLink className="w-3 h-3" /> Open Paperless
+                <ExternalLink className="w-3 h-3" /> {t("documents.grid.openPaperless")}
               </a>
             </div>
           </div>
@@ -1429,8 +1446,9 @@ function DocCardGrid({
       {(hasPrev || hasNext) && (
         <div className="border-t border-border px-6 pt-3 pb-[max(5rem,calc(env(safe-area-inset-bottom)+1rem))] md:pb-20 flex items-center justify-between text-sm text-muted-foreground shrink-0 bg-background/40">
           <span className="tabular-nums text-xs">
-            Page {page} · {total.toLocaleString()} doc{total === 1 ? "" : "s"}
-            {facet ? " in this folder" : " total"}
+            {facet
+              ? t("documents.grid.pageFolder", { page, count: total })
+              : t("documents.grid.pageTotal", { page, count: total })}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -1441,7 +1459,7 @@ function DocCardGrid({
                 hasPrev ? "hover:bg-muted text-foreground/80" : "opacity-30 cursor-not-allowed",
               )}
             >
-              ‹ Prev
+              {t("documents.grid.prev")}
             </button>
             <button
               onClick={onNext}
@@ -1451,7 +1469,7 @@ function DocCardGrid({
                 hasNext ? "hover:bg-muted text-foreground/80" : "opacity-30 cursor-not-allowed",
               )}
             >
-              Next ›
+              {t("documents.grid.next")}
             </button>
           </div>
         </div>
@@ -1520,12 +1538,13 @@ function PaginationBar({
   hasNext: boolean; hasPrev: boolean;
   onPrev: () => void; onNext: () => void;
 }) {
+  const { t } = useTranslation();
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const end   = Math.min(page * pageSize, total);
   return (
     <div className="border-t border-border/60 px-3 py-2 flex items-center justify-between text-xs text-muted-foreground bg-background/40">
       <span className="tabular-nums">
-        {start.toLocaleString()}–{end.toLocaleString()} of {total.toLocaleString()}
+        {t("documents.grid.rangeOf", { start: start.toLocaleString(locale()), end: end.toLocaleString(locale()), total: total.toLocaleString(locale()) })}
       </span>
       <div className="flex items-center gap-1">
         <button
@@ -1535,7 +1554,7 @@ function PaginationBar({
             "px-2 py-1 rounded-md transition",
             hasPrev ? "hover:bg-muted text-foreground/80" : "opacity-30 cursor-not-allowed",
           )}
-          aria-label="Previous page"
+          aria-label={t("documents.grid.prevPage")}
         >
           ‹
         </button>
@@ -1547,7 +1566,7 @@ function PaginationBar({
             "px-2 py-1 rounded-md transition",
             hasNext ? "hover:bg-muted text-foreground/80" : "opacity-30 cursor-not-allowed",
           )}
-          aria-label="Next page"
+          aria-label={t("documents.grid.nextPage")}
         >
           ›
         </button>
@@ -1578,6 +1597,7 @@ function BrowseTree({
   onPick: (node: FacetNode) => void;
   onClear: () => void;
 }) {
+  const { t } = useTranslation();
   // Default: Tags expanded (the most useful after running the autotagger),
   // others collapsed. If something IS actively filtered, also expand that
   // group so the active item is visible without an extra click.
@@ -1652,38 +1672,45 @@ function BrowseTree({
       {active ? (
         <div className="mx-1 mb-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/15 text-xs text-amber-700 dark:text-amber-300 font-medium">
           <span>{labelForKind(active.kind)}: {active.label}</span>
-          <button onClick={onClear} title="Clear filter" className="opacity-70 hover:opacity-100">
+          <button onClick={onClear} title={t("documents.facets.clearFilter")} className="opacity-70 hover:opacity-100">
             <X className="w-3 h-3" />
           </button>
         </div>
       ) : (
         <div className="px-2 py-1 flex items-center justify-between">
-          <span className="text-2xs font-semibold text-muted-foreground">Browse</span>
+          <span className="text-2xs font-semibold text-muted-foreground">{t("documents.facets.browse")}</span>
           {loading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
         </div>
       )}
       <div className="space-y-0.5">
-        {groupRow("tag",           "Tags",           TagIcon,    facets?.tags || [])}
-        {groupRow("correspondent", "Correspondents", UserIcon2,  facets?.correspondents || [])}
-        {groupRow("document_type", "Types",          FilesIcon,  facets?.document_types || [])}
-        {groupRow("year",          "Years",          CalIcon,    facets?.years || [])}
+        {groupRow("tag",           t("documents.facets.tags"),           TagIcon,    facets?.tags || [])}
+        {groupRow("correspondent", t("documents.facets.correspondents"), UserIcon2,  facets?.correspondents || [])}
+        {groupRow("document_type", t("documents.facets.types"),          FilesIcon,  facets?.document_types || [])}
+        {groupRow("year",          t("documents.facets.years"),          CalIcon,    facets?.years || [])}
       </div>
       {!loading && !hasAny && (
         <p className="px-2 py-2 text-xs text-muted-foreground leading-relaxed">
-          No tags or senders yet — documents get them as they are filed.
+          {t("documents.facets.noTagsOrSenders")}
         </p>
       )}
     </div>
   );
 }
 
+/** Singular label of a facet kind ("Tag", "From", …), resolved at call time. */
 function labelForKind(k: FacetKind): string {
-  switch (k) {
-    case "tag":           return "Tag";
-    case "correspondent": return "From";
-    case "document_type": return "Type";
-    case "year":          return "Year";
-  }
+  return i18n.t(`documents.facets.kind.${k}`);
+}
+
+/** Lowercase plural used inside sentences ("tags", "years"). */
+function pluralForKind(k: FacetKind): string {
+  return i18n.t(`documents.facets.kindPlural.${k}`);
+}
+
+/** Capitalised plural used as a heading ("Tags", "Years"). */
+function headingForKind(k: FacetKind): string {
+  const key = k === "tag" ? "tags" : k === "correspondent" ? "correspondents" : k === "document_type" ? "types" : "years";
+  return i18n.t(`documents.facets.${key}`);
 }
 
 
@@ -1700,6 +1727,7 @@ function SearchEngineBadges({
   legs: SearchResponse["legs"];
   searching: boolean;
 }) {
+  const { t } = useTranslation();
   if (searching) return null;
   const sem = legs?.semantic;
   const fts = legs?.fts;
@@ -1725,12 +1753,12 @@ function SearchEngineBadges({
           "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium",
           tone,
         )}
-        title={status.error || (isEmpty ? "Ran successfully but returned 0 hits" : `${status.count} hits`)}
+        title={status.error || (isEmpty ? t("documents.search.ranEmpty") : t("documents.search.hits", { count: status.count }))}
       >
         <Icon className="w-3 h-3 opacity-70" />
         <span>{label}</span>
         <span className="opacity-60">·</span>
-        <span>{isError ? "unavailable" : `${status.count} hit${status.count === 1 ? "" : "s"}`}</span>
+        <span>{isError ? t("documents.search.unavailable") : t("documents.search.hits", { count: status.count })}</span>
         <StatusIcon className="w-3 h-3 opacity-70" />
       </div>
     );
@@ -1740,19 +1768,19 @@ function SearchEngineBadges({
   // — title-tooltips don't read on mobile, and a failed leg is the kind
   // of thing the user wants to ACT on, not just hover over.
   const firstError = sem?.error || fts?.error;
-  const failingLeg = sem?.error ? "Semantic" : fts?.error ? "Keyword" : null;
+  const failingLeg = sem?.error ? t("documents.search.semantic") : fts?.error ? t("documents.search.keyword") : null;
 
   return (
     <div className="px-6 py-2 border-b border-border bg-background/60">
       <div className="flex items-center gap-2 flex-wrap">
-        {pill("Semantic", Sparkles, sem)}
-        {pill("Keyword", Type, fts)}
+        {pill(t("documents.search.semantic"), Sparkles, sem)}
+        {pill(t("documents.search.keyword"), Type, fts)}
       </div>
       {firstError && failingLeg && (
         <div className="mt-1.5 text-xs text-amber-700/90 dark:text-amber-300/90 flex items-start gap-1.5">
           <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
           <span>
-            <strong>{failingLeg} search:</strong> {firstError}
+            <strong>{t("documents.search.legFailed", { leg: failingLeg })}</strong> {firstError}
           </span>
         </div>
       )}
@@ -1771,6 +1799,7 @@ function SearchResultsPane({
   onPickDoc: (docId: number) => void;
   onClear: () => void;
 }) {
+  const { t } = useTranslation();
   // Group hits by document so the user sees one card per file with the
   // best-scoring chunk on top — matches semantic-search UX from Notion,
   // Obsidian, etc. Hits arrive sorted best-first by the backend, so the
@@ -1798,13 +1827,16 @@ function SearchResultsPane({
           <div className="min-w-0">
             <div className="font-semibold truncate">
               {searching
-                ? "Searching…"
+                ? t("documents.search.searching")
                 : passageCount === 0
-                  ? "No matches"
-                  : `${passageCount} passage${passageCount === 1 ? "" : "s"} across ${docCount} document${docCount === 1 ? "" : "s"}`}
+                  ? t("documents.search.noMatches")
+                  : t("documents.search.summary", {
+                      passages: t("documents.search.passages", { count: passageCount }),
+                      documents: t("documents.search.documents", { count: docCount }),
+                    })}
             </div>
             <div className="text-xs text-muted-foreground truncate">
-              for "{query}"
+              {t("documents.search.forQuery", { query })}
             </div>
           </div>
         </div>
@@ -1812,7 +1844,7 @@ function SearchResultsPane({
           onClick={onClear}
           className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition"
         >
-          <X className="w-3 h-3" /> Clear
+          <X className="w-3 h-3" /> {t("documents.search.clear")}
         </button>
       </header>
       <SearchEngineBadges legs={legs} searching={searching} />
@@ -1825,8 +1857,8 @@ function SearchResultsPane({
         {!searching && hits.length === 0 && (
           <div className="text-center py-16 text-muted-foreground">
             <Search className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <div>No matches for <strong className="text-foreground/80">{query}</strong>.</div>
-            <div className="text-xs mt-1">Try paraphrasing — search is semantic.</div>
+            <div><Trans i18nKey="documents.search.noMatchesFor" values={{ query }} components={{ strong: <strong className="text-foreground/80" /> }} /></div>
+            <div className="text-xs mt-1">{t("documents.search.tryParaphrasing")}</div>
           </div>
         )}
         {grouped.map(group => (
@@ -1843,6 +1875,7 @@ function SearchResultsPane({
 
 function DocSearchGroup({ hits, onPickDoc }:
   { hits: DocumentSearchHit[]; onPickDoc: (docId: number) => void }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const best = hits[0];
   const extras = hits.slice(1);
@@ -1859,12 +1892,12 @@ function DocSearchGroup({ hits, onPickDoc }:
             <span className="font-medium text-sm truncate">{best.doc_title}</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-2xs text-muted-foreground">chunk {best.chunk_index}</span>
+            <span className="text-2xs text-muted-foreground">{t("documents.search.chunk", { index: best.chunk_index })}</span>
             <span
               className="text-2xs px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-500 font-medium"
-              title="Relative match score across both search engines — 1.00 is the top hit"
+              title={t("documents.search.matchScoreTitle")}
             >
-              {(best.match_score ?? Math.max(0, 1 - best.distance)).toFixed(2)} match
+              {t("documents.search.match", { score: (best.match_score ?? Math.max(0, 1 - best.distance)).toFixed(2) })}
             </span>
           </div>
         </div>
@@ -1880,8 +1913,8 @@ function DocSearchGroup({ hits, onPickDoc }:
           >
             <span className={cn("inline-block w-2 transition-transform", expanded && "rotate-90")}>›</span>
             {expanded
-              ? `Hide ${extras.length} more passage${extras.length === 1 ? "" : "s"}`
-              : `Show ${extras.length} more passage${extras.length === 1 ? "" : "s"} from this document`}
+              ? t("documents.search.hideMore", { count: extras.length })
+              : t("documents.search.showMore", { count: extras.length })}
           </button>
           {expanded && (
             <div className="px-4 pb-3 space-y-2.5">
@@ -1892,12 +1925,12 @@ function DocSearchGroup({ hits, onPickDoc }:
                   className="w-full text-left bg-muted/30 hover:bg-muted/50 border border-border/40 rounded-lg p-3 transition"
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-2xs text-muted-foreground">chunk {h.chunk_index}</span>
+                    <span className="text-2xs text-muted-foreground">{t("documents.search.chunk", { index: h.chunk_index })}</span>
                     <span
                       className="text-2xs px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-500 font-medium"
-                      title="Relative match score across both search engines — 1.00 is the top hit"
+                      title={t("documents.search.matchScoreTitle")}
                     >
-                      {(h.match_score ?? Math.max(0, 1 - h.distance)).toFixed(2)} match
+                      {t("documents.search.match", { score: (h.match_score ?? Math.max(0, 1 - h.distance)).toFixed(2) })}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
@@ -1920,15 +1953,16 @@ function DocSearchGroup({ hits, onPickDoc }:
 /** "PDF", "Image", "Word document" — not "application/pdf". */
 function fileKind(mime?: string | null): string {
   const m = (mime || "").toLowerCase();
-  if (!m) return "File";
-  if (m.includes("pdf")) return "PDF";
-  if (m.startsWith("image/")) return "Image";
-  if (m.includes("word") || m.includes("opendocument.text")) return "Word document";
-  if (m.includes("sheet") || m.includes("excel") || m.includes("csv")) return "Spreadsheet";
-  if (m.includes("presentation") || m.includes("powerpoint")) return "Presentation";
-  if (m.startsWith("text/")) return "Text";
-  if (m.includes("message/rfc822")) return "Email";
-  return "File";
+  const k = (key: string) => i18n.t(`documents.fileKind.${key}`);
+  if (!m) return k("file");
+  if (m.includes("pdf")) return k("pdf");
+  if (m.startsWith("image/")) return k("image");
+  if (m.includes("word") || m.includes("opendocument.text")) return k("word");
+  if (m.includes("sheet") || m.includes("excel") || m.includes("csv")) return k("spreadsheet");
+  if (m.includes("presentation") || m.includes("powerpoint")) return k("presentation");
+  if (m.startsWith("text/")) return k("text");
+  if (m.includes("message/rfc822")) return k("email");
+  return k("file");
 }
 
 function MetadataPane({
@@ -1938,6 +1972,7 @@ function MetadataPane({
   role: string;
   onReindexed: () => void;
 }) {
+  const { t } = useTranslation();
   const [reindexing, setReindexing] = useState(false);
 
   async function reindex() {
@@ -1946,7 +1981,7 @@ function MetadataPane({
       await api.post(`/api/documents/${doc.id}/reindex?role=${encodeURIComponent(role)}`);
       onReindexed();
     } catch (e: any) {
-      toast("Reindex failed: " + e.message);
+      toast(t("documents.meta.reindexFailed", { error: e.message }));
     } finally {
       setReindexing(false);
     }
@@ -1975,37 +2010,37 @@ function MetadataPane({
           <FileText className="w-4 h-4 text-amber-500" />
         </div>
         <div>
-          <div className="font-semibold leading-none text-sm">Details</div>
+          <div className="font-semibold leading-none text-sm">{t("documents.meta.details")}</div>
           <div className="text-2xs text-muted-foreground mt-0.5">
-            {fromArchive ? "File" : "File · index · access"}
+            {fromArchive ? t("documents.meta.file") : t("documents.meta.fileIndexAccess")}
           </div>
         </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
-        <Section label="File">
-          <Row label="Type">{fileKind(doc.mime_type)}</Row>
-          {doc.bytes > 0 && <Row label="Size">{fmtBytes(doc.bytes)}</Row>}
-          <Row label={fromArchive ? "Date" : "Uploaded"}>{formatDate(doc.created_at)}</Row>
+        <Section label={t("documents.meta.file")}>
+          <Row label={t("documents.meta.type")}>{fileKind(doc.mime_type)}</Row>
+          {doc.bytes > 0 && <Row label={t("documents.meta.size")}>{fmtBytes(doc.bytes)}</Row>}
+          <Row label={fromArchive ? t("documents.meta.date") : t("documents.meta.uploaded")}>{formatDate(doc.created_at)}</Row>
         </Section>
 
-        {!fromArchive && <Section label="Index">
-          <Row label="Status">
+        {!fromArchive && <Section label={t("documents.meta.index")}>
+          <Row label={t("documents.meta.status")}>
             {indexed
               ? <span className="text-emerald-500 inline-flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Indexed
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> {t("documents.meta.indexed")}
                 </span>
               : <span className="text-amber-500 inline-flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" /> Pending
+                  <AlertCircle className="w-3 h-3" /> {t("documents.meta.pending")}
                 </span>
             }
           </Row>
-          <Row label="Chunks">{doc.chunk_count}</Row>
-          {indexed && <Row label="Indexed at">{formatDate(doc.indexed_at!)}</Row>}
+          <Row label={t("documents.meta.chunks")}>{doc.chunk_count}</Row>
+          {indexed && <Row label={t("documents.meta.indexedAt")}>{formatDate(doc.indexed_at!)}</Row>}
         </Section>}
 
-        {!fromArchive && <Section label="Access">
-          <Row label="Visible to">
+        {!fromArchive && <Section label={t("documents.meta.access")}>
+          <Row label={t("documents.meta.visibleTo")}>
             <div className="flex flex-wrap gap-1">
               {(doc.allowed_roles || "").split(",").map(r => r.trim()).filter(Boolean).map(r => (
                 <span key={r} className="text-xs px-2 py-0.5 rounded-full bg-muted text-foreground/80">
@@ -2015,7 +2050,7 @@ function MetadataPane({
             </div>
           </Row>
           {doc.tags && (
-            <Row label="Tags">{doc.tags}</Row>
+            <Row label={t("documents.meta.tags")}>{doc.tags}</Row>
           )}
         </Section>}
 
@@ -2024,14 +2059,14 @@ function MetadataPane({
             href={`/api/documents/${doc.id}/raw?role=${encodeURIComponent(role)}&download=1`}
             className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 md:py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium shadow-sm transition"
           >
-            <Download className="w-4 h-4" /> Download
+            <Download className="w-4 h-4" /> {t("documents.meta.download")}
           </a>
           <button
             onClick={() => sendDocViaEmail(doc, role)}
             className="w-full mt-2 inline-flex items-center justify-center gap-2 px-3 py-2.5 md:py-2 rounded-lg bg-muted hover:bg-muted/70 text-foreground text-sm transition"
-            title="Open the email composer with this document pre-attached"
+            title={t("documents.meta.sendEmailTitle")}
           >
-            <Mail className="w-4 h-4" /> Send via email
+            <Mail className="w-4 h-4" /> {t("documents.meta.sendEmail")}
           </button>
           {!fromArchive && <button
             onClick={reindex}
@@ -2039,8 +2074,8 @@ function MetadataPane({
             className="w-full mt-2 inline-flex items-center justify-center gap-2 px-3 py-2.5 md:py-2 rounded-lg bg-muted hover:bg-muted/70 text-foreground text-sm transition disabled:opacity-50"
           >
             {reindexing
-              ? <><Loader2 className="w-4 h-4 animate-spin" /> Reindexing…</>
-              : <><RefreshCw className="w-4 h-4" /> Reindex</>}
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> {t("documents.meta.reindexing")}</>
+              : <><RefreshCw className="w-4 h-4" /> {t("documents.meta.reindex")}</>}
           </button>}
           {paperlessUrl && (
             <a
@@ -2048,16 +2083,15 @@ function MetadataPane({
               target="_blank"
               rel="noopener noreferrer"
               className="w-full mt-2 inline-flex items-center justify-center gap-2 px-3 py-2.5 md:py-2 rounded-lg bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground text-sm transition"
-              title="Power-user features: tags, correspondents, bulk operations — and deletion"
+              title={t("documents.meta.openPaperlessTitle")}
             >
-              <ExternalLink className="w-4 h-4" /> Open in Paperless
+              <ExternalLink className="w-4 h-4" /> {t("documents.meta.openPaperless")}
             </a>
           )}
         </div>
 
         <div className="pt-3 mt-3 border-t border-border text-xs text-muted-foreground leading-relaxed">
-          Ask Yorik about this document in the <strong className="text-foreground/70">chat</strong> —
-          the answer will cite it.
+          <Trans i18nKey="documents.meta.askHint" components={{ strong: <strong className="text-foreground/70" /> }} />
         </div>
       </div>
     </>
@@ -2087,17 +2121,19 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 function EmptyMetadata() {
+  const { t } = useTranslation();
   return (
     <div className="flex-1 flex items-center justify-center text-center text-xs text-muted-foreground p-8">
       <div>
         <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
-        Select a document to see its details, or run a search.
+        {t("documents.meta.selectHint")}
       </div>
     </div>
   );
 }
 
 function EmptyPane({ onUpload, canUpload }: { onUpload: () => void; canUpload: boolean }) {
+  const { t } = useTranslation();
   const paperlessUrl = paperlessUrlFromHost();
   return (
     <div className="flex-1 flex items-center justify-center px-6">
@@ -2105,11 +2141,10 @@ function EmptyPane({ onUpload, canUpload }: { onUpload: () => void; canUpload: b
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/30 to-orange-500/30 flex items-center justify-center mx-auto mb-5">
           <FolderOpen className="w-8 h-8 text-amber-500" />
         </div>
-        <div className="font-semibold text-lg">Your filing cabinet</div>
+        <div className="font-semibold text-lg">{t("documents.emptyPane.title")}</div>
         <div className="text-sm text-muted-foreground mt-2">
-          PDFs, contracts, invoices, lab results, manuals — anything you'd want to find again
-          by asking. Yorik indexes them locally so the chat can cite them.
-          <span className="hidden md:inline"> Drop a file anywhere on this page.</span>
+          {t("documents.emptyPane.body")}
+          <span className="hidden md:inline">{t("documents.emptyPane.dropHint")}</span>
         </div>
         {canUpload && (
           <div className="mt-6 flex flex-col items-center gap-3">
@@ -2117,7 +2152,7 @@ function EmptyPane({ onUpload, canUpload }: { onUpload: () => void; canUpload: b
               onClick={onUpload}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-sm shadow-md transition"
             >
-              <Upload className="w-4 h-4" /> Upload a document
+              <Upload className="w-4 h-4" /> {t("documents.emptyPane.upload")}
             </button>
             {paperlessUrl && (
               <a
@@ -2126,13 +2161,13 @@ function EmptyPane({ onUpload, canUpload }: { onUpload: () => void; canUpload: b
                 rel="noopener noreferrer"
                 className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 transition"
               >
-                Or open Paperless to bulk-import <ExternalLink className="w-3 h-3" />
+                {t("documents.emptyPane.bulkImport")} <ExternalLink className="w-3 h-3" />
               </a>
             )}
           </div>
         )}
         <div className="mt-6 text-xs text-muted-foreground italic">
-          Tip — PDFs sent to you on WhatsApp file themselves automatically.
+          {t("documents.emptyPane.tip")}
         </div>
       </div>
     </div>
@@ -2150,6 +2185,7 @@ function UploadDialog({
   onUpload: (files: File[]) => Promise<void> | void;
   uploading: boolean;
 }) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const [picked, setPicked] = useState<File[]>([]);
@@ -2172,12 +2208,12 @@ function UploadDialog({
         <header className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Upload className="w-4 h-4 text-amber-500" />
-            <span className="font-semibold">Upload documents</span>
+            <span className="font-semibold">{t("documents.upload.dialogTitle")}</span>
           </div>
           <button
             onClick={onClose}
             disabled={uploading}
-            aria-label="Close"
+            aria-label={t("documents.upload.close")}
             className="w-10 h-10 md:w-7 md:h-7 rounded-md hover:bg-muted text-muted-foreground flex items-center justify-center disabled:opacity-50"
           >
             <X className="w-5 h-5 md:w-4 md:h-4" />
@@ -2191,11 +2227,11 @@ function UploadDialog({
           >
             <Upload className="w-10 h-10 text-muted-foreground/60 mx-auto mb-2" />
             <div className="text-sm font-medium">
-              <span className="md:hidden">Tap to choose files</span>
-              <span className="hidden md:inline">Click to choose files</span>
+              <span className="md:hidden">{t("documents.upload.tapToChoose")}</span>
+              <span className="hidden md:inline">{t("documents.upload.clickToChoose")}</span>
             </div>
             <div className="hidden md:block text-xs text-muted-foreground mt-1">
-              or drop them anywhere on this page
+              {t("documents.upload.orDrop")}
             </div>
           </button>
           {/* Phone: a letter photographed with the camera. The backend
@@ -2206,7 +2242,7 @@ function UploadDialog({
             disabled={uploading}
             className="md:hidden mt-3 w-full border border-border rounded-xl py-3 px-4 text-sm font-medium inline-flex items-center justify-center gap-2 hover:bg-muted/50 transition disabled:opacity-50"
           >
-            <Camera className="w-4 h-4 text-amber-500" /> Take a photo of a letter
+            <Camera className="w-4 h-4 text-amber-500" /> {t("documents.upload.takePhoto")}
           </button>
           <input
             ref={inputRef}
@@ -2241,7 +2277,7 @@ function UploadDialog({
               ))}
               {picked.some(f => f.type.startsWith("image/")) && (
                 <div className="text-2xs text-muted-foreground pt-1">
-                  Photos are filed as PDFs. If one is a bill, Yorik suggests adding it to Finance.
+                  {t("documents.upload.photosAsPdf")}
                 </div>
               )}
             </div>
@@ -2253,7 +2289,7 @@ function UploadDialog({
             disabled={uploading}
             className="h-10 md:h-auto px-4 md:px-3 md:py-1.5 text-sm md:text-xs rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition disabled:opacity-50"
           >
-            Cancel
+            {t("documents.upload.cancel")}
           </button>
           <button
             onClick={() => onUpload(picked)}
@@ -2266,8 +2302,8 @@ function UploadDialog({
             )}
           >
             {uploading
-              ? <><Loader2 className="w-4 h-4 md:w-3.5 md:h-3.5 animate-spin" /> Uploading…</>
-              : <>Upload {picked.length || ""}</>}
+              ? <><Loader2 className="w-4 h-4 md:w-3.5 md:h-3.5 animate-spin" /> {t("documents.upload.uploading")}</>
+              : <>{picked.length ? t("documents.upload.uploadCount", { count: picked.length }) : t("documents.upload.upload")}</>}
           </button>
         </footer>
       </div>
@@ -2291,8 +2327,8 @@ function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso.replace(" ", "T") + (iso.includes("T") ? "" : "Z"));
   if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }) +
-         " · " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString(locale(), { day: "numeric", month: "short", year: "numeric" }) +
+         " · " + d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 }
 
 function pickDocIcon(mime?: string | null, title?: string) {

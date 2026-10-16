@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, LifeBuoy, MessageSquare, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { appIdFromPath } from "@/lib/dock-order";
 import { AssistantMarkdown } from "@/components/AssistantMarkdown";
@@ -29,6 +30,7 @@ export function openHelp(topic?: string) {
 }
 
 export function HelpPanel() {
+  const { t } = useTranslation();
   const loc = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -43,7 +45,7 @@ export function HelpPanel() {
     }
     if (!topic) { setPage(null); return; }
     try { setPage(await api.get<Page>(`/api/help/${topic}`)); }
-    catch (e: any) { setPage(null); setError(e?.message || "This help page couldn't be loaded."); }
+    catch (e: any) { setPage(null); setError(e?.message || t("apps.helpPanel.loadFailed")); }
   }
 
   useEffect(() => {
@@ -66,15 +68,15 @@ export function HelpPanel() {
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[900] flex justify-end" role="dialog" aria-label="Help">
+    <div className="fixed inset-0 z-[900] flex justify-end" role="dialog" aria-label={t("apps.help")}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
       <aside className="relative w-full max-w-lg h-full bg-background border-l border-border shadow-2xl flex flex-col">
         <header className="h-14 px-4 flex items-center gap-2 border-b border-border shrink-0">
           {page
-            ? <button onClick={() => void show(null)} className="w-9 h-9 rounded-md hover:bg-muted flex items-center justify-center" aria-label="All help topics"><ArrowLeft className="w-4 h-4" /></button>
+            ? <button onClick={() => void show(null)} className="w-9 h-9 rounded-md hover:bg-muted flex items-center justify-center" aria-label={t("apps.helpPanel.allTopics")}><ArrowLeft className="w-4 h-4" /></button>
             : <LifeBuoy className="w-5 h-5 text-primary ml-1.5" />}
-          <h2 className="flex-1 font-semibold truncate">{page ? page.title : "Help"}</h2>
-          <button onClick={() => setOpen(false)} className="w-9 h-9 rounded-md hover:bg-muted flex items-center justify-center" aria-label="Close help"><X className="w-4 h-4" /></button>
+          <h2 className="flex-1 font-semibold truncate">{page ? page.title : t("apps.help")}</h2>
+          <button onClick={() => setOpen(false)} className="w-9 h-9 rounded-md hover:bg-muted flex items-center justify-center" aria-label={t("apps.helpPanel.close")}><X className="w-4 h-4" /></button>
         </header>
         <div className="flex-1 overflow-y-auto px-5 py-5">
           {error && <p className="text-sm text-destructive mb-4">{error}</p>}
@@ -82,7 +84,7 @@ export function HelpPanel() {
             <AssistantMarkdown className="text-sm leading-relaxed">{page.body}</AssistantMarkdown>
           ) : (
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground mb-3">Pick a topic, or ask Yorik in your own words.</p>
+              <p className="text-sm text-muted-foreground mb-3">{t("apps.helpPanel.pickTopic")}</p>
               {(topics || []).map(t => (
                 <button key={t.topic} onClick={() => void show(t.topic)}
                         className="w-full text-left p-3 rounded-xl border border-border bg-card hover:border-foreground/20 transition">
@@ -90,20 +92,20 @@ export function HelpPanel() {
                   {t.summary && <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.summary}</div>}
                 </button>
               ))}
-              {!topics && <p className="text-sm text-muted-foreground">Loading…</p>}
+              {!topics && <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}
               <button onClick={() => { setOpen(false); navigate("/home"); setTimeout(startTour, 600); }}
                       className="w-full text-left p-3 rounded-xl border border-dashed border-border hover:border-foreground/20 transition text-sm">
-                Show the tour again
+                {t("apps.helpPanel.showTour")}
               </button>
             </div>
           )}
         </div>
         <footer className="p-4 border-t border-border shrink-0">
           <button
-            onClick={() => { setOpen(false); navigate(`/chat?say=${encodeURIComponent(page ? `How does ${page.title} work?` : "How do I get started?")}`); }}
+            onClick={() => { setOpen(false); navigate(`/chat?say=${encodeURIComponent(page ? t("apps.helpPanel.askHow", { title: page.title }) : t("apps.helpPanel.askStart"))}`); }}
             className={cn("w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition")}
           >
-            <MessageSquare className="w-4 h-4" /> Ask Yorik instead
+            <MessageSquare className="w-4 h-4" /> {t("apps.helpPanel.askYorik")}
           </button>
         </footer>
       </aside>

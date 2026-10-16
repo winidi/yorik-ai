@@ -14,12 +14,14 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Loader2, Trash2, MonitorSmartphone, Tv, Tablet, Play, ShieldCheck, Mic, MicOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/components/AuthGate";
+import i18n, { locale } from "@/i18n";
 
 interface DeviceRow {
   id:              string;
@@ -49,6 +51,7 @@ interface Props {
 }
 
 export function DevicesTab({ toast }: Props) {
+  const { t } = useTranslation();
   const auth = useAuth();
   const navigate = useNavigate();
   const isAdmin = auth.user.role === "admin" || auth.user.role === "platform_admin";
@@ -64,9 +67,9 @@ export function DevicesTab({ toast }: Props) {
       setDevices(r);
     } catch (err: any) {
       const msg = err instanceof ApiError ? err.message : String(err);
-      toast(`Couldn't load devices: ${msg}`, "error");
+      toast(t("settings.devices.loadFailed", { msg }), "error");
     }
-  }, [toast]);
+  }, [toast, t]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -125,14 +128,14 @@ export function DevicesTab({ toast }: Props) {
 
   async function forgetTrust() {
     if (!wallDeviceId) return;
-    if (!confirm("Forget this device as a kiosk? Future logins will need to be set up again.")) return;
+    if (!confirm(t("settings.devices.forgetConfirm"))) return;
     try {
       await api.delete(`/api/devices/trust/${wallDeviceId}`);
-      toast("This device is no longer remembered as a kiosk", "success");
+      toast(t("settings.devices.forgotten"), "success");
       await refreshTrusted();
     } catch (err: any) {
       const msg = err instanceof ApiError ? err.message : String(err);
-      toast(`Forget failed: ${msg}`, "error");
+      toast(t("settings.devices.forgetFailed", { msg }), "error");
     }
   }
 
@@ -153,24 +156,24 @@ export function DevicesTab({ toast }: Props) {
           n.setHotwordEnabled(next);
         }
       } catch {}
-      toast(next ? "Wake word “Hey Yorik” enabled" : "Wake word disabled", "success");
+      toast(next ? t("settings.devices.wakeWordOn") : t("settings.devices.wakeWordOff"), "success");
       await refreshTrusted();
     } catch (err: any) {
       const msg = err instanceof ApiError ? err.message : String(err);
-      toast(`Wake-word toggle failed: ${msg}`, "error");
+      toast(t("settings.devices.wakeWordFailed", { msg }), "error");
     }
   }
 
   async function revoke(sid: string) {
-    if (!confirm("Sign this device out? It needs your password or PIN to get back in.")) return;
+    if (!confirm(t("settings.devices.revokeConfirm"))) return;
     setBusy(b => ({ ...b, [sid]: true }));
     try {
       await api.delete(`/api/devices/${sid}`);
-      toast("Session revoked", "success");
+      toast(t("settings.devices.revoked"), "success");
       await refresh();
     } catch (err: any) {
       const msg = err instanceof ApiError ? err.message : String(err);
-      toast(`Revoke failed: ${msg}`, "error");
+      toast(t("settings.devices.revokeFailed", { msg }), "error");
     } finally {
       setBusy(b => ({ ...b, [sid]: false }));
     }
@@ -206,12 +209,12 @@ export function DevicesTab({ toast }: Props) {
           // won't auto-apply if the trust call failed.
         }
       }
-      toast(is_kiosk ? "Kiosk mode enabled" : "Kiosk mode disabled", "success");
+      toast(is_kiosk ? t("settings.devices.kioskOn") : t("settings.devices.kioskOff"), "success");
       setEditingFor(null);
       await refresh();
     } catch (err: any) {
       const msg = err instanceof ApiError ? err.message : String(err);
-      toast(`Kiosk toggle failed: ${msg}`, "error");
+      toast(t("settings.devices.kioskFailed", { msg }), "error");
     } finally {
       setBusy(b => ({ ...b, [sid]: false }));
     }
@@ -233,19 +236,16 @@ export function DevicesTab({ toast }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold mb-1">Where you're signed in</h2>
+        <h2 className="text-lg font-semibold mb-1">{t("settings.devices.title")}</h2>
         <p className="text-sm text-muted-foreground">
-          Browsers, tablets and phones signed in as you. Sign one out if you lost
-          it or no longer use it. Admins also set up the family wall tablet here,
-          on the tablet itself.
+          {t("settings.devices.intro")}
         </p>
       </div>
 
       <div className="space-y-3">
         {devices.length === 0 && (
           <div className="text-sm text-muted-foreground italic">
-            No sessions found — that's unusual; you're reading this from one
-            right now. Try refreshing.
+            {t("settings.devices.empty")}
           </div>
         )}
         {devices.map(d => (
@@ -297,6 +297,7 @@ function DeviceCard({
   onApplyKiosk:    (sid: string, is_kiosk: boolean, album_id: string | null, label: string, show_today: boolean, block_phrases: string[]) => void;
   onOpenKiosk:     () => void;
 }) {
+  const { t } = useTranslation();
   const [draftLabel, setDraftLabel] = useState(device.device_label || "");
   const [draftAlbum, setDraftAlbum] = useState(device.kiosk_album_id || "");
   const [draftShowToday, setDraftShowToday] = useState(device.show_today);
@@ -306,7 +307,7 @@ function DeviceCard({
   // that reads cleaner for them.
   const [draftPhrases, setDraftPhrases] = useState((device.block_phrases || []).join(", "));
 
-  const ua = device.user_agent || "(unknown user-agent)";
+  const ua = device.user_agent || t("settings.devices.unknownUa");
   const lastSeen = formatRelative(device.last_seen_at);
   const Icon = device.is_kiosk ? Tv : guessIcon(ua);
 
@@ -326,17 +327,17 @@ function DeviceCard({
             </span>
             {device.is_kiosk && (
               <span className="text-2xs px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 font-medium">
-                Kiosk
+                {t("settings.devices.badgeKiosk")}
               </span>
             )}
             {device.is_kiosk && device.show_today && (
               <span className="text-2xs px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-medium">
-                Today
+                {t("settings.devices.badgeToday")}
               </span>
             )}
             {device.trusted_until && (
               <span className="text-2xs px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 font-medium">
-                Trusted
+                {t("settings.devices.badgeTrusted")}
               </span>
             )}
           </div>
@@ -344,11 +345,11 @@ function DeviceCard({
             {ua}
           </div>
           <div className="text-xs text-muted-foreground mt-0.5">
-            Last seen {lastSeen} from {device.ip_seen || "unknown IP"}
+            {t("settings.devices.lastSeen", { when: lastSeen, ip: device.ip_seen || t("settings.devices.unknownIp") })}
           </div>
           {device.is_kiosk && (
             <div className="text-xs text-blue-500 mt-1">
-              Album: {albumName || (device.kiosk_album_id ? device.kiosk_album_id.slice(0, 8) + "…" : "not configured")}
+              {t("settings.devices.album")} {albumName || (device.kiosk_album_id ? device.kiosk_album_id.slice(0, 8) + "…" : t("settings.devices.albumNotConfigured"))}
             </div>
           )}
         </div>
@@ -357,9 +358,9 @@ function DeviceCard({
             onClick={onRevoke}
             disabled={busy}
             className="h-8 px-2 inline-flex items-center gap-1 rounded-md text-xs text-rose-500 hover:bg-rose-500/10 disabled:opacity-50"
-            title="Sign out this device"
+            title={t("settings.devices.signOutTitle")}
           >
-            <Trash2 className="w-3.5 h-3.5" /> Sign out
+            <Trash2 className="w-3.5 h-3.5" /> {t("settings.devices.signOut")}
           </button>
         </div>
       </div>
@@ -375,7 +376,7 @@ function DeviceCard({
             disabled={busy}
             className="h-7 px-2.5 inline-flex items-center gap-1 rounded-md border border-border text-xs hover:bg-muted disabled:opacity-50"
           >
-            {device.is_kiosk ? "Edit family wall settings" : "Make this device the family wall"}
+            {device.is_kiosk ? t("settings.devices.editWall") : t("settings.devices.makeWall")}
           </button>
           {/* Open the kiosk wall — the auto-redirect on cold load only
               fires once per app boot, so this gives a no-fail manual
@@ -387,7 +388,7 @@ function DeviceCard({
               onClick={onOpenKiosk}
               className="h-7 px-2.5 inline-flex items-center gap-1 rounded-md text-xs bg-blue-500 text-white hover:bg-blue-600"
             >
-              <Play className="w-3 h-3" /> Open kiosk wall
+              <Play className="w-3 h-3" /> {t("settings.devices.openWall")}
             </button>
           )}
           {/* Trusted-device chip + revoke. Shown when this exact device
@@ -399,15 +400,15 @@ function DeviceCard({
           {device.is_current && trusted && (
             <span
               className="h-7 px-2.5 inline-flex items-center gap-1 rounded-md text-xs bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
-              title="Future logins from this physical tablet will auto-apply this kiosk config."
+              title={t("settings.devices.trustedTitle")}
             >
-              <ShieldCheck className="w-3 h-3" /> Trusted
+              <ShieldCheck className="w-3 h-3" /> {t("settings.devices.badgeTrusted")}
               <button
                 onClick={onForgetTrust}
                 className="ml-1 text-emerald-700/70 hover:text-emerald-700 underline-offset-2 hover:underline"
-                title="Forget this device — future logins will need fresh setup"
+                title={t("settings.devices.forgetTitle")}
               >
-                forget
+                {t("settings.devices.forget")}
               </button>
             </span>
           )}
@@ -427,13 +428,13 @@ function DeviceCard({
               )}
               title={
                 hotwordOn
-                  ? "Tap to stop listening for 'Hey Yorik'"
-                  : "Tap to start listening for 'Hey Yorik' on this tablet"
+                  ? t("settings.devices.hotwordStopTitle")
+                  : t("settings.devices.hotwordStartTitle")
               }
             >
               {hotwordOn
-                ? <><Mic className="w-3 h-3" /> "Hey Yorik" on</>
-                : <><MicOff className="w-3 h-3" /> "Hey Yorik" off</>}
+                ? <><Mic className="w-3 h-3" /> {t("settings.devices.hotwordOn")}</>
+                : <><MicOff className="w-3 h-3" /> {t("settings.devices.hotwordOff")}</>}
             </button>
           )}
         </div>
@@ -442,32 +443,32 @@ function DeviceCard({
       {isAdmin && editing && (
         <div className="border-t border-border pt-3 space-y-3">
           <div>
-            <label className="block text-xs font-medium mb-1">Device label</label>
+            <label className="block text-xs font-medium mb-1">{t("settings.devices.deviceLabel")}</label>
             <input
               type="text"
               value={draftLabel}
               onChange={e => setDraftLabel(e.target.value)}
-              placeholder="e.g. Living Room Tablet"
+              placeholder={t("settings.devices.deviceLabelPlaceholder")}
               className="w-full h-9 px-2 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring/40"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium mb-1">Photo album</label>
+            <label className="block text-xs font-medium mb-1">{t("settings.devices.photoAlbum")}</label>
             <select
               value={draftAlbum}
               onChange={e => setDraftAlbum(e.target.value)}
               className="w-full h-9 px-2 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring/40"
             >
-              <option value="">— Pick an Immich album —</option>
+              <option value="">{t("settings.devices.pickAlbum")}</option>
               {albums.map(a => (
                 <option key={a.id} value={a.id}>
-                  {a.name} ({a.asset_count} photo{a.asset_count === 1 ? "" : "s"})
+                  {a.name} ({t("settings.devices.photoCount", { count: a.asset_count })})
                 </option>
               ))}
             </select>
             {albums.length === 0 && (
               <div className="text-xs text-muted-foreground mt-1">
-                No albums visible. Make an album in Photos first, then come back.
+                {t("settings.devices.noAlbums")}
               </div>
             )}
           </div>
@@ -482,11 +483,9 @@ function DeviceCard({
               className="mt-0.5"
             />
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium">Also show today's photos</div>
+              <div className="text-xs font-medium">{t("settings.devices.showToday")}</div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                Surface photos taken today from your Immich library first,
-                then cycle the curated album. The family-wall mode — walk
-                past, see what happened today.
+                {t("settings.devices.showTodayHint")}
               </div>
             </div>
           </label>
@@ -494,20 +493,16 @@ function DeviceCard({
               Immich's smart search; the union of matches gets hidden from
               the slideshow. Empty = no filter. */}
           <div>
-            <label className="block text-xs font-medium mb-1">Hide photos matching</label>
+            <label className="block text-xs font-medium mb-1">{t("settings.devices.hideMatching")}</label>
             <textarea
               value={draftPhrases}
               onChange={e => setDraftPhrases(e.target.value)}
               rows={2}
-              placeholder="medicine, prescription bottle, receipt, screenshot"
+              placeholder={t("settings.devices.hideMatchingPlaceholder")}
               className="w-full px-2 py-1.5 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring/40 resize-y"
             />
             <div className="text-xs text-muted-foreground mt-1">
-              Comma-separated phrases. Uses Immich's CLIP smart search to
-              recognise photo content — so "medicine" hides pill bottles
-              and prescription packaging even if they aren't tagged.
-              False positives happen with similar visuals (a spice rack
-              may look like medicine to CLIP). Refresh takes ~10 minutes.
+              {t("settings.devices.hideMatchingHint")}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -520,7 +515,7 @@ function DeviceCard({
               className="h-8 px-3 rounded-md bg-blue-500 text-white text-xs font-medium hover:opacity-90 disabled:opacity-40 inline-flex items-center gap-1.5"
             >
               {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-              {device.is_kiosk ? "Save kiosk settings" : "Enable kiosk mode"}
+              {device.is_kiosk ? t("settings.devices.saveKiosk") : t("settings.devices.enableKiosk")}
             </button>
             {device.is_kiosk && (
               <button
@@ -528,7 +523,7 @@ function DeviceCard({
                 disabled={busy}
                 className="h-8 px-3 rounded-md border border-rose-500/40 text-rose-500 text-xs hover:bg-rose-500/10 disabled:opacity-40"
               >
-                Disable kiosk
+                {t("settings.devices.disableKiosk")}
               </button>
             )}
             <button
@@ -536,13 +531,11 @@ function DeviceCard({
               disabled={busy}
               className="h-8 px-2.5 rounded-md text-xs text-muted-foreground hover:bg-muted disabled:opacity-40"
             >
-              Cancel
+              {t("settings.devices.cancel")}
             </button>
           </div>
           <div className="text-xs text-muted-foreground">
-            Enabling kiosk mode extends this session's trust to 365 days and
-            unlocks PIN-based user switching from the wall. Disable any time
-            from here.
+            {t("settings.devices.kioskNote")}
           </div>
         </div>
       )}
@@ -583,10 +576,10 @@ function formatRelative(iso: string): string {
   try {
     const t = new Date(iso).getTime();
     const diff = (Date.now() - t) / 1000;
-    if (diff < 60)     return "just now";
-    if (diff < 3600)   return `${Math.round(diff / 60)} min ago`;
-    if (diff < 86400)  return `${Math.round(diff / 3600)} h ago`;
-    return new Date(iso).toLocaleDateString();
+    if (diff < 60)     return i18n.t("settings.devices.justNow");
+    if (diff < 3600)   return i18n.t("settings.devices.minAgo", { n: Math.round(diff / 60) });
+    if (diff < 86400)  return i18n.t("settings.devices.hoursAgo", { n: Math.round(diff / 3600) });
+    return new Date(iso).toLocaleDateString(locale());
   } catch {
     return iso;
   }

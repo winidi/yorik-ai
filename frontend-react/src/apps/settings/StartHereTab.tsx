@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Check, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ interface Checklist { steps: Step[] }
 interface Row { id: string; title: string; hint: string; done?: boolean; optional?: boolean; go: () => void }
 
 export function StartHereTab({ onOpen, available }: { onOpen: (tab: Tab) => void; available: string[] }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [list, setList] = useState<Checklist | null>(null);
   const [aiOk, setAiOk] = useState<boolean | null>(null);
@@ -47,7 +49,7 @@ export function StartHereTab({ onOpen, available }: { onOpen: (tab: Tab) => void
     }
   }
 
-  if (!list) return <div className="text-sm text-muted-foreground">Loading…</div>;
+  if (!list) return <div className="text-sm text-muted-foreground">{t("settings.startHere.loading")}</div>;
 
   const step = (id: string) => list.steps.find(s => s.id === id);
   const fromList = (id: string): Row[] => {
@@ -56,13 +58,13 @@ export function StartHereTab({ onOpen, available }: { onOpen: (tab: Tab) => void
   };
 
   const household: Row[] = [
-    { id: "ai", title: "Yorik can think", hint: "The AI model is running; without it the chat can't answer",
+    { id: "ai", title: t("settings.startHere.ai.title"), hint: t("settings.startHere.ai.hint"),
       done: aiOk ?? undefined, go: () => onOpen("ai") },
     ...fromList("family"),
     ...fromList("backup"),
-    { id: "apps", title: "Pick the extra apps you want", hint: "Write, WhatsApp, Finance, Recordings, Pipelines: off until you turn them on",
+    { id: "apps", title: t("settings.startHere.apps.title"), hint: t("settings.startHere.apps.hint"),
       done: appsOn === null ? undefined : appsOn > 0, optional: true, go: () => onOpen("apps") },
-    { id: "away", title: "Reach Yorik when you're away from home", hint: "On your phones, through Tailscale",
+    { id: "away", title: t("settings.startHere.away.title"), hint: t("settings.startHere.away.hint"),
       optional: true, go: () => onOpen("system") },
   ];
   const yours: Row[] = [
@@ -71,7 +73,7 @@ export function StartHereTab({ onOpen, available }: { onOpen: (tab: Tab) => void
     ...fromList("mail"),
     ...fromList("calendar"),
     ...fromList("ask"),
-    { id: "letters", title: "Your letterhead", hint: "Only if you write letters or invoices with Yorik",
+    { id: "letters", title: t("settings.startHere.letters.title"), hint: t("settings.startHere.letters.hint"),
       optional: true, go: () => onOpen("letters") },
   ];
   // A line that would open a page this Yorik doesn't show (a hosted
@@ -88,31 +90,30 @@ export function StartHereTab({ onOpen, available }: { onOpen: (tab: Tab) => void
   return (
     <div>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Start here</h1>
+        <h1 className="text-2xl font-semibold">{t("settings.startHere.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          New to Yorik? Work down this list from the top. Each line opens the place where it is done,
-          and it ticks itself off. Everything else in Settings can wait until you need it.
+          {t("settings.startHere.intro")}
         </p>
       </header>
 
       <div className="mb-6">
         <div className="flex items-baseline justify-between text-sm mb-1.5">
-          <span>{done} of {needed.length} done</span>
-          {done === needed.length && needed.length > 0 && <span className="text-emerald-600">Yorik is set up.</span>}
+          <span>{t("settings.startHere.progress", { done, total: needed.length })}</span>
+          {done === needed.length && needed.length > 0 && <span className="text-emerald-600">{t("settings.startHere.allDone")}</span>}
         </div>
         <div className="h-2 rounded-full bg-muted overflow-hidden">
           <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
         </div>
       </div>
 
-      <Section title="For the household" rows={household} next={next} />
-      <Section title="For you" rows={yours} next={next} />
+      <Section title={t("settings.startHere.forHousehold")} rows={household} next={next} />
+      <Section title={t("settings.startHere.forYou")} rows={yours} next={next} />
 
       {modal === "invite" && <InviteDialog onClose={() => { setModal(null); load(); }} />}
       {modal === "phone" && (
         <div className="fixed inset-0 z-[850] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setModal(null)}>
           <div className="w-full max-w-md bg-background border border-border rounded-2xl shadow-2xl p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-xl font-semibold mb-4">Yorik on your phone</h2>
+            <h2 className="text-xl font-semibold mb-4">{t("settings.startHere.phoneTitle")}</h2>
             <PhoneSetup onDone={() => { setModal(null); load(); }} />
           </div>
         </div>
@@ -122,6 +123,7 @@ export function StartHereTab({ onOpen, available }: { onOpen: (tab: Tab) => void
 }
 
 function Section({ title, rows, next }: { title: string; rows: Row[]; next?: Row }) {
+  const { t } = useTranslation();
   return (
     <section className="mb-6">
       <h2 className="text-sm font-semibold text-muted-foreground mb-2">{title}</h2>
@@ -144,7 +146,7 @@ function Section({ title, rows, next }: { title: string; rows: Row[]; next?: Row
               <span className="flex-1 min-w-0">
                 <span className="block text-sm font-medium">
                   {r.title}
-                  {r.optional && <span className="ml-2 text-2xs font-normal text-muted-foreground">optional</span>}
+                  {r.optional && <span className="ml-2 text-2xs font-normal text-muted-foreground">{t("settings.startHere.optional")}</span>}
                 </span>
                 {!r.done && <span className="block text-xs text-muted-foreground">{r.hint}</span>}
               </span>

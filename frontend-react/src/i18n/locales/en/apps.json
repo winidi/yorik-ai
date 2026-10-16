@@ -17,5 +17,181 @@
   "settings": "Settings",
   "help": "Help",
   "more": "More",
-  "all_apps": "All apps"
+  "all_apps": "All apps",
+  "blurb": {
+    "chat": "Ask Yorik anything in plain language.",
+    "calendar": "Events, tasks, drag-to-create blocks.",
+    "tasks": "Add, complete, and triage your to-dos.",
+    "documents": "Letters, bills and papers, easy to find.",
+    "write": "Letters and invoices on your letterhead.",
+    "contacts": "Everyone Yorik knows, with numbers and addresses.",
+    "whatsapp": "Your chats, with replies Yorik suggests.",
+    "email": "Your inbox, sorted and summarized.",
+    "photos": "The family's photos and videos.",
+    "briefing": "Your morning digest in one screen.",
+    "settings": "Your profile, family and connections."
+  },
+  "homeScreen": {
+    "greeting": {
+      "late": "Up late",
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening",
+      "night": "Good night"
+    },
+    "fallbackName": "there",
+    "tagline": "Everything stays at home. Pick an app, or just ask.",
+    "searchAria": "Search everything",
+    "searchTitle": "Search everything — email, photos, documents, calendar",
+    "search": "Search",
+    "helpTitle": "Help: how Yorik works, step by step",
+    "askTitle": "Ask Yorik anything",
+    "askExamples": "\"Schedule the dentist Friday at 2pm\", \"find my insurance policy\", \"write to the landlord about the heating\"…",
+    "appsHeading": "Apps",
+    "quickActions": "Quick actions",
+    "quick": {
+      "write": "Write a letter or invoice",
+      "event": "Add a calendar event",
+      "document": "Find a document"
+    },
+    "health": {
+      "allRunning": "Everything is running",
+      "needYou": "{{count}} things need you: {{list}}",
+      "openSettings": "Open Settings › Health & updates"
+    }
+  },
+  "dock": {
+    "tabsAria": "App tabs",
+    "dockAria": "App dock"
+  },
+  "shell": {
+    "details": "Details",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
+  },
+  "search": {
+    "placeholder": "Search everything: mail, WhatsApp, documents, calendar, tasks, contacts, recordings…",
+    "searching": "Searching…",
+    "noResultsYet": "No results yet — try a longer query.",
+    "noMatches": "No matches for \"{{query}}\".",
+    "untitled": "(untitled)",
+    "footerNavigate": "↑↓ navigate",
+    "footerOpen": "↵ open",
+    "footerClose": "ESC close",
+    "results_one": "{{count}} result",
+    "results_other": "{{count}} results",
+    "hintTitle": "Search everything you may see — mail, WhatsApp, documents, photos, calendar, tasks, contacts, recordings, letters.",
+    "hintSub": "Try a name, a topic or an invoice number. Words need not match exactly; Yorik also finds by meaning.",
+    "source": {
+      "drafts": "Letters & drafts",
+      "bank": "Bank",
+      "pipelines": "Follow-ups"
+    }
+  },
+  "bell": {
+    "title": "Notifications",
+    "unread_one": "{{count}} unread notification",
+    "unread_other": "{{count}} unread notifications",
+    "noneNew": "No new notifications",
+    "markAllRead": "Mark all read",
+    "clearAll": "Clear all",
+    "clearAllTitle": "Remove all entries",
+    "empty": "Nothing to see here.",
+    "remove": "Remove",
+    "removeAria": "Remove notification",
+    "keep": "Keep",
+    "addToCalendar": "Add to calendar",
+    "addToBills": "Add to bills",
+    "dismiss": "Dismiss",
+    "spam": "Spam",
+    "spamTitle": "Block this sender + move email to junk",
+    "viewDocument": "view document",
+    "viewEmail": "view email",
+    "addedToBills": "Added to Finance → Bills.",
+    "acceptFailed": "Couldn't accept: {{error}}",
+    "requestExpired": "This request has expired or was already handled.",
+    "deleted": "Deleted.",
+    "deleteFailed": "Couldn't delete: {{error}}",
+    "keepFailed": "Couldn't keep: {{error}}",
+    "spamFailed": "Couldn't mark as spam: {{error}}",
+    "spamConfirm": {
+      "block": "Block sender <mono>{{sender}}</mono> and move the email to the junk folder?",
+      "unknown": "(unknown)",
+      "domain": "Also block the whole domain <mono>@{{domain}}</mono>",
+      "confirm": "Mark as spam"
+    },
+    "time": {
+      "justNow": "just now",
+      "minutesAgo": "{{count}} min ago",
+      "hoursAgo": "{{count}}h ago"
+    }
+  },
+  "helpPanel": {
+    "loadFailed": "This help page couldn't be loaded.",
+    "allTopics": "All help topics",
+    "close": "Close help",
+    "pickTopic": "Pick a topic, or ask Yorik in your own words.",
+    "showTour": "Show the tour again",
+    "askHow": "How does {{title}} work?",
+    "askStart": "How do I get started?",
+    "askYorik": "Ask Yorik instead"
+  },
+  "hint": {
+    "gotIt": "Got it",
+    "calendar": "Tap a day or + to add an appointment. Everyone has their own colour.",
+    "tasks": "Type a to-do at the top. Tick the box when it's done.",
+    "chat": "Talk to Yorik like to a person: it adds dates, finds papers and writes letters.",
+    "docs": "Drop a letter or bill here, or take a photo of one. Yorik reads and files it.",
+    "email": "Your inbox. Yorik sorts it and suggests replies; nothing goes out without you.",
+    "photos": "Your family's photos. How to back up this phone's pictures: tap ? below.",
+    "board": "Everyone's day at a glance. Tap your own tasks to tick them.",
+    "contacts": "Everyone Yorik knows. Yorik uses this to find addresses and numbers.",
+    "whatsapp": "Your WhatsApp chats. Yorik can suggest replies; you decide what's sent.",
+    "compose": "Letters, invoices and forms from templates. Or ask Yorik to write one.",
+    "write": "Write a letter on your letterhead. Yorik helps with the wording.",
+    "briefing": "Your day in one page: dates, to-dos and what came in.",
+    "finance": "Your bank account, sorted by what the money went to. Read-only.",
+    "pipelines": "Yorik keeps an eye on things for you, like waiting for an answer to a mail.",
+    "recordings": "Record a conversation; Yorik writes down what was said and agreed."
+  },
+  "tour": {
+    "step": "{{current}} of {{total}}",
+    "skip": "Skip the tour",
+    "next": "Next",
+    "gotIt": "Got it",
+    "ask": {
+      "title": "Ask Yorik",
+      "text": "Tap here and type or say what you need: \"Remind me tomorrow at 9 to call the doctor.\""
+    },
+    "family": {
+      "title": "Your family today",
+      "text": "Everyone's face and what their day holds. Tap a face to open the family board."
+    },
+    "checklist": {
+      "title": "A few steps left",
+      "text": "This list helps you finish setting up. It waits until you're ready."
+    },
+    "dock": {
+      "title": "Your apps",
+      "text": "Every app lives down here. The colours stay the same everywhere."
+    },
+    "help": {
+      "title": "Stuck?",
+      "text": "Tap the question mark for help on the page you're on, or just ask Yorik \"how does this work?\""
+    }
+  },
+  "error": {
+    "title": "Something broke",
+    "body": "The page hit a render error. Try Reset; if it keeps happening, copy the details below to share with Yorik maintainers.",
+    "reset": "Reset",
+    "reload": "Reload page"
+  },
+  "family": {
+    "events_one": "{{count}} event",
+    "events_other": "{{count}} events",
+    "todos_one": "{{count}} to-do",
+    "todos_other": "{{count}} to-dos",
+    "freeToday": "Free today",
+    "openBoard": "{{name}}: {{line}}. Open the family board"
+  }
 }

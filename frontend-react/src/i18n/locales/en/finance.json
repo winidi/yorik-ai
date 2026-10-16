@@ -90,6 +90,7 @@
     "fieldName": "What for",
     "fieldNameHint": "Electricity March",
     "fieldAmount": "Amount ({{currency}})",
+    "fieldAmountHint": "0.00",
     "fieldDue": "Due date",
     "fieldPayee": "Payee (optional)",
     "fieldPayeeHint": "Stadtwerke",

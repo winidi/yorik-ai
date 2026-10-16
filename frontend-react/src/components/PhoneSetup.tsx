@@ -7,8 +7,10 @@
  */
 import { useEffect, useState } from "react";
 import { BellRing, Check, Loader2, Share, SquarePlus, MoreVertical, Download } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import i18n from "@/i18n";
 
 type Platform = "ios" | "android" | "desktop";
 
@@ -34,23 +36,24 @@ function b64ToUint8(b64: string): Uint8Array {
 export async function enablePush(): Promise<{ ok: boolean; text: string }> {
   if (!("PushManager" in window) || !("serviceWorker" in navigator)) {
     return { ok: false, text: detectPlatform() === "ios"
-      ? "On iPhone, notifications work once Yorik is on the home screen. Open it from there and try again."
-      : "This browser can't show notifications." };
+      ? i18n.t("settings.phoneSetup.iosNeedsHome")
+      : i18n.t("settings.phoneSetup.noPush") };
   }
   try {
     const perm = await Notification.requestPermission();
-    if (perm !== "granted") return { ok: false, text: "Notifications weren't allowed. You can turn them on later in your profile." };
+    if (perm !== "granted") return { ok: false, text: i18n.t("settings.phoneSetup.notAllowed") };
     const reg = await navigator.serviceWorker.ready;
     const { key } = await api.get<{ key: string }>("/api/push/vapid-public-key");
     const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToUint8(key) });
     await api.post("/api/push/subscribe", { subscription: sub.toJSON() });
-    return { ok: true, text: "Done. Yorik can tap you on the shoulder now." };
+    return { ok: true, text: i18n.t("settings.phoneSetup.pushDone") };
   } catch (e: any) {
-    return { ok: false, text: e?.message || "Notifications couldn't be turned on." };
+    return { ok: false, text: e?.message || i18n.t("settings.phoneSetup.pushFailed") };
   }
 }
 
-export function PhoneSetup({ onDone, doneLabel = "Done" }: { onDone: () => void; doneLabel?: string }) {
+export function PhoneSetup({ onDone, doneLabel }: { onDone: () => void; doneLabel?: string }) {
+  const { t } = useTranslation();
   const platform = detectPlatform();
   const [installed, setInstalled] = useState(isInstalled());
   const [prompt, setPrompt] = useState<any>(null);
@@ -89,29 +92,29 @@ export function PhoneSetup({ onDone, doneLabel = "Done" }: { onDone: () => void;
                               installed ? "bg-emerald-500 text-white" : "bg-primary/15 text-primary")}>
             {installed ? <Check className="w-3.5 h-3.5" /> : "1"}
           </span>
-          Yorik on your home screen
+          {t("settings.phoneSetup.homeScreen")}
         </h3>
         {installed ? (
-          <p className="text-sm text-muted-foreground">Yorik is on this phone's home screen.</p>
+          <p className="text-sm text-muted-foreground">{t("settings.phoneSetup.installed")}</p>
         ) : platform === "ios" ? (
           <ol className="text-sm space-y-2 pl-1">
-            <li className="flex items-start gap-2"><Share className="w-4 h-4 mt-0.5 shrink-0 text-primary" /> Tap <b>Share</b> at the bottom of Safari.</li>
-            <li className="flex items-start gap-2"><SquarePlus className="w-4 h-4 mt-0.5 shrink-0 text-primary" /> Scroll down and tap <b>Add to Home Screen</b>, then <b>Add</b>.</li>
-            <li className="text-muted-foreground">Then open Yorik from the new icon.</li>
+            <li className="flex items-start gap-2"><Share className="w-4 h-4 mt-0.5 shrink-0 text-primary" /> {t("settings.phoneSetup.iosShareBefore")}<b>{t("settings.phoneSetup.iosShare")}</b>{t("settings.phoneSetup.iosShareAfter")}</li>
+            <li className="flex items-start gap-2"><SquarePlus className="w-4 h-4 mt-0.5 shrink-0 text-primary" /> {t("settings.phoneSetup.iosAddBefore")}<b>{t("settings.phoneSetup.iosAddToHome")}</b>{t("settings.phoneSetup.iosAddMiddle")}<b>{t("settings.phoneSetup.iosAdd")}</b>.</li>
+            <li className="text-muted-foreground">{t("settings.phoneSetup.iosOpen")}</li>
           </ol>
         ) : platform === "android" ? (
           prompt ? (
             <button onClick={installNow} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary text-primary-foreground font-medium">
-              <Download className="w-4 h-4" /> Add Yorik to the home screen
+              <Download className="w-4 h-4" /> {t("settings.phoneSetup.androidInstall")}
             </button>
           ) : (
             <ol className="text-sm space-y-2 pl-1">
-              <li className="flex items-start gap-2"><MoreVertical className="w-4 h-4 mt-0.5 shrink-0 text-primary" /> Tap the <b>⋮</b> menu at the top right of Chrome.</li>
-              <li className="flex items-start gap-2"><SquarePlus className="w-4 h-4 mt-0.5 shrink-0 text-primary" /> Tap <b>Add to home screen</b> or <b>Install app</b>.</li>
+              <li className="flex items-start gap-2"><MoreVertical className="w-4 h-4 mt-0.5 shrink-0 text-primary" /> {t("settings.phoneSetup.androidMenuBefore")}<b>⋮</b>{t("settings.phoneSetup.androidMenuAfter")}</li>
+              <li className="flex items-start gap-2"><SquarePlus className="w-4 h-4 mt-0.5 shrink-0 text-primary" /> {t("settings.phoneSetup.androidAddBefore")}<b>{t("settings.phoneSetup.androidAddToHome")}</b>{t("settings.phoneSetup.androidAddOr")}<b>{t("settings.phoneSetup.androidInstallApp")}</b>.</li>
             </ol>
           )
         ) : (
-          <p className="text-sm text-muted-foreground">On a computer, keep this page as a bookmark. On your phone, open the invite there to put Yorik on the home screen.</p>
+          <p className="text-sm text-muted-foreground">{t("settings.phoneSetup.desktop")}</p>
         )}
       </section>
 
@@ -121,16 +124,16 @@ export function PhoneSetup({ onDone, doneLabel = "Done" }: { onDone: () => void;
                               push.ok ? "bg-emerald-500 text-white" : "bg-primary/15 text-primary")}>
             {push.ok ? <Check className="w-3.5 h-3.5" /> : "2"}
           </span>
-          Let Yorik remind you
+          {t("settings.phoneSetup.remind")}
         </h3>
         {platform === "ios" && !installed ? (
-          <p className="text-sm text-muted-foreground">Do step 1 first; iPhones allow reminders only for apps on the home screen.</p>
+          <p className="text-sm text-muted-foreground">{t("settings.phoneSetup.stepOneFirst")}</p>
         ) : (
           <>
             {!push.ok && (
               <button onClick={askPush} disabled={push.busy}
                       className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-border bg-card font-medium disabled:opacity-60">
-                {push.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <BellRing className="w-4 h-4" />} Turn on reminders
+                {push.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <BellRing className="w-4 h-4" />} {t("settings.phoneSetup.turnOnReminders")}
               </button>
             )}
             {push.text && <p className={cn("text-sm", push.ok ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>{push.text}</p>}
@@ -139,7 +142,7 @@ export function PhoneSetup({ onDone, doneLabel = "Done" }: { onDone: () => void;
       </section>
 
       <button onClick={onDone} className="w-full px-4 py-3 rounded-xl bg-primary text-primary-foreground font-medium">
-        {doneLabel}
+        {doneLabel ?? t("settings.phoneSetup.done")}
       </button>
     </div>
   );

@@ -6,7 +6,9 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft, Check, ChevronDown, ChevronRight, Loader2, Mic, RefreshCw, Trash2 } from "lucide-react";
+import i18n, { locale } from "@/i18n";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/AuthGate";
 import { Dock } from "@/components/Dock";
@@ -27,20 +29,25 @@ interface Report {
   template: string; generated_at: string;
 }
 
-const KIND_LABEL: Record<string, string> = { dinner: "Dinner", meeting: "Meeting", conversation: "Conversation" };
+const KINDS = ["dinner", "meeting", "conversation"];
+/** The kind's label in the person's language; "" for a kind we do not know. */
+function kindLabel(kind: string): string {
+  return KINDS.includes(kind) ? i18n.t(`recordings.kind.${kind}`) : "";
+}
 
 function fmtDuration(s: number | null): string {
   if (!s) return "";
   const m = Math.round(s / 60);
-  return m < 1 ? `${Math.round(s)} s` : `${m} min`;
+  return m < 1 ? i18n.t("recordings.list.seconds", { count: Math.round(s) }) : i18n.t("recordings.list.minutes", { count: m });
 }
 
 function fmtDate(iso: string): string {
   const d = new Date(iso.replace(" ", "T"));
-  return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return isNaN(d.getTime()) ? iso : d.toLocaleDateString(locale(), { weekday: "short", day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 }
 
 export function RecordingsApp() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const [list, setList] = useState<Recording[] | null>(null);
@@ -67,12 +74,12 @@ export function RecordingsApp() {
       <div className="mx-auto max-w-6xl px-4 pt-6 pb-[max(7rem,env(safe-area-inset-bottom)+6rem)]">
         <div className="flex items-center justify-between gap-3 mb-4 max-md:pr-12">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Recordings</h1>
-            <p className="text-xs text-muted-foreground">Dinners and meetings, with what came out of them.</p>
+            <h1 className="text-2xl font-semibold tracking-tight">{t("recordings.list.title")}</h1>
+            <p className="text-xs text-muted-foreground">{t("recordings.list.subtitle")}</p>
           </div>
           <button onClick={() => setStartOpen(true)}
                   className="flex items-center gap-2 rounded-full bg-red-500 text-white px-4 py-2 text-sm font-semibold hover:bg-red-400">
-            <Mic className="w-4 h-4" /> Record
+            <Mic className="w-4 h-4" /> {t("recordings.list.record")}
           </button>
         </div>
 
@@ -81,7 +88,7 @@ export function RecordingsApp() {
             {list === null && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
             {list?.length === 0 && (
               <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
-                Nothing recorded yet. Tap Record at the table, or say "Yorik, record the dinner".
+                {t("recordings.list.empty")}
               </div>
             )}
             {list?.map(r => (
@@ -89,9 +96,9 @@ export function RecordingsApp() {
                       className={cn("w-full text-left rounded-xl border px-3 py-2.5 hover:bg-muted/60",
                                     selected === r.id ? "border-primary bg-muted/60" : "border-border")}>
                 <div className="flex items-center justify-between gap-2">
-                  <div className="font-medium truncate">{r.title || KIND_LABEL[r.kind] || "Recording"}</div>
+                  <div className="font-medium truncate">{r.title || kindLabel(r.kind) || t("recordings.fallbackTitle")}</div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <span className="rounded-full border border-border px-1.5 py-0.5 text-2xs text-muted-foreground">{KIND_LABEL[r.kind] || r.kind}</span>
+                    <span className="rounded-full border border-border px-1.5 py-0.5 text-2xs text-muted-foreground">{kindLabel(r.kind) || r.kind}</span>
                     <StatusPill r={r} />
                   </div>
                 </div>
@@ -104,7 +111,7 @@ export function RecordingsApp() {
           <div className={cn(!selected && "hidden md:block")}>
             {selected
               ? <RecordingDetail id={selected} onBack={() => navigate("/recordings")} onDeleted={() => { navigate("/recordings"); load(); }} />
-              : <div className="hidden md:flex h-full min-h-[16rem] items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">Pick a recording</div>}
+              : <div className="hidden md:flex h-full min-h-[16rem] items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">{t("recordings.list.pick")}</div>}
           </div>
         </div>
       </div>
@@ -115,15 +122,18 @@ export function RecordingsApp() {
 }
 
 function StatusPill({ r }: { r: Recording }) {
+  const { t } = useTranslation();
   const map: Record<string, string> = {
     recording: "bg-red-500/15 text-red-500", uploaded: "bg-amber-500/15 text-amber-600", processing: "bg-amber-500/15 text-amber-600",
     done: "bg-emerald-500/15 text-emerald-600", failed: "bg-red-500/15 text-red-500",
   };
-  const label = r.status === "processing" ? (r.progress || "processing") : r.status === "done" ? (r.has_report ? "report" : "transcript") : r.status;
+  const label = r.status === "processing" ? (r.progress || t("recordings.status.processing")) : r.status === "done" ? (r.has_report ? t("recordings.status.report") : t("recordings.status.transcript")) : t(`recordings.status.${r.status}`, { defaultValue: r.status });
   return <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-2xs font-semibold", map[r.status] || "bg-muted")}>{label}</span>;
 }
 
 function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => void; onDeleted: () => void }) {
+  const { t } = useTranslation();
+  const tr = t;   // the tasks loop below names its item `t`
   const auth = useAuth();
   const [rec, setRec] = useState<Recording | null>(null);
   const [report, setReport] = useState<Report | null>(null);
@@ -141,8 +151,8 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
       if (r.has_report) setReport(await api.get<Report>(`/api/recordings/${id}/report`));
       else setReport(null);
       if (r.status === "done") setSegments((await api.get<{ segments: Segment[] }>(`/api/recordings/${id}/transcript`)).segments);
-    } catch (e: any) { setErr(e?.message || "could not load"); }
-  }, [id]);
+    } catch (e: any) { setErr(e?.message || t("recordings.detail.loadFailed")); }
+  }, [id, t]);
   useEffect(() => { setRec(null); setReport(null); setSegments(null); setErr(null); load(); }, [load]);
   useEffect(() => {
     if (!rec || !["recording", "uploaded", "processing"].includes(rec.status)) return;
@@ -170,7 +180,7 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
     try {
       setReport(await api.post<Report>(`/api/recordings/${id}/tasks/${i}/adopt`, { with_user_ids: [...together] }));
       setAdoptOpen(null);
-    } catch (e: any) { setErr(e?.message || "could not add the task"); }
+    } catch (e: any) { setErr(e?.message || t("recordings.detail.addTaskFailed")); }
     finally { setBusy(null); }
   }
   async function buildReport(refresh = false) {
@@ -194,13 +204,13 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
         setReport(r as Report);
         setRec(x => x ? { ...x, has_report: true } : x);
       }
-    } catch (e: any) { setErr(e?.message || "could not write the report"); }
+    } catch (e: any) { setErr(e?.message || t("recordings.detail.reportFailed")); }
     finally { setBusy(null); }
   }
   async function remove() {
-    if (!confirm("Delete this recording, its transcript and report?")) return;
+    if (!confirm(t("recordings.detail.confirmDelete"))) return;
     try { await api.delete(`/api/recordings/${id}`); onDeleted(); }
-    catch (e: any) { setErr(e?.message || "could not delete"); }
+    catch (e: any) { setErr(e?.message || t("recordings.detail.deleteFailed")); }
   }
 
   if (err && !rec) return <div className="text-sm text-red-500">{err}</div>;
@@ -211,39 +221,39 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
   return (
     <div className="space-y-5">
       <div className="flex items-start gap-3">
-        <button onClick={onBack} className="md:hidden p-1 -ml-1 rounded-full hover:bg-muted" aria-label="Back"><ArrowLeft className="w-5 h-5" /></button>
+        <button onClick={onBack} className="md:hidden p-1 -ml-1 rounded-full hover:bg-muted" aria-label={t("recordings.detail.back")}><ArrowLeft className="w-5 h-5" /></button>
         <div className="flex-1 min-w-0">
-          <h2 className="text-xl font-semibold truncate">{rec.title || KIND_LABEL[rec.kind]}</h2>
+          <h2 className="text-xl font-semibold truncate">{rec.title || kindLabel(rec.kind)}</h2>
           <div className="text-xs text-muted-foreground">
-            <span className="rounded-full border border-border px-1.5 py-0.5 mr-1.5">{KIND_LABEL[rec.kind] || rec.kind}</span>
+            <span className="rounded-full border border-border px-1.5 py-0.5 mr-1.5">{kindLabel(rec.kind) || rec.kind}</span>
             {fmtDate(rec.started_at)}{rec.duration_s ? ` · ${fmtDuration(rec.duration_s)}` : ""} · {[rec.owner_name, ...rec.participants.map(p => p.name)].filter(Boolean).join(", ")}
           </div>
         </div>
-        {mine && <button onClick={remove} className="p-2 rounded-full hover:bg-muted text-muted-foreground" title="Delete"><Trash2 className="w-4 h-4" /></button>}
+        {mine && <button onClick={remove} className="p-2 rounded-full hover:bg-muted text-muted-foreground" title={t("recordings.detail.delete")}><Trash2 className="w-4 h-4" /></button>}
       </div>
       {err && <div className="text-sm text-red-500">{err}</div>}
 
       {rec.status !== "done" && rec.status !== "failed" && (
         <div className="rounded-xl border border-border p-4 text-sm flex items-center gap-3">
           <Loader2 className="w-4 h-4 animate-spin" />
-          {rec.status === "recording" ? "Recording is running." : `Writing the transcript… ${rec.progress || ""}`}
+          {rec.status === "recording" ? t("recordings.detail.recordingRunning") : t("recordings.detail.writingTranscript", { progress: rec.progress || "" })}
         </div>
       )}
-      {rec.status === "failed" && <div className="rounded-xl border border-red-500/40 p-4 text-sm text-red-500">Failed: {rec.error}</div>}
+      {rec.status === "failed" && <div className="rounded-xl border border-red-500/40 p-4 text-sm text-red-500">{t("recordings.detail.failed", { error: rec.error })}</div>}
       {rec.status === "done" && rec.error && !rec.error.startsWith("report failed") && (
         <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
-          <span className="font-medium">Something went wrong while recording: </span>{rec.error}.
-          Keep the phone unlocked and in the app while it records; it warns you now when the microphone goes quiet.
+          <span className="font-medium">{t("recordings.detail.wentWrong")} </span>{rec.error}.
+          {" "}{t("recordings.detail.keepUnlocked")}
         </div>
       )}
 
       {rec.status === "done" && !report && (
         <div className="rounded-xl border border-border p-4 text-sm flex items-center justify-between gap-3">
-          <span>The transcript is there. No report yet.</span>
+          <span>{t("recordings.detail.noReportYet")}</span>
           <button onClick={() => buildReport(false)} disabled={busy === "report"}
                   className="flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
             {busy === "report" ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-            {busy === "report" ? "Writing… (minutes for a long recording)" : "Write the report"}
+            {busy === "report" ? t("recordings.detail.writingReport") : t("recordings.detail.writeReport")}
           </button>
         </div>
       )}
@@ -253,7 +263,7 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
           <p className="text-[15px] leading-relaxed">{report.summary}</p>
 
           {report.tasks.length > 0 && (
-            <Section title="Tasks" hint="Proposals until someone adopts them">
+            <Section title={t("recordings.detail.tasks")} hint={t("recordings.detail.tasksHint")}>
               {report.tasks.map((t, i) => (
                 <div key={i} className="py-2 border-t border-border first:border-t-0">
                   <div className="flex items-start justify-between gap-3">
@@ -264,15 +274,15 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
                       </div>
                     </div>
                     {t.task_id
-                      ? <span className="shrink-0 flex items-center gap-1 text-xs text-emerald-600"><Check className="w-3.5 h-3.5" /> {t.adopted_by || "added"}{t.with && t.with.length ? ` + ${t.with.join(", ")}` : ""}</span>
+                      ? <span className="shrink-0 flex items-center gap-1 text-xs text-emerald-600"><Check className="w-3.5 h-3.5" /> {t.adopted_by || tr("recordings.detail.added")}{t.with && t.with.length ? ` + ${t.with.join(", ")}` : ""}</span>
                       : <button onClick={() => adoptOpen === i ? setAdoptOpen(null) : openAdopt(i, t)} disabled={busy === `adopt-${i}`}
                                 className="shrink-0 rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-muted disabled:opacity-50">
-                          Adopt
+                          {tr("recordings.detail.adopt")}
                         </button>}
                   </div>
                   {adoptOpen === i && !t.task_id && (
                     <div className="mt-2 rounded-lg bg-muted/50 p-3 text-xs flex flex-wrap items-center gap-3">
-                      <span className="text-muted-foreground">Mine{others.length ? ", together with:" : "."}</span>
+                      <span className="text-muted-foreground">{others.length ? tr("recordings.detail.mineTogether") : tr("recordings.detail.mineOnly")}</span>
                       {others.map(p => {
                         const on = together.has(p.user_id);
                         return (
@@ -285,7 +295,7 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
                       })}
                       <button onClick={() => adopt(i)} disabled={busy === `adopt-${i}`}
                               className="ml-auto rounded-full bg-primary text-primary-foreground px-3 py-1 font-semibold disabled:opacity-50">
-                        {busy === `adopt-${i}` ? <Loader2 className="w-3 h-3 animate-spin" /> : "Add task"}
+                        {busy === `adopt-${i}` ? <Loader2 className="w-3 h-3 animate-spin" /> : tr("recordings.detail.addTask")}
                       </button>
                     </div>
                   )}
@@ -294,22 +304,22 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
             </Section>
           )}
           {report.decisions.length > 0 && (
-            <Section title="Decisions">
+            <Section title={t("recordings.detail.decisions")}>
               {report.decisions.map((d, i) => <Line key={i} text={d.text} meta={[d.who, d.when].filter(Boolean).join(" · ")} />)}
             </Section>
           )}
-          {report.highlights.length > 0 && <Section title="Nice moments" tone="text-emerald-600">{report.highlights.map((h, i) => <Line key={i} text={h} />)}</Section>}
-          {report.friction.length > 0 && <Section title="What did not go well" tone="text-amber-600">{report.friction.map((h, i) => <Line key={i} text={h} />)}</Section>}
-          {report.open_questions.length > 0 && <Section title="Open questions">{report.open_questions.map((h, i) => <Line key={i} text={h} />)}</Section>}
+          {report.highlights.length > 0 && <Section title={t("recordings.detail.niceMoments")} tone="text-emerald-600">{report.highlights.map((h, i) => <Line key={i} text={h} />)}</Section>}
+          {report.friction.length > 0 && <Section title={t("recordings.detail.friction")} tone="text-amber-600">{report.friction.map((h, i) => <Line key={i} text={h} />)}</Section>}
+          {report.open_questions.length > 0 && <Section title={t("recordings.detail.openQuestions")}>{report.open_questions.map((h, i) => <Line key={i} text={h} />)}</Section>}
           {report.dates.length > 0 && (
-            <Section title="Dates mentioned">
+            <Section title={t("recordings.detail.datesMentioned")}>
               {report.dates.map((d, i) => <Line key={i} text={d.text} meta={[d.date, d.time].filter(Boolean).join(" ")} />)}
             </Section>
           )}
           <div className="text-xs text-muted-foreground flex items-center gap-3">
-            <span>Report written {fmtDate(report.generated_at)}</span>
+            <span>{t("recordings.detail.reportWritten", { date: fmtDate(report.generated_at) })}</span>
             <button onClick={() => buildReport(true)} disabled={busy === "report"} className="flex items-center gap-1 hover:text-foreground">
-              {busy === "report" ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} write again
+              {busy === "report" ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} {t("recordings.detail.writeAgain")}
             </button>
           </div>
         </div>
@@ -318,7 +328,7 @@ function RecordingDetail({ id, onBack, onDeleted }: { id: number; onBack: () => 
       {segments && (
         <div>
           <button onClick={() => setShowTranscript(v => !v)} className="flex items-center gap-1 text-sm font-medium">
-            {showTranscript ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />} Transcript ({segments.length} turns)
+            {showTranscript ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />} {t("recordings.detail.transcript", { count: segments.length })}
           </button>
           {showTranscript && (
             <div className="mt-2 space-y-2 text-sm">

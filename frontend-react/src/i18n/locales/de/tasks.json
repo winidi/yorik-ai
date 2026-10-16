@@ -6,5 +6,181 @@
     "open": "Aufgabe öffnen",
     "pause": "Pause",
     "done": "Erledigt"
+  },
+  "title": "Aufgaben",
+  "presets": {
+    "estimate": "Fehlende Dauern schätzen",
+    "prioritise": "Automatisch priorisieren",
+    "categorise": "Automatisch einordnen"
+  },
+  "errors": {
+    "failed": "Fehlgeschlagen: {{error}}",
+    "addSubtask": "Teilaufgabe konnte nicht angelegt werden: {{error}}",
+    "snooze": "Verschieben fehlgeschlagen: {{error}}",
+    "timer": "Zeitmessung fehlgeschlagen: {{error}}",
+    "magic": "Die Suche hat nicht geklappt: {{error}}",
+    "magicShort": "Das hat nicht geklappt: {{error}}",
+    "apply": "Übernehmen fehlgeschlagen: {{error}}"
+  },
+  "confirmDelete": "Aufgabe „{{title}}\" löschen?",
+  "applied": "{{applied}} übernommen, {{rejected}} abgelehnt.",
+  "understood": {
+    "prefix": "Yorik hat verstanden: ",
+    "due": "fällig {{date}}",
+    "high": "hohe Priorität",
+    "low": "niedrige Priorität"
+  },
+  "matches": "Treffer",
+  "header": {
+    "openShort_one": "<n>{{count}}</n> offene Aufgabe",
+    "openShort_other": "<n>{{count}}</n> offene Aufgaben",
+    "open_one": "Du hast <n>{{count}}</n> offene Aufgabe.",
+    "open_other": "Du hast <n>{{count}}</n> offene Aufgaben.",
+    "allClear": "Alles erledigt.",
+    "loadTitle": "{{time}} geschätzte Arbeit, heute fällig oder überfällig",
+    "today": "Heute: {{time}}",
+    "estimateTitle": "Yorik die fehlenden Dauern schätzen lassen",
+    "unestimated": "+ {{count}} ohne Schätzung",
+    "doneTitle": "{{time}} geschätzte Arbeit heute schon erledigt",
+    "done": "{{time}} erledigt",
+    "about": "Etwa <n>{{time}}</n> geschätzte Arbeit in dieser Ansicht.",
+    "addEstimates": "Trag Schätzungen ein, um zu sehen, wie viel Arbeit vor dir liegt."
+  },
+  "bar": {
+    "placeholder": "Aufgabe eintragen oder Yorik etwas fragen…",
+    "aria": "Aufgabe eintragen oder Yorik fragen",
+    "clearMagic": "Filter aufheben",
+    "addEnter": "Aufgabe anlegen (Enter)",
+    "add": "Aufgabe anlegen",
+    "askEnter": "Yorik fragen (Enter)",
+    "askTitle": "Yorik fragen",
+    "ask": "Fragen",
+    "doneTodayRun": "Heute erledigt: <n>{{count}} ✓</n> — starker Lauf.",
+    "doneToday": "Heute erledigt: <n>{{count}} ✓</n>",
+    "smartTools": "Helfer",
+    "yorik": "Yorik:"
+  },
+  "tabs": {
+    "today": "Heute",
+    "inbox": "Eingang",
+    "upcoming": "Demnächst",
+    "all": "Alle",
+    "overdue": "{{count}} überfällig",
+    "hideDone": "Erledigte Aufgaben ausblenden",
+    "showDone": "Erledigte Aufgaben zeigen",
+    "done": "Erledigt ({{count}})",
+    "onlyMine": "Nur meine Aufgaben zeigen",
+    "alsoOthers": "Auch Aufgaben der anderen im Haushalt zeigen",
+    "others": "Andere ({{count}})",
+    "groupBy": "Aufgaben gruppieren nach",
+    "group": {
+      "due": "Gruppieren · nach Fälligkeit",
+      "category": "Gruppieren · nach Kategorie",
+      "person": "Gruppieren · nach Person",
+      "flat": "Gruppieren · keine (flach)"
+    }
+  },
+  "empty": {
+    "magic": "Die Suche hat nichts gefunden — versuch es anders formuliert.",
+    "today": "Heute steht nichts an.",
+    "inbox": "Eingang leer — tipp oben eine Aufgabe ein.",
+    "upcoming": "Keine Aufgaben geplant.",
+    "all": "Du hast noch keine Aufgaben angelegt.",
+    "viewAll": "Alle Aufgaben zeigen"
+  },
+  "groups": {
+    "all": "Alle",
+    "uncategorised": "Ohne Kategorie",
+    "unassigned": "Niemandem zugewiesen",
+    "noDate": "Ohne Datum",
+    "overdue": "Überfällig",
+    "today": "Heute",
+    "tomorrow": "Morgen",
+    "thisWeek": "Diese Woche",
+    "later": "Später"
+  },
+  "snooze": {
+    "title": "Verschieben: Fälligkeit nach hinten schieben",
+    "aria": "Verschieben auf {{label}}",
+    "day": "+1 Tag",
+    "nextMon": "Nächster Mo",
+    "week": "+1 Woche"
+  },
+  "row": {
+    "markDone": "Als erledigt markieren",
+    "markNotDone": "Als nicht erledigt markieren",
+    "recurring": "Wiederholt sich: {{rule}}",
+    "runningTitle": "{{elapsed}} von {{estimate}} geschätzten Minuten (inkl. {{prior}} Min. aus früheren Sitzungen)",
+    "runningTitleNoEstimate": "{{elapsed}} Minuten insgesamt (inkl. {{prior}} Min. aus früheren Sitzungen, keine Schätzung)",
+    "running": "läuft · {{time}}",
+    "tookTitle": "Hat {{prior}} von {{estimate}} geschätzten Minuten gedauert",
+    "tookTitleNoEstimate": "Hat {{prior}} Minuten gedauert (keine Schätzung)",
+    "tookOf": "dauerte {{time}} / {{estimate}}",
+    "took": "dauerte {{time}}",
+    "subtasksDone": "{{done}} von {{total}} Teilaufgaben erledigt",
+    "pauseFocus": "Fokus pausieren",
+    "focusThis": "Auf diese Aufgabe fokussieren",
+    "delete": "Aufgabe löschen",
+    "collapse": "Zuklappen",
+    "expand": "Aufklappen",
+    "collapseTask": "Aufgabe zuklappen",
+    "expandTask": "Aufgabe aufklappen",
+    "subtasks": "Teilaufgaben · ",
+    "markSubtaskDone": "Teilaufgabe als erledigt markieren",
+    "markSubtaskNotDone": "Teilaufgabe als nicht erledigt markieren",
+    "estimated": "Geschätzt {{time}}",
+    "deleteSubtask": "Teilaufgabe löschen"
+  },
+  "editor": {
+    "dueDate": "Fällig am",
+    "estimatePlaceholder": "Schätzung in Min.",
+    "estimateTitle": "Geschätzte Minuten",
+    "priority": "Priorität",
+    "categoryPlaceholder": "Kategorie",
+    "notesPlaceholder": "Notizen…",
+    "delete": "Löschen",
+    "pauseFocus": "Fokus pausieren",
+    "focus": "Fokus",
+    "cancel": "Abbrechen",
+    "save": "Speichern"
+  },
+  "priority": {
+    "low": "Niedrig",
+    "normal": "Normal",
+    "high": "Hoch"
+  },
+  "subtask": {
+    "add": "Teilaufgabe hinzufügen",
+    "placeholder": "Titel der Teilaufgabe — Enter zum Anlegen, Esc zum Schließen",
+    "aria": "Titel der neuen Teilaufgabe",
+    "addButton": "Hinzufügen",
+    "close": "Eingabe schließen"
+  },
+  "repeat": {
+    "label": "Wiederholen",
+    "daily": "Täglich",
+    "weekdays": "Wochentags",
+    "weekly": "Wöchentlich",
+    "biweekly": "Alle 2 Wochen",
+    "monthly": "Monatlich",
+    "yearly": "Jährlich",
+    "custom": "Eigene…",
+    "clearTitle": "Wiederholung aufheben (einmalig)",
+    "clear": "Wiederholung aufheben",
+    "customPlaceholder": "z. B. „every Mon,Wed,Fri\", „every 3 days\", „quarterly\"",
+    "customTitle": "Wiederholungsregel (leer = einmalig)"
+  },
+  "panel": {
+    "yorik": "Yorik:",
+    "dismiss": "ausblenden",
+    "proposes": "Yorik schlägt vor:",
+    "changes_one": "{{count}} Änderung",
+    "changes_other": "{{count}} Änderungen",
+    "minutesFor": "Geschätzte Minuten für {{title}}",
+    "applyOneTitle": "Nur diese übernehmen",
+    "applyOneAria": "Änderung für {{title}} übernehmen",
+    "apply": "Übernehmen",
+    "cancel": "Abbrechen",
+    "applyAll": "Alle übernehmen"
   }
 }

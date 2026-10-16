@@ -19,8 +19,10 @@ import {
   RefreshCw, Newspaper, Sparkles, AlertCircle,
   ChevronLeft, ChevronRight, Sun,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import i18n, { locale } from "@/i18n";
 import { Dock } from "@/components/Dock";
 
 type Period = "yesterday" | "today" | "tomorrow" | "recap";
@@ -49,16 +51,12 @@ interface BriefingResult {
   _snapshot?: { generated_at: string };
 }
 
-const TAB_LABELS: Record<Period, string> = {
-  yesterday: "Yesterday",
-  today:     "Today",
-  tomorrow:  "Tomorrow",
-  recap:     "Recap",
-};
+// Tab order; the label of each is briefing.tabs.<period> in the catalogue.
+const PERIODS: Period[] = ["yesterday", "today", "tomorrow", "recap"];
 
 function pickDefaultPeriod(): Period {
   const stored = localStorage.getItem("yorik_briefing_period") as Period | null;
-  if (stored && stored in TAB_LABELS) return stored;
+  if (stored && PERIODS.includes(stored)) return stored;
   const h = new Date().getHours();
   if (h >= 21 || h < 5) return "tomorrow";   // late night → look ahead
   if (h >= 17)          return "recap";       // evening → today recap
@@ -77,12 +75,13 @@ function shiftDate(iso: string, deltaDays: number): string {
 
 function formatDateLabel(iso: string): string {
   const d = new Date(iso + "T12:00:00");
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(locale(), {
     weekday: "short", year: "numeric", month: "short", day: "numeric",
   });
 }
 
 export function BriefingApp() {
+  const { t } = useTranslation();
   const [period, setPeriod] = useState<Period>(pickDefaultPeriod);
   // `dateOffset` lets the user navigate further back than the default
   // for yesterday/recap (e.g. day before yesterday). For today/tomorrow
@@ -120,7 +119,7 @@ export function BriefingApp() {
       const r = await api.get<BriefingResult>(url);
       setData(r);
     } catch (e: any) {
-      setError(e?.message || "briefing failed");
+      setError(e?.message || i18n.t("briefing.failed"));
       setData(null);
     } finally {
       setLoading(false);
@@ -156,20 +155,20 @@ export function BriefingApp() {
         {/* max-md:pr-16: on a phone the notification bell floats over the right end of this bar */}
         <div className="max-w-4xl mx-auto px-4 sm:px-6 max-md:pr-16 h-14 flex items-center gap-3">
           <Newspaper className="w-5 h-5 text-primary shrink-0" />
-          <div className="font-semibold">Briefing</div>
+          <div className="font-semibold">{t("apps.briefing")}</div>
           <div className="flex-1" />
           <button
             onClick={() => refresh(true)}
             disabled={loading}
             className="p-2.5 md:p-2 rounded-md hover:bg-muted text-muted-foreground"
-            title="Refresh (bypass cache)"
+            title={t("briefing.refreshTitle")}
           >
             <RefreshCw className={cn("w-5 h-5 md:w-4 md:h-4", loading && "animate-spin")} />
           </button>
         </div>
         {/* Tab bar */}
         <div className="max-w-4xl mx-auto px-2 sm:px-4 pb-2 flex gap-1 overflow-x-auto snap-x snap-mandatory">
-          {(Object.keys(TAB_LABELS) as Period[]).map(p => (
+          {PERIODS.map(p => (
             <button
               key={p}
               onClick={() => switchPeriod(p)}
@@ -180,7 +179,7 @@ export function BriefingApp() {
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              {TAB_LABELS[p]}
+              {t(`briefing.tabs.${p}`)}
             </button>
           ))}
         </div>
@@ -193,21 +192,21 @@ export function BriefingApp() {
               onClick={() => setDateOffset(o => o - 1)}
               disabled={!canGoBack}
               className="p-2.5 md:p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Older"
+              title={t("briefing.older")}
             >
               <ChevronLeft className="w-5 h-5 md:w-4 md:h-4" />
             </button>
             <div className="text-sm font-medium tabular-nums">{formatDateLabel(targetDate)}</div>
             {isSnapshot && (
               <span className="text-2xs px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                snapshot
+                {t("briefing.snapshot")}
               </span>
             )}
             <button
               onClick={() => setDateOffset(o => o + 1)}
               disabled={!canGoForward}
               className="p-2.5 md:p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Newer"
+              title={t("briefing.newer")}
             >
               <ChevronRight className="w-5 h-5 md:w-4 md:h-4" />
             </button>
@@ -242,7 +241,7 @@ export function BriefingApp() {
           <div className="mb-4 md:mb-6 p-5 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20">
             <div className="flex items-center gap-2 mb-2 text-xs text-primary font-semibold">
               <Sparkles className="w-3.5 h-3.5" />
-              Briefing
+              {t("apps.briefing")}
             </div>
             <div className="text-sm leading-relaxed whitespace-pre-line">{data.synthesis}</div>
           </div>
@@ -270,17 +269,16 @@ export function BriefingApp() {
               <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-amber-500/10 flex items-center justify-center">
                 <Sun className="w-5 h-5 text-amber-500" />
               </div>
-              <div className="text-base font-medium">Quiet day</div>
+              <div className="text-base font-medium">{t("briefing.quiet.title")}</div>
               <div className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-                Nothing on your calendar, no overdue tasks, no bills due, no new email.
-                Yorik will surface anything new automatically.
+                {t("briefing.quiet.body")}
               </div>
             </div>
           )}
 
         {data && (
           <div className="mt-6 text-xs text-center text-muted-foreground">
-            Generated {new Date(data.generated_at).toLocaleString()}
+            {t("briefing.generatedAt", { when: new Date(data.generated_at).toLocaleString(locale()) })}
           </div>
         )}
       </main>
@@ -292,14 +290,29 @@ export function BriefingApp() {
 
 // ───────────────────────── section renderers ────────────────────────
 
+// The bundled templates carry English section titles; a known one
+// reads in the person's language, a title someone typed stays as is.
+const SECTION_TITLE_KEYS: Record<string, string> = {
+  "Bills due this week": "billsWeek", "Calendar": "calendar", "Email": "email", "Email today": "emailToday",
+  "Inbox": "inbox", "Photos": "photos", "Photos from today": "photosToday", "Photos taken today": "photosToday",
+  "Tasks completed": "tasksDone", "Tasks due": "tasksDue", "Tasks (+ overdue)": "tasksOverdue", "Today": "today",
+  "Today's schedule": "todaySchedule", "Tomorrow": "tomorrow", "WhatsApp": "whatsapp", "WhatsApp today": "whatsappToday",
+  "Yesterday": "yesterday",
+};
+function sectionTitle(title: string | undefined, t: (k: string, o?: Record<string, unknown>) => string): string {
+  const key = SECTION_TITLE_KEYS[(title || "").trim()];
+  return key ? t(`briefing.sectionTitle.${key}`, { defaultValue: title }) : (title || "");
+}
+
 function SectionCard({ section }: { section: SectionResult }) {
+  const { t } = useTranslation();
   if (!section.ok) {
     return (
       <div className="p-4 rounded-lg border border-destructive/30 bg-destructive/5 mb-4">
         <div className="text-xs text-destructive font-semibold mb-1">
-          {section.icon} {section.title}
+          {section.icon} {sectionTitle(section.title, t)}
         </div>
-        <div className="text-xs text-muted-foreground">Error: {section.error}</div>
+        <div className="text-xs text-muted-foreground">{t("briefing.sectionError", { error: section.error })}</div>
       </div>
     );
   }
@@ -310,7 +323,7 @@ function SectionCard({ section }: { section: SectionResult }) {
     )}>
       <div className="flex items-center gap-2 mb-3">
         <span className="text-lg">{section.icon}</span>
-        <h3 className="font-semibold">{section.title}</h3>
+        <h3 className="font-semibold">{sectionTitle(section.title, t)}</h3>
       </div>
       <RenderSection section={section} />
     </div>
@@ -318,6 +331,7 @@ function SectionCard({ section }: { section: SectionResult }) {
 }
 
 function RenderSection({ section }: { section: SectionResult }) {
+  const { t } = useTranslation();
   // Shape-based renderers — fire regardless of the declared render
   // type because "raw_json" is the catch-all template authors pick
   // when no special renderer fits. Order matters: more-specific
@@ -329,7 +343,7 @@ function RenderSection({ section }: { section: SectionResult }) {
     return <PhotoGrid photos={photos} />;
   }
   if (Array.isArray(photos) && photos.length === 0) {
-    return <p className="text-sm text-muted-foreground italic">No photos.</p>;
+    return <p className="text-sm text-muted-foreground italic">{t("briefing.empty.photos")}</p>;
   }
 
   // check_tasks → checkbox list with inline complete (Layer 2 will
@@ -337,7 +351,7 @@ function RenderSection({ section }: { section: SectionResult }) {
   const tasks = section.result?.tasks;
   if (Array.isArray(tasks)) {
     if (tasks.length === 0) {
-      return <p className="text-sm text-muted-foreground italic">No tasks.</p>;
+      return <p className="text-sm text-muted-foreground italic">{t("briefing.empty.tasks")}</p>;
     }
     return <TaskList tasks={tasks} />;
   }
@@ -346,7 +360,7 @@ function RenderSection({ section }: { section: SectionResult }) {
   const bills = section.result?.bills;
   if (Array.isArray(bills)) {
     if (bills.length === 0) {
-      return <p className="text-sm text-muted-foreground italic">No bills due.</p>;
+      return <p className="text-sm text-muted-foreground italic">{t("briefing.empty.bills")}</p>;
     }
     return <BillsList bills={bills} />;
   }
@@ -365,7 +379,7 @@ function RenderSection({ section }: { section: SectionResult }) {
   }
   if (section.render === "list") {
     const lines = section.lines || [];
-    if (lines.length === 0) return <p className="text-sm text-muted-foreground">Nothing here today.</p>;
+    if (lines.length === 0) return <p className="text-sm text-muted-foreground">{t("briefing.empty.list")}</p>;
     return (
       <ul className="space-y-1.5 text-sm">
         {lines.map((l, i) => (
@@ -388,7 +402,7 @@ function RenderSection({ section }: { section: SectionResult }) {
       .filter((s: any) => s.date > today || (s.date === today && s.end > hhmm))
       .map((s: any) => (s.date === today && s.start < hhmm ? { ...s, start: hhmm } : s));
     if (events.length === 0 && freeSlots.length === 0) {
-      return <p className="text-sm text-muted-foreground italic">Nothing on the calendar.</p>;
+      return <p className="text-sm text-muted-foreground italic">{t("briefing.empty.calendar")}</p>;
     }
     return (
       <>
@@ -410,7 +424,7 @@ function RenderSection({ section }: { section: SectionResult }) {
         )}
         {freeSlots.length > 0 && (
           <div className="mt-3 pt-3 border-t border-border/40 text-xs text-muted-foreground">
-            <div className="font-semibold mb-1.5">Free slots</div>
+            <div className="font-semibold mb-1.5">{t("briefing.freeSlots")}</div>
             <div className="flex flex-wrap gap-1">
               {freeSlots.slice(0, 6).map((s: any, i: number) => (
                 <a
@@ -483,10 +497,10 @@ function formatDueDateShort(iso: string): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const diff = Math.round((d.getTime() - today.getTime()) / (24 * 3600 * 1000));
-  if (diff === 0) return "today";
-  if (diff === 1) return "tomorrow";
-  if (diff === -1) return "yesterday";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (diff === 0) return i18n.t("briefing.due.today");
+  if (diff === 1) return i18n.t("briefing.due.tomorrow");
+  if (diff === -1) return i18n.t("briefing.due.yesterday");
+  return d.toLocaleDateString(locale(), { month: "short", day: "numeric" });
 }
 
 // Bills list — name + amount + due date. Click → if the bill was
@@ -591,7 +605,7 @@ function MarkdownBlock({ md, emailThreads = [], waChats = [] }: {
   emailThreads?: any[];
   waChats?: any[];
 }) {
-  if (!md) return <p className="text-sm text-muted-foreground italic">(empty)</p>;
+  if (!md) return <p className="text-sm text-muted-foreground italic">{i18n.t("briefing.empty.markdown")}</p>;
 
   // Build lookup tables: lowercased name → href. We try multiple name
   // shapes per thread/chat so we catch nicknames + first-name-only.

@@ -38,6 +38,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from backend.database import get_conn
+from backend import messages as _msg
 from backend import auth_sessions as _auth
 
 log = logging.getLogger("yorik.whatsapp")
@@ -319,7 +320,7 @@ def _insert_message(m: dict[str, Any], owner_user_id: str) -> None:
         name_source="push" if chat_name else None,
         is_group=jid.endswith("@g.us"),
         ts=int(m.get("timestamp") or 0),
-        last_text=m.get("text") or _media_placeholder(m),
+        last_text=m.get("text") or _media_placeholder(m, _msg.language_of(owner_user_id)),
         owner_user_id=owner_user_id,
     )
 
@@ -375,18 +376,31 @@ def _insert_message(m: dict[str, Any], owner_user_id: str) -> None:
             log.warning("WA suggestions trigger failed: %s", exc)
 
 
-def _media_placeholder(m: dict[str, Any]) -> Optional[str]:
-    """Generate a stand-in last-message preview for media-only messages."""
+_PREVIEW_KEYS = {"image": "whatsapp.preview.photo", "video": "whatsapp.preview.video",
+                 "audio": "whatsapp.preview.voice", "sticker": "whatsapp.preview.sticker"}
+_PREVIEW_ICON = {"image": "📷", "video": "🎥", "audio": "🎙️", "document": "📄", "sticker": "🩷"}
+# What earlier versions stored, English only; mapped to the viewer's
+# language when the chat list is read.
+_LEGACY_PREVIEWS = {"📷 Photo": "image", "🎥 Video": "video", "🎙️ Voice message": "audio", "🩷 Sticker": "sticker"}
+
+
+def _media_placeholder(m: dict[str, Any], lang: str = "en") -> Optional[str]:
+    """A stand-in last-message preview for a media-only message, in the
+    owner's language (the text is stored with the chat)."""
+    from backend.messages import tr
     kind = m.get("mediaKind")
     if not kind:
         return None
-    return {
-        "image":    "📷 Photo",
-        "video":    "🎥 Video",
-        "audio":    "🎙️ Voice message",
-        "document": f"📄 {m.get('filename') or 'Document'}",
-        "sticker":  "🩷 Sticker",
-    }.get(kind, f"[{kind}]")
+    if kind == "document":
+        return f"📄 {m.get('filename') or tr('whatsapp.preview.document', lang)}"
+    key = _PREVIEW_KEYS.get(kind)
+    return f"{_PREVIEW_ICON[kind]} {tr(key, lang)}" if key else f"[{kind}]"
+
+
+def _localised_preview(text: Optional[str], lang: str) -> Optional[str]:
+    """A legacy English placeholder becomes the viewer's language; real text stays."""
+    kind = _LEGACY_PREVIEWS.get((text or "").strip())
+    return _media_placeholder({"mediaKind": kind}, lang) if kind else text
 
 
 # ─────────────────────────── WS subscriber ─────────────────────────────
@@ -1560,6 +1574,9 @@ def _merge_same_person(rows: list[dict[str, Any]], uid: str) -> list[dict[str, A
                 or _name_rank(r.get("name_source")) > _name_rank(cur.get("name_source"))):
             cur["name"], cur["name_source"] = r["name"], r.get("name_source")
     out = [merged[k] for k in order]
+    _lang = _msg.language_of(uid)
+    for _c in out:
+        _c["last_message_text"] = _localised_preview(_c.get("last_message_text"), _lang)
     out.sort(key=lambda r: r.get("last_message_ts") or 0, reverse=True)
     return out
 

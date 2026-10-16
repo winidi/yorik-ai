@@ -17,5 +17,181 @@
   "settings": "Einstellungen",
   "help": "Hilfe",
   "more": "Mehr",
-  "all_apps": "Alle Apps"
+  "all_apps": "Alle Apps",
+  "blurb": {
+    "chat": "Frag Yorik einfach in deinen Worten.",
+    "calendar": "Termine, Aufgaben, Zeitblöcke per Ziehen anlegen.",
+    "tasks": "Aufgaben anlegen, abhaken und sortieren.",
+    "documents": "Briefe, Rechnungen und Unterlagen, schnell gefunden.",
+    "write": "Briefe und Rechnungen auf deinem Briefpapier.",
+    "contacts": "Alle, die Yorik kennt, mit Nummern und Adressen.",
+    "whatsapp": "Deine Chats, mit Antworten, die Yorik vorschlägt.",
+    "email": "Dein Postfach, sortiert und zusammengefasst.",
+    "photos": "Die Fotos und Videos der Familie.",
+    "briefing": "Dein Morgenüberblick auf einem Bildschirm.",
+    "settings": "Dein Profil, deine Familie und Verbindungen."
+  },
+  "homeScreen": {
+    "greeting": {
+      "late": "Noch wach",
+      "morning": "Guten Morgen",
+      "afternoon": "Guten Tag",
+      "evening": "Guten Abend",
+      "night": "Gute Nacht"
+    },
+    "fallbackName": "du",
+    "tagline": "Alles bleibt zu Hause. Wähl eine App oder frag einfach.",
+    "searchAria": "Alles durchsuchen",
+    "searchTitle": "Alles durchsuchen — E-Mail, Fotos, Dokumente, Kalender",
+    "search": "Suchen",
+    "helpTitle": "Hilfe: wie Yorik funktioniert, Schritt für Schritt",
+    "askTitle": "Frag Yorik, was du willst",
+    "askExamples": "„Zahnarzt Freitag 14 Uhr eintragen“, „finde meine Versicherungspolice“, „schreib dem Vermieter wegen der Heizung“…",
+    "appsHeading": "Apps",
+    "quickActions": "Schnellzugriff",
+    "quick": {
+      "write": "Brief oder Rechnung schreiben",
+      "event": "Termin eintragen",
+      "document": "Dokument finden"
+    },
+    "health": {
+      "allRunning": "Alles läuft",
+      "needYou": "{{count}} Dinge brauchen dich: {{list}}",
+      "openSettings": "Einstellungen › Zustand & Updates öffnen"
+    }
+  },
+  "dock": {
+    "tabsAria": "App-Leiste",
+    "dockAria": "App-Dock"
+  },
+  "shell": {
+    "details": "Details",
+    "openMenu": "Menü öffnen",
+    "closeMenu": "Menü schließen"
+  },
+  "search": {
+    "placeholder": "Alles durchsuchen: E-Mail, WhatsApp, Dokumente, Kalender, Aufgaben, Kontakte, Aufnahmen…",
+    "searching": "Suche…",
+    "noResultsYet": "Noch keine Treffer — probier eine längere Eingabe.",
+    "noMatches": "Keine Treffer für „{{query}}“.",
+    "untitled": "(ohne Titel)",
+    "footerNavigate": "↑↓ wählen",
+    "footerOpen": "↵ öffnen",
+    "footerClose": "ESC schließen",
+    "results_one": "{{count}} Treffer",
+    "results_other": "{{count}} Treffer",
+    "hintTitle": "Durchsuche alles, was du sehen darfst — E-Mail, WhatsApp, Dokumente, Fotos, Kalender, Aufgaben, Kontakte, Aufnahmen, Briefe.",
+    "hintSub": "Probier einen Namen, ein Thema oder eine Rechnungsnummer. Die Wörter müssen nicht genau passen; Yorik findet auch nach Bedeutung.",
+    "source": {
+      "drafts": "Briefe & Entwürfe",
+      "bank": "Bank",
+      "pipelines": "Wiedervorlagen"
+    }
+  },
+  "bell": {
+    "title": "Benachrichtigungen",
+    "unread_one": "{{count}} ungelesene Benachrichtigung",
+    "unread_other": "{{count}} ungelesene Benachrichtigungen",
+    "noneNew": "Keine neuen Benachrichtigungen",
+    "markAllRead": "Alle als gelesen markieren",
+    "clearAll": "Alle löschen",
+    "clearAllTitle": "Alle Einträge entfernen",
+    "empty": "Hier gibt es nichts zu sehen.",
+    "remove": "Entfernen",
+    "removeAria": "Benachrichtigung entfernen",
+    "keep": "Behalten",
+    "addToCalendar": "In den Kalender eintragen",
+    "addToBills": "Als Rechnung eintragen",
+    "dismiss": "Verwerfen",
+    "spam": "Spam",
+    "spamTitle": "Absender blockieren + E-Mail in den Junk-Ordner verschieben",
+    "viewDocument": "Dokument ansehen",
+    "viewEmail": "E-Mail ansehen",
+    "addedToBills": "In Finanzen → Rechnungen eingetragen.",
+    "acceptFailed": "Annehmen ging nicht: {{error}}",
+    "requestExpired": "Diese Anfrage ist abgelaufen oder wurde schon erledigt.",
+    "deleted": "Gelöscht.",
+    "deleteFailed": "Löschen ging nicht: {{error}}",
+    "keepFailed": "Behalten ging nicht: {{error}}",
+    "spamFailed": "Als Spam markieren ging nicht: {{error}}",
+    "spamConfirm": {
+      "block": "Absender <mono>{{sender}}</mono> blockieren und die E-Mail in den Junk-Ordner verschieben?",
+      "unknown": "(unbekannt)",
+      "domain": "Auch die ganze Domain <mono>@{{domain}}</mono> blockieren",
+      "confirm": "Als Spam markieren"
+    },
+    "time": {
+      "justNow": "gerade eben",
+      "minutesAgo": "vor {{count}} Min.",
+      "hoursAgo": "vor {{count}} Std."
+    }
+  },
+  "helpPanel": {
+    "loadFailed": "Diese Hilfeseite konnte nicht geladen werden.",
+    "allTopics": "Alle Hilfethemen",
+    "close": "Hilfe schließen",
+    "pickTopic": "Wähl ein Thema oder frag Yorik in deinen eigenen Worten.",
+    "showTour": "Die Tour noch mal zeigen",
+    "askHow": "Wie funktioniert {{title}}?",
+    "askStart": "Wie fange ich an?",
+    "askYorik": "Lieber Yorik fragen"
+  },
+  "hint": {
+    "gotIt": "Verstanden",
+    "calendar": "Tipp auf einen Tag oder auf +, um einen Termin anzulegen. Jeder hat seine eigene Farbe.",
+    "tasks": "Schreib oben eine Aufgabe hin. Hak das Kästchen ab, wenn sie erledigt ist.",
+    "chat": "Sprich mit Yorik wie mit einem Menschen: er trägt Termine ein, findet Unterlagen und schreibt Briefe.",
+    "docs": "Leg hier einen Brief oder eine Rechnung ab oder fotografier sie. Yorik liest und sortiert sie ein.",
+    "email": "Dein Postfach. Yorik sortiert es und schlägt Antworten vor; nichts geht ohne dich raus.",
+    "photos": "Die Fotos deiner Familie. Wie du die Bilder dieses Handys sicherst: tipp unten auf ?.",
+    "board": "Der Tag aller auf einen Blick. Tipp auf deine eigenen Aufgaben, um sie abzuhaken.",
+    "contacts": "Alle, die Yorik kennt. Damit findet Yorik Adressen und Nummern.",
+    "whatsapp": "Deine WhatsApp-Chats. Yorik kann Antworten vorschlagen; du entscheidest, was rausgeht.",
+    "compose": "Briefe, Rechnungen und Formulare aus Vorlagen. Oder bitte Yorik, eins zu schreiben.",
+    "write": "Schreib einen Brief auf deinem Briefpapier. Yorik hilft bei der Formulierung.",
+    "briefing": "Dein Tag auf einer Seite: Termine, Aufgaben und was reingekommen ist.",
+    "finance": "Dein Bankkonto, sortiert nach dem, wofür das Geld ausgegeben wurde. Nur lesend.",
+    "pipelines": "Yorik behält Dinge für dich im Blick, zum Beispiel, ob auf eine E-Mail eine Antwort kommt.",
+    "recordings": "Nimm ein Gespräch auf; Yorik schreibt mit, was gesagt und vereinbart wurde."
+  },
+  "tour": {
+    "step": "{{current}} von {{total}}",
+    "skip": "Tour überspringen",
+    "next": "Weiter",
+    "gotIt": "Verstanden",
+    "ask": {
+      "title": "Yorik fragen",
+      "text": "Tipp hier und schreib oder sag, was du brauchst: „Erinnere mich morgen um 9 an den Anruf beim Arzt.“"
+    },
+    "family": {
+      "title": "Deine Familie heute",
+      "text": "Alle Gesichter und was ihr Tag bringt. Tipp auf ein Gesicht, um die Familientafel zu öffnen."
+    },
+    "checklist": {
+      "title": "Noch ein paar Schritte",
+      "text": "Diese Liste hilft dir beim Einrichten. Sie wartet, bis du bereit bist."
+    },
+    "dock": {
+      "title": "Deine Apps",
+      "text": "Alle Apps wohnen hier unten. Die Farben bleiben überall gleich."
+    },
+    "help": {
+      "title": "Kommst du nicht weiter?",
+      "text": "Tipp auf das Fragezeichen für Hilfe zur aktuellen Seite oder frag Yorik einfach „Wie geht das?“"
+    }
+  },
+  "error": {
+    "title": "Da ist etwas schiefgegangen",
+    "body": "Die Seite konnte nicht angezeigt werden. Versuch „Zurücksetzen“; wenn es wieder passiert, kopier die Details unten und schick sie den Yorik-Entwicklern.",
+    "reset": "Zurücksetzen",
+    "reload": "Seite neu laden"
+  },
+  "family": {
+    "events_one": "{{count}} Termin",
+    "events_other": "{{count}} Termine",
+    "todos_one": "{{count}} Aufgabe",
+    "todos_other": "{{count}} Aufgaben",
+    "freeToday": "Heute frei",
+    "openBoard": "{{name}}: {{line}}. Familientafel öffnen"
+  }
 }

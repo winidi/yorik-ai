@@ -1,0 +1,63 @@
+{
+  "tabs": {
+    "yesterday": "Yesterday",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "recap": "Recap"
+  },
+  "failed": "briefing failed",
+  "refreshTitle": "Refresh (bypass cache)",
+  "older": "Older",
+  "newer": "Newer",
+  "snapshot": "snapshot",
+  "quiet": {
+    "title": "Quiet day",
+    "body": "Nothing on your calendar, no overdue tasks, no bills due, no new email. Yorik will surface anything new automatically."
+  },
+  "generatedAt": "Generated {{when}}",
+  "sectionError": "Error: {{error}}",
+  "empty": {
+    "photos": "No photos.",
+    "tasks": "No tasks.",
+    "bills": "No bills due.",
+    "list": "Nothing here today.",
+    "calendar": "Nothing on the calendar.",
+    "markdown": "(empty)"
+  },
+  "freeSlots": "Free slots",
+  "due": {
+    "today": "today",
+    "tomorrow": "tomorrow",
+    "yesterday": "yesterday"
+  },
+  "card": {
+    "markPaidFailed": "Failed to mark paid: {{error}}",
+    "bill": "Bill",
+    "amount": "Amount",
+    "due": "Due",
+    "recurring": "Recurring",
+    "notes": "Notes",
+    "noSource": "Manually added or from seed data. No source email linked.",
+    "openEmail": "Open email",
+    "markPaid": "Mark paid",
+    "open": "open"
+  },
+  "sectionTitle": {
+    "billsWeek": "Bills due this week",
+    "calendar": "Calendar",
+    "email": "Email",
+    "emailToday": "Email today",
+    "inbox": "Inbox",
+    "photos": "Photos",
+    "photosToday": "Photos from today",
+    "tasksDone": "Tasks completed",
+    "tasksDue": "Tasks due",
+    "tasksOverdue": "Tasks (+ overdue)",
+    "today": "Today",
+    "todaySchedule": "Today's schedule",
+    "tomorrow": "Tomorrow",
+    "whatsapp": "WhatsApp",
+    "whatsappToday": "WhatsApp today",
+    "yesterday": "Yesterday"
+  }
+}

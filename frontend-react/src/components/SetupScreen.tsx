@@ -5,6 +5,7 @@
  */
 
 import { useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { Loader2, Sparkles, Mail, Lock, User as UserIcon, AlertCircle, Info, Copy, CheckCircle2, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollPage } from "@/components/ScrollPage";
@@ -53,6 +54,7 @@ interface SetupResponse {
 }
 
 export function SetupScreen({ onSetupComplete }: Props) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -107,13 +109,13 @@ export function SetupScreen({ onSetupComplete }: Props) {
         setPaperlessFallback({
           password: fb,
           note: r.provisioning?.paperless?.fallback_password_note ||
-                "Save this password — Yorik uses it for Paperless and you'll need it for direct Paperless logins.",
+                t("onboarding.setup.fallbackNote"),
         });
       } else {
         onSetupComplete();
       }
     } catch (e: any) {
-      setErr(e.message || "Setup failed");
+      setErr(e.message || t("onboarding.setup.failed"));
     } finally {
       setBusy(false);
     }
@@ -139,18 +141,15 @@ export function SetupScreen({ onSetupComplete }: Props) {
             <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center mb-4 shadow-lg">
               <AlertCircle className="w-6 h-6 text-amber-600" />
             </div>
-            <div className="text-2xl font-semibold">Save this Paperless password</div>
+            <div className="text-2xl font-semibold">{t("onboarding.setup.fallbackTitle")}</div>
             <div className="text-sm text-muted-foreground mt-1 max-w-sm">
-              Your chosen password didn't meet Paperless's complexity rules,
-              so we generated a stronger one for it. You'll need this for
-              direct logins to the Paperless web UI. Yorik uses it
-              automatically.
+              {t("onboarding.setup.fallbackBody")}
             </div>
           </div>
 
           <div className="bg-card border border-amber-500/40 rounded-2xl shadow-xl p-6 space-y-4">
             <div className="text-xs text-muted-foreground">
-              Paperless password (one-time display)
+              {t("onboarding.setup.fallbackLabel")}
             </div>
             <div className="flex items-center gap-2">
               <code className="flex-1 font-mono text-sm bg-muted/60 px-3 py-2.5 rounded-md break-all select-all">
@@ -158,7 +157,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
               </code>
               <button
                 onClick={copyFallback}
-                title="Copy to clipboard"
+                title={t("onboarding.setup.copy")}
                 className="w-10 h-10 inline-flex items-center justify-center rounded-md bg-muted hover:bg-muted/70 text-foreground transition shrink-0"
               >
                 {copied
@@ -173,12 +172,12 @@ export function SetupScreen({ onSetupComplete }: Props) {
               onClick={onSetupComplete}
               className="w-full h-10 rounded-md font-medium text-sm bg-gradient-to-r from-violet-500 to-blue-500 hover:from-violet-600 hover:to-blue-600 text-white shadow-md transition"
             >
-              I saved it — continue
+              {t("onboarding.setup.savedContinue")}
             </button>
           </div>
 
           <div className="text-xs text-muted-foreground text-center mt-6">
-            Stored encrypted on this machine. Yorik won't show it again, so keep it somewhere safe.
+            {t("onboarding.setup.fallbackFooter")}
           </div>
         </div>
       </ScrollPage>
@@ -204,16 +203,16 @@ export function SetupScreen({ onSetupComplete }: Props) {
               : <Sparkles className="w-6 h-6 text-violet-500" />}
           </div>
           <div className="text-2xl font-semibold">
-            {resetToken ? "Reset your password" :
-             inviteToken ? "Set up your household" :
-             "Set up your Yorik"}
+            {resetToken ? t("onboarding.setup.titleReset") :
+             inviteToken ? t("onboarding.setup.titleInvite") :
+             t("onboarding.setup.title")}
           </div>
           <div className="text-sm text-muted-foreground mt-1 max-w-sm">
             {resetToken
-              ? "The host operator issued you a reset link. Pick a new password and you're back in. Your data is untouched."
+              ? t("onboarding.setup.subtitleReset")
               : inviteToken
-              ? "You've been invited to your own private Yorik. Pick the credentials you'll use to sign in — only you will have access to this household's data."
-              : "First run — create the owner account. You'll be the admin, with full access to settings and other users you invite later."}
+              ? t("onboarding.setup.subtitleInvite")
+              : t("onboarding.setup.subtitle")}
           </div>
         </div>
 
@@ -229,14 +228,14 @@ export function SetupScreen({ onSetupComplete }: Props) {
           {!resetToken && (
             <>
               <label className="block">
-                <div className="text-xs text-muted-foreground mb-1">Your name</div>
+                <div className="text-xs text-muted-foreground mb-1">{t("onboarding.setup.yourName")}</div>
                 <div className="relative">
                   <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                   <input
                     autoFocus
                     value={name}
                     onChange={e => setName(e.target.value)}
-                    placeholder="Jane Doe"
+                    placeholder={t("onboarding.setup.namePlaceholder")}
                     className="w-full h-10 pl-9 pr-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
                     required
                   />
@@ -244,14 +243,14 @@ export function SetupScreen({ onSetupComplete }: Props) {
               </label>
 
               <label className="block">
-                <div className="text-xs text-muted-foreground mb-1">Email</div>
+                <div className="text-xs text-muted-foreground mb-1">{t("onboarding.fields.email")}</div>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                   <input
                     type="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    placeholder="you@example.com"
+                    placeholder={t("onboarding.fields.emailPlaceholder")}
                     className="w-full h-10 pl-9 pr-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
                     required
                   />
@@ -261,7 +260,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
           )}
 
           <label className="block">
-            <div className="text-xs text-muted-foreground mb-1">Password</div>
+            <div className="text-xs text-muted-foreground mb-1">{t("onboarding.fields.password")}</div>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <input
@@ -283,20 +282,18 @@ export function SetupScreen({ onSetupComplete }: Props) {
               "text-2xs mt-1",
               tooShort ? "text-red-500" : "text-muted-foreground",
             )}>
-              At least 8 characters.
+              {t("onboarding.setup.minChars")}
             </div>
             <div className="mt-2 text-2xs text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-1.5 flex items-start gap-1.5 leading-relaxed">
               <Info className="w-3 h-3 mt-0.5 shrink-0" />
               <span>
-                <strong>Alpha note:</strong> 8 characters is the current minimum. Beta will require
-                stronger passwords (longer, common-password check). Yorik holds your real personal
-                data — pick something solid now so you don't have to reset later.
+                <Trans i18nKey="onboarding.setup.alphaNote" components={{ strong: <strong /> }} />
               </span>
             </div>
           </label>
 
           <label className="block">
-            <div className="text-xs text-muted-foreground mb-1">Confirm password</div>
+            <div className="text-xs text-muted-foreground mb-1">{t("onboarding.setup.confirmPassword")}</div>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <input
@@ -314,7 +311,7 @@ export function SetupScreen({ onSetupComplete }: Props) {
               />
             </div>
             {mismatch && (
-              <div className="text-2xs text-red-500 mt-1">Passwords don't match.</div>
+              <div className="text-2xs text-red-500 mt-1">{t("onboarding.setup.mismatch")}</div>
             )}
           </label>
 
@@ -340,13 +337,13 @@ export function SetupScreen({ onSetupComplete }: Props) {
             )}
           >
             {busy
-              ? <><Loader2 className="w-4 h-4 animate-spin" /> {resetToken ? "Resetting…" : "Setting up…"}</>
-              : (resetToken ? "Set new password" : "Create owner account")}
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> {resetToken ? t("onboarding.setup.resetting") : t("onboarding.setup.settingUp")}</>
+              : (resetToken ? t("onboarding.setup.setNewPassword") : t("onboarding.setup.createOwner"))}
           </button>
         </form>
 
         <div className="text-xs text-muted-foreground text-center mt-6">
-          This password is hashed with bcrypt and stored only on this machine.
+          {t("onboarding.setup.footer")}
         </div>
       </div>
       <style>{`

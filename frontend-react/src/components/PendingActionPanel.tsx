@@ -27,6 +27,7 @@ import { api } from "@/lib/api";
 import { emitUiAction } from "@/lib/uiActions";
 import { useAuth } from "@/components/AuthGate";
 import { currency as householdCurrency } from "@/i18n/format";
+import i18n, { locale } from "@/i18n";
 
 interface PendingAction {
   pending_id: string;
@@ -209,7 +210,7 @@ function ResolvedStamp({ kind, compact, deferred, what = "delete" }:
 // ── Per-skill preview renderers ─────────────────────────────────────
 
 function PendingPreview({ skill, preview }: { skill: string; preview: any }) {
-  if (!preview) return <div className="text-xs text-muted-foreground italic">(no preview)</div>;
+  if (!preview) return <div className="text-xs text-muted-foreground italic">{i18n.t("chat.preview.noPreview")}</div>;
   if (skill === "add_calendar_event")    return <CalendarCreatePreview p={preview} />;
   if (skill === "update_calendar_event") return <CalendarUpdatePreview p={preview} />;
   if (skill === "delete_calendar_event") return <CalendarDeletePreview p={preview} />;
@@ -228,7 +229,7 @@ function PendingPreview({ skill, preview }: { skill: string; preview: any }) {
     <div className="space-y-0.5 text-xs">
       {rows.map(([k, v]) => (
         <div key={k} className="break-words">
-          <span className="text-muted-foreground">{k.replace(/_/g, " ")}:</span>{" "}
+          <span className="text-muted-foreground">{i18n.t(`chat.preview.field.${k}`, { defaultValue: k.replace(/_/g, " ") })}:</span>{" "}
           {typeof v === "object" ? JSON.stringify(v) : String(v)}
         </div>
       ))}
@@ -266,37 +267,44 @@ function fmtDateTime(iso?: string): string {
   if (!iso) return "—";
   try {
     const d = new Date(iso);
-    return d.toLocaleString([], {
+    return d.toLocaleString(locale(), {
       weekday: "short", day: "numeric", month: "short",
       hour: "2-digit", minute: "2-digit",
     });
   } catch { return iso; }
 }
 
+/** A changed field's name in the person's language ("starts at" → "Beginn"). */
+function fieldLabel(k: string): string {
+  return i18n.t(`chat.preview.field.${k}`, { defaultValue: k.replace("_", " ") });
+}
+
 function CalendarCreatePreview({ p }: { p: any }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-0.5 text-xs">
-      <div><span className="text-muted-foreground">Create:</span> <span className="font-semibold">{p.title}</span></div>
-      <div><span className="text-muted-foreground">When:</span> {fmtDateTime(p.starts_at)} → {fmtDateTime(p.ends_at)}</div>
-      {p.person && <div><span className="text-muted-foreground">Who:</span> {p.person}</div>}
-      {p.notes  && <div><span className="text-muted-foreground">Notes:</span> {p.notes}</div>}
+      <div><span className="text-muted-foreground">{t("chat.preview.create")}</span> <span className="font-semibold">{p.title}</span></div>
+      <div><span className="text-muted-foreground">{t("chat.preview.when")}</span> {fmtDateTime(p.starts_at)} → {fmtDateTime(p.ends_at)}</div>
+      {p.person && <div><span className="text-muted-foreground">{t("chat.preview.who")}</span> {p.person}</div>}
+      {p.notes  && <div><span className="text-muted-foreground">{t("chat.preview.notes")}</span> {p.notes}</div>}
     </div>
   );
 }
 
 function CalendarUpdatePreview({ p }: { p: any }) {
+  const { t } = useTranslation();
   const fields = ["title", "starts_at", "ends_at", "person", "notes", "all_day"] as const;
   const changed = fields.filter(k => p.before?.[k] !== p.after?.[k]);
   return (
     <div className="space-y-0.5 text-xs">
-      <div><span className="text-muted-foreground">Update event:</span> <span className="font-semibold">{p.before?.title || "this event"}</span></div>
-      {changed.length === 0 && <div className="text-muted-foreground italic">No changes.</div>}
+      <div><span className="text-muted-foreground">{t("chat.preview.updateEvent")}</span> <span className="font-semibold">{p.before?.title || t("chat.preview.thisEvent")}</span></div>
+      {changed.length === 0 && <div className="text-muted-foreground italic">{t("chat.preview.noChanges")}</div>}
       {changed.map(k => {
         const before = k.includes("_at") ? fmtDateTime(p.before[k]) : String(p.before[k] ?? "—");
         const after  = k.includes("_at") ? fmtDateTime(p.after[k])  : String(p.after[k] ?? "—");
         return (
           <div key={k} className="text-xs">
-            <span className="text-muted-foreground">{k.replace("_", " ")}:</span>{" "}
+            <span className="text-muted-foreground">{fieldLabel(k)}:</span>{" "}
             <span className="line-through text-red-500/80">{before}</span>{" → "}
             <span className="font-medium text-emerald-600">{after}</span>
           </div>
@@ -307,9 +315,10 @@ function CalendarUpdatePreview({ p }: { p: any }) {
 }
 
 function CalendarDeletePreview({ p }: { p: any }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-0.5 text-xs">
-      <div className="text-muted-foreground">Delete this event:</div>
+      <div className="text-muted-foreground">{t("chat.preview.deleteEvent")}</div>
       <div className="p-1.5 bg-red-500/5 border border-red-500/20 rounded text-xs">
         <div className="font-medium">{p.event?.title}</div>
         <div className="text-muted-foreground">{fmtDateTime(p.event?.starts_at)}{p.event?.person && ` · ${p.event.person}`}</div>
@@ -323,35 +332,37 @@ function CalendarDeletePreview({ p }: { p: any }) {
 function fmtDate(iso?: string): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+    return new Date(iso).toLocaleDateString(locale(), { day: "numeric", month: "short", year: "numeric" });
   } catch { return iso; }
 }
 
 function TaskCreatePreview({ p }: { p: any }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-0.5 text-xs">
-      <div><span className="text-muted-foreground">Create task:</span> <span className="font-semibold">{p.title}</span></div>
-      {p.due_date && <div><span className="text-muted-foreground">Due:</span> {fmtDate(p.due_date)}</div>}
-      {p.person   && <div><span className="text-muted-foreground">Who:</span> {p.person}</div>}
-      {p.category && <div><span className="text-muted-foreground">Category:</span> {p.category}</div>}
-      {p.notes    && <div><span className="text-muted-foreground">Notes:</span> {p.notes}</div>}
+      <div><span className="text-muted-foreground">{t("chat.preview.createTask")}</span> <span className="font-semibold">{p.title}</span></div>
+      {p.due_date && <div><span className="text-muted-foreground">{t("chat.preview.due")}</span> {fmtDate(p.due_date)}</div>}
+      {p.person   && <div><span className="text-muted-foreground">{t("chat.preview.who")}</span> {p.person}</div>}
+      {p.category && <div><span className="text-muted-foreground">{t("chat.preview.category")}</span> {p.category}</div>}
+      {p.notes    && <div><span className="text-muted-foreground">{t("chat.preview.notes")}</span> {p.notes}</div>}
     </div>
   );
 }
 
 function TaskUpdatePreview({ p }: { p: any }) {
+  const { t } = useTranslation();
   const fields = ["title", "due_date", "done", "person", "category", "notes"] as const;
   const changed = fields.filter(k => p.before?.[k] !== p.after?.[k]);
   return (
     <div className="space-y-0.5 text-xs">
-      <div><span className="text-muted-foreground">Update task:</span> <span className="font-semibold">{p.before?.title || "this task"}</span></div>
-      {changed.length === 0 && <div className="text-muted-foreground italic">No changes.</div>}
+      <div><span className="text-muted-foreground">{t("chat.preview.updateTask")}</span> <span className="font-semibold">{p.before?.title || t("chat.preview.thisTask")}</span></div>
+      {changed.length === 0 && <div className="text-muted-foreground italic">{t("chat.preview.noChanges")}</div>}
       {changed.map(k => {
         const before = k === "due_date" ? fmtDate(p.before[k]) : String(p.before[k] ?? "—");
         const after  = k === "due_date" ? fmtDate(p.after[k])  : String(p.after[k] ?? "—");
         return (
           <div key={k} className="text-xs">
-            <span className="text-muted-foreground">{k.replace("_", " ")}:</span>{" "}
+            <span className="text-muted-foreground">{fieldLabel(k)}:</span>{" "}
             <span className="line-through text-red-500/80">{before}</span>{" → "}
             <span className="font-medium text-emerald-600">{after}</span>
           </div>
@@ -362,15 +373,16 @@ function TaskUpdatePreview({ p }: { p: any }) {
 }
 
 function TaskDeletePreview({ p }: { p: any }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-0.5 text-xs">
-      <div className="text-muted-foreground">Delete this task:</div>
+      <div className="text-muted-foreground">{t("chat.preview.deleteTask")}</div>
       <div className="p-1.5 bg-red-500/5 border border-red-500/20 rounded text-xs">
         <div className="font-medium">{p.task?.title}</div>
         <div className="text-muted-foreground">
-          {p.task?.due_date && `Due ${fmtDate(p.task.due_date)}`}
+          {p.task?.due_date && t("chat.preview.dueDate", { date: fmtDate(p.task.due_date) })}
           {p.task?.person && ` · ${p.task.person}`}
-          {p.task?.done && " · ✓ done"}
+          {p.task?.done && ` · ${t("chat.preview.doneMark")}`}
         </div>
       </div>
     </div>
@@ -383,31 +395,33 @@ function fmtMoney(amount?: number, currency?: string): string {
   if (amount == null) return "—";
   const c = currency || householdCurrency();
   try {
-    return new Intl.NumberFormat([], { style: "currency", currency: c }).format(amount);
+    return new Intl.NumberFormat(locale(), { style: "currency", currency: c }).format(amount);
   } catch {
     return `${amount} ${c}`;
   }
 }
 
 function BillCreatePreview({ p }: { p: any }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-0.5 text-xs">
-      <div><span className="text-muted-foreground">Create bill:</span> <span className="font-semibold">{p.name}</span></div>
-      <div><span className="text-muted-foreground">Amount:</span> <span className="font-mono">{fmtMoney(p.amount, p.currency)}</span></div>
-      {p.due_date  && <div><span className="text-muted-foreground">Due:</span> {fmtDate(p.due_date)}</div>}
-      {p.recurring && <div><span className="text-muted-foreground">Recurring:</span> {p.recurring}</div>}
-      {p.notes     && <div><span className="text-muted-foreground">Notes:</span> {p.notes}</div>}
+      <div><span className="text-muted-foreground">{t("chat.preview.createBill")}</span> <span className="font-semibold">{p.name}</span></div>
+      <div><span className="text-muted-foreground">{t("chat.preview.amount")}</span> <span className="font-mono">{fmtMoney(p.amount, p.currency)}</span></div>
+      {p.due_date  && <div><span className="text-muted-foreground">{t("chat.preview.due")}</span> {fmtDate(p.due_date)}</div>}
+      {p.recurring && <div><span className="text-muted-foreground">{t("chat.preview.recurring")}</span> {p.recurring}</div>}
+      {p.notes     && <div><span className="text-muted-foreground">{t("chat.preview.notes")}</span> {p.notes}</div>}
     </div>
   );
 }
 
 function BillUpdatePreview({ p }: { p: any }) {
+  const { t } = useTranslation();
   const fields = ["name", "amount", "currency", "due_date", "recurring", "paid", "notes"] as const;
   const changed = fields.filter(k => p.before?.[k] !== p.after?.[k]);
   return (
     <div className="space-y-0.5 text-xs">
-      <div><span className="text-muted-foreground">Update bill:</span> <span className="font-semibold">{p.before?.name || "this bill"}</span></div>
-      {changed.length === 0 && <div className="text-muted-foreground italic">No changes.</div>}
+      <div><span className="text-muted-foreground">{t("chat.preview.updateBill")}</span> <span className="font-semibold">{p.before?.name || t("chat.preview.thisBill")}</span></div>
+      {changed.length === 0 && <div className="text-muted-foreground italic">{t("chat.preview.noChanges")}</div>}
       {changed.map(k => {
         const fmt = (v: any) =>
           k === "amount"   ? fmtMoney(v, p.after?.currency || p.before?.currency)
@@ -415,7 +429,7 @@ function BillUpdatePreview({ p }: { p: any }) {
         : String(v ?? "—");
         return (
           <div key={k} className="text-xs">
-            <span className="text-muted-foreground">{k.replace("_", " ")}:</span>{" "}
+            <span className="text-muted-foreground">{fieldLabel(k)}:</span>{" "}
             <span className="line-through text-red-500/80">{fmt(p.before[k])}</span>{" → "}
             <span className="font-medium text-emerald-600">{fmt(p.after[k])}</span>
           </div>
@@ -426,15 +440,16 @@ function BillUpdatePreview({ p }: { p: any }) {
 }
 
 function BillDeletePreview({ p }: { p: any }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-0.5 text-xs">
-      <div className="text-muted-foreground">Delete this bill:</div>
+      <div className="text-muted-foreground">{t("chat.preview.deleteBill")}</div>
       <div className="p-1.5 bg-red-500/5 border border-red-500/20 rounded text-xs">
         <div className="font-medium">{p.bill?.name}</div>
         <div className="text-muted-foreground">
           {fmtMoney(p.bill?.amount, p.bill?.currency)}
-          {p.bill?.due_date && ` · due ${fmtDate(p.bill.due_date)}`}
-          {p.bill?.paid && " · ✓ paid"}
+          {p.bill?.due_date && ` · ${t("chat.preview.dueLower", { date: fmtDate(p.bill.due_date) })}`}
+          {p.bill?.paid && ` · ${t("chat.preview.paidMark")}`}
         </div>
       </div>
     </div>

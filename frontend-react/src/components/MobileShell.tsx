@@ -26,6 +26,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, Menu, PanelRight, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 export interface TriPane {
@@ -126,16 +127,19 @@ export const MOBILE_BELL_SLOT_ID = "yorik-mobile-bell-slot";
  *  170 px of chrome before the first appointment) and the bell floated
  *  as a separate circle. */
 export function MobileTopBar({
-  title, onMenuClick, onBack, backLabel = "Back", onContextClick, contextLabel = "Details", rightAction, below,
+  title, onMenuClick, onBack, backLabel, onContextClick, contextLabel, rightAction, below,
   titleAlign = "center",
 }: MobileTopBarProps) {
+  const { t } = useTranslation();
+  const backText = backLabel ?? t("common.back");
+  const contextText = contextLabel ?? t("apps.shell.details");
   return (
     <div className="md:hidden sticky top-0 z-30 shrink-0 border-b border-border bg-background/90 backdrop-blur pt-[env(safe-area-inset-top)]">
       <div className="h-11 pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.25rem,env(safe-area-inset-right))] flex items-center gap-0.5">
         {onBack ? (
           <button
             onClick={onBack}
-            aria-label={backLabel}
+            aria-label={backText}
             className="w-11 h-11 rounded-md text-foreground flex items-center justify-center shrink-0"
           >
             <ChevronLeft className="w-7 h-7 -ml-1" />
@@ -143,7 +147,7 @@ export function MobileTopBar({
         ) : onMenuClick ? (
           <button
             onClick={onMenuClick}
-            aria-label="Open menu"
+            aria-label={t("apps.shell.openMenu")}
             className="w-11 h-11 rounded-md text-muted-foreground hover:text-foreground flex items-center justify-center shrink-0"
           >
             <Menu className="w-[22px] h-[22px]" />
@@ -160,7 +164,7 @@ export function MobileTopBar({
           {onContextClick && (
             <button
               onClick={onContextClick}
-              aria-label={contextLabel}
+              aria-label={contextText}
               className="w-11 h-11 rounded-md text-muted-foreground hover:text-foreground flex items-center justify-center shrink-0"
             >
               <PanelRight className="w-[22px] h-[22px]" />
@@ -194,10 +198,11 @@ export function MobileBackdrop({ show, onClick }:
 /** Small ✕ button asides can put inside themselves so users can close
  *  the drawer from inside (visible only on mobile). */
 export function MobileDrawerClose({ onClick }: { onClick: () => void }) {
+  const { t } = useTranslation();
   return (
     <button
       onClick={onClick}
-      aria-label="Close menu"
+      aria-label={t("apps.shell.closeMenu")}
       className="md:hidden absolute top-2 right-2 w-8 h-8 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition flex items-center justify-center z-10"
     >
       <X className="w-4 h-4" />

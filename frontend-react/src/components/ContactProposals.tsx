@@ -11,6 +11,8 @@ import { useCallback, useEffect, useState } from "react";
 import { GitMerge, Loader2, Plus, Undo2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 
 type Channel = { kind: string; value: string };
 type Contact = { id: number; display_name: string; kind: string; status: string; channels?: Channel[] };
@@ -22,6 +24,7 @@ type Proposal = {
   channel_kind?: string | null;
   channel_value?: string | null;
   reason: string;
+  evidence?: { source?: string; phone?: string; lid?: string; number?: string } | null;
   confidence: number;
   created_at: string;
   contact: Contact | null;
@@ -30,11 +33,29 @@ type Proposal = {
 type Merge = { id: number; keep_id: number; drop_id: number; keep_name: string; drop_name: string; created_at: string; undone_at: string | null };
 
 function channels(c: Contact | null): string {
-  if (!c?.channels?.length) return "no contact details";
+  if (!c?.channels?.length) return i18n.t("contacts.suggestions.noDetails");
   return c.channels.map(ch => ch.kind === "whatsapp" ? `WhatsApp ${ch.value.split("@")[0]}` : ch.value).join(" · ");
 }
 
+/** The reason in the person's language, built from the evidence; the
+ *  stored English sentence only when the source is unknown. */
+function reasonText(p: Proposal, t: (k: string, o?: Record<string, unknown>) => string): string {
+  const src = p.evidence?.source;
+  const a = p.other_contact?.display_name || "?";
+  const b = p.contact?.display_name || "?";
+  if (p.kind === "merge" && src === "whatsapp_alias_map")
+    return t("contacts.suggestions.reason.whatsappTwin", { a, b, number: "+" + (p.evidence?.number || "").split("@")[0].replace(/\D/g, "") });
+  if (p.kind === "merge" && src === "email_signature")
+    return t("contacts.suggestions.reason.signatureMerge", { phone: p.evidence?.phone || "", name: a });
+  if (p.kind === "add_channel" && src === "email_signature")
+    return t("contacts.suggestions.reason.signatureAdd", { phone: p.channel_value || "" });
+  if (p.kind === "merge" && src === "vcard_import")
+    return t("contacts.suggestions.reason.vcardImport", { a, b });
+  return p.reason;
+}
+
 export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () => void; reloadKey?: number }) {
+  const { t } = useTranslation();
   const [items, setItems] = useState<Proposal[]>([]);
   const [merges, setMerges] = useState<Merge[]>([]);
   const [busy, setBusy] = useState<number | null>(null);
@@ -59,11 +80,11 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
     setBusy(p.id);
     try {
       await api.post(`/api/contacts/proposals/${p.id}/accept`, keepId ? { keep_id: keepId } : {});
-      toast(p.kind === "merge" ? "Contacts merged. You can undo this below." : "Added.");
+      toast(p.kind === "merge" ? t("contacts.suggestions.merged") : t("contacts.suggestions.added"));
       await load();
       onChanged();
     } catch (e: any) {
-      toast(`Couldn't apply: ${e?.message || e}`);
+      toast(t("contacts.suggestions.applyFailed", { error: e?.message || e }));
     } finally {
       setBusy(null);
     }
@@ -74,7 +95,7 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
       await api.post(`/api/contacts/proposals/${p.id}/reject`, {});
       await load();
     } catch (e: any) {
-      toast(`Couldn't dismiss: ${e?.message || e}`);
+      toast(t("contacts.suggestions.dismissFailed", { error: e?.message || e }));
     } finally {
       setBusy(null);
     }
@@ -83,11 +104,11 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
     setBusy(-m.id);
     try {
       await api.post(`/api/contacts/merges/${m.id}/undo`, {});
-      toast(`Restored ${m.drop_name}.`);
+      toast(t("contacts.suggestions.restored", { name: m.drop_name }));
       await load();
       onChanged();
     } catch (e: any) {
-      toast(`Couldn't undo: ${e?.message || e}`);
+      toast(t("contacts.suggestions.undoFailed", { error: e?.message || e }));
     } finally {
       setBusy(null);
     }
@@ -99,7 +120,7 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
       await api.post(`/api/contacts/proposals/reject-all?kind=add_channel`, {});
       await load();
     } catch (e: any) {
-      toast(`Couldn't dismiss: ${e?.message || e}`);
+      toast(t("contacts.suggestions.dismissFailed", { error: e?.message || e }));
     } finally {
       setBusy(null);
     }
@@ -113,14 +134,14 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
     <div className="mb-4 rounded-xl border border-amber-300/60 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-700/50 p-3">
       {items.length > 0 && (
         <div className="text-xs text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-3">
-          <span>Suggestions · {merges_n > 0 && `${merges_n} merge${merges_n === 1 ? "" : "s"}`}{merges_n > 0 && adds_n > 0 && " · "}{adds_n > 0 && `${adds_n} number${adds_n === 1 ? "" : "s"}`}</span>
+          <span>{t("contacts.suggestions.heading")}{merges_n > 0 && t("contacts.suggestions.merges", { count: merges_n })}{merges_n > 0 && adds_n > 0 && " · "}{adds_n > 0 && t("contacts.suggestions.numbers", { count: adds_n })}</span>
           {adds_n > 1 && (
             <button
               disabled={busy === -999999}
               onClick={rejectAllAdds}
               className="normal-case tracking-normal text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
-              dismiss all number suggestions
+              {t("contacts.suggestions.dismissAllNumbers")}
             </button>
           )}
         </div>
@@ -128,7 +149,7 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
       <ul className="space-y-3">
         {items.map(p => (
           <li key={p.id} className="bg-card border border-border rounded-lg p-3">
-            <div className="text-sm">{p.reason}</div>
+            <div className="text-sm">{reasonText(p, t)}</div>
             {p.kind === "merge" && p.contact && p.other_contact && (
               <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
                 {[p.contact, p.other_contact].map(c => (
@@ -137,10 +158,10 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
                     disabled={busy === p.id}
                     onClick={() => accept(p, c.id)}
                     className="text-left rounded-md border border-border px-3 py-2 hover:border-violet-500 hover:bg-violet-500/5 transition disabled:opacity-50"
-                    title="Keep this one, fold the other into it"
+                    title={t("contacts.suggestions.keepTitle")}
                   >
                     <div className="text-sm font-medium flex items-center gap-1.5">
-                      <GitMerge className="w-3.5 h-3.5 text-violet-500" /> Keep {c.display_name}
+                      <GitMerge className="w-3.5 h-3.5 text-violet-500" /> {t("contacts.suggestions.keep", { name: c.display_name })}
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">{channels(c)}</div>
                   </button>
@@ -155,7 +176,7 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
                   className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground inline-flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {busy === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                  Add {p.channel_value} to {p.contact.display_name}
+                  {t("contacts.suggestions.addTo", { value: p.channel_value, name: p.contact.display_name })}
                 </button>
               </div>
             )}
@@ -165,7 +186,7 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
                 onClick={() => reject(p)}
                 className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 disabled:opacity-50"
               >
-                <X className="w-3 h-3" /> Not the same person
+                <X className="w-3 h-3" /> {t("contacts.suggestions.notSamePerson")}
               </button>
             </div>
           </li>
@@ -181,7 +202,7 @@ export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () =
                 onClick={() => undo(m)}
                 className="inline-flex items-center gap-0.5 text-violet-600 hover:underline disabled:opacity-50"
               >
-                <Undo2 className="w-3 h-3" /> undo
+                <Undo2 className="w-3 h-3" /> {t("contacts.suggestions.undo")}
               </button>
             </span>
           ))}

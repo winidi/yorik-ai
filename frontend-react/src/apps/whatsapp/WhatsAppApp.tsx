@@ -13,6 +13,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
+import i18n, { locale } from "@/i18n";
 import {
   Loader2, Search, RefreshCw, Plus, Send, Sparkles,
   MessageSquare, Newspaper, Trash2, Download, X, Mic, FileText,
@@ -39,6 +41,7 @@ import type {
 } from "./types";
 
 export function WhatsAppApp() {
+  const { t } = useTranslation();
   // Deep-link: `/r/whatsapp?chat=<jid>` selects that chat on mount.
   // Used by the briefing's "Jump to chat" actions. Read synchronously
   // so the first render already has the right activeJid — saves a
@@ -197,7 +200,7 @@ export function WhatsAppApp() {
               <button
                 onClick={refreshAll}
                 className="w-11 h-11 rounded-md flex items-center justify-center text-muted-foreground"
-                aria-label="Reload"
+                aria-label={t("whatsapp.header.reload")}
               >
                 <RefreshCw className={cn("w-5 h-5", chatsApi.loading && "animate-spin")} />
               </button>
@@ -212,21 +215,21 @@ export function WhatsAppApp() {
             <div>
               <div className="font-semibold leading-none">WhatsApp</div>
               <div className="text-2xs text-muted-foreground mt-0.5">
-                {chats.length} chat{chats.length === 1 ? "" : "s"}
+                {t("whatsapp.header.chatCount", { count: chats.length })}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-0.5">
-            <SilkBtn icon={Newspaper} title="Briefing" onClick={() => setShowBriefing(true)} />
-            <SilkBtn icon={Plus} title="Import chat history" onClick={() => setShowImport(true)} />
-            <SilkBtn icon={Download} title="Sync from phone" onClick={async () => {
+            <SilkBtn icon={Newspaper} title={t("whatsapp.header.briefing")} onClick={() => setShowBriefing(true)} />
+            <SilkBtn icon={Plus} title={t("whatsapp.header.importHistory")} onClick={() => setShowImport(true)} />
+            <SilkBtn icon={Download} title={t("whatsapp.header.syncFromPhone")} onClick={async () => {
               try {
                 const r = await api.post<{ chats: number; messages_ingested: number }>("/api/whatsapp/sync");
                 refreshAll();
-                if (r.messages_ingested) toast(`Synced ${r.messages_ingested} new messages.`);
-              } catch (e: any) { toast("Sync failed: " + e.message); }
+                if (r.messages_ingested) toast(t("whatsapp.header.synced", { count: r.messages_ingested }));
+              } catch (e: any) { toast(t("whatsapp.header.syncFailed", { error: e.message })); }
             }} />
-            <SilkBtn icon={RefreshCw} title="Reload" loading={chatsApi.loading} onClick={refreshAll} />
+            <SilkBtn icon={RefreshCw} title={t("whatsapp.header.reload")} loading={chatsApi.loading} onClick={refreshAll} />
           </div>
         </header>
 
@@ -244,18 +247,18 @@ export function WhatsAppApp() {
           <ConnectionDot status={status} />
           <span className="text-muted-foreground truncate flex-1">
             {status?.connected
-              ? <>Connected as <span className="text-foreground font-medium">{status.me?.name || status.me?.id?.split(":")[0]}</span></>
+              ? <>{t("whatsapp.footer.connectedAs")} <span className="text-foreground font-medium">{status.me?.name || status.me?.id?.split(":")[0]}</span></>
               : status?.bridge_unreachable
-                ? <span className="text-yellow-500">Bridge offline</span>
-                : "Not paired"}
+                ? <span className="text-yellow-500">{t("whatsapp.footer.bridgeOffline")}</span>
+                : t("whatsapp.footer.notPaired")}
           </span>
           {status?.connected && (
             <button
               onClick={() => setShowDisconnect(true)}
               className="text-muted-foreground hover:text-destructive underline-offset-2 hover:underline shrink-0"
-              title="Disconnect this WhatsApp account so you can pair a different one"
+              title={t("whatsapp.footer.disconnectTitle")}
             >
-              Disconnect
+              {t("whatsapp.footer.disconnect")}
             </button>
           )}
         </footer>
@@ -266,9 +269,9 @@ export function WhatsAppApp() {
         <MobileTopBar
           title={activeChat?.name || (activeJid ? activeJid.split("@")[0] : "WhatsApp")}
           onBack={backToList}
-          backLabel="Back to chats"
+          backLabel={t("whatsapp.thread.backToChats")}
           onContextClick={activeJid ? () => tri.setRightOpen(true) : undefined}
-          contextLabel="Drafts"
+          contextLabel={t("whatsapp.thread.drafts")}
         />
         {activeJid && activeChat ? (
           <Thread
@@ -307,7 +310,7 @@ export function WhatsAppApp() {
       {showBriefing && <BriefingDialog onClose={() => setShowBriefing(false)} />}
       {showDisconnect && (
         <DisconnectDialog
-          currentName={status?.me?.name || status?.me?.id?.split(":")[0] || "(unknown)"}
+          currentName={status?.me?.name || status?.me?.id?.split(":")[0] || t("whatsapp.thread.unknown")}
           onClose={() => setShowDisconnect(false)}
           onDisconnected={async () => {
             setShowDisconnect(false);
@@ -350,6 +353,7 @@ function ChatListPane({
   needsPairing: boolean;
   bridgeUnreachable: boolean;
 }) {
+  const { t } = useTranslation();
   const [filter, setFilter] = useState("");
 
   const filtered = useMemo(() => {
@@ -385,7 +389,7 @@ function ChatListPane({
           <input
             value={filter}
             onChange={e => setFilter(e.target.value)}
-            placeholder="Filter conversations"
+            placeholder={t("whatsapp.list.filter")}
             className="w-full h-9 pl-9 pr-3 rounded-full bg-muted/70 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
           />
         </div>
@@ -408,12 +412,12 @@ function ChatListPane({
         {!loading && filtered.length === 0 && (
           <div className="px-4 py-12 text-center text-xs text-muted-foreground">
             {bridgeUnreachable
-              ? <><MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-30" />WhatsApp isn't connected right now.<br/>Start it from the pairing dialog above.</>
+              ? <><MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-30" />{t("whatsapp.list.notConnected")}<br/>{t("whatsapp.list.startFromPairing")}</>
               : needsPairing
-                ? <><MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-30" />Scan the QR to start syncing chats.</>
+                ? <><MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-30" />{t("whatsapp.list.scanToSync")}</>
                 : chats.length === 0
-                  ? <><MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-30" />No conversations yet.<br/>Once someone messages you they'll show up here.</>
-                  : "No matches."}
+                  ? <><MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-30" />{t("whatsapp.list.noConversations")}<br/>{t("whatsapp.list.showUpHere")}</>
+                  : t("whatsapp.list.noMatches")}
           </div>
         )}
         {filtered.map(c => (
@@ -436,10 +440,9 @@ function withPushMark(chat: WaChat, text: string) {
   return chat.name && chat.name_source === "push" ? `~${text}` : text;
 }
 
-const PUSH_NAME_HINT = "The name this contact chose for themselves — not from your address book";
-
 function ChatRow({ chat, active, draftCount, ambiguousName, onClick }:
   { chat: WaChat; active: boolean; draftCount: number; ambiguousName: boolean; onClick: () => void }) {
+  const { t } = useTranslation();
   const rawName = chat.name || chat.jid.split("@")[0];
   // When two chats still share a name ("Tom" / "Tom" — two people),
   // append the number's last 4 digits so the user can tell them apart.
@@ -471,7 +474,7 @@ function ChatRow({ chat, active, draftCount, ambiguousName, onClick }:
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline justify-between gap-2">
           <span className={cn("text-sm truncate", chat.unread_count > 0 && "font-semibold")}
-                title={shown !== name ? PUSH_NAME_HINT : undefined}>
+                title={shown !== name ? t("whatsapp.list.pushNameHint") : undefined}>
             {shown}
           </span>
           <span className={cn(
@@ -508,6 +511,7 @@ function ChatRow({ chat, active, draftCount, ambiguousName, onClick }:
 
 function Thread({ jid, chat, onSent }:
   { jid: string; chat: WaChat; onSent: () => void }) {
+  const { t } = useTranslation();
   const msgsApi = useApi<WaMessage[]>(`/api/whatsapp/chats/${encodeURIComponent(jid)}/messages?limit=200`, [jid]);
   const messages = msgsApi.data || [];
   const [text, setText] = useState("");
@@ -573,30 +577,30 @@ function Thread({ jid, chat, onSent }:
   function pickFile(f: File | null | undefined) {
     if (!f) return;
     const ok = f.type.startsWith("image/") || f.type.startsWith("video/") || f.type === "application/pdf";
-    if (!ok) { toast("A photo, a video or a PDF"); return; }
+    if (!ok) { toast(t("whatsapp.thread.attachOnly")); return; }
     setAttachment(f);
     composerRef.current?.focus();
   }
 
   async function send() {
-    const t = text.trim();
-    if (!t && !attachment) return;
+    const body = text.trim();
+    if (!body && !attachment) return;
     setSending(true);
     try {
       if (attachment) {
         const fd = new FormData();
         fd.append("file", attachment, attachment.name);
-        fd.append("caption", t);
+        fd.append("caption", body);
         await api.postForm(`/api/whatsapp/chats/${encodeURIComponent(jid)}/send-media`, fd);
         setAttachment(null);
       } else {
-        await api.post(`/api/whatsapp/chats/${encodeURIComponent(jid)}/send`, { text: t });
+        await api.post(`/api/whatsapp/chats/${encodeURIComponent(jid)}/send`, { text: body });
       }
       setText("");
       await msgsApi.refetch();
       onSent();
     } catch (e: any) {
-      toast("Send failed: " + e.message);
+      toast(t("whatsapp.thread.sendFailed", { error: e.message }));
     } finally {
       setSending(false);
     }
@@ -615,11 +619,11 @@ function Thread({ jid, chat, onSent }:
         <div className="flex-1 min-w-0">
           <PersonHover identifier={jid}>
             <div className="font-semibold leading-none cursor-default inline-block"
-                 title={shown !== name ? PUSH_NAME_HINT : undefined}>{shown}</div>
+                 title={shown !== name ? t("whatsapp.list.pushNameHint") : undefined}>{shown}</div>
           </PersonHover>
           <div className="text-xs text-muted-foreground mt-1 truncate">
-            {chat.is_group ? "Group chat" : jid.replace(/@.+/, "")}
-            <span className="ml-2 opacity-60">· {messages.length} message{messages.length === 1 ? "" : "s"}</span>
+            {chat.is_group ? t("whatsapp.thread.groupChat") : jid.replace(/@.+/, "")}
+            <span className="ml-2 opacity-60">· {t("whatsapp.thread.messageCount", { count: messages.length })}</span>
           </div>
         </div>
       </header>
@@ -634,7 +638,7 @@ function Thread({ jid, chat, onSent }:
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="px-6 py-6 max-w-3xl mx-auto">
           {msgsApi.loading && messages.length === 0 && (
-            <div className="text-center text-xs text-muted-foreground py-12">Loading…</div>
+            <div className="text-center text-xs text-muted-foreground py-12">{t("whatsapp.thread.loading")}</div>
           )}
           <MessageStream messages={messages} contactName={name} isGroup={!!chat.is_group} />
         </div>
@@ -661,11 +665,11 @@ function Thread({ jid, chat, onSent }:
             <div className="min-w-0 flex-1">
               <div className="text-sm truncate">{attachment.name}</div>
               <div className="text-xs text-muted-foreground">
-                {attachment.type.startsWith("image/") ? "Photo" : attachment.type.startsWith("video/") ? "Video" : "PDF"}
-                {" · "}{(attachment.size / (1024 * 1024)).toFixed(attachment.size > 10 * 1024 * 1024 ? 0 : 1)} MB
+                {attachment.type.startsWith("image/") ? t("whatsapp.thread.attachment.photo") : attachment.type.startsWith("video/") ? t("whatsapp.thread.attachment.video") : t("whatsapp.thread.attachment.pdf")}
+                {" · "}{t("whatsapp.thread.attachment.size", { size: (attachment.size / (1024 * 1024)).toFixed(attachment.size > 10 * 1024 * 1024 ? 0 : 1) })}
               </div>
             </div>
-            <button type="button" aria-label="Remove attachment" onClick={() => setAttachment(null)}
+            <button type="button" aria-label={t("whatsapp.thread.attachment.remove")} onClick={() => setAttachment(null)}
                     className="p-1.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 shrink-0">
               <X className="w-4 h-4" />
             </button>
@@ -683,8 +687,8 @@ function Thread({ jid, chat, onSent }:
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={sending}
-          aria-label="Attach a photo, a video or a PDF"
-          title="Photo, video or PDF"
+          aria-label={t("whatsapp.thread.attachment.attachAria")}
+          title={t("whatsapp.thread.attachment.attachTitle")}
           className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground transition"
         >
           <Paperclip className="w-5 h-5" />
@@ -705,7 +709,7 @@ function Thread({ jid, chat, onSent }:
                 e.preventDefault(); send();
               }
             }}
-            placeholder={attachment ? "Add a caption…" : "Type a message…"}
+            placeholder={attachment ? t("whatsapp.thread.captionPlaceholder") : t("whatsapp.thread.messagePlaceholder")}
             rows={1}
             className="w-full px-4 py-2.5 rounded-2xl bg-muted/70 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 resize-none min-h-[42px] max-h-32 leading-relaxed"
             style={{ height: "auto" }}
@@ -719,7 +723,7 @@ function Thread({ jid, chat, onSent }:
         <button
           type="submit"
           disabled={(!text.trim() && !attachment) || sending}
-          aria-label="Send"
+          aria-label={t("whatsapp.thread.send")}
           className={cn(
             "w-11 h-11 rounded-full flex items-center justify-center transition shrink-0",
             (text.trim() || attachment) && !sending
@@ -794,12 +798,12 @@ function DateSeparator({ date }: { date: Date }) {
   const now = new Date();
   const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
   let label: string;
-  if (date.toDateString() === now.toDateString()) label = "Today";
-  else if (date.toDateString() === yesterday.toDateString()) label = "Yesterday";
+  if (date.toDateString() === now.toDateString()) label = i18n.t("common.today");
+  else if (date.toDateString() === yesterday.toDateString()) label = i18n.t("common.yesterday");
   else if (date.getFullYear() === now.getFullYear()) {
-    label = date.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+    label = date.toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" });
   } else {
-    label = date.toLocaleDateString([], { day: "numeric", month: "long", year: "numeric" });
+    label = date.toLocaleDateString(locale(), { day: "numeric", month: "long", year: "numeric" });
   }
   // A centred pill, the way messengers mark a day — not a rule across
   // the screen.
@@ -822,11 +826,12 @@ function DateSeparator({ date }: { date: Date }) {
  * as a broken-image icon.
  */
 function ImageBubble({ msgId }: { msgId: string }) {
+  const { t } = useTranslation();
   const [errored, setErrored] = useState(false);
   if (errored) {
     return (
       <span className="opacity-80 italic flex items-center gap-1.5 text-sm px-2 py-1">
-        <ImageIcon className="w-3.5 h-3.5" /> Photo (unavailable)
+        <ImageIcon className="w-3.5 h-3.5" /> {t("whatsapp.bubble.photoUnavailable")}
       </span>
     );
   }
@@ -841,7 +846,7 @@ function ImageBubble({ msgId }: { msgId: string }) {
     >
       <img
         src={url}
-        alt="Photo"
+        alt={t("whatsapp.bubble.photo")}
         loading="lazy"
         className="rounded-xl max-w-full max-h-[420px] object-cover cursor-zoom-in"
         onError={() => setErrored(true)}
@@ -853,6 +858,7 @@ function ImageBubble({ msgId }: { msgId: string }) {
 
 function Bubble({ m, contactName, isGroup, isFirstInGroup, isLastInGroup }:
   { m: WaMessage; contactName: string; isGroup: boolean; isFirstInGroup: boolean; isLastInGroup: boolean }) {
+  const { t } = useTranslation();
   const out = !!m.from_me;
   const mediaUrl = `/api/whatsapp/media/${encodeURIComponent(m.msg_id)}`;
   // Media first, the caption (m.text) under it — a photo with a caption
@@ -867,7 +873,7 @@ function Bubble({ m, contactName, isGroup, isFirstInGroup, isLastInGroup }:
       <a href={mediaUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
          className="flex items-center gap-2 rounded-lg bg-black/10 dark:bg-white/10 px-2.5 py-2 hover:bg-black/15 dark:hover:bg-white/15">
         <FileText className="w-5 h-5 shrink-0" />
-        <span className="truncate text-sm">{m.filename || "Document"}</span>
+        <span className="truncate text-sm">{m.filename || t("whatsapp.bubble.document")}</span>
       </a>
     );
   } else if (m.media_kind === "audio") {
@@ -915,8 +921,8 @@ function Bubble({ m, contactName, isGroup, isFirstInGroup, isLastInGroup }:
           mediaOnly ? "px-1.5 pt-1 pb-0.5" : "mt-0.5 -mb-0.5",
           out ? "text-emerald-900/60 dark:text-emerald-100/60" : "text-muted-foreground",
         )}>
-          {m.media_paperless_id != null && <FileText className="w-3 h-3 opacity-70" aria-label="Filed in Documents" />}
-          {m.media_immich_id && <ImageIcon className="w-3 h-3 opacity-70" aria-label="In Photos" />}
+          {m.media_paperless_id != null && <FileText className="w-3 h-3 opacity-70" aria-label={t("whatsapp.bubble.filedInDocuments")} />}
+          {m.media_immich_id && <ImageIcon className="w-3 h-3 opacity-70" aria-label={t("whatsapp.bubble.inPhotos")} />}
           {ts}
           {out && <CheckCheck className="w-3.5 h-3.5 opacity-80" />}
         </div>
@@ -928,9 +934,10 @@ function Bubble({ m, contactName, isGroup, isFirstInGroup, isLastInGroup }:
 /** A video from the chat — the browser streams it from the media route
  *  (bridge or the photo library); a faded label when it is gone. */
 function VideoBubble({ url }: { url: string }) {
+  const { t } = useTranslation();
   const [errored, setErrored] = useState(false);
   if (errored) {
-    return <span className="opacity-80 italic text-sm px-2 py-1 inline-block">Video (unavailable)</span>;
+    return <span className="opacity-80 italic text-sm px-2 py-1 inline-block">{t("whatsapp.bubble.videoUnavailable")}</span>;
   }
   return (
     <video
@@ -947,11 +954,12 @@ function VideoBubble({ url }: { url: string }) {
 
 /** A voice note: a player, and under it what was said (the transcript). */
 function AudioBubble({ url, transcript, out }: { url: string; transcript?: string | null; out: boolean }) {
+  const { t } = useTranslation();
   const [errored, setErrored] = useState(false);
   return (
     <div className="min-w-[200px]">
       {errored ? (
-        <div className="opacity-80 italic flex items-center gap-1.5 text-sm"><Mic className="w-3.5 h-3.5" /> Voice message (unavailable)</div>
+        <div className="opacity-80 italic flex items-center gap-1.5 text-sm"><Mic className="w-3.5 h-3.5" /> {t("whatsapp.bubble.voiceUnavailable")}</div>
       ) : (
         <audio src={url} controls preload="none" className="w-full h-9" onError={() => setErrored(true)}
                onClick={(e) => e.stopPropagation()} />
@@ -1033,6 +1041,7 @@ function WaSuggestions({ jid }: { jid: string }) {
 
 function DraftPanel({ jid, chat, onPicked }:
   { jid: string; chat: WaChat | undefined; onPicked: (text: string) => void }) {
+  const { t } = useTranslation();
   // States loaded once from /api/whatsapp/draft-states so adding /
   // removing a state is a pure backend change.
   const statesApi = useApi<DraftState[]>("/api/whatsapp/draft-states", []);
@@ -1063,7 +1072,7 @@ function DraftPanel({ jid, chat, onPicked }:
       );
       setDrafts(r.drafts || []);
     } catch (e: any) {
-      setError(e?.message || "Generation failed");
+      setError(e?.message || t("whatsapp.drafts.generationFailed"));
     } finally {
       setGenerating(false);
     }
@@ -1077,9 +1086,9 @@ function DraftPanel({ jid, chat, onPicked }:
             <Sparkles className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <div className="text-sm font-semibold leading-none">Draft a reply</div>
+            <div className="text-sm font-semibold leading-none">{t("whatsapp.drafts.title")}</div>
             <div className="text-2xs text-muted-foreground mt-0.5">
-              {generating ? "thinking…" : "pick a tone"}
+              {generating ? t("whatsapp.drafts.thinking") : t("whatsapp.drafts.pickTone")}
             </div>
           </div>
         </div>
@@ -1088,10 +1097,10 @@ function DraftPanel({ jid, chat, onPicked }:
       {chat?.last_message_text && (
         <div className="px-5 pt-4 pb-3 border-b border-border bg-muted/30">
           <div className="text-2xs text-muted-foreground font-semibold mb-1.5">
-            Replying to
+            {t("whatsapp.drafts.replyingTo")}
           </div>
           <div className="text-xs italic text-muted-foreground line-clamp-3 pl-2 border-l-2 border-primary/40">
-            "{chat.last_message_text}"
+            {t("whatsapp.drafts.quoted", { text: chat.last_message_text })}
           </div>
         </div>
       )}
@@ -1124,7 +1133,7 @@ function DraftPanel({ jid, chat, onPicked }:
         <textarea
           value={custom}
           onChange={e => setCustom(e.target.value)}
-          placeholder="Optional: nudge the content (e.g. 'ask if Saturday works')"
+          placeholder={t("whatsapp.drafts.customPlaceholder")}
           rows={2}
           className="w-full px-3 py-2 rounded-lg bg-muted/60 text-xs focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 resize-none leading-relaxed placeholder:text-muted-foreground/70"
         />
@@ -1135,7 +1144,7 @@ function DraftPanel({ jid, chat, onPicked }:
         {generating && (
           <div className="text-xs text-primary italic px-2 py-8 text-center flex flex-col items-center gap-2">
             <ThinkingDots />
-            <span>Yorik is composing 3 options…</span>
+            <span>{t("whatsapp.drafts.composing")}</span>
           </div>
         )}
         {!generating && error && (
@@ -1146,7 +1155,7 @@ function DraftPanel({ jid, chat, onPicked }:
         {!generating && !error && drafts.length === 0 && (
           <div className="text-xs text-muted-foreground italic px-3 py-8 text-center">
             <Sparkles className="w-6 h-6 mx-auto mb-3 opacity-30" />
-            Pick a tone above. Yorik will mirror your writing style with this person.
+            {t("whatsapp.drafts.pickToneHint")}
           </div>
         )}
         {!generating && drafts.map((text, idx) => (
@@ -1157,7 +1166,7 @@ function DraftPanel({ jid, chat, onPicked }:
           >
             <div className="flex items-center gap-2 mb-2">
               <span className="text-2xs font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary">
-                Option {idx + 1}
+                {t("whatsapp.drafts.option", { n: idx + 1 })}
               </span>
             </div>
             <div className="text-xs whitespace-pre-line leading-relaxed text-foreground/90 group-hover:text-foreground">
@@ -1170,7 +1179,7 @@ function DraftPanel({ jid, chat, onPicked }:
             onClick={() => generate(activeState)}
             className="w-full mt-1 px-3 py-2 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition inline-flex items-center justify-center gap-1.5"
           >
-            <RefreshCw className="w-3 h-3" /> Regenerate
+            <RefreshCw className="w-3 h-3" /> {t("whatsapp.drafts.regenerate")}
           </button>
         )}
       </div>
@@ -1204,19 +1213,20 @@ function ThinkingDots() {
 // ───────────────────────── empty states ──────────────────────────────
 
 function EmptyThread({ chatsCount, onOpenList }: { chatsCount: number; onOpenList?: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="flex-1 flex items-center justify-center p-12">
       <div className="text-center max-w-sm">
         <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-6">
           <MessageSquare className="w-10 h-10 text-emerald-500" />
         </div>
-        <h2 className="text-lg font-semibold mb-2">Your WhatsApp inbox</h2>
+        <h2 className="text-lg font-semibold mb-2">{t("whatsapp.drafts.emptyTitle")}</h2>
         <p className="text-sm text-muted-foreground leading-relaxed">
           {chatsCount === 0
-            ? "Once you scan the QR code, your chats will appear here."
+            ? t("whatsapp.drafts.emptyScan")
             : <>
-                <span className="hidden md:inline">Pick a conversation on the left. Yorik suggests replies you can send or change.</span>
-                <span className="md:hidden">Yorik suggests replies you can send or change.</span>
+                <span className="hidden md:inline">{t("whatsapp.drafts.emptyPickDesktop")}</span>
+                <span className="md:hidden">{t("whatsapp.drafts.emptyPickPhone")}</span>
               </>}
         </p>
         {chatsCount > 0 && onOpenList && (
@@ -1226,7 +1236,7 @@ function EmptyThread({ chatsCount, onOpenList }: { chatsCount: number; onOpenLis
             onClick={onOpenList}
             className="md:hidden mt-5 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
           >
-            <MessageSquare className="w-4 h-4" /> Show chats
+            <MessageSquare className="w-4 h-4" /> {t("whatsapp.drafts.showChats")}
           </button>
         )}
       </div>
@@ -1235,12 +1245,13 @@ function EmptyThread({ chatsCount, onOpenList }: { chatsCount: number; onOpenLis
 }
 
 function EmptyDrafts() {
+  const { t } = useTranslation();
   return (
     <div className="flex-1 flex items-center justify-center p-6 text-center">
       <div>
         <Sparkles className="w-8 h-8 mx-auto mb-3 text-primary/40" />
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Open a conversation to see Yorik's<br/>draft replies.
+          {t("whatsapp.drafts.emptyDraftsLine1")}<br/>{t("whatsapp.drafts.emptyDraftsLine2")}
         </p>
       </div>
     </div>
@@ -1260,6 +1271,7 @@ interface BridgeInfo {
 // WhatsApp on the same phone as Yorik can't scan a QR on its own screen:
 // link by phone number instead ("Link with phone number instead").
 function PairByCode() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState<string | null>(null);
@@ -1270,13 +1282,13 @@ function PairByCode() {
     try {
       const r = await api.post<{ code: string }>("/api/whatsapp/pairing-code", { phone });
       setCode(r.code);
-    } catch (e: any) { setErr(e?.message || "No code came back."); }
+    } catch (e: any) { setErr(e?.message || t("whatsapp.pair.noCode")); }
     finally { setBusy(false); }
   }
   if (!open) {
     return (
       <button onClick={() => setOpen(true)} className="mt-4 text-sm text-primary underline">
-        WhatsApp is on this phone? Link with a code instead
+        {t("whatsapp.pair.linkWithCode")}
       </button>
     );
   }
@@ -1285,23 +1297,23 @@ function PairByCode() {
       {!code ? (
         <>
           <label className="block text-sm">
-            <span className="font-medium">Your WhatsApp phone number</span>
+            <span className="font-medium">{t("whatsapp.pair.yourNumber")}</span>
             <input value={phone} onChange={e => setPhone(e.target.value)} inputMode="tel" placeholder="+49 170 1234567"
                    className="mt-1.5 w-full h-10 px-3 rounded-lg bg-background border border-border" />
           </label>
           {err && <p className="text-xs text-destructive">{err}</p>}
           <button onClick={ask} disabled={busy || phone.replace(/\D/g, "").length < 8}
                   className="w-full h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2">
-            {busy && <Loader2 className="w-4 h-4 animate-spin" />} Get the code
+            {busy && <Loader2 className="w-4 h-4 animate-spin" />} {t("whatsapp.pair.getCode")}
           </button>
         </>
       ) : (
         <>
           <div className="text-center text-3xl font-mono font-semibold tracking-[0.3em] py-2">{code}</div>
           <ol className="text-xs text-muted-foreground space-y-1 pl-4 list-decimal">
-            <li>Open WhatsApp → Settings → <b>Linked Devices → Link a Device</b></li>
-            <li>Tap <b>Link with phone number instead</b></li>
-            <li>Type the code above</li>
+            <li><Trans i18nKey="whatsapp.pair.codeStep1" components={{ b: <b /> }} /></li>
+            <li><Trans i18nKey="whatsapp.pair.codeStep2" components={{ b: <b /> }} /></li>
+            <li>{t("whatsapp.pair.codeStep3")}</li>
           </ol>
         </>
       )}
@@ -1315,6 +1327,7 @@ function QrModal({
   status: WaStatus | null | undefined;
   onRefreshStatus: () => void;
 }) {
+  const { t } = useTranslation();
   const [dismissed, setDismissed] = useState(false);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [bridgeInfo, setBridgeInfo] = useState<BridgeInfo | null>(null);
@@ -1341,14 +1354,14 @@ function QrModal({
     const id = setInterval(() => {
       if (Date.now() - startedAt > 180_000) {
         setBusy(false);
-        setErrorMsg("WhatsApp didn't start within 3 minutes. Try again; if it keeps failing, an admin can look under Settings → System.");
+        setErrorMsg(t("whatsapp.pair.timeout"));
         clearInterval(id);
         return;
       }
       onRefreshStatus();
     }, 2500);
     return () => clearInterval(id);
-  }, [busy, onRefreshStatus]);
+  }, [busy, onRefreshStatus, t]);
 
   // When status flips reachable, clear busy + load QR.
   useEffect(() => {
@@ -1410,7 +1423,7 @@ function QrModal({
       await api.post(`/api/whatsapp/bridge/${action}`, {});
     } catch (e: any) {
       setBusy(false);
-      setErrorMsg(e?.message || "Request failed");
+      setErrorMsg(e?.message || t("whatsapp.pair.requestFailed"));
     }
   }
 
@@ -1423,7 +1436,7 @@ function QrModal({
   const cs = bridgeInfo?.container_state || "unknown";
   const dockerOk = bridgeInfo?.docker_available && bridgeInfo?.compose_available;
   const isRunning = cs === "running" || cs === "restarting";
-  const actionLabel = isRunning ? "Restart bridge" : "Start bridge";
+  const actionLabel = isRunning ? t("whatsapp.pair.restartBridge") : t("whatsapp.pair.startBridge");
   const actionVerb: "start" | "restart" = isRunning ? "restart" : "start";
 
   return (
@@ -1444,20 +1457,20 @@ function QrModal({
         <div className="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center mx-auto mb-4">
           <MessageSquare className="w-7 h-7 text-emerald-500" />
         </div>
-        <h2 className="text-lg font-semibold mb-1">Link your WhatsApp</h2>
+        <h2 className="text-lg font-semibold mb-1">{t("whatsapp.pair.title")}</h2>
         <p className="text-sm text-muted-foreground mb-6">
           {status?.bridge_unreachable
             ? (isRunning
-                ? "The WhatsApp bridge is running but not responding."
-                : "The WhatsApp bridge container isn't running yet.")
-            : "Scan this with your phone — Yorik becomes a linked device, just like WhatsApp Web."}
+                ? t("whatsapp.pair.bridgeNotResponding")
+                : t("whatsapp.pair.bridgeNotRunning"))
+            : t("whatsapp.pair.scanIntro")}
         </p>
         {status?.bridge_unreachable ? (
           <div className="space-y-3">
             {dockerOk === false ? (
               <div className="text-xs text-left bg-amber-500/10 border border-amber-500/30 rounded-md p-3 text-amber-700 dark:text-amber-300">
-                <strong>Docker {bridgeInfo?.docker_available ? "Compose" : ""} not available.</strong>{" "}
-                Install Docker Desktop (or the Docker Engine + Compose plugin on Linux), then refresh this page.
+                <strong>{bridgeInfo?.docker_available ? t("whatsapp.pair.dockerComposeMissing") : t("whatsapp.pair.dockerMissing")}</strong>{" "}
+                {t("whatsapp.pair.installDocker")}
               </div>
             ) : (
               <>
@@ -1472,21 +1485,21 @@ function QrModal({
                   )}
                 >
                   {busy ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Starting bridge…</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> {t("whatsapp.pair.startingBridge")}</>
                   ) : (
                     <><Power className="w-4 h-4" /> {actionLabel}</>
                   )}
                 </button>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   {busy
-                    ? "First-time start downloads the bridge image — can take a minute or two. The QR will appear here automatically when the bridge is ready."
+                    ? t("whatsapp.pair.firstStartHint")
                     : isRunning
-                      ? "Will restart the existing container (~5 sec). Usually fixes a wedged bridge."
-                      : "Will run `docker compose up -d whatsapp-bridge` for you. First start can take 1–2 minutes while the image builds."}
+                      ? t("whatsapp.pair.restartHint")
+                      : t("whatsapp.pair.startHint")}
                 </p>
                 {bridgeInfo && (
                   <p className="text-2xs text-muted-foreground/70 font-mono">
-                    container: {bridgeInfo.container_name} · state: {cs}
+                    {t("whatsapp.pair.containerInfo", { name: bridgeInfo.container_name, state: cs })}
                   </p>
                 )}
               </>
@@ -1500,19 +1513,19 @@ function QrModal({
         ) : qrUrl ? (
           <>
             <div className="bg-white rounded-xl p-4 inline-block shadow-inner">
-              <img src={qrUrl} alt="WhatsApp pairing QR" className="w-64 h-64" />
+              <img src={qrUrl} alt={t("whatsapp.pair.qrAlt")} className="w-64 h-64" />
             </div>
             <ol className="text-left text-xs text-muted-foreground mt-6 space-y-1 pl-4 list-decimal">
-              <li>Open WhatsApp on your phone</li>
-              <li>Settings → <b>Linked Devices → Link a Device</b></li>
-              <li>Scan the QR above</li>
+              <li>{t("whatsapp.pair.qrStep1")}</li>
+              <li><Trans i18nKey="whatsapp.pair.qrStep2" components={{ b: <b /> }} /></li>
+              <li>{t("whatsapp.pair.qrStep3")}</li>
             </ol>
             <PairByCode />
           </>
         ) : (
           <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
-            Waiting for QR…
+            {t("whatsapp.pair.waitingQr")}
           </div>
         )}
       </div>
@@ -1524,6 +1537,7 @@ function QrModal({
 
 function ImportDialog({ onClose, onImported }:
   { onClose: () => void; onImported: () => void }) {
+  const { t } = useTranslation();
   const [uploading, setUploading] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
 
@@ -1539,11 +1553,11 @@ function ImportDialog({ onClose, onImported }:
       });
       if (!r.ok) throw new Error(await r.text());
       const data = await r.json();
-      toast(`Imported ${data.messages_inserted} messages from "${file.name}".`);
+      toast(t("whatsapp.import.imported", { count: data.messages_inserted, name: file.name }));
       onImported();
       onClose();
     } catch (e: any) {
-      toast("Import failed: " + e.message);
+      toast(t("whatsapp.import.importFailed", { error: e.message }));
     } finally { setUploading(false); }
   }
 
@@ -1552,11 +1566,10 @@ function ImportDialog({ onClose, onImported }:
       onClick={onClose}>
       <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md p-7"
         onClick={e => e.stopPropagation()}>
-        <h2 className="font-semibold text-base mb-2">Import WhatsApp chat history</h2>
+        <h2 className="font-semibold text-base mb-2">{t("whatsapp.import.title")}</h2>
         <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
-          On your phone: open a chat → menu → <b>More → Export Chat → Without Media</b>.
-          Save the <code className="text-xs bg-muted px-1 rounded">.txt</code> or
-          <code className="text-xs bg-muted px-1 rounded ml-1">.zip</code> here.
+          <Trans i18nKey="whatsapp.import.intro"
+                 components={{ b: <b />, code: <code className="text-xs bg-muted px-1 rounded" />, code2: <code className="text-xs bg-muted px-1 rounded ml-1" /> }} />
         </p>
         <input ref={ref} type="file" accept=".txt,.zip" onChange={handleFile} className="hidden" />
         <button
@@ -1564,10 +1577,10 @@ function ImportDialog({ onClose, onImported }:
           disabled={uploading}
           className="w-full py-3 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 font-medium"
         >
-          {uploading ? "Importing…" : "Pick file"}
+          {uploading ? t("whatsapp.import.importing") : t("whatsapp.import.pickFile")}
         </button>
         <button onClick={onClose} className="w-full mt-2 py-2 text-sm text-muted-foreground hover:bg-muted rounded-md">
-          Cancel
+          {t("whatsapp.import.cancel")}
         </button>
       </div>
     </div>
@@ -1591,6 +1604,7 @@ function DisconnectDialog({
   onClose: () => void;
   onDisconnected: () => Promise<void> | void;
 }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [wipeHistory, setWipeHistory] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1609,12 +1623,12 @@ function DisconnectDialog({
         // Surface the bridge error explicitly — partial states (e.g.
         // auth was wiped but logout failed) leave you in a workable
         // state but worth telling the user.
-        setErr(`Disconnect partially failed: ${r.bridge_error}. You may need to reload the page.`);
+        setErr(t("whatsapp.disconnect.partialFailed", { error: r.bridge_error }));
         return;
       }
       await onDisconnected();
     } catch (e: any) {
-      setErr(e?.message || "disconnect failed");
+      setErr(e?.message || t("whatsapp.disconnect.failed"));
     } finally {
       setBusy(false);
     }
@@ -1625,11 +1639,10 @@ function DisconnectDialog({
       onClick={busy ? undefined : onClose}>
       <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md p-6"
         onClick={e => e.stopPropagation()}>
-        <h2 className="font-semibold text-base mb-1">Disconnect WhatsApp?</h2>
+        <h2 className="font-semibold text-base mb-1">{t("whatsapp.disconnect.title")}</h2>
         <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-          Currently connected as <span className="font-medium text-foreground">{currentName}</span>.
-          Your phone's "Linked Devices" list will lose this connection.
-          A fresh QR will appear so you can pair a different account.
+          <Trans i18nKey="whatsapp.disconnect.intro" values={{ name: currentName }}
+                 components={{ b: <span className="font-medium text-foreground" /> }} />
         </p>
 
         <label className="flex items-start gap-2 mb-4 cursor-pointer select-none p-2.5 rounded-md border border-border hover:bg-muted/40">
@@ -1641,10 +1654,9 @@ function DisconnectDialog({
             className="mt-0.5 accent-primary"
           />
           <span className="text-xs leading-snug">
-            <span className="text-foreground font-medium">Also delete all message history from Yorik</span>
+            <span className="text-foreground font-medium">{t("whatsapp.disconnect.wipeLabel")}</span>
             <span className="block text-muted-foreground mt-0.5">
-              By default, conversations stay archived locally — only the connection is reset.
-              Check this only if you want a completely clean slate.
+              {t("whatsapp.disconnect.wipeHint")}
             </span>
           </span>
         </label>
@@ -1661,7 +1673,7 @@ function DisconnectDialog({
             disabled={busy}
             className="flex-1 py-2 text-sm text-muted-foreground hover:bg-muted rounded-md disabled:opacity-50"
           >
-            Cancel
+            {t("whatsapp.disconnect.cancel")}
           </button>
           <button
             onClick={confirm}
@@ -1669,7 +1681,7 @@ function DisconnectDialog({
             className="flex-1 py-2 text-sm rounded-md bg-destructive text-destructive-foreground hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
           >
             {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {busy ? "Disconnecting…" : "Disconnect"}
+            {busy ? t("whatsapp.disconnect.disconnecting") : t("whatsapp.disconnect.disconnect")}
           </button>
         </div>
       </div>
@@ -1679,6 +1691,7 @@ function DisconnectDialog({
 
 
 function BriefingDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   const briefingApi = useApi<{ summary: string; stats: any; generated_at: string }>(
     "/api/briefings/morning-overview/run?window_hours=24", []
   );
@@ -1690,13 +1703,13 @@ function BriefingDialog({ onClose }: { onClose: () => void }) {
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-semibold flex items-center gap-2">
-            <Newspaper className="w-5 h-5 text-primary" /> Briefing (last 24h)
+            <Newspaper className="w-5 h-5 text-primary" /> {t("whatsapp.briefing.title")}
           </h2>
-          <a href="/r/briefing" className="text-xs text-primary hover:underline">Open full briefing →</a>
+          <a href="/r/briefing" className="text-xs text-primary hover:underline">{t("whatsapp.briefing.openFull")}</a>
         </div>
         {briefingApi.loading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" /> Generating…
+            <Loader2 className="w-4 h-4 animate-spin" /> {t("whatsapp.briefing.generating")}
           </div>
         )}
         {briefingApi.error && <div className="text-sm text-destructive">{briefingApi.error}</div>}
@@ -1791,14 +1804,14 @@ function formatChatListTime(d: Date): string {
   if (isNaN(d.getTime())) return "";
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   }
   const y = new Date(now); y.setDate(y.getDate() - 1);
-  if (d.toDateString() === y.toDateString()) return "Yesterday";
+  if (d.toDateString() === y.toDateString()) return i18n.t("common.yesterday");
   if (now.getTime() - d.getTime() < 7 * 24 * 3600 * 1000) {
-    return d.toLocaleDateString([], { weekday: "short" });
+    return d.toLocaleDateString(locale(), { weekday: "short" });
   }
-  return d.toLocaleDateString([], { day: "2-digit", month: "short" });
+  return d.toLocaleDateString(locale(), { day: "2-digit", month: "short" });
 }
 
 function hash(s: string): number {
@@ -1867,6 +1880,7 @@ interface BannerContact {
 }
 
 function ContactBanner({ jid, fallbackName }: { jid: string; fallbackName: string }) {
+  const { t } = useTranslation();
   // We pass the FULL jid (including @s.whatsapp.net / @lid) so the
   // backend can match contact_channels exactly. The earlier "digits only"
   // version was what made @lid pseudo-jids collide with each other.
@@ -1909,7 +1923,7 @@ function ContactBanner({ jid, fallbackName }: { jid: string; fallbackName: strin
   }
   async function markSpam() {
     if (!contact) return;
-    if (!confirm(`Mark "${contact.display_name}" as spam? Future WhatsApp messages from this number will be tagged spam.`)) return;
+    if (!confirm(t("whatsapp.contact.confirmSpam", { name: contact.display_name }))) return;
     setBusy(true);
     try {
       await api.post(`/api/contacts/${contact.id}/spam`);
@@ -1953,7 +1967,7 @@ function ContactBanner({ jid, fallbackName }: { jid: string; fallbackName: strin
       <div className="px-6 py-2 bg-amber-500/10 border-b border-amber-500/30 flex items-center gap-2 text-xs">
         <UsersRound className="w-3.5 h-3.5 text-amber-600" />
         <span className="text-foreground">
-          <span className="font-medium">{contact.display_name}</span> is a pending contact — confirm to add to your address book.
+          <Trans i18nKey="whatsapp.contact.pending" values={{ name: contact.display_name }} components={{ b: <span className="font-medium" /> }} />
         </span>
         <button
           onClick={promote}
@@ -1961,19 +1975,19 @@ function ContactBanner({ jid, fallbackName }: { jid: string; fallbackName: strin
           className="ml-auto px-2.5 py-1 rounded-md bg-emerald-500 text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
         >
           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-          Confirm
+          {t("whatsapp.contact.confirm")}
         </button>
         <button
           onClick={markSpam}
           disabled={busy}
           className="px-2.5 py-1 rounded-md border border-border bg-card text-xs hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-500 disabled:opacity-50 flex items-center gap-1"
         >
-          <ShieldAlert className="w-3 h-3" /> Spam
+          <ShieldAlert className="w-3 h-3" /> {t("whatsapp.contact.spam")}
         </button>
         <button
           onClick={() => setDismissed(true)}
           className="p-1 text-muted-foreground hover:text-foreground"
-          title="Dismiss for this session"
+          title={t("whatsapp.contact.dismissSession")}
         >
           <X className="w-3 h-3" />
         </button>
@@ -1986,19 +2000,19 @@ function ContactBanner({ jid, fallbackName }: { jid: string; fallbackName: strin
       <div className="px-6 py-2 bg-red-500/10 border-b border-red-500/30 flex items-center gap-2 text-xs">
         <ShieldAlert className="w-3.5 h-3.5 text-red-500" />
         <span className="text-foreground">
-          <span className="font-medium">{contact.display_name}</span> is on your spam list.
+          <Trans i18nKey="whatsapp.contact.onSpamList" values={{ name: contact.display_name }} components={{ b: <span className="font-medium" /> }} />
         </span>
         <button
           onClick={restoreFromSpam}
           disabled={busy}
           className="ml-auto px-2.5 py-1 rounded-md border border-border bg-card text-xs hover:bg-muted disabled:opacity-50"
         >
-          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : "Restore to active"}
+          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : t("whatsapp.contact.restore")}
         </button>
         <button
           onClick={() => setDismissed(true)}
           className="p-1 text-muted-foreground hover:text-foreground"
-          title="Dismiss for this session"
+          title={t("whatsapp.contact.dismissSession")}
         >
           <X className="w-3 h-3" />
         </button>
@@ -2011,7 +2025,7 @@ function ContactBanner({ jid, fallbackName }: { jid: string; fallbackName: strin
       <div className="px-6 py-2 bg-blue-500/10 border-b border-blue-500/30 flex items-center gap-2 text-xs">
         <UsersRound className="w-3.5 h-3.5 text-blue-500" />
         <span className="text-foreground">
-          This number isn't in your contacts yet.
+          {t("whatsapp.contact.unknownNumber")}
         </span>
         <button
           onClick={saveUnknown}
@@ -2019,12 +2033,12 @@ function ContactBanner({ jid, fallbackName }: { jid: string; fallbackName: strin
           className="ml-auto px-2.5 py-1 rounded-md bg-blue-500 text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-1"
         >
           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-          Save to contacts
+          {t("whatsapp.contact.saveToContacts")}
         </button>
         <button
           onClick={() => setDismissed(true)}
           className="p-1 text-muted-foreground hover:text-foreground"
-          title="Dismiss for this session"
+          title={t("whatsapp.contact.dismissSession")}
         >
           <X className="w-3 h-3" />
         </button>

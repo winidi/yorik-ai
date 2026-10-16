@@ -208,7 +208,7 @@ export function DiagnosticsCard({ toast, onOpenReports }: {
       setState({ ...state, ...r });
       toast(t("settings.diagnostics.saved", "Saved"), "success");
     } catch (e: any) {
-      toast(e?.message || "Failed to save", "error");
+      toast(e?.message || t("settings.diagnostics.saveFailed"), "error");
     } finally { setBusy(false); }
   }
 
@@ -219,7 +219,7 @@ export function DiagnosticsCard({ toast, onOpenReports }: {
       toast(t("settings.diagnostics.resetDone", "New identity. {{n}} pseudonyms forgotten.", { n: r.pseudonyms_forgotten }), "success");
       await load();
     } catch (e: any) {
-      toast(e?.message || "Failed", "error");
+      toast(e?.message || t("settings.diagnostics.resetFailed"), "error");
     } finally { setBusy(false); }
   }
 

@@ -6,7 +6,9 @@
  */
 import { useEffect, useState } from "react";
 import { Check, HardDrive, Loader2, Printer, Usb } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
+import { locale } from "@/i18n";
 import { cn } from "@/lib/utils";
 
 interface Volume { name: string; mountpoint: string; size?: string; label?: string; hotplug: boolean; suggested_target: string }
@@ -21,6 +23,7 @@ function makePassphrase(): string {
 }
 
 export function EasyBackup({ onDone }: { onDone?: () => void }) {
+  const { t } = useTranslation();
   const [vols, setVols] = useState<Volume[] | null>(null);
   const [pick, setPick] = useState<Volume | null>(null);
   const [phrase] = useState(makePassphrase);
@@ -38,21 +41,21 @@ export function EasyBackup({ onDone }: { onDone?: () => void }) {
     try {
       await api.patch("/api/backup/config", { target_path: pick.suggested_target, schedule: "03:00", passphrase: phrase });
       setStep("done"); onDone?.();
-    } catch (e: any) { setErr(e?.message || "Saving didn't work."); }
+    } catch (e: any) { setErr(e?.message || t("settings.easyBackup.saveFailed")); }
     finally { setBusy(false); }
   }
 
   function printSheet() {
     const w = window.open("", "_blank", "width=700,height=800");
     if (!w) return;
-    const today = new Date().toLocaleDateString();
-    w.document.write(`<!doctype html><title>Yorik recovery sheet</title>
+    const today = new Date().toLocaleDateString(locale());
+    w.document.write(`<!doctype html><title>${t("settings.easyBackup.sheet.title")}</title>
       <body style="font-family:system-ui,sans-serif;max-width:560px;margin:40px auto;line-height:1.5">
-      <h1 style="margin-bottom:4px">Yorik recovery sheet</h1><p style="color:#555">Made ${today}. Keep it with your important papers.</p>
-      <p>Your family's Yorik saves an encrypted copy of everything every night to <b>${pick?.label || pick?.name || "the backup drive"}</b>.
-      To restore it on a new machine you need this passphrase. Without it, the copies can't be opened by anyone, not even you.</p>
+      <h1 style="margin-bottom:4px">${t("settings.easyBackup.sheet.title")}</h1><p style="color:#555">${t("settings.easyBackup.sheet.made", { date: today })}</p>
+      <p>${t("settings.easyBackup.sheet.saves", { drive: `<b>${pick?.label || pick?.name || t("settings.easyBackup.sheet.theDrive")}</b>` })}
+      ${t("settings.easyBackup.sheet.needPhrase")}</p>
       <p style="font:600 26px ui-monospace,monospace;letter-spacing:2px;border:2px solid #000;padding:16px;text-align:center">${phrase}</p>
-      <p style="color:#555">How to restore: install Yorik, then follow docs/RESTORE.md with the backup drive plugged in.</p>
+      <p style="color:#555">${t("settings.easyBackup.sheet.howTo")}</p>
       <script>window.print()</script></body>`);
     w.document.close();
   }
@@ -61,7 +64,7 @@ export function EasyBackup({ onDone }: { onDone?: () => void }) {
     return (
       <div className="flex items-start gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
         <Check className="w-5 h-5 text-emerald-500 shrink-0" />
-        <p className="text-sm">Backups are on: every night at 3:00 to <b>{pick?.label || pick?.name}</b>. Keep the drive plugged in.</p>
+        <p className="text-sm">{t("settings.easyBackup.doneBefore")}<b>{pick?.label || pick?.name}</b>{t("settings.easyBackup.doneAfter")}</p>
       </div>
     );
   }
@@ -69,14 +72,14 @@ export function EasyBackup({ onDone }: { onDone?: () => void }) {
   return (
     <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-4">
       <div>
-        <div className="font-semibold">Easy setup</div>
-        <p className="text-sm text-muted-foreground">Plug a USB stick or disk into this machine, pick it, done.</p>
+        <div className="font-semibold">{t("settings.easyBackup.title")}</div>
+        <p className="text-sm text-muted-foreground">{t("settings.easyBackup.intro")}</p>
       </div>
       {err && <p className="text-sm text-destructive">{err}</p>}
       {step === "drive" && (
         <>
           {vols === null ? <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-            : vols.length === 0 ? <p className="text-sm text-muted-foreground">No drive found yet. Plug one in and <button className="underline" onClick={() => { setVols(null); api.get<Volume[]>("/api/storage/volumes").then(v => setVols(v.filter(x => x.hotplug || x.suggested_target))).catch(() => setVols([])); }}>look again</button>.</p>
+            : vols.length === 0 ? <p className="text-sm text-muted-foreground">{t("settings.easyBackup.noDriveBefore")}<button className="underline" onClick={() => { setVols(null); api.get<Volume[]>("/api/storage/volumes").then(v => setVols(v.filter(x => x.hotplug || x.suggested_target))).catch(() => setVols([])); }}>{t("settings.easyBackup.lookAgain")}</button>{t("settings.easyBackup.noDriveAfter")}</p>
             : (
               <div className="grid gap-2">
                 {vols.map(v => (
@@ -86,26 +89,26 @@ export function EasyBackup({ onDone }: { onDone?: () => void }) {
                     {v.hotplug ? <Usb className="w-5 h-5 text-muted-foreground" /> : <HardDrive className="w-5 h-5 text-muted-foreground" />}
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm font-medium truncate">{v.label || v.name}</span>
-                      <span className="block text-xs text-muted-foreground">{v.size ? `${v.size} · ` : ""}{v.hotplug ? "removable" : "built in"}</span>
+                      <span className="block text-xs text-muted-foreground">{v.size ? `${v.size} · ` : ""}{v.hotplug ? t("settings.easyBackup.removable") : t("settings.easyBackup.builtIn")}</span>
                     </span>
                   </button>
                 ))}
               </div>
             )}
           <button onClick={() => setStep("sheet")} disabled={!pick}
-                  className="w-full h-10 rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">Next</button>
+                  className="w-full h-10 rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50">{t("settings.easyBackup.next")}</button>
         </>
       )}
       {step === "sheet" && (
         <>
-          <p className="text-sm">Yorik made a passphrase for the backups. <b>Print it or write it down now</b>; it's the only way to open them on a new machine, and Yorik won't show it again.</p>
+          <p className="text-sm">{t("settings.easyBackup.phraseBefore")}<b>{t("settings.easyBackup.phraseStrong")}</b>{t("settings.easyBackup.phraseAfter")}</p>
           <div className="text-center font-mono text-lg font-semibold tracking-wider p-3 rounded-xl bg-card border border-border break-all">{phrase}</div>
           <button onClick={printSheet} className="w-full h-10 rounded-xl border border-border bg-card text-sm font-medium flex items-center justify-center gap-2">
-            <Printer className="w-4 h-4" /> Print the recovery sheet
+            <Printer className="w-4 h-4" /> {t("settings.easyBackup.printSheet")}
           </button>
           <button onClick={save} disabled={busy}
                   className="w-full h-10 rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-60 flex items-center justify-center gap-2">
-            {busy && <Loader2 className="w-4 h-4 animate-spin" />} I've kept it safe, turn backups on
+            {busy && <Loader2 className="w-4 h-4 animate-spin" />} {t("settings.easyBackup.keptSafe")}
           </button>
         </>
       )}

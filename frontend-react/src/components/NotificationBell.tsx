@@ -11,6 +11,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import * as Popover from "@radix-ui/react-popover";
+import { Trans, useTranslation } from "react-i18next";
+import i18n, { locale } from "@/i18n";
 import { MOBILE_BELL_SLOT_ID } from "@/components/MobileShell";
 import { Bell, Check, CheckCheck, Loader2, ShieldAlert, X, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,6 +36,7 @@ interface ListResponse {
 }
 
 export function NotificationBell() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [list, setList] = useState<Notification[] | null>(null);
@@ -136,9 +139,9 @@ export function NotificationBell() {
       await api.post(`/api/notifications/${n.id}/accept`);
       setList(l => l ? l.filter(x => x.id !== n.id) : l);
       setUnread(c => Math.max(0, c - 1));
-      if (n.payload?.category === "bill") toast("Added to Finance → Bills.");
+      if (n.payload?.category === "bill") toast(t("apps.bell.addedToBills"));
     } catch (e: any) {
-      toast(`Couldn't accept: ${e?.message || e}`);
+      toast(t("apps.bell.acceptFailed", { error: e?.message || e }));
     } finally {
       setBusyId(null);
     }
@@ -155,7 +158,7 @@ export function NotificationBell() {
           await api.post(`/api/pending/${encodeURIComponent(pendingId)}/${decision}`, {});
         } catch (e: any) {
           if (e?.status === 404) {
-            toast("This request has expired or was already handled.");
+            toast(t("apps.bell.requestExpired"));
           } else {
             throw e;
           }
@@ -164,9 +167,9 @@ export function NotificationBell() {
       await api.post(`/api/notifications/${n.id}/read`);
       setList(l => l ? l.filter(x => x.id !== n.id) : l);
       setUnread(c => Math.max(0, c - 1));
-      if (decision === "confirm") toast("Deleted.");
+      if (decision === "confirm") toast(t("apps.bell.deleted"));
     } catch (e: any) {
-      toast(`Couldn't ${decision === "confirm" ? "delete" : "keep"}: ${e?.message || e}`);
+      toast(t(decision === "confirm" ? "apps.bell.deleteFailed" : "apps.bell.keepFailed", { error: e?.message || e }));
     } finally {
       setBusyId(null);
     }
@@ -207,7 +210,7 @@ export function NotificationBell() {
       const junkBit = r.moved_to_junk ? ", in Junk verschoben" : "";
       if (import.meta.env.DEV) console.log(`[spam] blocked ${blocks}${junkBit}`);
     } catch (e: any) {
-      toast(`Couldn't mark as spam: ${e?.message || e}`);
+      toast(t("apps.bell.spamFailed", { error: e?.message || e }));
     } finally {
       setBusyId(null);
     }
@@ -218,12 +221,12 @@ export function NotificationBell() {
       {unread > 99 ? "99+" : unread}
     </span>
   );
-  const label = unread > 0 ? `${unread} unread notification${unread === 1 ? "" : "s"}` : "No new notifications";
+  const label = unread > 0 ? t("apps.bell.unread", { count: unread }) : t("apps.bell.noneNew");
   const trigger = slot ? (
     <Popover.Trigger asChild>
       <button
         className="relative w-11 h-11 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground"
-        aria-label="Notifications"
+        aria-label={t("apps.bell.title")}
         title={label}
       >
         <Bell className="w-[22px] h-[22px]" />
@@ -234,7 +237,7 @@ export function NotificationBell() {
     <Popover.Trigger asChild>
       <button
         className="fixed z-[60] w-10 h-10 top-[calc(env(safe-area-inset-top)+0.25rem)] right-[max(0.75rem,env(safe-area-inset-right))] md:top-3 md:right-3 rounded-full bg-card border border-border shadow-md hover:shadow-lg flex items-center justify-center text-muted-foreground hover:text-foreground transition"
-        aria-label="Notifications"
+        aria-label={t("apps.bell.title")}
         title={label}
       >
         <Bell className="w-4 h-4" />
@@ -252,7 +255,7 @@ export function NotificationBell() {
           className="z-[900] w-[min(380px,calc(100vw-1.5rem))] max-h-[70vh] bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col"
         >
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-            <h3 className="font-semibold text-sm">Notifications</h3>
+            <h3 className="font-semibold text-sm">{t("apps.bell.title")}</h3>
             <div className="flex items-center gap-3">
               {list && list.some(n => !n.is_read) && (
                 <button
@@ -260,17 +263,17 @@ export function NotificationBell() {
                   className="text-xs text-primary hover:underline flex items-center gap-1"
                 >
                   <CheckCheck className="w-3 h-3" />
-                  Mark all read
+                  {t("apps.bell.markAllRead")}
                 </button>
               )}
               {list && list.length > 0 && (
                 <button
                   onClick={clearAll}
                   className="text-xs text-muted-foreground hover:text-foreground hover:underline flex items-center gap-1"
-                  title="Remove all entries"
+                  title={t("apps.bell.clearAllTitle")}
                 >
                   <Trash2 className="w-3 h-3" />
-                  Clear all
+                  {t("apps.bell.clearAll")}
                 </button>
               )}
             </div>
@@ -278,13 +281,13 @@ export function NotificationBell() {
           <div className="flex-1 overflow-y-auto">
             {loading && !list && (
               <div className="p-8 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+                <Loader2 className="w-4 h-4 animate-spin" /> {t("common.loading")}
               </div>
             )}
             {list && list.length === 0 && (
               <div className="p-8 text-center text-sm text-muted-foreground">
                 <Bell className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                Nothing to see here.
+                {t("apps.bell.empty")}
               </div>
             )}
             {list?.map(n => {
@@ -320,8 +323,8 @@ export function NotificationBell() {
                     onClick={(e) => { e.stopPropagation(); void dismiss(n.id); }}
                     onPointerDown={(e) => e.stopPropagation()}
                     className="absolute top-2 right-2 p-1 rounded-full text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 hover:bg-muted"
-                    title="Remove"
-                    aria-label="Remove notification"
+                    title={t("apps.bell.remove")}
+                    aria-label={t("apps.bell.removeAria")}
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -349,14 +352,14 @@ export function NotificationBell() {
                           {busyId === n.id
                             ? <Loader2 className="w-3 h-3 animate-spin" />
                             : <Check className="w-3 h-3" />}
-                          Delete
+                          {t("common.delete")}
                         </button>
                         <button
                           disabled={busyId === n.id}
                           onClick={(e) => { e.stopPropagation(); resolveAgentPending(n, "cancel"); }}
                           className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-border hover:bg-muted/40 disabled:opacity-50"
                         >
-                          <X className="w-3 h-3" /> Keep
+                          <X className="w-3 h-3" /> {t("apps.bell.keep")}
                         </button>
                       </div>
                     )}
@@ -370,23 +373,23 @@ export function NotificationBell() {
                           {busyId === n.id
                             ? <Loader2 className="w-3 h-3 animate-spin" />
                             : <Check className="w-3 h-3" />}
-                          Add to {proposalKind === "appointment" ? "calendar" : "bills"}
+                          {proposalKind === "appointment" ? t("apps.bell.addToCalendar") : t("apps.bell.addToBills")}
                         </button>
                         <button
                           disabled={busyId === n.id}
                           onClick={(e) => { e.stopPropagation(); void dismiss(n.id); }}
                           className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-border hover:bg-muted/40 disabled:opacity-50"
                         >
-                          <X className="w-3 h-3" /> Dismiss
+                          <X className="w-3 h-3" /> {t("apps.bell.dismiss")}
                         </button>
                         {n.payload?.from_email && (
                           <button
                             disabled={busyId === n.id}
                             onClick={(e) => { e.stopPropagation(); setSpamConfirmId(n.id); }}
                             className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-rose-500/40 text-rose-500 hover:bg-rose-500/10 disabled:opacity-50"
-                            title="Block this sender + move email to junk"
+                            title={t("apps.bell.spamTitle")}
                           >
-                            <ShieldAlert className="w-3 h-3" /> Spam
+                            <ShieldAlert className="w-3 h-3" /> {t("apps.bell.spam")}
                           </button>
                         )}
                         {n.navigate_to && (
@@ -394,7 +397,7 @@ export function NotificationBell() {
                             onClick={(e) => { e.stopPropagation(); setOpen(false); window.location.assign(n.navigate_to!); }}
                             className="text-xs text-primary hover:underline ml-auto"
                           >
-                            {n.kind === "document_proposal" ? "view document" : "view email"}
+                            {n.kind === "document_proposal" ? t("apps.bell.viewDocument") : t("apps.bell.viewEmail")}
                           </button>
                         )}
                       </div>
@@ -433,6 +436,7 @@ function SpamConfirmPanel({
   onConfirm: (blockDomain: boolean) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [blockDomain, setBlockDomain] = useState(false);
   const domain = senderEmail.includes("@") ? senderEmail.split("@")[1] : "";
   return (
@@ -441,8 +445,11 @@ function SpamConfirmPanel({
       onClick={(e) => e.stopPropagation()}
     >
       <div className="text-xs text-foreground">
-        Sender <span className="font-mono text-rose-600 dark:text-rose-400">{senderEmail || "(unknown)"}</span> blockieren
-        und Mail in den Junk-Ordner verschieben?
+        <Trans
+          i18nKey="apps.bell.spamConfirm.block"
+          values={{ sender: senderEmail || t("apps.bell.spamConfirm.unknown") }}
+          components={{ mono: <span className="font-mono text-rose-600 dark:text-rose-400" /> }}
+        />
       </div>
       {domain && (
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -452,7 +459,11 @@ function SpamConfirmPanel({
             onChange={(e) => setBlockDomain(e.target.checked)}
             className="w-3 h-3"
           />
-          Auch die ganze Domain <span className="font-mono">@{domain}</span> blockieren
+          <Trans
+            i18nKey="apps.bell.spamConfirm.domain"
+            values={{ domain }}
+            components={{ mono: <span className="font-mono" /> }}
+          />
         </label>
       )}
       <div className="flex gap-2">
@@ -464,14 +475,14 @@ function SpamConfirmPanel({
           {busy
             ? <Loader2 className="w-3 h-3 animate-spin" />
             : <ShieldAlert className="w-3 h-3" />}
-          Als Spam markieren
+          {t("apps.bell.spamConfirm.confirm")}
         </button>
         <button
           disabled={busy}
           onClick={onCancel}
           className="text-xs px-2 py-1 rounded border border-border hover:bg-muted/40 disabled:opacity-50"
         >
-          Abbrechen
+          {t("common.cancel")}
         </button>
       </div>
     </div>
@@ -483,8 +494,8 @@ function formatTime(iso: string): string {
   if (isNaN(d.getTime())) return iso;
   const now = new Date();
   const diffMin = (now.getTime() - d.getTime()) / 60_000;
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${Math.round(diffMin)} min ago`;
-  if (diffMin < 24 * 60) return `${Math.round(diffMin / 60)}h ago`;
-  return d.toLocaleDateString([], { day: "numeric", month: "short" });
+  if (diffMin < 1) return i18n.t("apps.bell.time.justNow");
+  if (diffMin < 60) return i18n.t("apps.bell.time.minutesAgo", { count: Math.round(diffMin) });
+  if (diffMin < 24 * 60) return i18n.t("apps.bell.time.hoursAgo", { count: Math.round(diffMin / 60) });
+  return d.toLocaleDateString(locale(), { day: "numeric", month: "short" });
 }

@@ -22,7 +22,7 @@
  */
 
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { locale } from "@/i18n";
 import {
   Loader2, Sparkles, MapPin, Building2, ArrowRight, ArrowLeft,
@@ -404,6 +404,7 @@ function RegionStep({ profile, patch }:
 
 function AddressStep({ profile, patch }:
   { profile: Profile; patch: <K extends keyof Profile>(k: K, v: Profile[K]) => void }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-3">
       {/* First + last separately — used by Compose for the letterhead
@@ -411,53 +412,53 @@ function AddressStep({ profile, patch }:
           that need each part on its own line. Stored on the user_profile
           so the LLM never has to ask. */}
       <div className="grid grid-cols-2 gap-3">
-        <Field label="First name">
+        <Field label={t("onboarding.address.firstName")}>
           <input
             autoFocus
             value={profile.first_name}
             onChange={e => patch("first_name", e.target.value)}
-            placeholder="Anna"
+            placeholder={t("onboarding.address.firstNamePlaceholder")}
             className="w-full h-9 px-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
           />
         </Field>
-        <Field label="Last name">
+        <Field label={t("onboarding.address.lastName")}>
           <input
             value={profile.last_name}
             onChange={e => patch("last_name", e.target.value)}
-            placeholder="Schmidt"
+            placeholder={t("onboarding.address.lastNamePlaceholder")}
             className="w-full h-9 px-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
           />
         </Field>
       </div>
-      <Field label="Street and number">
+      <Field label={t("onboarding.address.street")}>
         <input
           value={profile.address_street}
           onChange={e => patch("address_street", e.target.value)}
-          placeholder="123 Main Street"
+          placeholder={t("onboarding.address.streetPlaceholder")}
           className="w-full h-9 px-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
         />
       </Field>
       <div className="grid grid-cols-3 gap-3">
-        <Field label="Postal code">
+        <Field label={t("onboarding.address.postcode")}>
           <input
             value={profile.address_postcode}
             onChange={e => patch("address_postcode", e.target.value)}
-            placeholder="10115"
+            placeholder={t("onboarding.address.postcodePlaceholder")}
             className="w-full h-9 px-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
           />
         </Field>
         <div className="col-span-2">
-          <Field label="City">
+          <Field label={t("onboarding.address.city")}>
             <input
               value={profile.address_city}
               onChange={e => patch("address_city", e.target.value)}
-              placeholder="Berlin"
+              placeholder={t("onboarding.address.cityPlaceholder")}
               className="w-full h-9 px-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
             />
           </Field>
         </div>
       </div>
-      <Field label="Phone (optional)">
+      <Field label={t("onboarding.address.phone")}>
         <input
           type="tel"
           value={profile.phone}
@@ -467,7 +468,7 @@ function AddressStep({ profile, patch }:
         />
       </Field>
       <div className="text-xs text-muted-foreground">
-        Stays on this machine. Yorik only uses it for documents you create.
+        {t("onboarding.address.privacyNote")}
       </div>
     </div>
   );
@@ -475,6 +476,7 @@ function AddressStep({ profile, patch }:
 
 function BusinessStep({ profile, patch }:
   { profile: Profile; patch: <K extends keyof Profile>(k: K, v: Profile[K]) => void }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
@@ -489,10 +491,10 @@ function BusinessStep({ profile, patch }:
         >
           <div className="flex items-center gap-2 mb-1">
             <UserIcon className="w-4 h-4 text-violet-500" />
-            <span className="font-medium">Personal</span>
+            <span className="font-medium">{t("onboarding.business.personal")}</span>
           </div>
           <div className="text-xs text-muted-foreground leading-relaxed">
-            Letters, government forms, family stuff. No invoice numbering needed.
+            {t("onboarding.business.personalText")}
           </div>
         </button>
         <button
@@ -506,25 +508,25 @@ function BusinessStep({ profile, patch }:
         >
           <div className="flex items-center gap-2 mb-1">
             <Building2 className="w-4 h-4 text-violet-500" />
-            <span className="font-medium">Business</span>
+            <span className="font-medium">{t("onboarding.business.business")}</span>
           </div>
           <div className="text-xs text-muted-foreground leading-relaxed">
-            Send invoices and quotes. Yorik sets up sequential numbering, ZUGFeRD when needed.
+            {t("onboarding.business.businessText")}
           </div>
         </button>
       </div>
 
       {profile.is_business && (
         <div className="space-y-3 pt-2 border-t border-border">
-          <Field label="Business name">
+          <Field label={t("onboarding.business.name")}>
             <input
               value={profile.business_name}
               onChange={e => patch("business_name", e.target.value)}
-              placeholder="Sparkle Cleaning Co."
+              placeholder={t("onboarding.business.namePlaceholder")}
               className="w-full h-9 px-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
             />
           </Field>
-          <Field label="Tax ID / USt-IdNr / EIN">
+          <Field label={t("onboarding.business.taxId")}>
             <input
               value={profile.tax_id}
               onChange={e => patch("tax_id", e.target.value)}
@@ -532,7 +534,7 @@ function BusinessStep({ profile, patch }:
               className="w-full h-9 px-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
             />
           </Field>
-          <Field label="IBAN (for invoice footer)">
+          <Field label={t("onboarding.business.iban")}>
             <input
               value={profile.iban}
               onChange={e => patch("iban", e.target.value)}
@@ -593,9 +595,7 @@ function StorageStep() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground leading-relaxed">
-        Yorik's databases (calendar, contacts, chat history) are small and stay on the internal disk.
-        Photos and document scans can grow into hundreds of GB — relocate them to an external SSD
-        if you have one. <strong>You can skip this step</strong> and decide later in Settings → Storage.
+        <Trans i18nKey="onboarding.storage.text" components={{ strong: <strong /> }} />
       </p>
       <StoragePicker compact />
     </div>
@@ -603,12 +603,11 @@ function StorageStep() {
 }
 
 function BackupStep() {
+  const { t } = useTranslation();
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground leading-relaxed">
-        Set a passphrase + a target now and Yorik will auto-snapshot every night. You can change
-        any of this later in Settings → Backup, but a Yorik without backups is a Yorik one disk
-        away from losing your family's data.
+        {t("onboarding.backup.text")}
       </p>
       <BackupPicker compact />
     </div>

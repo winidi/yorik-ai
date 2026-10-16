@@ -14,6 +14,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, Loader2, MapPin, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { locale } from "@/i18n";
 import { api } from "@/lib/api";
 
 interface AgendaEvent {
@@ -38,6 +40,7 @@ interface Props {
 const AUTO_DISMISS_MS = 30_000;
 
 export function AgendaPane({ onClose }: Props) {
+  const { t } = useTranslation();
   const [events, setEvents] = useState<AgendaEvent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -97,7 +100,7 @@ export function AgendaPane({ onClose }: Props) {
         <header className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-border">
           <div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-1">
-              Today
+              {t("common.today")}
             </div>
             <h2 className="text-2xl font-light">{formatDayLabel()}</h2>
           </div>
@@ -105,7 +108,7 @@ export function AgendaPane({ onClose }: Props) {
             type="button"
             onClick={onClose}
             className="h-10 w-10 rounded-full bg-muted/60 hover:bg-muted flex items-center justify-center"
-            aria-label="Close"
+            aria-label={t("common.close")}
           >
             <X className="w-5 h-5" />
           </button>
@@ -122,12 +125,10 @@ export function AgendaPane({ onClose }: Props) {
             <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground px-6">
               <Calendar className="w-10 h-10 mb-3 opacity-50" />
               <div className="text-base font-medium text-foreground mb-1">
-                Nothing on the wall today
+                {t("board.agenda.empty")}
               </div>
               <p className="text-xs leading-relaxed max-w-xs">
-                Nobody in the household has events today, or nobody's flipped
-                "show my appointments on the household wall" in Settings →
-                Profile yet.
+                {t("board.agenda.emptyHint")}
               </p>
               {error && (
                 <p className="text-[11px] text-rose-500/80 mt-3">
@@ -213,7 +214,7 @@ function formatTime(iso: string): string {
 
 function formatDayLabel(): string {
   const d = new Date();
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(locale(), {
     weekday: "long",
     month: "long",
     day: "numeric",

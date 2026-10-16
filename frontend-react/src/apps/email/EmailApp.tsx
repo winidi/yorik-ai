@@ -21,7 +21,8 @@ import {
   AlignJustify, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
+import i18n, { locale } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { useApi } from "@/lib/useApi";
 import { api } from "@/lib/api";
@@ -139,7 +140,7 @@ function usePagedMessages(
       const more = data.length >= MESSAGES_PAGE_SIZE;
       setHasMoreInDb(more);
     } catch (e: any) {
-      if (myReq === reqIdRef.current) setError(e?.message || "fetch failed");
+      if (myReq === reqIdRef.current) setError(e?.message || i18n.t("email.app.fetchFailed"));
     } finally {
       if (myReq === reqIdRef.current) setLoading(false);
     }
@@ -184,7 +185,7 @@ function usePagedMessages(
       // hit next on a regular loadMore.
       await fetchPage(nextOffsetRef.current, "append");
     } catch (e: any) {
-      setError(e?.message || "load-older failed");
+      setError(e?.message || i18n.t("email.app.loadOlderFailed"));
     } finally {
       setBackfilling(false);
     }
@@ -204,6 +205,7 @@ function usePagedMessages(
 
 
 export function EmailApp() {
+  const { t } = useTranslation();
   // ?add=1 (the Home checklist's "Connect your email") opens the wizard.
   const [showWizard, setShowWizard] = useState(() => new URLSearchParams(window.location.search).get("add") === "1");
   const [showCleanup, setShowCleanup] = useState(false);
@@ -585,13 +587,13 @@ export function EmailApp() {
         <div className="h-14 px-4 flex items-center justify-between border-b border-border">
           <div>
             <div className="font-bold text-lg tracking-tight leading-none">yorik</div>
-            <span className="text-2xs text-muted-foreground">email</span>
+            <span className="text-2xs text-muted-foreground">{t("email.app.subtitle")}</span>
           </div>
           <button
             onClick={() => setShowSettings(true)}
             className="text-xs text-muted-foreground hover:text-foreground p-2 -mr-2 md:p-0 md:mr-0 rounded-md hover:bg-muted md:hover:bg-transparent inline-flex items-center justify-center"
-            title="Email settings — manage connected accounts"
-            aria-label="Email settings"
+            title={t("email.app.settingsTitle")}
+            aria-label={t("email.app.settingsAria")}
           >
             <SettingsIcon className="w-5 h-5 md:w-4 md:h-4" />
           </button>
@@ -603,12 +605,12 @@ export function EmailApp() {
           className="m-3 flex items-center justify-center gap-2 h-10 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 transition"
         >
           <Pencil className="w-4 h-4" />
-          Compose
+          {t("email.app.compose")}
         </button>
 
         {/* Unified semantic shortcuts at the top — work across all accounts */}
         <nav className="px-2 pb-2 space-y-0.5">
-          <SidebarItem icon={Inbox} label="All inboxes"
+          <SidebarItem icon={Inbox} label={t("email.app.allInboxes")}
             badge={inboxSummary.data?.unread}
             active={folderSel.folderId === null && folderSel.semantic === "inbox"
                     && !folderSel.unreadOnly && !folderSel.starredOnly && !folderSel.snoozedView
@@ -617,20 +619,20 @@ export function EmailApp() {
               setSelectedAccount("all");
               setFolderSel({ folderId: null, semantic: "inbox", unreadOnly: false });
             }} />
-          <SidebarItem icon={AlertCircle} label="Unread"
+          <SidebarItem icon={AlertCircle} label={t("email.app.unread")}
             badge={inboxSummary.data?.unread}
             active={folderSel.folderId === null && !!folderSel.unreadOnly && !folderSel.snoozedView}
             onClick={() => {
               setSelectedAccount("all");
               setFolderSel({ folderId: null, semantic: "inbox", unreadOnly: true });
             }} />
-          <SidebarItem icon={Star} label="Starred"
+          <SidebarItem icon={Star} label={t("email.app.starred")}
             active={folderSel.folderId === null && !!folderSel.starredOnly}
             onClick={() => {
               setSelectedAccount("all");
               setFolderSel({ folderId: null, semantic: "all", unreadOnly: false, starredOnly: true });
             }} />
-          <SidebarItem icon={Clock} label="Snoozed"
+          <SidebarItem icon={Clock} label={t("email.app.snoozed")}
             active={folderSel.folderId === null && !!folderSel.snoozedView}
             onClick={() => {
               setSelectedAccount("all");
@@ -644,7 +646,7 @@ export function EmailApp() {
             with a categories array set. */}
         <div className="border-t border-border mt-2 pt-3 px-2">
           <div className="px-2 pb-2 text-2xs text-muted-foreground font-medium">
-            Categories
+            {t("email.app.categories")}
           </div>
           <nav className="space-y-0.5">
             {CATEGORY_NAV.map(c => {
@@ -659,7 +661,7 @@ export function EmailApp() {
                 <SidebarItem
                   key={c.id}
                   icon={c.icon}
-                  label={c.label}
+                  label={t(`email.category.nav.${c.id}`)}
                   active={active}
                   onClick={() => {
                     setSelectedAccount("all");
@@ -680,12 +682,12 @@ export function EmailApp() {
         <div className="border-t border-border mt-2 pt-3 px-2 flex-1 overflow-y-auto max-md:flex-none max-md:overflow-visible">
           <div className="px-2 pb-2 flex items-center justify-between">
             <span className="text-2xs text-muted-foreground font-medium">
-              Accounts
+              {t("email.app.accounts")}
             </span>
             <button
               onClick={() => setShowWizard(true)}
               className="text-muted-foreground hover:text-foreground"
-              title="Add account"
+              title={t("email.app.addAccount")}
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -729,9 +731,9 @@ export function EmailApp() {
         </div>
 
         <div className="mt-auto border-t border-border p-3 text-xs text-muted-foreground">
-          {accountsApi.loading ? "Loading…"
-            : accounts.length === 0 ? "Add your first account to get started."
-            : `${accounts.length} account${accounts.length === 1 ? "" : "s"} · auto-syncs via IMAP IDLE`}
+          {accountsApi.loading ? t("common.loading")
+            : accounts.length === 0 ? t("email.app.firstAccount")
+            : t("email.app.accountCount", { count: accounts.length })}
         </div>
       </aside>
 
@@ -759,22 +761,22 @@ export function EmailApp() {
         {/* Phone: the shared app bar (folder name, refresh, bell) with
             the search as a slim pill under it — one block, not two bars. */}
         <MobileTopBar
-          title={folderSel.starredOnly ? "Starred"
-            : folderSel.snoozedView ? "Snoozed"
-            : folderSel.unreadOnly ? "Unread"
+          title={folderSel.starredOnly ? t("email.app.starred")
+            : folderSel.snoozedView ? t("email.app.snoozed")
+            : folderSel.unreadOnly ? t("email.app.unread")
             : folderSel.categories?.length
-              ? (findCategoryNav(folderSel.categories)?.label || "Filtered")
-            : folderSel.semantic === "inbox" ? "Inbox"
-            : folderSel.semantic === "sent" ? "Sent"
-            : folderSel.semantic === "all" ? "All mail"
-            : "Mail"}
+              ? (categoryNavLabel(folderSel.categories) || t("email.app.filtered"))
+            : folderSel.semantic === "inbox" ? t("email.app.inbox")
+            : folderSel.semantic === "sent" ? t("email.app.sent")
+            : folderSel.semantic === "all" ? t("email.app.allMail")
+            : t("email.app.mail")}
           onMenuClick={() => setMobileDrawerOpen(true)}
           rightAction={
             <button
               onClick={() => (search ? searchApi.refetch() : listApi.refetch())}
               disabled={listApi.loading || searchApi.loading}
               className="w-11 h-11 rounded-md flex items-center justify-center text-muted-foreground"
-              aria-label="Refresh"
+              aria-label={t("common.refresh")}
             >
               <RefreshCw className={cn("w-5 h-5", (listApi.loading || searchApi.loading) && "animate-spin")} />
             </button>
@@ -785,14 +787,14 @@ export function EmailApp() {
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search…"
-                aria-label="Search across all email"
+                placeholder={t("email.app.searchPlaceholder")}
+                aria-label={t("email.app.searchAria")}
                 className="w-full h-8 pl-9 pr-8 rounded-full bg-muted text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
               />
               {search && (
                 <button onClick={() => setSearch("")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label="Clear search">
+                  aria-label={t("email.app.clearSearch")}>
                   ✕
                 </button>
               )}
@@ -807,14 +809,14 @@ export function EmailApp() {
               onChange={e => setSearch(e.target.value)}
               // Short placeholder on mobile so it fits at 375px viewport
               // width; desktop shows the more descriptive one.
-              placeholder="Search…"
-              aria-label="Search across all email"
+              placeholder={t("email.app.searchPlaceholder")}
+              aria-label={t("email.app.searchAria")}
               className="w-full h-11 md:h-9 pl-9 pr-3 rounded-md bg-muted text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
             />
             {search && (
               <button onClick={() => setSearch("")}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label="Clear search">
+                aria-label={t("email.app.clearSearch")}>
                 ✕
               </button>
             )}
@@ -823,15 +825,15 @@ export function EmailApp() {
             <button
               onClick={() => setShowCleanup(true)}
               className="hidden sm:inline-flex items-center gap-1.5 px-2.5 h-9 rounded-md border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted shrink-0"
-              title="Bulk unsubscribe / block / delete by sender"
+              title={t("email.app.cleanupTitle")}
             >
-              <Sparkles className="w-3.5 h-3.5" /> Cleanup
+              <Sparkles className="w-3.5 h-3.5" /> {t("email.app.cleanup")}
             </button>
           ) : null}
           <button
             onClick={() => setShowPreview(v => { try { localStorage.setItem("yorik_email_preview", v ? "0" : "1"); } catch {} return !v; })}
             className={cn("p-2 rounded-md hover:bg-muted", showPreview ? "text-foreground bg-muted" : "text-muted-foreground")}
-            title={showPreview ? "Hide the text preview (sender and subject only)" : "Show two lines of each mail"}
+            title={showPreview ? t("email.app.previewHide") : t("email.app.previewShow")}
             aria-pressed={showPreview}
           >
             <AlignJustify className="w-4 h-4" />
@@ -840,7 +842,7 @@ export function EmailApp() {
             onClick={() => (search ? searchApi.refetch() : listApi.refetch())}
             disabled={listApi.loading || searchApi.loading}
             className="p-2 rounded-md hover:bg-muted text-muted-foreground"
-            title="Refresh"
+            title={t("common.refresh")}
           >
             <RefreshCw className={cn("w-4 h-4", (listApi.loading || searchApi.loading) && "animate-spin")} />
           </button>
@@ -853,11 +855,11 @@ export function EmailApp() {
           loading={search ? searchApi.loading : listApi.loading}
           error={search ? searchApi.error : listApi.error}
           empty={accounts.length === 0
-            ? "Add an email account to get started."
-            : search ? `No results for "${search}"`
-            : folderSel.snoozedView ? "Nothing snoozed right now."
-            : folderSel.starredOnly ? "No starred messages yet."
-            : "No messages in this view yet."}
+            ? t("email.app.emptyNoAccount")
+            : search ? t("email.app.emptySearch", { query: search })
+            : folderSel.snoozedView ? t("email.app.emptySnoozed")
+            : folderSel.starredOnly ? t("email.app.emptyStarred")
+            : t("email.app.emptyView")}
           hasMoreInDb={listApi.hasMoreInDb}
           backfilling={listApi.backfilling}
           onLoadMore={listApi.loadMore}
@@ -878,7 +880,7 @@ export function EmailApp() {
               }
               listApi.refetch();
             } catch (e: any) {
-              toast(`Action failed: ${e?.message || e}`);
+              toast(t("email.app.actionFailed", { error: e?.message || e }));
             }
           }}
         />
@@ -893,8 +895,8 @@ export function EmailApp() {
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize message list"
-        title="Drag to resize · double-click to reset"
+        aria-label={t("email.app.resizeAria")}
+        title={t("email.app.resizeTitle")}
         onMouseDown={(e) => { e.preventDefault(); setResizing(true); }}
         onDoubleClick={() => setListWidth(LIST_DEFAULT)}
         className={cn(
@@ -928,7 +930,7 @@ export function EmailApp() {
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-            {accounts.length === 0 ? "" : "Select a message to read it."}
+            {accounts.length === 0 ? "" : t("email.app.selectMessage")}
           </div>
         )}
       </section>
@@ -976,8 +978,8 @@ export function EmailApp() {
           type="button"
           onClick={() => setComposer({ to: "", subject: "", body: "" })}
           className="md:hidden fixed left-4 bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] z-30 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:opacity-90 active:scale-95 transition"
-          aria-label="Compose new email"
-          title="Compose"
+          aria-label={t("email.app.composeNewAria")}
+          title={t("email.app.compose")}
         >
           <Pencil className="w-5 h-5" strokeWidth={2.5} />
         </button>
@@ -993,24 +995,26 @@ export function EmailApp() {
 // backend/email_classifier.py tags each incoming message. We DON'T
 // show a badge for "personal" or "other" — the absence of a badge IS
 // the signal that it's a normal human email needing attention.
-const CATEGORY_BADGE: Record<string, { label: string; cls: string }> = {
-  bill:         { label: "Bill",         cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30" },
-  appointment:  { label: "Appointment",  cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" },
-  newsletter:   { label: "Newsletter",   cls: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30" },
-  notification: { label: "Notification", cls: "bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/30" },
+// The badge text is email.category.badge.<category> in the catalogue.
+const CATEGORY_BADGE: Record<string, { cls: string }> = {
+  bill:         { cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30" },
+  appointment:  { cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" },
+  newsletter:   { cls: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30" },
+  notification: { cls: "bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/30" },
 };
 
 // Sidebar category quick-filters. Each entry can map to ONE OR MORE
 // classifier categories — "People" bundles the two catch-all tags
 // (personal + other) into the "actual humans writing to me, not
 // broadcasts" view. The id is the URL-stable identifier; categories
-// is what we send to the backend's ?category= filter.
-const CATEGORY_NAV: Array<{ id: string; label: string; icon: any; categories: string[] }> = [
-  { id: "people",       label: "People",        icon: Users,     categories: ["personal", "other"] },
-  { id: "newsletter",   label: "Newsletters",   icon: Newspaper, categories: ["newsletter"] },
-  { id: "bill",         label: "Bills",         icon: Receipt,   categories: ["bill"] },
-  { id: "appointment",  label: "Appointments",  icon: Calendar,  categories: ["appointment"] },
-  { id: "notification", label: "Notifications", icon: Bell,      categories: ["notification"] },
+// is what we send to the backend's ?category= filter. The visible name
+// is email.category.nav.<id> in the catalogue.
+const CATEGORY_NAV: Array<{ id: string; icon: any; categories: string[] }> = [
+  { id: "people",       icon: Users,     categories: ["personal", "other"] },
+  { id: "newsletter",   icon: Newspaper, categories: ["newsletter"] },
+  { id: "bill",         icon: Receipt,   categories: ["bill"] },
+  { id: "appointment",  icon: Calendar,  categories: ["appointment"] },
+  { id: "notification", icon: Bell,      categories: ["notification"] },
 ];
 
 // Look up the nav entry whose categories match an active filter — used
@@ -1021,8 +1025,26 @@ function findCategoryNav(active: string[] | null | undefined) {
   return CATEGORY_NAV.find(c => [...c.categories].sort().join(",") === key) || null;
 }
 
+// The friendly name of that nav entry in the current language (resolved
+// at render time, never at module load).
+function categoryNavLabel(active: string[] | null | undefined): string | null {
+  const nav = findCategoryNav(active);
+  return nav ? i18n.t(`email.category.nav.${nav.id}`) : null;
+}
+
 // Folder category → icon. Keeps the sidebar visually parseable at
 // a glance (envelope for Inbox, paper-plane for Sent, shield for Spam, etc.).
+// A standard folder keeps the name the mail server gave it unless that
+// name is the plain English default — then it reads in the person's
+// language. "Rechnungen 2025" stays "Rechnungen 2025".
+const STANDARD_FOLDER_NAMES = /^(inbox|sent( items| mail| messages)?|drafts?|trash|deleted( items| messages)?|spam|junk( e-?mail)?|archive)$/i;
+const TRANSLATED_FOLDER_CATEGORIES = new Set(["inbox", "sent", "drafts", "trash", "spam", "archive"]);
+function folderLabel(f: { display_name: string; category: string }, t: (k: string) => string): string {
+  if (TRANSLATED_FOLDER_CATEGORIES.has(f.category) && STANDARD_FOLDER_NAMES.test((f.display_name || "").trim()))
+    return t(`email.folder.${f.category}`);
+  return f.display_name;
+}
+
 const FOLDER_ICONS: Record<string, any> = {
   inbox:    Inbox,
   sent:     Send,
@@ -1043,6 +1065,7 @@ function AccountSection({
   activeSemanticInbox?: boolean;
   onSelectFolder: (folder: EmailFolder) => void;
 }) {
+  const { t } = useTranslation();
   const foldersApi = useApi<EmailFolder[]>(`/api/email/accounts/${account.id}/folders`, [], 30_000);
   const folders = foldersApi.data || [];
 
@@ -1073,7 +1096,7 @@ function AccountSection({
         <span className="truncate">{account.display_name || account.email}</span>
       </div>
       {foldersApi.loading && folders.length === 0 && (
-        <div className="px-3 py-1 text-xs text-muted-foreground italic">syncing folders…</div>
+        <div className="px-3 py-1 text-xs text-muted-foreground italic">{t("email.sidebar.syncingFolders")}</div>
       )}
       {sorted.map(f => {
         const Icon = FOLDER_ICONS[f.category] || Folder;
@@ -1096,7 +1119,7 @@ function AccountSection({
             )}
           >
             <Icon className="w-3.5 h-3.5 shrink-0" />
-            <span className="flex-1 truncate">{f.display_name}</span>
+            <span className="flex-1 truncate">{folderLabel(f, t)}</span>
             {f.unread > 0 && (
               <span className={cn(
                 "text-2xs tabular-nums",
@@ -1180,6 +1203,7 @@ function MessageList({
    *  next to "Loading older messages…". */
   backfilling?: boolean;
 }) {
+  const { t } = useTranslation();
   if (error) {
     return <div className="p-4 text-sm text-destructive">{error}</div>;
   }
@@ -1260,18 +1284,18 @@ function MessageList({
                   (2026-10-05); both are in the opened mail's toolbar. */}
               <span className="hidden md:contents">
               <QuickActionBtn
-                icon={Star} label={m.is_starred ? "Unstar" : "Star"}
+                icon={Star} label={m.is_starred ? t("email.list.unstar") : t("email.list.star")}
                 active={m.is_starred}
                 onClick={(e) => { e.stopPropagation(); onQuickAction(m, m.is_starred ? "unstar" : "star"); }}
               />
               <QuickActionBtn
-                icon={Reply} label={m.needs_reply ? "Reply-needed off" : "Mark needs reply"}
+                icon={Reply} label={m.needs_reply ? t("email.list.needsReplyOff") : t("email.list.needsReplyOn")}
                 active={!!m.needs_reply}
                 onClick={(e) => { e.stopPropagation(); onQuickAction(m, m.needs_reply ? "needs_reply_off" : "needs_reply_on"); }}
               />
               </span>
               <QuickActionBtn
-                icon={Archive} label="Archive"
+                icon={Archive} label={t("email.list.archive")}
                 onClick={(e) => { e.stopPropagation(); onQuickAction(m, "archive"); }}
               />
               <SnoozeMenuBtn
@@ -1292,7 +1316,7 @@ function MessageList({
                   m.is_unread ? "font-semibold text-foreground" : "text-muted-foreground",
                 )}>
                   {m.is_sent ? (
-                    <span className="text-muted-foreground">to {addrLabel(m.to_addrs)}</span>
+                    <span className="text-muted-foreground">{t("email.list.to", { name: addrLabel(m.to_addrs) })}</span>
                   ) : (
                     <PersonHover identifier={m.from_email}>
                       <span className="cursor-default">{m.from_name || m.from_email}</span>
@@ -1310,14 +1334,14 @@ function MessageList({
                 {m.has_my_reply && (
                   <CornerDownRight
                     className="w-3 h-3 text-emerald-600 dark:text-emerald-500 shrink-0"
-                    aria-label="You replied to this"
+                    aria-label={t("email.list.youReplied")}
                   />
                 )}
-                <span className="truncate">{m.subject || "(no subject)"}</span>
+                <span className="truncate">{m.subject || t("email.list.noSubject")}</span>
                 {typeof m.thread_count === "number" && m.thread_count > 1 && (
                   <span
                     className="text-2xs tabular-nums px-1.5 rounded bg-muted text-muted-foreground shrink-0"
-                    title={`${m.thread_count} messages in thread`}
+                    title={t("email.list.threadCount", { count: m.thread_count })}
                   >
                     {m.thread_count}
                   </span>
@@ -1333,9 +1357,9 @@ function MessageList({
                 {m.needs_reply && (
                   <span
                     className="px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/[0.08] text-amber-700 dark:text-amber-400 text-2xs font-medium leading-none inline-flex items-center gap-1"
-                    title="You marked this as needing a reply"
+                    title={t("email.list.needsReplyTitle")}
                   >
-                    <Reply className="w-2.5 h-2.5" /> reply
+                    <Reply className="w-2.5 h-2.5" /> {t("email.list.replyBadge")}
                   </span>
                 )}
                 {m.category && CATEGORY_BADGE[m.category] && (
@@ -1343,12 +1367,12 @@ function MessageList({
                     "px-1.5 py-0.5 rounded border text-2xs font-medium leading-none",
                     CATEGORY_BADGE[m.category].cls,
                   )}>
-                    {CATEGORY_BADGE[m.category].label}
+                    {t(`email.category.badge.${m.category}`)}
                   </span>
                 )}
                 {m.has_attachments && (
                   <span className="flex items-center gap-1">
-                    <Paperclip className="w-3 h-3" /> attachment
+                    <Paperclip className="w-3 h-3" /> {t("email.list.attachment")}
                   </span>
                 )}
                 {(m.account_display_name || m.account_email) && (
@@ -1356,7 +1380,7 @@ function MessageList({
                 )}
                 {m.snoozed_until && (
                   <span className="inline-flex items-center gap-1 text-violet-500"
-                        title={`Snoozed until ${m.snoozed_until}`}>
+                        title={t("email.list.snoozedUntil", { when: m.snoozed_until })}>
                     <Clock className="w-3 h-3" /> {formatWhen(m.snoozed_until)}
                   </span>
                 )}
@@ -1397,6 +1421,7 @@ function ListBottomSentinel({
   onLoadMore?: () => Promise<void> | void;
   onLoadOlderFromImap?: () => Promise<void> | void;
 }) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const triedBackfillRef = useRef(false);
 
@@ -1425,12 +1450,12 @@ function ListBottomSentinel({
     <div ref={ref} className="px-4 py-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
       {(loading || backfilling) && <Loader2 className="w-3 h-3 animate-spin" />}
       {backfilling
-        ? "Fetching older messages from server…"
+        ? t("email.list.fetchingOlder")
         : loading
-          ? "Loading…"
+          ? t("common.loading")
           : hasMoreInDb
-            ? "Scroll for more"
-            : "End of inbox"}
+            ? t("email.list.scrollMore")
+            : t("email.list.endOfInbox")}
     </div>
   );
 }
@@ -1464,13 +1489,14 @@ function QuickActionBtn({ icon: Icon, label, active, onClick }: {
 function SnoozeMenuBtn({ onPick }: {
   onPick: (action: "snooze-1d" | "snooze-tomorrow" | "snooze-nextweek") => void;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   return (
     <div className="relative" onClick={(e) => e.stopPropagation()}>
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
-        title="Snooze"
+        title={t("email.list.snooze")}
         className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition"
       >
         <Clock className="w-3.5 h-3.5" />
@@ -1480,9 +1506,9 @@ function SnoozeMenuBtn({ onPick }: {
           className="absolute top-full right-0 mt-1 min-w-[140px] rounded-md border border-border bg-popover shadow-lg z-30 overflow-hidden"
           onMouseLeave={() => setOpen(false)}
         >
-          <SnoozeMenuItem label="Tomorrow morning" onClick={() => { setOpen(false); onPick("snooze-tomorrow"); }} />
-          <SnoozeMenuItem label="+1 day"           onClick={() => { setOpen(false); onPick("snooze-1d"); }} />
-          <SnoozeMenuItem label="Next week"        onClick={() => { setOpen(false); onPick("snooze-nextweek"); }} />
+          <SnoozeMenuItem label={t("email.list.snoozeTomorrow")} onClick={() => { setOpen(false); onPick("snooze-tomorrow"); }} />
+          <SnoozeMenuItem label={t("email.list.snoozePlus1")}    onClick={() => { setOpen(false); onPick("snooze-1d"); }} />
+          <SnoozeMenuItem label={t("email.list.snoozeNextWeek")} onClick={() => { setOpen(false); onPick("snooze-nextweek"); }} />
         </div>
       )}
     </div>
@@ -1541,6 +1567,7 @@ function CleanupModal({
   onClose: () => void;
   onApplied: () => void;
 }) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [senders, setSenders] = useState<CleanupSender[]>([]);
   const [choices, setChoices] = useState<Record<string, CleanupChoice>>({});
@@ -1555,7 +1582,7 @@ function CleanupModal({
     const qs = categories.length ? `?category=${encodeURIComponent(categories.join(","))}` : "";
     api.get<{ senders: CleanupSender[] }>(`/api/email/cleanup/senders${qs}`)
       .then(r => { if (alive) setSenders(r.senders); })
-      .catch((e: any) => { if (alive) setErr(e?.message || "load failed"); })
+      .catch((e: any) => { if (alive) setErr(e?.message || t("email.cleanup.loadFailed")); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [categories.join(",")]);
@@ -1589,7 +1616,7 @@ function CleanupModal({
           "/api/email/cleanup/apply", { actions: [a] });
         collected.push(...(r.results || []));
       } catch (e: any) {
-        collected.push({ sender_email: a.sender_email, error: e?.message || "failed" });
+        collected.push({ sender_email: a.sender_email, error: e?.message || t("email.cleanup.failed") });
       }
     }
     setProgress({ done: actions.length, total: actions.length });
@@ -1622,11 +1649,10 @@ function CleanupModal({
         <div className="flex items-center justify-between p-5 border-b border-border">
           <div>
             <h2 className="font-semibold text-base">
-              Inbox cleanup — {findCategoryNav(categories)?.label || categories.join(", ") || "filtered"}
+              {t("email.cleanup.title", { scope: categoryNavLabel(categories) || categories.join(", ") || t("email.cleanup.filtered") })}
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {senders.length} sender{senders.length === 1 ? "" : "s"} found across all connected mailboxes.
-              Pick what to do with each, then Apply.
+              {t("email.cleanup.intro", { count: senders.length })}
             </p>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground">
@@ -1636,24 +1662,24 @@ function CleanupModal({
 
         {results ? (
           <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-2">
-            <div className="text-sm font-medium">Cleanup applied — results</div>
+            <div className="text-sm font-medium">{t("email.cleanup.resultsTitle")}</div>
             {results.map((r, i) => (
               <div key={i} className="p-3 border border-border rounded-md text-xs space-y-1">
                 <div className="font-medium">{r.sender_email}</div>
                 {r.unsubscribe && (
                   <div className={cn(r.unsubscribe.ok === false ? "text-destructive" : "text-emerald-600 dark:text-emerald-500")}>
-                    unsubscribe: {JSON.stringify(r.unsubscribe)}
+                    {t("email.cleanup.resUnsubscribe", { detail: JSON.stringify(r.unsubscribe) })}
                   </div>
                 )}
                 {r.blocked && (
                   <div className="text-emerald-600 dark:text-emerald-500">
-                    blocked: sender={String(r.blocked.sender ?? false)}, domain={String(r.blocked.domain ?? false)}
+                    {t("email.cleanup.resBlocked", { sender: String(r.blocked.sender ?? false), domain: String(r.blocked.domain ?? false) })}
                   </div>
                 )}
                 {r.deleted && (
                   <div className="text-muted-foreground">
-                    deleted {r.deleted.deleted}/{r.deleted.matched} message(s)
-                    {r.deleted.errors?.length ? ` · errors: ${r.deleted.errors.join("; ")}` : ""}
+                    {t("email.cleanup.resDeleted", { deleted: r.deleted.deleted, matched: r.deleted.matched })}
+                    {r.deleted.errors?.length ? t("email.cleanup.resErrors", { errors: r.deleted.errors.join("; ") }) : ""}
                   </div>
                 )}
               </div>
@@ -1663,32 +1689,32 @@ function CleanupModal({
                 onClick={onApplied}
                 className="px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 text-sm"
               >
-                Done
+                {t("email.cleanup.done")}
               </button>
             </div>
           </div>
         ) : (
           <>
             <div className="px-5 py-2 border-b border-border flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="flex-1">{senders.length} senders</span>
+              <span className="flex-1">{t("email.cleanup.senderCount", { count: senders.length })}</span>
               <button onClick={() => selectAll("unsubscribe", s => s.has_unsubscribe)} className="hover:text-foreground">
-                Toggle all unsubscribe (eligible)
+                {t("email.cleanup.toggleUnsubscribe")}
               </button>
               <button onClick={() => selectAll("block")} className="hover:text-foreground">
-                Toggle all block
+                {t("email.cleanup.toggleBlock")}
               </button>
               <button onClick={() => selectAll("delete_existing")} className="hover:text-foreground">
-                Toggle all delete
+                {t("email.cleanup.toggleDelete")}
               </button>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto">
               {loading && (
                 <div className="p-8 text-center text-sm text-muted-foreground">
-                  <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Loading senders…
+                  <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> {t("email.cleanup.loadingSenders")}
                 </div>
               )}
               {!loading && senders.length === 0 && (
-                <div className="p-8 text-center text-sm text-muted-foreground">No senders found in this category.</div>
+                <div className="p-8 text-center text-sm text-muted-foreground">{t("email.cleanup.noSenders")}</div>
               )}
               {!loading && senders.map(s => {
                 const c = choices[s.sender_email] || { unsubscribe: false, block: false, block_domain: false, delete_existing: false };
@@ -1697,8 +1723,8 @@ function CleanupModal({
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{s.sender_name || s.sender_email}</div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {s.sender_email} · {s.msg_count} mail{s.msg_count === 1 ? "" : "s"}
-                        {s.account_emails.length > 1 && ` · across ${s.account_emails.length} mailboxes`}
+                        {s.sender_email} · {t("email.cleanup.mailCount", { count: s.msg_count })}
+                        {s.account_emails.length > 1 && t("email.cleanup.acrossMailboxes", { count: s.account_emails.length })}
                       </div>
                       {s.sample_subject && (
                         <div className="text-xs text-muted-foreground/80 italic truncate mt-0.5">
@@ -1710,7 +1736,7 @@ function CleanupModal({
                       <label className={cn(
                         "flex items-center gap-2",
                         !s.has_unsubscribe && "opacity-50 cursor-not-allowed",
-                      )} title={s.has_unsubscribe ? "RFC 8058 / 2369 unsubscribe" : "No List-Unsubscribe header on any message from this sender"}>
+                      )} title={s.has_unsubscribe ? t("email.cleanup.unsubscribeHint") : t("email.cleanup.noUnsubscribeHint")}>
                         <input
                           type="checkbox"
                           checked={c.unsubscribe}
@@ -1718,7 +1744,7 @@ function CleanupModal({
                           onChange={() => toggle(s.sender_email, "unsubscribe")}
                           className="h-3.5 w-3.5"
                         />
-                        Unsubscribe
+                        {t("email.cleanup.unsubscribe")}
                       </label>
                       <label className="flex items-center gap-2">
                         <input
@@ -1727,7 +1753,7 @@ function CleanupModal({
                           onChange={() => toggle(s.sender_email, "block")}
                           className="h-3.5 w-3.5"
                         />
-                        Block sender
+                        {t("email.cleanup.blockSender")}
                       </label>
                       <label className="flex items-center gap-2">
                         <input
@@ -1736,7 +1762,7 @@ function CleanupModal({
                           onChange={() => toggle(s.sender_email, "block_domain")}
                           className="h-3.5 w-3.5"
                         />
-                        Block domain
+                        {t("email.cleanup.blockDomain")}
                       </label>
                       <label className="flex items-center gap-2 text-destructive/90">
                         <input
@@ -1745,7 +1771,7 @@ function CleanupModal({
                           onChange={() => toggle(s.sender_email, "delete_existing")}
                           className="h-3.5 w-3.5"
                         />
-                        Delete all ({s.msg_count})
+                        {t("email.cleanup.deleteAll", { count: s.msg_count })}
                       </label>
                     </div>
                   </div>
@@ -1757,7 +1783,7 @@ function CleanupModal({
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>
-                      Processing {progress.done} of {progress.total}
+                      {t("email.cleanup.processing", { done: progress.done, total: progress.total })}
                       {progress.current && <> · <span className="text-foreground/80">{progress.current}</span></>}
                     </span>
                     <span>{Math.round((progress.done / progress.total) * 100)}%</span>
@@ -1773,14 +1799,14 @@ function CleanupModal({
               <div className="flex items-center gap-3">
                 {err && <span className="text-xs text-destructive">{err}</span>}
                 <div className="flex-1 text-xs text-muted-foreground">
-                  {actionCount} sender{actionCount === 1 ? "" : "s"} selected
+                  {t("email.cleanup.selectedCount", { count: actionCount })}
                 </div>
                 <button
                   onClick={onClose}
                   disabled={applying}
                   className="px-4 h-9 rounded-md hover:bg-muted text-sm disabled:opacity-50"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
                 <button
                   onClick={apply}
@@ -1788,7 +1814,7 @@ function CleanupModal({
                   className="px-4 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 text-sm inline-flex items-center gap-2"
                 >
                   {applying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  {applying ? "Applying…" : "Apply"}
+                  {applying ? t("email.cleanup.applying") : t("email.cleanup.apply")}
                 </button>
               </div>
             </div>
@@ -1807,6 +1833,7 @@ function CleanupModal({
 // a soft "Added · open" line so the user has a confirmation without a
 // modal toast system in play.
 function AppointmentBanner({ messageId }: { messageId: number }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ starts_at: string; event_id?: number | string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -1820,7 +1847,7 @@ function AppointmentBanner({ messageId }: { messageId: number }) {
       }>(`/api/email/messages/${messageId}/calendar-event`);
       setDone({ starts_at: r.starts_at, event_id: r.skill_result?.event_id });
     } catch (e: any) {
-      setErr(e.message || "could not add to calendar");
+      setErr(e.message || t("email.appointment.addFailed"));
     } finally {
       setBusy(false);
     }
@@ -1831,7 +1858,7 @@ function AppointmentBanner({ messageId }: { messageId: number }) {
       <div className="mt-3 p-2.5 rounded-md bg-emerald-500/[0.08] border border-emerald-500/30 text-xs flex items-center gap-2">
         <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-500" />
         <span className="text-emerald-700 dark:text-emerald-400">
-          Added to calendar — {done.starts_at.replace("T", " ").slice(0, 16)}
+          {t("email.appointment.added", { when: done.starts_at.replace("T", " ").slice(0, 16) })}
         </span>
       </div>
     );
@@ -1841,14 +1868,14 @@ function AppointmentBanner({ messageId }: { messageId: number }) {
     <div className="mt-3 p-2.5 rounded-md bg-sky-500/[0.08] border border-sky-500/30 text-xs flex items-center gap-2">
       <Clock className="w-3.5 h-3.5 text-sky-600 dark:text-sky-500" />
       <span className="flex-1 text-foreground/85">
-        This email looks like an appointment.
+        {t("email.appointment.looksLike")}
       </span>
       <button
         onClick={add}
         disabled={busy}
         className="px-3 h-7 rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
       >
-        Add to calendar
+        {t("email.appointment.add")}
       </button>
       {err && <span className="text-destructive ml-2">{err}</span>}
     </div>
@@ -1879,6 +1906,7 @@ function AttachmentRow({
   att: EmailAttachment;
   onActionDone: () => void;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const state = att.paperless_state ?? null;
 
@@ -1896,23 +1924,23 @@ function AttachmentRow({
             {ext(att.filename)}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate">{att.filename || "attachment"}</div>
+            <div className="text-sm font-medium truncate">{att.filename || t("email.attachment.fallbackName")}</div>
             <div className="text-xs text-muted-foreground truncate">
               {humanSize(att.size_bytes)} · {att.mimetype || "?"}
               {state === "auto_filed" && (
-                <span className="ml-2 text-emerald-600 dark:text-emerald-500">✓ Filed (auto)</span>
+                <span className="ml-2 text-emerald-600 dark:text-emerald-500">✓ {t("email.attachment.filedAuto")}</span>
               )}
               {state === "filed" && (
-                <span className="ml-2 text-emerald-600 dark:text-emerald-500">✓ Filed</span>
+                <span className="ml-2 text-emerald-600 dark:text-emerald-500">✓ {t("email.attachment.filed")}</span>
               )}
               {state === "suggested" && (
-                <span className="ml-2 text-sky-600 dark:text-sky-500">📎 Suggested</span>
+                <span className="ml-2 text-sky-600 dark:text-sky-500">📎 {t("email.attachment.suggested")}</span>
               )}
               {state === "failed" && (
-                <span className="ml-2 text-destructive">Upload failed</span>
+                <span className="ml-2 text-destructive">{t("email.attachment.uploadFailed")}</span>
               )}
               {state === "discarded" && (
-                <span className="ml-2 text-muted-foreground">Not filed</span>
+                <span className="ml-2 text-muted-foreground">{t("email.attachment.notFiled")}</span>
               )}
             </div>
           </div>
@@ -1921,9 +1949,9 @@ function AttachmentRow({
             onClick={(e) => e.stopPropagation()}
             className="text-xs text-muted-foreground hover:text-foreground no-underline shrink-0"
             download
-            title="Save to disk"
+            title={t("email.attachment.saveToDisk")}
           >
-            ↓ download
+            ↓ {t("email.attachment.download")}
           </a>
         </div>
       </div>
@@ -1988,7 +2016,7 @@ function AttachmentPreviewModal({
       }
       onActionDone();
     } catch (e: any) {
-      setErr(e.message || `${action} failed`);
+      setErr(e.message || t("email.attachment.actionFailed", { action }));
     } finally {
       setBusy(false);
     }
@@ -2009,7 +2037,7 @@ function AttachmentPreviewModal({
       >
         <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
           <div className="min-w-0">
-            <div className="font-semibold truncate">{att.filename || "attachment"}</div>
+            <div className="font-semibold truncate">{att.filename || t("email.attachment.fallbackName")}</div>
             <div className="text-xs text-muted-foreground">
               {humanSize(att.size_bytes)} · {att.mimetype || "?"}
             </div>
@@ -2017,7 +2045,7 @@ function AttachmentPreviewModal({
           <button
             onClick={onClose}
             className="p-1.5 hover:bg-muted rounded-md text-muted-foreground shrink-0 ml-2"
-            aria-label="Close"
+            aria-label={t("common.close")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -2038,20 +2066,20 @@ function AttachmentPreviewModal({
               <iframe
                 src={inlineUrl}
                 className="hidden md:block w-full h-full bg-white"
-                title={att.filename || "attachment"}
+                title={att.filename || t("email.attachment.fallbackName")}
               />
               <div className="md:hidden h-full flex flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground">
                 <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center text-base font-bold">
                   {ext(att.filename)}
                 </div>
-                <div>Tap below to view this file in your browser or system PDF viewer.</div>
+                <div>{t("email.preview.tapToOpen")}</div>
                 <a
                   href={inlineUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="px-4 h-10 rounded-md bg-primary text-primary-foreground hover:opacity-90 inline-flex items-center"
                 >
-                  Open {isPdf ? "PDF" : "file"}
+                  {isPdf ? t("email.preview.openPdf") : t("email.preview.openFile")}
                 </a>
               </div>
             </>
@@ -2061,13 +2089,13 @@ function AttachmentPreviewModal({
             </div>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-sm text-muted-foreground gap-3 px-6 text-center">
-              <div>Preview not available for {att.mimetype || "this file type"}.</div>
+              <div>{t("email.preview.notAvailable", { type: att.mimetype || t("email.preview.thisFileType") })}</div>
               <a
                 href={downloadUrl}
                 download
                 className="px-3 h-9 rounded-md bg-primary text-primary-foreground hover:opacity-90 inline-flex items-center"
               >
-                ↓ Download to view
+                {t("email.preview.downloadToView")}
               </a>
             </div>
           )}
@@ -2100,9 +2128,9 @@ function AttachmentPreviewModal({
               onClick={() => call("undo")}
               disabled={busy}
               className="px-3 h-9 rounded-md border border-border hover:bg-muted text-sm disabled:opacity-50"
-              title="Delete from Paperless"
+              title={t("email.preview.undoTitle")}
             >
-              Undo
+              {t("email.preview.undo")}
             </button>
           ) : (
             <>
@@ -2112,7 +2140,7 @@ function AttachmentPreviewModal({
                   disabled={busy}
                   className="px-3 h-9 rounded-md border border-border hover:bg-muted text-sm disabled:opacity-50"
                 >
-                  Discard
+                  {t("email.preview.discard")}
                 </button>
               )}
               <span className="text-xs text-muted-foreground">{localState === "failed" ? t("email.paperless.retryVisibleTo") : t("email.paperless.addVisibleTo")}</span>
@@ -2136,9 +2164,9 @@ function AttachmentPreviewModal({
               target="_blank"
               rel="noreferrer"
               className="px-3 h-9 rounded-md border border-border hover:bg-muted text-sm no-underline text-foreground inline-flex items-center"
-              title="Open in a new browser tab"
+              title={t("email.preview.openInTabTitle")}
             >
-              Open in tab
+              {t("email.preview.openInTab")}
             </a>
           )}
           <a
@@ -2146,7 +2174,7 @@ function AttachmentPreviewModal({
             download
             className="px-3 h-9 rounded-md border border-border hover:bg-muted text-sm no-underline text-foreground inline-flex items-center"
           >
-            Download
+            {t("email.preview.download")}
           </a>
         </div>
       </div>
@@ -2250,7 +2278,7 @@ function Reader({
       to: recipients.join(", "),
       cc: ccList.length ? ccList.join(", ") : undefined,
       subject: replySubject,
-      body: `\n\nOn ${m!.date_received || ""}, ${m!.from_name || m!.from_email} wrote:\n> ${(m!.body_text || "").split("\n").join("\n> ")}`,
+      body: `\n\n${t("email.reader.quoteHeader", { date: m!.date_received || "", name: m!.from_name || m!.from_email })}\n> ${(m!.body_text || "").split("\n").join("\n> ")}`,
       inReplyTo: m!.message_id || undefined,
       references: m!.message_id ? [...m!.references_ids, m!.message_id] : m!.references_ids,
     };
@@ -2267,7 +2295,7 @@ function Reader({
             type="button"
             onClick={onBack}
             className="md:hidden w-10 h-10 -ml-1 rounded-md hover:bg-muted flex items-center justify-center text-muted-foreground shrink-0"
-            aria-label="Back to list"
+            aria-label={t("email.reader.backToList")}
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -2276,71 +2304,71 @@ function Reader({
             overflow. Desktop fits everything; mobile gets a small
             scrollbar on overflow which is acceptable for a touch row. */}
         <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto md:overflow-visible">
-          <ToolbarBtn icon={Reply} label="Reply" onClick={() => onReply(buildReply(false))} />
-          <ToolbarBtn icon={ReplyAll} label="Reply all" onClick={() => onReply(buildReply(true))} />
-          <ToolbarBtn icon={Forward} label="Forward"
+          <ToolbarBtn icon={Reply} label={t("email.reader.reply")} onClick={() => onReply(buildReply(false))} />
+          <ToolbarBtn icon={ReplyAll} label={t("email.reader.replyAll")} onClick={() => onReply(buildReply(true))} />
+          <ToolbarBtn icon={Forward} label={t("email.reader.forward")}
             onClick={() => onReply({
               accountId: messageRow.account_id,
               to: "", subject: `Fwd: ${m.subject}`,
-              body: `\n\n--- Forwarded message ---\nFrom: ${m.from_name || m.from_email}\nSubject: ${m.subject}\n\n${m.body_text || ""}`,
+              body: `\n\n${t("email.reader.forwardHeader", { from: m.from_name || m.from_email, subject: m.subject })}\n\n${m.body_text || ""}`,
             })} />
           {m.is_sent && pipelinesOn && (
-            <ToolbarBtn icon={Workflow} label="Follow up until answered (Pipelines)"
+            <ToolbarBtn icon={Workflow} label={t("email.reader.followUp")}
               onClick={async () => {
                 try {
                   const p = await api.post<{ id: number }>("/api/pipelines", { mail_id: messageRow.id });
                   navigate(`/pipelines/${p.id}`);
-                } catch (e: any) { toast("Pipeline: " + e.message); }
+                } catch (e: any) { toast(t("email.reader.pipelineFailed", { error: e.message })); }
               }} />
           )}
           <div className="w-px h-5 bg-border mx-1" />
           <ToolbarBtn
             icon={Star}
-            label={messageRow.is_starred ? "Unstar" : "Star"}
+            label={messageRow.is_starred ? t("email.list.unstar") : t("email.list.star")}
             active={messageRow.is_starred}
             onClick={async () => {
               try {
                 await api.patch(`/api/email/messages/${messageRow.id}`, { is_starred: !messageRow.is_starred });
                 onActionDone(false);
-              } catch (e: any) { toast("Star failed: " + e.message); }
+              } catch (e: any) { toast(t("email.reader.starFailed", { error: e.message })); }
             }} />
           <ToolbarBtn
             icon={AlertCircle}
-            label={messageRow.is_unread ? "Mark read" : "Mark unread"}
+            label={messageRow.is_unread ? t("email.reader.markRead") : t("email.reader.markUnread")}
             onClick={async () => {
               try {
                 await api.patch(`/api/email/messages/${messageRow.id}`, { is_unread: !messageRow.is_unread });
                 onActionDone(false);
-              } catch (e: any) { toast("Failed: " + e.message); }
+              } catch (e: any) { toast(t("email.reader.failed", { error: e.message })); }
             }} />
           <ToolbarBtn
             icon={Reply}
-            label={m.needs_reply ? "Reply-needed off" : "Mark needs reply"}
+            label={m.needs_reply ? t("email.list.needsReplyOff") : t("email.list.needsReplyOn")}
             active={!!m.needs_reply}
             onClick={async () => {
               try {
                 await api.patch(`/api/email/messages/${messageRow.id}`,
                   { needs_reply: !m.needs_reply });
                 onActionDone(false);
-              } catch (e: any) { toast("Failed: " + e.message); }
+              } catch (e: any) { toast(t("email.reader.failed", { error: e.message })); }
             }} />
           <ToolbarBtn
             icon={Archive}
-            label="Archive"
+            label={t("email.list.archive")}
             onClick={async () => {
               try {
                 await api.post(`/api/email/messages/${messageRow.id}/archive`);
                 onActionDone(true);
-              } catch (e: any) { toast("Archive failed: " + e.message); }
+              } catch (e: any) { toast(t("email.reader.archiveFailed", { error: e.message })); }
             }} />
           <ToolbarBtn
             icon={Trash2}
-            label="Delete"
+            label={t("common.delete")}
             onClick={async () => {
               try {
                 await api.delete(`/api/email/messages/${messageRow.id}`);
                 onActionDone(true);
-              } catch (e: any) { toast("Delete failed: " + e.message); }
+              } catch (e: any) { toast(t("email.reader.deleteFailed", { error: e.message })); }
             }} />
           {/* Unsubscribe — appears only when the message carries a
               List-Unsubscribe header. Tiered behaviour:
@@ -2353,13 +2381,13 @@ function Reader({
             <ToolbarBtn
               icon={MailX}
               label={m.unsubscribe.method === "http"
-                ? "Unsubscribe (open)"
-                : "Unsubscribe"}
+                ? t("email.reader.unsubscribeOpen")
+                : t("email.reader.unsubscribe")}
               onClick={async () => {
                 if (!confirm(
                   m.unsubscribe!.method === "http"
-                    ? "Open the sender's unsubscribe page?\n\nThe sender will also be added to your block list so future emails stop generating notifications."
-                    : "Unsubscribe from the newsletter and block the sender?",
+                    ? t("email.reader.confirmUnsubscribeOpen")
+                    : t("email.reader.confirmUnsubscribe"),
                 )) return;
                 try {
                   const r = await api.post<{
@@ -2398,21 +2426,21 @@ function Reader({
       <div className={cn("flex-1 min-h-0 flex flex-col", phone && "overflow-y-auto")}>
       {phone ? (
         <div className="px-4 pt-3 pb-2 border-b border-border shrink-0">
-          <h1 className="text-lg font-semibold leading-snug break-words">{m.subject || "(no subject)"}</h1>
+          <h1 className="text-lg font-semibold leading-snug break-words">{m.subject || t("email.list.noSubject")}</h1>
           <button type="button" onClick={() => setHeaderOpen(o => !o)} className="mt-1.5 w-full flex items-center gap-2 text-left">
             <Avatar name={m.from_name || m.from_email} />
             <span className="flex-1 min-w-0">
               <span className="block text-sm font-medium truncate">{m.from_name || m.from_email}</span>
-              {!headerOpen && <span className="block text-xs text-muted-foreground truncate">to {m.to_addrs?.map(a => a.name || a.email).join(", ") || "me"}</span>}
+              {!headerOpen && <span className="block text-xs text-muted-foreground truncate">{t("email.reader.to", { list: m.to_addrs?.map(a => a.name || a.email).join(", ") || t("email.reader.me") })}</span>}
             </span>
             <span className="text-xs text-muted-foreground shrink-0">{formatWhen(m.date_received)}</span>
             <ChevronDown className={cn("w-4 h-4 text-muted-foreground shrink-0 transition", headerOpen && "rotate-180")} />
           </button>
           {headerOpen && (
             <div className="mt-2 text-xs text-muted-foreground space-y-0.5 break-words">
-              <div>from {m.from_email}</div>
-              {m.to_addrs?.length > 0 && <div>to {m.to_addrs.map(a => a.email).join(", ")}</div>}
-              <div>{formatFull(m.date_received)} · via {m.account_email}</div>
+              <div>{t("email.reader.from", { email: m.from_email })}</div>
+              {m.to_addrs?.length > 0 && <div>{t("email.reader.to", { list: m.to_addrs.map(a => a.email).join(", ") })}</div>}
+              <div>{formatFull(m.date_received)} · {t("email.reader.via", { account: m.account_email })}</div>
             </div>
           )}
         </div>
@@ -2429,15 +2457,15 @@ function Reader({
             <div className="text-sm text-muted-foreground truncate">
               {m.from_email}
               {m.to_addrs?.length > 0 && (
-                <span> · to {m.to_addrs.map(a => a.name || a.email).join(", ")}</span>
+                <span> · {t("email.reader.to", { list: m.to_addrs.map(a => a.name || a.email).join(", ") })}</span>
               )}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              {formatFull(m.date_received)} · via {m.account_email}
+              {formatFull(m.date_received)} · {t("email.reader.via", { account: m.account_email })}
             </div>
           </div>
         </div>
-        <h1 className="text-xl font-semibold break-words">{m.subject || "(no subject)"}</h1>
+        <h1 className="text-xl font-semibold break-words">{m.subject || t("email.list.noSubject")}</h1>
         {m.category === "appointment" && (
           <AppointmentBanner messageId={m.id} />
         )}
@@ -2456,23 +2484,23 @@ function Reader({
         <div className={cn("flex flex-col", phone ? "px-0 py-0" : "px-6 py-4 h-full")}>
           {phone && hasRemoteImages && !showImages && (
             <div className="px-4 py-1.5 bg-amber-500/[0.08] border-b border-amber-500/30 text-xs flex items-center gap-3 shrink-0">
-              <span className="flex-1 text-foreground/80 truncate">Images blocked</span>
-              <button onClick={() => setShowImages(true)} className="underline">Show once</button>
+              <span className="flex-1 text-foreground/80 truncate">{t("email.reader.imagesBlocked")}</span>
+              <button onClick={() => setShowImages(true)} className="underline">{t("email.reader.showOnce")}</button>
               <button onClick={async () => { try { await api.post(`/api/email/messages/${m.id}/trust-sender-images`); setSenderTrusted(true); } catch {} setShowImages(true); }}
-                      className="underline">Always</button>
+                      className="underline">{t("email.reader.always")}</button>
             </div>
           )}
           {!phone && hasRemoteImages && !showImages && (
             <div className="mb-3 p-2.5 rounded-md bg-amber-500/[0.08] border border-amber-500/30 text-xs flex items-center gap-2 flex-wrap shrink-0">
               <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-500 shrink-0" />
               <span className="flex-1 min-w-[12rem] text-foreground/85">
-                Remote images blocked. Senders use these to track when you open emails.
+                {t("email.reader.remoteImagesBlocked")}
               </span>
               <button
                 onClick={() => setShowImages(true)}
                 className="px-3 h-7 rounded border border-border hover:bg-muted text-xs shrink-0"
               >
-                Show once
+                {t("email.reader.showOnce")}
               </button>
               <button
                 onClick={async () => {
@@ -2488,16 +2516,16 @@ function Reader({
                   }
                 }}
                 className="px-3 h-7 rounded bg-primary text-primary-foreground hover:opacity-90 text-xs shrink-0"
-                title={`Always show images from ${m.from_email}`}
+                title={t("email.reader.alwaysFromTitle", { email: m.from_email })}
               >
-                Always from {shortAddress(m.from_email)}
+                {t("email.reader.alwaysFrom", { sender: shortAddress(m.from_email) })}
               </button>
             </div>
           )}
           {hasRemoteImages && showImages && !senderTrusted && (
             <div className="mb-3 p-2 rounded-md bg-muted/40 border border-border text-xs flex items-center gap-2 shrink-0">
               <span className="flex-1 text-muted-foreground">
-                Want to skip the prompt for future mail from {m.from_email}?
+                {t("email.reader.skipPrompt", { email: m.from_email })}
               </span>
               <button
                 onClick={async () => {
@@ -2510,13 +2538,13 @@ function Reader({
                 }}
                 className="px-3 h-7 rounded border border-border hover:bg-muted text-xs shrink-0"
               >
-                Always show from this sender
+                {t("email.reader.alwaysThisSender")}
               </button>
             </div>
           )}
           {senderTrusted && hasRemoteImages && (
             <div className="mb-3 text-2xs text-muted-foreground flex items-center gap-2 shrink-0">
-              <span>Images auto-shown — sender is trusted.</span>
+              <span>{t("email.reader.autoShown")}</span>
               <button
                 onClick={async () => {
                   try {
@@ -2528,7 +2556,7 @@ function Reader({
                 }}
                 className="text-foreground/70 hover:text-foreground underline"
               >
-                Revoke
+                {t("email.reader.revoke")}
               </button>
             </div>
           )}
@@ -2544,23 +2572,23 @@ function Reader({
               />
             ) : (
               <div className={cn("text-sm leading-relaxed whitespace-pre-wrap break-words", phone ? "px-4 py-3" : "h-full overflow-y-auto")}>
-                {m.body_text ? <LinkedText text={m.body_text} /> : "(empty body)"}
+                {m.body_text ? <LinkedText text={m.body_text} /> : t("email.reader.emptyBody")}
               </div>
             )}
           </div>
           {phone && (
             <div className="px-4 py-3 flex flex-wrap gap-2 border-t border-border">
-              <button onClick={() => onReply(buildReply(false))} className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full border border-border text-sm"><Reply className="w-4 h-4" /> Reply</button>
-              <button onClick={() => onReply(buildReply(true))} className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full border border-border text-sm"><ReplyAll className="w-4 h-4" /> Reply all</button>
+              <button onClick={() => onReply(buildReply(false))} className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full border border-border text-sm"><Reply className="w-4 h-4" /> {t("email.reader.reply")}</button>
+              <button onClick={() => onReply(buildReply(true))} className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full border border-border text-sm"><ReplyAll className="w-4 h-4" /> {t("email.reader.replyAll")}</button>
               <button onClick={() => onReply({ accountId: messageRow.account_id, to: "", subject: `Fwd: ${m.subject}`,
-                        body: `\n\n--- Forwarded message ---\nFrom: ${m.from_name || m.from_email}\nSubject: ${m.subject}\n\n${m.body_text || ""}` })}
-                      className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full border border-border text-sm"><Forward className="w-4 h-4" /> Forward</button>
+                        body: `\n\n${t("email.reader.forwardHeader", { from: m.from_name || m.from_email, subject: m.subject })}\n\n${m.body_text || ""}` })}
+                      className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full border border-border text-sm"><Forward className="w-4 h-4" /> {t("email.reader.forward")}</button>
             </div>
           )}
           {m.attachments?.length > 0 && (
             <div className={cn("mt-6 space-y-2 shrink-0", phone && "px-4 pb-4 mt-2")}>
               <div className="text-xs text-muted-foreground font-medium">
-                Attachments
+                {t("email.reader.attachments")}
               </div>
               {m.attachments.map(att => (
                 <AttachmentRow
@@ -2627,6 +2655,7 @@ interface ThreadItem {
 function ThreadStrip({ threadId, currentId, onOpen }: {
   threadId: string; currentId: number; onOpen: (id: number) => void;
 }) {
+  const { t: tr } = useTranslation();
   const t = useApi<{ messages: ThreadItem[] }>(
     `/api/email/thread?thread_id=${encodeURIComponent(threadId)}`, [threadId, currentId]);
   const items = t.data?.messages || [];
@@ -2634,7 +2663,7 @@ function ThreadStrip({ threadId, currentId, onOpen }: {
   return (
     <div className="mt-3 rounded-md border border-border overflow-hidden">
       <div className="px-3 py-1.5 text-2xs font-semibold text-muted-foreground bg-muted/30">
-        Conversation · {items.length}
+        {tr("email.thread.title", { count: items.length })}
       </div>
       <div className="divide-y divide-border max-h-48 overflow-y-auto">
         {items.map(it => (
@@ -2648,7 +2677,7 @@ function ThreadStrip({ threadId, currentId, onOpen }: {
             )}
           >
             <span className={cn("shrink-0 w-32 truncate", it.is_unread && it.id !== currentId ? "font-semibold" : "font-medium")}>
-              {it.is_sent ? "You" : (it.from_name || it.from_email)}
+              {it.is_sent ? tr("email.thread.you") : (it.from_name || it.from_email)}
             </span>
             <span className="flex-1 min-w-0 truncate text-muted-foreground">{it.snippet}</span>
             <span className="shrink-0 text-muted-foreground tabular-nums">{formatWhen(it.date_received)}</span>
@@ -2665,6 +2694,7 @@ function AIDraftPanel({
   messageId: number; accountId: number; message: EmailMessageDetail;
   onUseDraft: (d: ComposeDraft) => void;
 }) {
+  const { t, i18n: i18next } = useTranslation();
   const draftsApi = useApi<{
     group_id: string | null;
     variants: Array<{ id: number; label: string; text: string }>;
@@ -2716,7 +2746,7 @@ function AIDraftPanel({
     const blob = new Blob(voiceChunksRef.current, { type: mimeType || "audio/webm" });
     voiceChunksRef.current = [];
     if (blob.size < 1000) {
-      setVoiceError("Too short — record again.");
+      setVoiceError(t("email.drafts.tooShort"));
       setVoiceState("idle");
       return;
     }
@@ -2733,12 +2763,12 @@ function AIDraftPanel({
       const data = await r.json() as { text: string };
       const transcript = (data.text || "").trim();
       if (!transcript) {
-        setVoiceError("Empty transcript — record again.");
+        setVoiceError(t("email.drafts.emptyTranscript"));
       } else {
         setInstructions(prev => prev.trim() ? `${prev.trim()} ${transcript}` : transcript);
       }
     } catch (e: any) {
-      setVoiceError(e?.message || "Transcription failed.");
+      setVoiceError(e?.message || t("email.drafts.transcriptionFailed"));
     } finally {
       setVoiceState("idle");
     }
@@ -2757,7 +2787,7 @@ function AIDraftPanel({
       rec.start();
       setVoiceState("recording");
     } catch (e: any) {
-      setVoiceError(e?.message || "Mic access denied.");
+      setVoiceError(e?.message || t("email.drafts.micDenied"));
     }
   };
   // Stop the recorder on unmount so a half-open stream doesn't leak.
@@ -2821,11 +2851,11 @@ function AIDraftPanel({
       <button
         onClick={() => setOpen(true)}
         className="md:hidden border-t border-border bg-muted/30 px-4 h-11 mb-14 w-full flex items-center gap-2 text-sm text-foreground/85"
-        title="Reply with Yorik's help"
+        title={t("email.drafts.replyWithYorikTitle")}
       >
         <span>✨</span>
-        <span className="font-medium">Reply with Yorik</span>
-        {variants.length > 0 && <span className="text-xs text-muted-foreground">· {variants.length} drafts ready</span>}
+        <span className="font-medium">{t("email.drafts.replyWithYorik")}</span>
+        {variants.length > 0 && <span className="text-xs text-muted-foreground">{t("email.drafts.draftsReady", { count: variants.length })}</span>}
         <ChevronUp className="w-4 h-4 ml-auto text-muted-foreground" />
       </button>
     );
@@ -2838,19 +2868,19 @@ function AIDraftPanel({
       <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground font-medium">
         <Loader2 className={cn("w-3.5 h-3.5", !regenerating && "hidden", "animate-spin")} />
         {!regenerating && <span>✨</span>}
-        AI drafts
+        {t("email.drafts.title")}
         <div className="ml-auto flex items-center gap-2">
-          <button onClick={() => setOpen(false)} className="md:hidden p-1 -my-1 rounded hover:bg-muted" title="Hide, show the mail">
+          <button onClick={() => setOpen(false)} className="md:hidden p-1 -my-1 rounded hover:bg-muted" title={t("email.drafts.hide")}>
             <ChevronDown className="w-4 h-4" />
           </button>
           {variants.length > 0 && (
-            <button onClick={discard} className="text-2xs hover:text-foreground">discard</button>
+            <button onClick={discard} className="text-2xs hover:text-foreground">{t("email.drafts.discard")}</button>
           )}
           <button onClick={() => regenerate()}
             disabled={regenerating}
             className="text-2xs hover:text-foreground flex items-center gap-1">
             <RefreshCw className={cn("w-3 h-3", regenerating && "animate-spin")} />
-            {regenerating ? "thinking" : "regenerate"}
+            {regenerating ? t("email.drafts.thinking") : t("email.drafts.regenerate")}
           </button>
         </div>
       </div>
@@ -2876,8 +2906,8 @@ function AIDraftPanel({
                   isActive ? tint.active : tint.idle,
                 )}
               >
-                <span>{s.label_en}</span>
-                <span className="text-2xs opacity-70 font-normal">{s.label_de}</span>
+                <span>{i18next.language === "de" ? s.label_de : s.label_en}</span>
+                <span className="text-2xs opacity-70 font-normal">{i18next.language === "de" ? s.label_en : s.label_de}</span>
               </button>
             );
           })}
@@ -2893,7 +2923,7 @@ function AIDraftPanel({
           <textarea
             value={instructions}
             onChange={e => setInstructions(e.target.value)}
-            placeholder="Tell Yorik what to say (optional) — e.g. 'decline politely, I'm on holiday until next Tuesday'"
+            placeholder={t("email.drafts.instructionsPlaceholder")}
             rows={2}
             className="w-full text-xs px-3 py-2 pr-10 rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-ring/30 transition resize-none leading-relaxed"
           />
@@ -2910,14 +2940,14 @@ function AIDraftPanel({
                 : "text-muted-foreground hover:text-foreground hover:bg-muted",
             )}
             title={
-              voiceState === "recording" ? "Stop recording" :
-              voiceState === "transcribing" ? "Transcribing…" :
-              "Dictate"
+              voiceState === "recording" ? t("email.drafts.stopRecording") :
+              voiceState === "transcribing" ? t("email.drafts.transcribing") :
+              t("email.drafts.dictate")
             }
             aria-label={
-              voiceState === "recording" ? "Stop recording" :
-              voiceState === "transcribing" ? "Transcribing" :
-              "Dictate"
+              voiceState === "recording" ? t("email.drafts.stopRecording") :
+              voiceState === "transcribing" ? t("email.drafts.transcribingAria") :
+              t("email.drafts.dictate")
             }
           >
             {voiceState === "recording" ? (
@@ -2938,8 +2968,11 @@ function AIDraftPanel({
 
       {variants.length === 0 ? (
         <div className="text-xs text-muted-foreground italic">
-          No draft yet — pick a <span className="font-medium">tone</span> above
-          {instructions.trim() ? " (your nudge is included)" : ""} to get 3 reply options.
+          <Trans
+            i18nKey="email.drafts.noDraft"
+            values={{ nudge: instructions.trim() ? t("email.drafts.nudgeIncluded") : "" }}
+            components={{ b: <span className="font-medium" /> }}
+          />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -3071,16 +3104,16 @@ function AskYorikButton({ message, detail, onReply }: {
   // and those links were eating the budget the actual text needed.
   const full = shortenLinks(detail.body_text || "");
   const body = full.length > BODY_SEED_CHARS
-    ? full.slice(0, BODY_SEED_CHARS) + "\n…(truncated)"
+    ? full.slice(0, BODY_SEED_CHARS) + "\n" + t("email.askYorik.truncated")
     : full;
-  const ctx = `[Email context]\n`
-            + `From: ${detail.from_name || ""} <${detail.from_email}>\n`
-            + `Subject: ${detail.subject}\n`
-            + `Date: ${detail.date_received || ""}\n\n`
-            + body;
+  const ctx = t("email.askYorik.context", {
+    from: `${detail.from_name || ""} <${detail.from_email}>`,
+    subject: detail.subject,
+    date: detail.date_received || "",
+  }) + `\n\n` + body;
 
-  const summary = `${ctx}\n\n---\nSummarize this email in one sentence — what does the sender want from me?`;
-  const task    = `${ctx}\n\n---\nCreate a follow-up task from this for me (title + due date if derivable from the text).`;
+  const summary = `${ctx}\n\n---\n${t("email.askYorik.summaryPrompt")}`;
+  const task    = `${ctx}\n\n---\n${t("email.askYorik.taskPrompt")}`;
 
   // Draft a reply INLINE — trigger the existing autodraft pipeline,
   // pick the first variant, open the Composer with that text. No
@@ -3128,23 +3161,23 @@ function AskYorikButton({ message, detail, onReply }: {
         onClick={() => setOpen(o => !o)}
         disabled={replyBusy}
         className="h-8 px-2.5 rounded-md text-xs inline-flex items-center gap-1.5 bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 transition disabled:opacity-60"
-        title="Ask Yorik about this email"
+        title={t("email.askYorik.askTitle")}
       >
         {replyBusy
           ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
           : <Sparkles className="w-3.5 h-3.5" />}
-        Ask Yorik
+        {t("email.askYorik.ask")}
       </button>
       {open && (
         <div
           className="absolute top-full left-0 mt-1 min-w-[220px] rounded-md border border-border bg-popover shadow-lg z-30 overflow-hidden"
           onMouseLeave={() => setOpen(false)}
         >
-          <AskYorikMenuItem icon={MessageSquare} label="Summarise this email"
+          <AskYorikMenuItem icon={MessageSquare} label={t("email.askYorik.summarise")}
                             onClick={() => seedAndGo(summary)} />
-          <AskYorikMenuItem icon={Reply} label="Draft a reply"
+          <AskYorikMenuItem icon={Reply} label={t("email.askYorik.draftReply")}
                             onClick={draftReplyInline} />
-          <AskYorikMenuItem icon={AlertCircle} label="Create a follow-up task"
+          <AskYorikMenuItem icon={AlertCircle} label={t("email.askYorik.createTask")}
                             onClick={() => seedAndGo(task)} />
         </div>
       )}
@@ -3202,25 +3235,25 @@ function formatWhen(iso?: string | null): string {
   if (isNaN(d.getTime())) return "";
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   }
   const y = new Date(now); y.setDate(y.getDate() - 1);
-  if (d.toDateString() === y.toDateString()) return "Yesterday";
+  if (d.toDateString() === y.toDateString()) return i18n.t("common.yesterday");
   if (now.getFullYear() === d.getFullYear()) {
-    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+    return d.toLocaleDateString(locale(), { month: "short", day: "numeric" });
   }
-  return d.toLocaleDateString([], { year: "2-digit", month: "short", day: "numeric" });
+  return d.toLocaleDateString(locale(), { year: "2-digit", month: "short", day: "numeric" });
 }
 
 function formatFull(iso?: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
+  return d.toLocaleString(locale());
 }
 
 function addrLabel(addrs: Array<{ name?: string; email: string }> | undefined): string {
-  if (!addrs?.length) return "(no recipient)";
+  if (!addrs?.length) return i18n.t("email.list.noRecipient");
   return addrs[0].name || addrs[0].email + (addrs.length > 1 ? ` +${addrs.length - 1}` : "");
 }
 
@@ -3241,7 +3274,7 @@ function humanSize(n?: number): string {
 // local part if it fits, otherwise shows the host so the user knows
 // who they'd be trusting.
 function shortAddress(email?: string | null): string {
-  if (!email) return "sender";
+  if (!email) return i18n.t("email.reader.senderFallback");
   const at = email.indexOf("@");
   if (at < 0) return email.length > 20 ? email.slice(0, 18) + "…" : email;
   const local = email.slice(0, at);
@@ -3257,6 +3290,7 @@ function shortAddress(email?: string | null): string {
 // the modal so it can be reused on a future "AI settings" page
 // without dragging the account-disconnect logic with it.
 function ClassifierSettingsPanel() {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<"heuristic" | "llm" | null>(null);
   const [billLlm, setBillLlm] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -3297,7 +3331,7 @@ function ClassifierSettingsPanel() {
       await api.post("/api/email/classifier/settings", { mode: next });
       setMode(next);
     } catch (e: any) {
-      setErr(e?.message || "save failed");
+      setErr(e?.message || t("email.classifier.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -3309,7 +3343,7 @@ function ClassifierSettingsPanel() {
       await api.post("/api/email/classifier/settings", { bill_llm: next });
       setBillLlm(next);
     } catch (e: any) {
-      setErr(e?.message || "save failed");
+      setErr(e?.message || t("email.classifier.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -3323,13 +3357,13 @@ function ClassifierSettingsPanel() {
       // poll, so the bar doesn't show idle for one tick.
       setTimeout(refreshStatus, 250);
     } catch (e: any) {
-      setErr(e?.message || "start failed");
+      setErr(e?.message || t("email.classifier.startFailed"));
     } finally {
       setStarting(false);
     }
   }
 
-  if (mode === null) return <div className="text-xs text-muted-foreground">Loading classifier…</div>;
+  if (mode === null) return <div className="text-xs text-muted-foreground">{t("email.classifier.loading")}</div>;
 
   const pct = job && job.total > 0 ? Math.round((job.done / job.total) * 100) : 0;
   const running = job?.status === "running";
@@ -3337,10 +3371,9 @@ function ClassifierSettingsPanel() {
   return (
     <div className="space-y-3">
       <div>
-        <div className="text-sm font-medium">Email classifier</div>
+        <div className="text-sm font-medium">{t("email.classifier.title")}</div>
         <div className="text-xs text-muted-foreground">
-          Picks the category badge ("Newsletter", "Bill", ...) on each incoming mail.
-          Heuristic is instant and offline; LLM uses your local Yorik LLM for sharper tagging.
+          {t("email.classifier.description")}
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -3354,9 +3387,9 @@ function ClassifierSettingsPanel() {
               : "border-border hover:bg-muted",
           )}
         >
-          <div className="text-sm font-medium">Heuristic</div>
+          <div className="text-sm font-medium">{t("email.classifier.heuristic")}</div>
           <div className="text-xs text-muted-foreground mt-0.5">
-            Regex rules. ~1 ms per mail. Reliable but coarse.
+            {t("email.classifier.heuristicHint")}
           </div>
         </button>
         <button
@@ -3369,9 +3402,9 @@ function ClassifierSettingsPanel() {
               : "border-border hover:bg-muted",
           )}
         >
-          <div className="text-sm font-medium">LLM (Yorik)</div>
+          <div className="text-sm font-medium">{t("email.classifier.llm")}</div>
           <div className="text-xs text-muted-foreground mt-0.5">
-            Local Qwen via HOMEOS_LLM_BASE_URL. ~1–2 s per mail. Sharper categories.
+            {t("email.classifier.llmHint")}
           </div>
         </button>
       </div>
@@ -3380,15 +3413,15 @@ function ClassifierSettingsPanel() {
         <div className="flex items-center gap-2">
           <div className="text-xs flex-1">
             {running ? (
-              <>Reclassifying inbox — {job!.done}/{job!.total} ({pct}%)</>
+              <>{t("email.classifier.reclassifying", { done: job!.done, total: job!.total, pct })}</>
             ) : job?.status === "done" ? (
-              <>Last backfill complete — {job.done}/{job.total} classified.</>
+              <>{t("email.classifier.backfillDone", { done: job.done, total: job.total })}</>
             ) : job?.status === "error" ? (
-              <span className="text-destructive">Last backfill errored: {job.last_error || "unknown"}</span>
+              <span className="text-destructive">{t("email.classifier.backfillError", { error: job.last_error || t("email.classifier.unknown") })}</span>
             ) : (
               <>
-                Reclassify existing mail with the current setting.
-                {job && job.total > 0 ? <> {job.done}/{job.total} already at this version.</> : null}
+                {t("email.classifier.reclassifyHint")}
+                {job && job.total > 0 ? <>{t("email.classifier.alreadyAtVersion", { done: job.done, total: job.total })}</> : null}
               </>
             )}
           </div>
@@ -3398,7 +3431,7 @@ function ClassifierSettingsPanel() {
             className="px-3 h-8 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 text-xs inline-flex items-center gap-1.5"
           >
             {(starting || running) && <Loader2 className="w-3 h-3 animate-spin" />}
-            {running ? "Running…" : "Reclassify all"}
+            {running ? t("email.classifier.running") : t("email.classifier.reclassifyAll")}
           </button>
         </div>
         {running && (
@@ -3423,10 +3456,9 @@ function ClassifierSettingsPanel() {
           className="mt-0.5 w-4 h-4 accent-violet-500"
         />
         <div>
-          <div className="text-sm font-medium">Read bills with Yorik</div>
+          <div className="text-sm font-medium">{t("email.classifier.readBills")}</div>
           <div className="text-xs text-muted-foreground mt-0.5">
-            The local LLM picks amount and due date for "New bill?" — the total, not the subtotal,
-            in any language and notation. An amount that isn't in the mail is ignored. Off: rules only.
+            {t("email.classifier.readBillsHint")}
           </div>
         </div>
       </label>
@@ -3480,6 +3512,7 @@ function LinkedText({ text }: { text: string }) {
  *  whether it is in step with the server, mails it could not read, and
  *  a button to compare everything now. */
 function AccountSync({ account, onChanged }: { account: EmailAccount; onChanged: () => void }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [failures, setFailures] = useState<{ folder: string; uid: number; last_error: string; parked: number }[] | null>(null);
   const st = account.sync_state;
@@ -3489,10 +3522,10 @@ function AccountSync({ account, onChanged }: { account: EmailAccount; onChanged:
     setBusy(true);
     try {
       await api.patch(`/api/email/accounts/${account.id}`, { import_scope: value });
-      toast(value === account.import_scope ? "Unchanged" : "Saved — Yorik is bringing the mail in", "success");
+      toast(value === account.import_scope ? t("email.sync.unchanged") : t("email.sync.saved"), "success");
       onChanged();
     } catch (e: any) {
-      toast(e?.message || "Could not save", "error");
+      toast(e?.message || t("email.sync.saveFailed"), "error");
     } finally {
       setBusy(false);
     }
@@ -3502,10 +3535,10 @@ function AccountSync({ account, onChanged }: { account: EmailAccount; onChanged:
     setBusy(true);
     try {
       await api.post(`/api/email/accounts/${account.id}/repair`, {});
-      toast("Checking every folder against the server", "success");
+      toast(t("email.sync.checking"), "success");
       window.setTimeout(onChanged, 4000);
     } catch (e: any) {
-      toast(e?.message || "Could not start the check", "error");
+      toast(e?.message || t("email.sync.checkFailed"), "error");
     } finally {
       setBusy(false);
     }
@@ -3517,30 +3550,30 @@ function AccountSync({ account, onChanged }: { account: EmailAccount; onChanged:
       const r = await api.get<{ failures: typeof failures }>(`/api/email/accounts/${account.id}/failures`);
       setFailures(r.failures || []);
     } catch (e: any) {
-      toast(e?.message || "Could not load the list", "error");
+      toast(e?.message || t("email.sync.listFailed"), "error");
     }
   }
 
   const status = !st
-    ? "Waiting for the first check"
+    ? t("email.sync.waiting")
     : st.phase === "importing"
-      ? `Bringing mail in — ${st.pending} to go`
-      : `In step with the server · checked ${st.last_run_at.slice(11, 16)}`;
+      ? t("email.sync.importing", { count: st.pending })
+      : t("email.sync.inStep", { time: st.last_run_at.slice(11, 16) });
 
   return (
     <div className="mt-2 space-y-1.5 text-xs">
       <div className="flex items-center gap-2 flex-wrap">
-        <label className="text-muted-foreground" htmlFor={`scope-${account.id}`}>Keep in Yorik</label>
+        <label className="text-muted-foreground" htmlFor={`scope-${account.id}`}>{t("email.sync.keep")}</label>
         <select id={`scope-${account.id}`} value={account.import_scope || "recent"} disabled={busy}
           onChange={e => setScope(e.target.value)}
           className="h-7 px-2 rounded-md bg-muted text-xs focus:outline-none focus:ring-2 focus:ring-ring/40">
-          {IMPORT_SCOPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {IMPORT_SCOPES.map(o => <option key={o.value} value={o.value}>{t(`email.sync.scope.${o.value.replace(":", "_")}`, { defaultValue: o.label })}</option>)}
         </select>
         <button onClick={checkNow} disabled={busy}
           className="h-7 px-2 rounded-md border border-border hover:bg-muted transition disabled:opacity-50 inline-flex items-center gap-1"
-          title="Compare every folder with the server now and bring in whatever is missing">
+          title={t("email.sync.checkNowTitle")}>
           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-          Check now
+          {t("email.sync.checkNow")}
         </button>
       </div>
       <div className={cn("inline-flex items-center gap-1",
@@ -3552,7 +3585,7 @@ function AccountSync({ account, onChanged }: { account: EmailAccount; onChanged:
         <div className="text-amber-600 dark:text-amber-400">
           <button onClick={showFailures} className="inline-flex items-center gap-1 underline-offset-2 hover:underline">
             <AlertTriangle className="w-3 h-3" />
-            {failed} mail{failed === 1 ? "" : "s"} could not be read — they are safe on the server
+            {t("email.sync.unreadable", { count: failed })}
           </button>
           {failures && (
             <ul className="mt-1 space-y-0.5 font-mono text-2xs text-muted-foreground">
@@ -3576,6 +3609,7 @@ function EmailSettingsModal({
   onAddAccount:    () => void;
   onDisconnected:  () => void;
 }) {
+  const { t } = useTranslation();
   const [busyId, setBusyId]   = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [error, setError]     = useState<string | null>(null);
@@ -3609,7 +3643,7 @@ function EmailSettingsModal({
       const msg = typeof e === "string"
         ? e
         : (e?.message || e?.toString?.() || JSON.stringify(e));
-      setError(`Couldn't disconnect: ${msg}`);
+      setError(t("email.settings.disconnectFailed", { error: msg }));
     } finally {
       setBusyId(null);
     }
@@ -3631,18 +3665,18 @@ function EmailSettingsModal({
             <SettingsIcon className="w-5 h-5 text-violet-500" />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-semibold leading-tight">Email settings</h2>
+            <h2 className="text-lg font-semibold leading-tight">{t("email.settings.title")}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
               {accounts.length === 0
-                ? "No accounts connected yet."
-                : `${accounts.length} account${accounts.length === 1 ? "" : "s"} connected.`}
+                ? t("email.settings.noAccounts")
+                : t("email.settings.connected", { count: accounts.length })}
             </p>
           </div>
           <button
             onClick={() => { if (busyId === null) onClose(); }}
             disabled={busyId !== null}
             className="text-muted-foreground hover:text-foreground transition disabled:opacity-40"
-            aria-label="Close"
+            aria-label={t("common.close")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -3660,7 +3694,7 @@ function EmailSettingsModal({
                   <div className="text-xs text-muted-foreground truncate font-mono">
                     {a.imap_host}:{a.imap_port}
                     {a.imap_ssl ? " · SSL" : ""}
-                    {a.is_default ? " · default" : ""}
+                    {a.is_default ? ` · ${t("email.settings.default")}` : ""}
                   </div>
                   {a.last_error && (
                     <div className="text-xs text-amber-600 dark:text-amber-400 mt-1 inline-flex items-center gap-1">
@@ -3678,14 +3712,14 @@ function EmailSettingsModal({
                       className="text-xs h-8 px-3 rounded-md bg-red-500 hover:bg-red-600 text-white transition disabled:opacity-50 inline-flex items-center gap-1"
                     >
                       {busyId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                      Confirm
+                      {t("email.settings.confirm")}
                     </button>
                     <button
                       onClick={() => setConfirmId(null)}
                       disabled={busyId !== null}
                       className="text-xs h-8 px-3 rounded-md border border-border hover:bg-muted transition disabled:opacity-50"
                     >
-                      Cancel
+                      {t("common.cancel")}
                     </button>
                   </div>
                 ) : (
@@ -3693,10 +3727,10 @@ function EmailSettingsModal({
                     onClick={() => { setConfirmId(a.id); setError(null); }}
                     disabled={busyId !== null}
                     className="text-xs h-8 px-3 rounded-md border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition disabled:opacity-50 inline-flex items-center gap-1.5 shrink-0"
-                    title="Remove this account from Yorik (the mailbox itself stays untouched on the IMAP server)"
+                    title={t("email.settings.disconnectTitle")}
                   >
                     <Trash2 className="w-3 h-3" />
-                    Disconnect
+                    {t("email.settings.disconnect")}
                   </button>
                 )}
               </div>
@@ -3722,22 +3756,19 @@ function EmailSettingsModal({
             className="text-sm h-9 px-3 rounded-md border border-border hover:bg-muted transition disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             <Plus className="w-3.5 h-3.5" />
-            Add another account
+            {t("email.settings.addAnother")}
           </button>
           <button
             onClick={() => { if (busyId === null) onClose(); }}
             disabled={busyId !== null}
             className="text-sm h-9 px-4 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition disabled:opacity-50"
           >
-            Done
+            {t("email.settings.done")}
           </button>
         </div>
 
         <p className="text-xs text-muted-foreground mt-4 leading-relaxed">
-          Disconnecting removes the account from Yorik. Yorik forgets the
-          IMAP/SMTP credentials and stops fetching new messages. The
-          mailbox on your provider is untouched — nothing is deleted on
-          their side. To restore, just add the account again.
+          {t("email.settings.footer")}
         </p>
       </div>
     </div>

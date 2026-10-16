@@ -20,6 +20,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Mic, Square, Loader2, X, Sparkles, AlertCircle, Volume2, MessageSquare } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import { cn } from "@/lib/utils";
 import { api, ApiError, wallDeviceHeader } from "@/lib/api";
 import { PendingActionPanel } from "@/components/PendingActionPanel";
@@ -63,6 +65,7 @@ interface UiAction {
 }
 
 export function VoiceFab() {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>("idle");
@@ -329,7 +332,7 @@ export function VoiceFab() {
     ttsStreamCompleteRef.current = false;
     voiceDetectedRef.current = false;
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setErr("Your browser doesn't support audio recording.");
+      setErr(i18n.t("chat.voiceFab.unsupported"));
       setMode("done");
       return;
     }
@@ -491,7 +494,7 @@ export function VoiceFab() {
       }
 
     } catch (e: any) {
-      setErr(e?.message || "Couldn't access the microphone.");
+      setErr(e?.message || i18n.t("chat.voiceFab.micFailed"));
       setMode("done");
     }
   }, []);
@@ -638,7 +641,7 @@ export function VoiceFab() {
     const blob = new Blob(chunksRef.current, { type: mimeType || "audio/webm" });
     chunksRef.current = [];
     if (blob.size < 1000) {
-      setErr("That was too short — try again.");
+      setErr(i18n.t("chat.voiceFab.tooShort"));
       setMode("done");
       return;
     }
@@ -667,7 +670,7 @@ export function VoiceFab() {
       }
       await processVoiceNdjson(r);
     } catch (e: any) {
-      setErr(e?.message || "Voice request failed.");
+      setErr(e?.message || i18n.t("chat.voiceFab.requestFailed"));
       setMode("done");
     }
   }
@@ -978,7 +981,7 @@ export function VoiceFab() {
       }
       await processVoiceNdjson(r);
     } catch (e: any) {
-      setErr(e?.message || "Voice resume failed.");
+      setErr(e?.message || i18n.t("chat.voiceFab.resumeFailed"));
       setMode("done");
     }
   }
@@ -1014,11 +1017,11 @@ export function VoiceFab() {
       <button
         onClick={stop}
         className={cn(fabBase, fabPos, "px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white animate-pulse-soft")}
-        title="Tap to stop"
-        aria-label="Stop recording"
+        title={t("chat.voiceFab.tapToStop")}
+        aria-label={t("chat.voiceFab.stopRecording")}
       >
         <Square className="w-4 h-4 fill-current" />
-        <span className="text-xs tabular-nums">REC {seconds}s</span>
+        <span className="text-xs tabular-nums">{t("chat.voiceFab.rec", { seconds })}</span>
         <style>{`
           @keyframes pulse-soft { 0%,100% { transform: scale(1) } 50% { transform: scale(1.04) } }
           .animate-pulse-soft { animation: pulse-soft 1.4s ease-in-out infinite; }
@@ -1047,16 +1050,16 @@ export function VoiceFab() {
           inflight && "opacity-90 cursor-wait",
         )}
         aria-label={
-          mode === "transcribing" ? "Transcribing…" :
-          mode === "thinking"     ? "Thinking…" :
-          mode === "speaking"     ? "Speaking…" :
-          "Talk to Yorik"
+          mode === "transcribing" ? t("chat.voiceFab.transcribing") :
+          mode === "thinking"     ? t("chat.voiceFab.thinking") :
+          mode === "speaking"     ? t("chat.voiceFab.speaking") :
+          t("chat.voiceFab.talk")
         }
         title={
-          mode === "transcribing" ? "Transcribing…" :
-          mode === "thinking"     ? "Thinking…" :
-          mode === "speaking"     ? "Speaking…" :
-          "Talk to Yorik"
+          mode === "transcribing" ? t("chat.voiceFab.transcribing") :
+          mode === "thinking"     ? t("chat.voiceFab.thinking") :
+          mode === "speaking"     ? t("chat.voiceFab.speaking") :
+          t("chat.voiceFab.talk")
         }
       >
         {mode === "transcribing" || mode === "thinking"
@@ -1106,6 +1109,7 @@ function ResultPopover({
   onNewConversation: () => void;
   onContinueInChat: () => void;
 }) {
+  const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     function esc(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
@@ -1120,9 +1124,9 @@ function ResultPopover({
   }, [history.length, result?.transcript, result?.response]);
 
   const statusLabel =
-    mode === "transcribing" ? "Transcribing…" :
-    mode === "thinking"     ? "Thinking…" :
-    mode === "speaking"     ? "Speaking…" :
+    mode === "transcribing" ? t("chat.voiceFab.transcribing") :
+    mode === "thinking"     ? t("chat.voiceFab.thinking") :
+    mode === "speaking"     ? t("chat.voiceFab.speaking") :
     null;
 
   return (
@@ -1132,11 +1136,11 @@ function ResultPopover({
           <div className="w-7 h-7 rounded-full bg-violet-500/15 flex items-center justify-center">
             <Sparkles className="w-3.5 h-3.5 text-violet-500" />
           </div>
-          <span className="text-xs font-semibold">Yorik · voice</span>
+          <span className="text-xs font-semibold">{t("chat.voiceFab.title")}</span>
           {result?.identifiedName && (
             <span
               className="text-2xs px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 inline-flex items-center gap-1"
-              title="Speaker matched a voice-enrolled profile"
+              title={t("chat.voiceFab.speakerMatched")}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               {result.identifiedName}
@@ -1153,13 +1157,13 @@ function ResultPopover({
           )}
           {result?.degraded && (
             <span className="text-2xs px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600">
-              offline
+              {t("chat.voiceFab.offline")}
             </span>
           )}
         </div>
         <button
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t("common.close")}
           className="w-7 h-7 rounded-md hover:bg-muted text-muted-foreground flex items-center justify-center"
         >
           <X className="w-3.5 h-3.5" />
@@ -1177,21 +1181,21 @@ function ResultPopover({
             intentionally not re-rendered here — past turns are read-
             only history; the active turn (below) is where any
             in-progress action lives. */}
-        {history.map((t, i) => (
+        {history.map((turn, i) => (
           <div
             key={i}
             className="space-y-2 pb-3 border-b border-border/60 last:border-b-0 opacity-80"
           >
-            {t.transcript && (
+            {turn.transcript && (
               <div>
-                <div className="text-2xs text-muted-foreground font-semibold mb-0.5">You said</div>
-                <div className="text-sm italic">"{t.transcript}"</div>
+                <div className="text-2xs text-muted-foreground font-semibold mb-0.5">{t("chat.voiceFab.youSaid")}</div>
+                <div className="text-sm italic">"{turn.transcript}"</div>
               </div>
             )}
-            {t.response && (
+            {turn.response && (
               <div>
                 <div className="text-2xs text-muted-foreground font-semibold mb-0.5">Yorik</div>
-                <div className="text-sm leading-relaxed whitespace-pre-wrap">{t.response}</div>
+                <div className="text-sm leading-relaxed whitespace-pre-wrap">{turn.response}</div>
               </div>
             )}
           </div>
@@ -1199,7 +1203,7 @@ function ResultPopover({
         {/* Active turn (live transcript + streaming response + pending action). */}
         {result?.transcript && (
           <div>
-            <div className="text-2xs text-muted-foreground font-semibold mb-0.5">You said</div>
+            <div className="text-2xs text-muted-foreground font-semibold mb-0.5">{t("chat.voiceFab.youSaid")}</div>
             <div className="text-sm italic">"{result.transcript}"</div>
           </div>
         )}
@@ -1214,7 +1218,7 @@ function ResultPopover({
         )}
         {!result?.response && (mode === "thinking" || mode === "speaking") && (
           <div className="text-xs text-muted-foreground italic">
-            {mode === "thinking" ? "(working on it…)" : "(speaking…)"}
+            {mode === "thinking" ? t("chat.voiceFab.workingOnIt") : t("chat.voiceFab.speakingParen")}
           </div>
         )}
       </div>
@@ -1228,18 +1232,18 @@ function ResultPopover({
         const docCount = result?.doc_count || 0;
         const photoCount = result?.photo_count || 0;
         const hasCards = docCount > 0 || photoCount > 0;
-        const chatLabel = !hasCards ? "Continue in chat"
-          : docCount && !photoCount   ? `Open ${docCount} document${docCount === 1 ? "" : "s"} in chat`
-          : photoCount && !docCount   ? `Open ${photoCount} photo${photoCount === 1 ? "" : "s"} in chat`
-          : `Open ${docCount + photoCount} results in chat`;
+        const chatLabel = !hasCards ? t("chat.voiceFab.continueInChat")
+          : docCount && !photoCount   ? t("chat.voiceFab.openDocs", { count: docCount })
+          : photoCount && !docCount   ? t("chat.voiceFab.openPhotos", { count: photoCount })
+          : t("chat.voiceFab.openResults", { count: docCount + photoCount });
         return (
           <footer className="px-4 py-2.5 border-t border-border bg-muted/20 flex items-center justify-between gap-2 flex-wrap">
             <button
               onClick={onNewConversation}
               className="text-2xs text-muted-foreground hover:text-foreground transition"
-              title="Start a fresh conversation (forget context)"
+              title={t("chat.voiceFab.newConversationTitle")}
             >
-              New conversation
+              {t("chat.voiceFab.newConversation")}
             </button>
             <div className="flex items-center gap-2">
               {conversationId && (
@@ -1251,7 +1255,7 @@ function ResultPopover({
                       ? "bg-violet-500 hover:bg-violet-600 text-white"
                       : "bg-card border border-border hover:bg-muted text-foreground",
                   )}
-                  title="Open this conversation in Chat for the full card UI + scrollback"
+                  title={t("chat.voiceFab.openInChatTitle")}
                 >
                   <MessageSquare className="w-3 h-3" /> {chatLabel}
                 </button>
@@ -1265,7 +1269,7 @@ function ResultPopover({
                     : "bg-violet-500 hover:bg-violet-600 text-white",
                 )}
               >
-                <Mic className="w-3 h-3" /> Speak again
+                <Mic className="w-3 h-3" /> {t("chat.voiceFab.speakAgain")}
               </button>
             </div>
           </footer>

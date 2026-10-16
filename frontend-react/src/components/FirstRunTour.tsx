@@ -6,24 +6,27 @@
  * restarts it (window event "yorik:tour").
  */
 import { useEffect, useLayoutEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/AuthGate";
 import { isKid } from "@/lib/dock-order";
 
-interface Stop { target: string; title: string; text: string }
+// Title and text of a stop live in the catalogue as apps.tour.<target>.
+interface Stop { target: string }
 
 const STOPS: Stop[] = [
-  { target: "ask", title: "Ask Yorik", text: "Tap here and type or say what you need: \"Remind me tomorrow at 9 to call the doctor.\"" },
-  { target: "family", title: "Your family today", text: "Everyone's face and what their day holds. Tap a face to open the family board." },
-  { target: "checklist", title: "A few steps left", text: "This list helps you finish setting up. It waits until you're ready." },
-  { target: "dock", title: "Your apps", text: "Every app lives down here. The colours stay the same everywhere." },
-  { target: "help", title: "Stuck?", text: "Tap the question mark for help on the page you're on, or just ask Yorik \"how does this work?\"" },
+  { target: "ask" },
+  { target: "family" },
+  { target: "checklist" },
+  { target: "dock" },
+  { target: "help" },
 ];
 const KID_STOPS = ["family", "dock", "help"];
 
 export function startTour() { window.dispatchEvent(new Event("yorik:tour")); }
 
 export function FirstRunTour() {
+  const { t } = useTranslation();
   const role = useAuth().user?.role;
   const [stops, setStops] = useState<Stop[] | null>(null);
   const [i, setI] = useState(0);
@@ -68,6 +71,8 @@ export function FirstRunTour() {
   }
 
   if (!stops || !stop || !box) return null;
+  const stopTitle = t(`apps.tour.${stop.target}.title`);
+  const stopText = t(`apps.tour.${stop.target}.text`);
   const last = i === stops.length - 1;
   const pad = 8;
   const below = box.top < window.innerHeight / 2;
@@ -82,15 +87,15 @@ export function FirstRunTour() {
            style={{ top: box.top - pad, left: box.left - pad, width: box.width + pad * 2, height: box.height + pad * 2,
                     boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)" }} />
       <div className="absolute w-[320px] max-w-[calc(100vw-32px)] bg-background border border-border rounded-2xl shadow-2xl p-4"
-           style={{ top: cardTop, bottom: cardBottom, left: cardLeft }} role="dialog" aria-label={stop.title}>
-        <div className="text-xs text-muted-foreground mb-1">{i + 1} of {stops.length}</div>
-        <div className="font-semibold mb-1">{stop.title}</div>
-        <p className="text-sm text-muted-foreground">{stop.text}</p>
+           style={{ top: cardTop, bottom: cardBottom, left: cardLeft }} role="dialog" aria-label={stopTitle}>
+        <div className="text-xs text-muted-foreground mb-1">{t("apps.tour.step", { current: i + 1, total: stops.length })}</div>
+        <div className="font-semibold mb-1">{stopTitle}</div>
+        <p className="text-sm text-muted-foreground">{stopText}</p>
         <div className="flex items-center justify-between mt-4">
-          <button onClick={finish} className="text-sm text-muted-foreground hover:text-foreground">Skip the tour</button>
+          <button onClick={finish} className="text-sm text-muted-foreground hover:text-foreground">{t("apps.tour.skip")}</button>
           <button onClick={() => (last ? finish() : setI(i + 1))}
                   className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium">
-            {last ? "Got it" : "Next"}
+            {last ? t("apps.tour.gotIt") : t("apps.tour.next")}
           </button>
         </div>
       </div>

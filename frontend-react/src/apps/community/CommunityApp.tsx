@@ -19,6 +19,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import { Dock } from "@/components/Dock";
 import { api } from "@/lib/api";
 import { Loader2, AlertTriangle, RefreshCw } from "lucide-react";
@@ -59,6 +61,7 @@ function escapeForInlineScript(js: string): string {
 }
 
 export function CommunityApp() {
+  const { t } = useTranslation();
   const { appId } = useParams<{ appId: string }>();
   const navigate = useNavigate();
   const [manifest, setManifest] = useState<AppManifest | null>(null);
@@ -82,14 +85,14 @@ export function CommunityApp() {
           api.get<AppManifest>(`/api/apps/${appId}/manifest`),
           fetch(`/api/apps/${appId}/ui`, { credentials: "same-origin" }),
         ]);
-        if (!jsResp.ok) throw new Error(`could not load app code (HTTP ${jsResp.status})`);
+        if (!jsResp.ok) throw new Error(i18n.t("community.loadCodeFailed", { status: jsResp.status }));
         const jsText = await jsResp.text();
-        if (!jsText || jsText.length < 10) throw new Error("app code is empty");
+        if (!jsText || jsText.length < 10) throw new Error(i18n.t("community.codeEmpty"));
         if (cancelled) return;
         setManifest(m);
         setUiJs(jsText);
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Could not load app");
+        if (!cancelled) setError(e?.message || i18n.t("community.loadFailed"));
       }
     })();
     return () => { cancelled = true; };
@@ -265,14 +268,13 @@ ${safeAppJs}
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div className="text-base font-semibold">
-                {appId} couldn't load
+                {t("community.appFailed", { app: appId })}
               </div>
               <div className="text-sm text-muted-foreground leading-relaxed">
                 {error}
               </div>
               <div className="text-xs text-muted-foreground">
-                The app's source may be missing, its server-side install may have
-                failed, or your network blocked the request.
+                {t("community.failedHint")}
               </div>
               <div className="flex justify-center gap-2 pt-2">
                 <button
@@ -280,13 +282,13 @@ ${safeAppJs}
                   className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition inline-flex items-center gap-1.5"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  Try again
+                  {t("community.retry")}
                 </button>
                 <button
                   onClick={() => navigate("/home")}
                   className="px-3 py-1.5 rounded-md text-sm font-medium border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition"
                 >
-                  Back to home
+                  {t("community.backHome")}
                 </button>
               </div>
             </div>

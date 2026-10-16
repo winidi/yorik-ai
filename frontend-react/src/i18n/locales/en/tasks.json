@@ -6,5 +6,181 @@
     "open": "Open this task",
     "pause": "Pause",
     "done": "Done"
+  },
+  "title": "Tasks",
+  "presets": {
+    "estimate": "Estimate missing durations",
+    "prioritise": "Auto-prioritise",
+    "categorise": "Auto-categorise"
+  },
+  "errors": {
+    "failed": "Failed: {{error}}",
+    "addSubtask": "Failed to add subtask: {{error}}",
+    "snooze": "Snooze failed: {{error}}",
+    "timer": "Timer failed: {{error}}",
+    "magic": "Magic search failed: {{error}}",
+    "magicShort": "Magic failed: {{error}}",
+    "apply": "Apply failed: {{error}}"
+  },
+  "confirmDelete": "Delete task \"{{title}}\"?",
+  "applied": "Applied {{applied}}, rejected {{rejected}}.",
+  "understood": {
+    "prefix": "Yorik understood: ",
+    "due": "due {{date}}",
+    "high": "high priority",
+    "low": "low priority"
+  },
+  "matches": "Matches",
+  "header": {
+    "openShort_one": "<n>{{count}}</n> open task",
+    "openShort_other": "<n>{{count}}</n> open tasks",
+    "open_one": "You have <n>{{count}}</n> open task.",
+    "open_other": "You have <n>{{count}}</n> open tasks.",
+    "allClear": "All clear.",
+    "loadTitle": "{{time}} of estimated work due today or overdue",
+    "today": "Today: {{time}}",
+    "estimateTitle": "Run the LLM to estimate the missing durations",
+    "unestimated": "+ {{count}} unestimated",
+    "doneTitle": "{{time}} of estimated work already done today",
+    "done": "{{time}} done",
+    "about": "About <n>{{time}}</n> of estimated work in this view.",
+    "addEstimates": "Add estimates to see how much work you're carrying."
+  },
+  "bar": {
+    "placeholder": "Add a task or ask Yorik anything…",
+    "aria": "Add a task or ask Yorik",
+    "clearMagic": "Clear magic filter",
+    "addEnter": "Add task (Enter)",
+    "add": "Add task",
+    "askEnter": "Ask Yorik (Enter)",
+    "askTitle": "Ask Yorik",
+    "ask": "Ask",
+    "doneTodayRun": "Done today: <n>{{count}} ✓</n> — solid run.",
+    "doneToday": "Done today: <n>{{count}} ✓</n>",
+    "smartTools": "Smart tools",
+    "yorik": "Yorik:"
+  },
+  "tabs": {
+    "today": "Today",
+    "inbox": "Inbox",
+    "upcoming": "Upcoming",
+    "all": "All",
+    "overdue": "{{count}} overdue",
+    "hideDone": "Hide completed tasks",
+    "showDone": "Show completed tasks",
+    "done": "Done ({{count}})",
+    "onlyMine": "Show only my tasks",
+    "alsoOthers": "Also show tasks of other household members",
+    "others": "Others ({{count}})",
+    "groupBy": "Group tasks by",
+    "group": {
+      "due": "Group · by due date",
+      "category": "Group · by category",
+      "person": "Group · by person",
+      "flat": "Group · none (flat)"
+    }
+  },
+  "empty": {
+    "magic": "Magic search returned nothing — try different wording.",
+    "today": "Nothing on your plate today.",
+    "inbox": "Inbox empty — type a task below to capture.",
+    "upcoming": "No upcoming tasks scheduled.",
+    "all": "You haven't added any tasks yet.",
+    "viewAll": "View all tasks"
+  },
+  "groups": {
+    "all": "All",
+    "uncategorised": "Uncategorised",
+    "unassigned": "Unassigned",
+    "noDate": "No date",
+    "overdue": "Overdue",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "thisWeek": "This week",
+    "later": "Later"
+  },
+  "snooze": {
+    "title": "Snooze: push the due date forward",
+    "aria": "Snooze to {{label}}",
+    "day": "+1d",
+    "nextMon": "Next Mon",
+    "week": "+1w"
+  },
+  "row": {
+    "markDone": "Mark as done",
+    "markNotDone": "Mark as not done",
+    "recurring": "Recurring: {{rule}}",
+    "runningTitle": "{{elapsed}} of {{estimate}} estimated minutes (incl. {{prior}}m from prior sessions)",
+    "runningTitleNoEstimate": "{{elapsed}} minutes total (incl. {{prior}}m from prior sessions, no estimate set)",
+    "running": "running · {{time}}",
+    "tookTitle": "Took {{prior}} of {{estimate}} estimated minutes",
+    "tookTitleNoEstimate": "Took {{prior}} minutes (no estimate was set)",
+    "tookOf": "took {{time}} / {{estimate}}",
+    "took": "took {{time}}",
+    "subtasksDone": "{{done}} of {{total}} subtasks done",
+    "pauseFocus": "Pause focus",
+    "focusThis": "Focus on this task",
+    "delete": "Delete task",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "collapseTask": "Collapse task",
+    "expandTask": "Expand task",
+    "subtasks": "Subtasks · ",
+    "markSubtaskDone": "Mark subtask as done",
+    "markSubtaskNotDone": "Mark subtask as not done",
+    "estimated": "Estimated {{time}}",
+    "deleteSubtask": "Delete subtask"
+  },
+  "editor": {
+    "dueDate": "Due date",
+    "estimatePlaceholder": "estimate min",
+    "estimateTitle": "Estimated minutes",
+    "priority": "Priority",
+    "categoryPlaceholder": "category",
+    "notesPlaceholder": "Notes…",
+    "delete": "Delete",
+    "pauseFocus": "Pause focus",
+    "focus": "Focus",
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "priority": {
+    "low": "Low",
+    "normal": "Normal",
+    "high": "High"
+  },
+  "subtask": {
+    "add": "Add subtask",
+    "placeholder": "Subtask title — Enter to add, Esc to close",
+    "aria": "New subtask title",
+    "addButton": "Add",
+    "close": "Close subtask composer"
+  },
+  "repeat": {
+    "label": "Repeat",
+    "daily": "Daily",
+    "weekdays": "Weekdays",
+    "weekly": "Weekly",
+    "biweekly": "Every 2 weeks",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "custom": "Custom…",
+    "clearTitle": "Clear recurrence (one-shot)",
+    "clear": "Clear recurrence",
+    "customPlaceholder": "e.g. \"every Mon,Wed,Fri\", \"every 3 days\", \"quarterly\"",
+    "customTitle": "Recurrence rule (empty = one-shot)"
+  },
+  "panel": {
+    "yorik": "Yorik:",
+    "dismiss": "dismiss",
+    "proposes": "Yorik proposes:",
+    "changes_one": "{{count}} change",
+    "changes_other": "{{count}} changes",
+    "minutesFor": "Estimated minutes for {{title}}",
+    "applyOneTitle": "Apply just this one",
+    "applyOneAria": "Apply update for {{title}}",
+    "apply": "Apply",
+    "cancel": "Cancel",
+    "applyAll": "Apply all"
   }
 }

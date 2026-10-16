@@ -11,6 +11,7 @@
  */
 
 import { useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { X, AlertCircle, Loader2, ExternalLink, Check, ChevronDown, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -24,20 +25,18 @@ interface Props {
 
 // Where each big provider hands out the separate password mail programs
 // need. Straight to the page, not a description of how to find it.
-const APP_PASSWORD_PAGE: Record<string, { url: string; steps: string[] }> = {
-  "Gmail": { url: "https://myaccount.google.com/apppasswords",
-    steps: ["Open Google's app passwords page (sign in if asked).", "Type \"Yorik\" as the name and tap Create.", "Copy the 16 letters Google shows and paste them below."] },
-  "iCloud Mail": { url: "https://account.apple.com/account/manage",
-    steps: ["Open your Apple account page and sign in.", "Go to Sign-In and Security → App-Specific Passwords.", "Create one called \"Yorik\" and paste it below."] },
-  "Outlook / Hotmail": { url: "https://account.microsoft.com/security",
-    steps: ["Only if you use two-step sign-in: open Microsoft's security page.", "Advanced security options → App passwords → Create.", "Paste it below. Without two-step sign-in, your normal password works."] },
-  "Yahoo Mail": { url: "https://login.yahoo.com/account/security",
-    steps: ["Open Yahoo's account security page.", "Generate app password, name it \"Yorik\".", "Paste it below."] },
+// The steps live in the catalogue under email.wizard.help.<key>.steps.
+const APP_PASSWORD_PAGE: Record<string, { url: string; key: string }> = {
+  "Gmail": { url: "https://myaccount.google.com/apppasswords", key: "gmail" },
+  "iCloud Mail": { url: "https://account.apple.com/account/manage", key: "icloud" },
+  "Outlook / Hotmail": { url: "https://account.microsoft.com/security", key: "outlook" },
+  "Yahoo Mail": { url: "https://login.yahoo.com/account/security", key: "yahoo" },
 };
 
 type Step = "address" | "password" | "scope";
 
 export function AccountWizard({ onClose, onSaved }: Props) {
+  const { t } = useTranslation();
   const [step, setStep] = useState<Step>("address");
   const [email, setEmail] = useState("");
   const [preset, setPreset] = useState<ProviderPreset | null>(null);
@@ -54,7 +53,7 @@ export function AccountWizard({ onClose, onSaved }: Props) {
 
   async function toPassword() {
     setError(null);
-    if (!email.includes("@")) { setError("That doesn't look like an email address."); return; }
+    if (!email.includes("@")) { setError(t("email.wizard.invalidAddress")); return; }
     setLoading(true);
     try {
       const res = await api.post<{ preset: ProviderPreset }>("/api/email/providers/probe", { email: email.trim() });
@@ -81,13 +80,16 @@ export function AccountWizard({ onClose, onSaved }: Props) {
       });
       onSaved(acct);
     } catch (e: any) {
-      setError(e.message || "Connecting didn't work.");
+      setError(e.message || t("email.wizard.connectFailed"));
       setStep("password");
     } finally { setLoading(false); }
   }
 
-  const name = preset?.name || "your provider";
+  const name = preset?.name || t("email.wizard.yourProvider");
   const help = preset ? APP_PASSWORD_PAGE[preset.name] : undefined;
+  const helpSteps: string[] = help
+    ? (t(`email.wizard.help.${help.key}.steps`, { returnObjects: true }) as unknown as string[])
+    : [];
   const bridge = !!preset?.bridge_required;
   const stepNo = step === "address" ? 1 : step === "password" ? 2 : 3;
 
@@ -98,10 +100,10 @@ export function AccountWizard({ onClose, onSaved }: Props) {
       <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 pb-3">
           <div>
-            <div className="text-xs text-muted-foreground">Step {stepNo} of 3</div>
-            <h2 className="font-semibold text-lg">Connect your email</h2>
+            <div className="text-xs text-muted-foreground">{t("email.wizard.step", { step: stepNo, total: 3 })}</div>
+            <h2 className="font-semibold text-lg">{t("email.wizard.title")}</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground" aria-label="Close">
+          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground" aria-label={t("common.close")}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -117,15 +119,15 @@ export function AccountWizard({ onClose, onSaved }: Props) {
           {step === "address" && (
             <>
               <label className="block">
-                <span className="text-sm font-medium">Your email address</span>
+                <span className="text-sm font-medium">{t("email.wizard.addressLabel")}</span>
                 <input type="email" autoFocus value={email} onChange={e => setEmail(e.target.value)}
                        onKeyDown={e => { if (e.key === "Enter") void toPassword(); }}
-                       placeholder="you@example.com" autoComplete="email"
+                       placeholder={t("email.wizard.addressPlaceholder")} autoComplete="email"
                        className="mt-1.5 w-full h-11 px-3 rounded-xl bg-background border border-border focus:outline-none focus:ring-2 focus:ring-ring/40" />
               </label>
               <button onClick={toPassword} disabled={!email || loading}
                       className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-medium disabled:opacity-50 flex items-center justify-center gap-2">
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />} Next
+                {loading && <Loader2 className="w-4 h-4 animate-spin" />} {t("email.wizard.next")}
               </button>
             </>
           )}
@@ -133,53 +135,53 @@ export function AccountWizard({ onClose, onSaved }: Props) {
           {step === "password" && (
             <>
               <p className="text-sm">
-                {known ? <><Check className="w-4 h-4 inline -mt-0.5 text-emerald-500" /> Yorik knows <b>{name}</b> and has filled in the rest.</>
-                       : <>Yorik doesn't know this provider yet. Enter the server details under Advanced; your provider's help pages list them.</>}
+                {known ? <><Check className="w-4 h-4 inline -mt-0.5 text-emerald-500" /> <Trans i18nKey="email.wizard.knownProvider" values={{ name }} components={{ b: <b /> }} /></>
+                       : <>{t("email.wizard.unknownProvider")}</>}
               </p>
 
               {bridge ? (
                 <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm space-y-2">
-                  <p><b>{name}</b> needs its Bridge app on this computer first; then use the password Bridge shows, not your normal one.</p>
+                  <p><Trans i18nKey="email.wizard.bridgeNeeded" values={{ name }} components={{ b: <b /> }} /></p>
                   {preset?.bridge_steps && <ol className="list-decimal pl-5 space-y-1">{preset.bridge_steps.map((s, i) => <li key={i}>{s}</li>)}</ol>}
-                  {preset?.docs_url && <a href={preset.docs_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline">How to set up Bridge <ExternalLink className="w-3 h-3" /></a>}
+                  {preset?.docs_url && <a href={preset.docs_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline">{t("email.wizard.bridgeHow")} <ExternalLink className="w-3 h-3" /></a>}
                 </div>
               ) : help ? (
                 <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 text-sm space-y-2">
-                  <p><b>{name}</b> wants a separate password for programs like Yorik, not your normal one.</p>
-                  <ol className="list-decimal pl-5 space-y-1 text-muted-foreground">{help.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
+                  <p><Trans i18nKey="email.wizard.appPasswordNeeded" values={{ name }} components={{ b: <b /> }} /></p>
+                  <ol className="list-decimal pl-5 space-y-1 text-muted-foreground">{helpSteps.map((s, i) => <li key={i}>{s}</li>)}</ol>
                   <a href={help.url} target="_blank" rel="noreferrer"
                      className="flex items-center justify-center gap-1.5 h-10 rounded-xl border border-border bg-card font-medium">
-                    Get the password from {name} <ExternalLink className="w-3.5 h-3.5" />
+                    {t("email.wizard.getPassword", { name })} <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 </div>
               ) : preset?.notes ? (
                 <div className="p-3 rounded-xl bg-muted/50 text-sm">
                   {preset.notes.replace(/\*\*/g, "")}
-                  {preset.docs_url && <> <a href={preset.docs_url} target="_blank" rel="noreferrer" className="underline inline-flex items-center gap-1">Show me how <ExternalLink className="w-3 h-3" /></a></>}
+                  {preset.docs_url && <> <a href={preset.docs_url} target="_blank" rel="noreferrer" className="underline inline-flex items-center gap-1">{t("email.wizard.showMeHow")} <ExternalLink className="w-3 h-3" /></a></>}
                 </div>
               ) : null}
 
               <label className="block">
-                <span className="text-sm font-medium">{bridge ? "Bridge password" : help ? "The password from " + name : "Your email password"}</span>
+                <span className="text-sm font-medium">{bridge ? t("email.wizard.bridgePassword") : help ? t("email.wizard.passwordFrom", { name }) : t("email.wizard.yourPassword")}</span>
                 <input type="password" autoFocus value={password} onChange={e => setPassword(e.target.value)}
                        autoComplete="current-password"
                        className="mt-1.5 w-full h-11 px-3 rounded-xl bg-background border border-border focus:outline-none focus:ring-2 focus:ring-ring/40" />
               </label>
 
               <button onClick={() => setAdvanced(a => !a)} className="text-xs text-muted-foreground inline-flex items-center gap-1">
-                {advanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />} Advanced: server details
+                {advanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />} {t("email.wizard.advanced")}
               </button>
               {advanced && (
                 <div className="space-y-3 p-3 rounded-xl border border-border">
-                  <ServerRow label="Incoming mail (IMAP)" v={imap} set={setImap} />
-                  <ServerRow label="Outgoing mail (SMTP)" v={smtp} set={setSmtp} starttls />
+                  <ServerRow label={t("email.wizard.imap")} v={imap} set={setImap} />
+                  <ServerRow label={t("email.wizard.smtp")} v={smtp} set={setSmtp} starttls />
                 </div>
               )}
 
               <div className="flex gap-2">
-                <button onClick={() => { setStep("address"); setError(null); }} className="h-11 px-4 rounded-xl border border-border">Back</button>
+                <button onClick={() => { setStep("address"); setError(null); }} className="h-11 px-4 rounded-xl border border-border">{t("common.back")}</button>
                 <button onClick={() => { setError(null); setStep("scope"); }} disabled={!password || !imap.host || !smtp.host}
-                        className="flex-1 h-11 rounded-xl bg-primary text-primary-foreground font-medium disabled:opacity-50">Next</button>
+                        className="flex-1 h-11 rounded-xl bg-primary text-primary-foreground font-medium disabled:opacity-50">{t("email.wizard.next")}</button>
               </div>
             </>
           )}
@@ -187,32 +189,32 @@ export function AccountWizard({ onClose, onSaved }: Props) {
           {step === "scope" && (
             <>
               <div>
-                <span className="text-sm font-medium">How much mail should Yorik bring in?</span>
+                <span className="text-sm font-medium">{t("email.wizard.howMuch")}</span>
                 <div className="mt-2 grid gap-2">
                   {IMPORT_SCOPES.map(s => (
                     <button key={s.value} onClick={() => setImportScope(s.value)}
                             className={cn("text-left px-3 py-2.5 rounded-xl border text-sm transition",
                                           importScope === s.value ? "border-primary/60 bg-primary/10" : "border-border hover:bg-muted/50")}>
-                      {s.label}
+                      {t(`email.sync.scope.${s.value.replace(":", "_")}`, { defaultValue: s.label })}
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">Older mail stays in your mailbox either way; this is only what Yorik reads.</p>
+                <p className="text-xs text-muted-foreground mt-2">{t("email.wizard.olderStays")}</p>
               </div>
               <label className="block">
-                <span className="text-sm font-medium">Your name on sent mail <span className="text-muted-foreground font-normal">(optional)</span></span>
+                <span className="text-sm font-medium">{t("email.wizard.yourName")} <span className="text-muted-foreground font-normal">{t("email.wizard.optional")}</span></span>
                 <input value={displayName} onChange={e => setDisplayName(e.target.value)}
                        className="mt-1.5 w-full h-10 px-3 rounded-xl bg-background border border-border" />
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)} />
-                Send from this address by default
+                {t("email.wizard.sendDefault")}
               </label>
               <div className="flex gap-2">
-                <button onClick={() => setStep("password")} disabled={loading} className="h-11 px-4 rounded-xl border border-border">Back</button>
+                <button onClick={() => setStep("password")} disabled={loading} className="h-11 px-4 rounded-xl border border-border">{t("common.back")}</button>
                 <button onClick={submit} disabled={loading}
                         className="flex-1 h-11 rounded-xl bg-primary text-primary-foreground font-medium disabled:opacity-60 flex items-center justify-center gap-2">
-                  {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Testing the connection…</> : "Connect"}
+                  {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> {t("email.wizard.testing")}</> : t("email.wizard.connect")}
                 </button>
               </div>
             </>
@@ -229,11 +231,12 @@ function ServerRow({ label, v, set, starttls }: {
   set: (x: { host: string; port: number; ssl: boolean; starttls: boolean }) => void;
   starttls?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-1.5">
       <div className="text-xs font-medium">{label}</div>
       <div className="flex gap-2">
-        <input value={v.host} onChange={e => set({ ...v, host: e.target.value })} placeholder="Server"
+        <input value={v.host} onChange={e => set({ ...v, host: e.target.value })} placeholder={t("email.wizard.serverPlaceholder")}
                className="flex-1 min-w-0 h-9 px-2 rounded-md bg-background border border-border text-sm" />
         <input type="number" value={v.port} onChange={e => set({ ...v, port: Number(e.target.value) || 0 })}
                className="w-20 h-9 px-2 rounded-md bg-background border border-border text-sm" />

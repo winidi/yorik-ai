@@ -497,7 +497,7 @@ export function FamilyBoard({ mode, currentUserId, currentUserRole = null, onNee
                                  placeholder={isMe ? tr("board.newTask") : tr("board.newTaskFor", { name: p.first_name || p.name })}
                                  className="flex-1 min-w-0 rounded-2xl px-3 py-2.5 text-[15px] outline-none select-text"
                                  style={{ background: tokens.card, color: tokens.ink, boxShadow: `inset 0 0 0 2px ${p.color}` }} />
-                          <button type="submit" className="rounded-2xl px-3 font-bold text-white" style={{ background: p.color }}>OK</button>
+                          <button type="submit" className="rounded-2xl px-3 font-bold text-white" style={{ background: p.color }}>{tr("board.ok")}</button>
                         </div>
                         {/* for when: today, tomorrow or any day */}
                         <div className="flex gap-1.5 flex-wrap items-center text-[13px]" role="group" aria-label={tr("board.forWhen")}>

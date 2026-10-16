@@ -98,10 +98,35 @@
     "doneTitle": "Die Wand ist danach wieder nur die Wand",
     "done": "Fertig",
     "doneName": "Fertig, {{name}}",
-    "recordDinner": "Essen aufnehmen"
+    "recordDinner": "Essen aufnehmen",
+    "tapAnywhere": "Irgendwo antippen zum Anmelden",
+    "wallLabel": "Wand",
+    "kioskCheckFailed": "Kiosk-Status konnte nicht geprüft werden: {{error}}",
+    "startFailed": "Die Wand konnte nicht starten",
+    "openSettings": "Einstellungen öffnen",
+    "hiName": "Hallo {{name}}",
+    "voiceRecognised": "Stimme erkannt",
+    "greetNight": "Gute Nacht.",
+    "greetMorning": "Guten Morgen.",
+    "greetAfternoon": "Guten Tag.",
+    "greetEvening": "Guten Abend."
   },
   "pin": {
     "notKiosk": "Diese Wand darf die Namen gerade nicht laden — sie ist noch kein Kiosk-Gerät. Auf diesem Tablet: Einstellungen › Sign-in & devices › „Make this device the family wall“.",
-    "noPins": "Niemand im Haushalt hat bisher eine Kiosk-PIN gesetzt. Einstellungen › Sign-in & devices auf einem beliebigen Gerät, PIN setzen, dann noch einmal tippen."
+    "noPins": "Niemand im Haushalt hat bisher eine Kiosk-PIN gesetzt. Einstellungen › Sign-in & devices auf einem beliebigen Gerät, PIN setzen, dann noch einmal tippen.",
+    "whoThere": "Wer ist da?",
+    "switchFailed": "Wechsel hat nicht geklappt — versuch es noch einmal",
+    "wrong": "Falsche PIN",
+    "tooMany": "Zu viele Versuche — warte eine Minute",
+    "notMe": "← Nicht ich",
+    "prompt": "Hallo {{name}}, gib deine PIN ein",
+    "fourDigits": "4 Ziffern",
+    "verifying": "prüft …",
+    "signInPassword": "Mit Passwort anmelden"
+  },
+  "ok": "OK",
+  "agenda": {
+    "empty": "Heute nichts auf der Wand",
+    "emptyHint": "Niemand im Haushalt hat heute Termine, oder noch niemand hat „Meine Termine auf der Familientafel zeigen“ unter Einstellungen → Profil eingeschaltet."
   }
 }

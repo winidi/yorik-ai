@@ -17,10 +17,12 @@
  */
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface SharedPhoto { url: string; name: string; from: string }
 
 export function SharedPhotoBanner({ appLabel }: { appLabel: string }) {
+  const { t } = useTranslation();
   const [shared, setShared] = useState<SharedPhoto | null>(() => {
     try {
       const raw = sessionStorage.getItem("yorik_share_photo");
@@ -39,10 +41,9 @@ export function SharedPhotoBanner({ appLabel }: { appLabel: string }) {
     <div className="fixed bottom-20 right-4 z-[70] max-w-sm bg-card border border-border rounded-xl shadow-2xl p-3 flex items-start gap-3">
       <img src={shared.url} alt="" className="w-14 h-14 rounded-md object-cover shrink-0" />
       <div className="flex-1 min-w-0 text-sm">
-        <div className="font-medium leading-tight">Photo from chat ready</div>
+        <div className="font-medium leading-tight">{t("photos.banner.ready")}</div>
         <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-          Auto-attach to {appLabel} isn't wired yet. Open the image and
-          drag it in, or paste from clipboard if you copied first.
+          {t("photos.banner.notWired", { app: appLabel })}
         </div>
         <div className="mt-2 flex gap-2">
           <a
@@ -51,13 +52,13 @@ export function SharedPhotoBanner({ appLabel }: { appLabel: string }) {
             rel="noopener"
             className="text-xs px-2.5 py-1 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition"
           >
-            Open image
+            {t("photos.banner.openImage")}
           </a>
           <button
             onClick={dismiss}
             className="text-xs px-2.5 py-1 rounded-md hover:bg-muted transition"
           >
-            Dismiss
+            {t("photos.banner.dismiss")}
           </button>
         </div>
       </div>

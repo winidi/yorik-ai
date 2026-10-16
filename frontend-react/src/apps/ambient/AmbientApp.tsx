@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import { Loader2, Settings as SettingsIcon } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -231,7 +232,7 @@ export function AmbientApp() {
         if (cancelled) return;
         setKiosk({
           is_kiosk:         true,
-          device_label:     mine?.device_label ?? myDevice?.device_label ?? "Wall",
+          device_label:     mine?.device_label ?? myDevice?.device_label ?? i18n.t("board.wall.wallLabel"),
         });
       } catch (err: any) {
         if (cancelled) return;
@@ -239,10 +240,10 @@ export function AmbientApp() {
         // In wrapper, even a network blip shouldn't kick us to /home —
         // the slideshow will retry on the next refresh interval.
         if (inWrapper) {
-          setKiosk({ is_kiosk: true, device_label: "Wall" });
+          setKiosk({ is_kiosk: true, device_label: i18n.t("board.wall.wallLabel") });
           return;
         }
-        setError(`Couldn't verify kiosk status: ${msg}`);
+        setError(i18n.t("board.wall.kioskCheckFailed", { error: msg }));
       }
     })();
     return () => { cancelled = true; };
@@ -421,7 +422,7 @@ export function AmbientApp() {
   if (error) {
     return (
       <FullscreenMessage>
-        <div className="text-rose-500 mb-2">Ambient failed to start</div>
+        <div className="text-rose-500 mb-2">{t("board.wall.startFailed")}</div>
         <div className="text-sm text-white/70">{error}</div>
       </FullscreenMessage>
     );
@@ -454,7 +455,7 @@ export function AmbientApp() {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 hover:bg-white/25"
           >
             <SettingsIcon className="w-4 h-4" />
-            Open Settings
+            {t("board.wall.openSettings")}
           </button>
         )}
       </FullscreenMessage>
@@ -551,10 +552,10 @@ export function AmbientApp() {
         >
           <div className="px-12 py-8 rounded-3xl bg-black/55 backdrop-blur-md text-center">
             <div className="font-serif text-white/95 text-6xl tracking-tight">
-              Hi {greeting.name}
+              {t("board.wall.hiName", { name: greeting.name })}
             </div>
             <div className="mt-2 text-white/60 text-xs uppercase tracking-[0.2em]">
-              Voice recognised
+              {t("board.wall.voiceRecognised")}
             </div>
           </div>
         </div>
@@ -637,7 +638,7 @@ function FullscreenMessage({ children }: { children: React.ReactNode }) {
  *  apart without guessing at session ids. */
 function wallLabelFromUserAgent(): string {
   const m = /YorikWall\/\S+\s+\(([^)]*)\)/.exec(navigator.userAgent);
-  return ((m?.[1] || "").trim() || "Wand").slice(0, 60);
+  return ((m?.[1] || "").trim() || i18n.t("board.wall.wallLabel")).slice(0, 60);
 }
 
 function timeGreeting(): string {
@@ -648,8 +649,8 @@ function timeGreeting(): string {
   // signs in, the regular Yorik UI takes over with proper personal
   // greetings throughout.
   const h = new Date().getHours();
-  if (h < 5)  return "Good night.";
-  if (h < 12) return "Good morning.";
-  if (h < 18) return "Good afternoon.";
-  return "Good evening.";
+  if (h < 5)  return i18n.t("board.wall.greetNight");
+  if (h < 12) return i18n.t("board.wall.greetMorning");
+  if (h < 18) return i18n.t("board.wall.greetAfternoon");
+  return i18n.t("board.wall.greetEvening");
 }

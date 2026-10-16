@@ -15,8 +15,10 @@ import {
   Activity, CheckCircle2, AlertTriangle, XCircle, Loader2,
   Mail, MessageSquare, Database, Cog,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import i18n from "@/i18n";
 
 interface Worker {
   name: string;
@@ -33,10 +35,10 @@ interface WorkersResponse { workers: Worker[]; }
 // Worker name → icon. Catch-all for unknown workers so a new worker
 // landing in the registry without a frontend change still renders.
 const WORKER_META: Array<{ match: RegExp; icon: any; label: (n: string) => string }> = [
-  { match: /^email_supervisor$/,  icon: Mail,          label: () => "Email supervisor" },
-  { match: /^email_account_(\d+)$/, icon: Mail,         label: (n) => `Email · account ${n.split("_").pop()}` },
-  { match: /^whatsapp_/,          icon: MessageSquare, label: () => "WhatsApp bridge" },
-  { match: /^backup_/,            icon: Database,      label: () => "Backup scheduler" },
+  { match: /^email_supervisor$/,  icon: Mail,          label: () => i18n.t("settings.workers.emailSupervisor") },
+  { match: /^email_account_(\d+)$/, icon: Mail,         label: (n) => i18n.t("settings.workers.emailAccount", { n: n.split("_").pop() }) },
+  { match: /^whatsapp_/,          icon: MessageSquare, label: () => i18n.t("settings.workers.whatsappBridge") },
+  { match: /^backup_/,            icon: Database,      label: () => i18n.t("settings.workers.backupScheduler") },
 ];
 
 function metaFor(name: string) {
@@ -57,12 +59,13 @@ function statusIcon(s: Worker["status"]) {
 
 function formatAge(s: number | null): string {
   if (s == null) return "—";
-  if (s < 60)    return `${s}s ago`;
-  if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
-  return `${Math.floor(s / 3600)}h ago`;
+  if (s < 60)    return i18n.t("settings.workers.secAgo", { n: s });
+  if (s < 3600)  return i18n.t("settings.workers.minAgo", { n: Math.floor(s / 60) });
+  return i18n.t("settings.workers.hoursAgo", { n: Math.floor(s / 3600) });
 }
 
 export function WorkersStatus() {
+  const { t } = useTranslation();
   const [workers, setWorkers] = useState<Worker[] | null>(null);
 
   const refresh = useCallback(async () => {
@@ -88,10 +91,10 @@ export function WorkersStatus() {
   return (
     <section className="mb-8">
       <h2 className="text-xs text-muted-foreground font-semibold mb-3 flex items-center gap-2">
-        <Activity className="w-3 h-3" /> Background workers
+        <Activity className="w-3 h-3" /> {t("settings.workers.title")}
         {allOk && (
           <span className="text-2xs normal-case tracking-normal text-emerald-500 font-normal">
-            · all {workers.length} healthy
+            · {t("settings.workers.allHealthy", { count: workers.length })}
           </span>
         )}
       </h2>
@@ -108,13 +111,13 @@ export function WorkersStatus() {
                 : w.status === "warn" ? "border-amber-500/40 bg-amber-500/[0.04]"
                 : "border-border",
               )}
-              title={`${w.detail || "—"} · uptime ${formatAge(w.uptime_s)}`}
+              title={`${w.detail || "—"} · ${t("settings.workers.uptime", { age: formatAge(w.uptime_s) })}`}
             >
               <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{label}</div>
                 <div className="text-2xs text-muted-foreground truncate">
-                  {w.detail || (w.status === "starting" ? "starting…" : "—")}
+                  {w.detail || (w.status === "starting" ? t("settings.workers.starting") : "—")}
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">

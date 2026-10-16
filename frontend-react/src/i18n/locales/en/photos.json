@@ -1,0 +1,44 @@
+{
+  "app": {
+    "title": "Photos",
+    "backUpPhone": "Back up this phone",
+    "openImmichTitle": "Open Immich in a new tab",
+    "newTab": "New tab",
+    "downTitle": "Photos aren't available right now",
+    "downBody": "The photo library on this Yorik isn't running. Your photos are safe; they're just not reachable at the moment.",
+    "forAdmin": "For the admin",
+    "cantReach": "Yorik can't reach Immich at <code>{{url}}</code>. Start it in the yorik-ai directory:",
+    "runningElsewhere": "Running elsewhere? Set <code>HOMEOS_IMMICH_BASE_URL</code> in <code>config.env</code>.",
+    "jsRequired": "JavaScript is required to load Immich."
+  },
+  "banner": {
+    "ready": "Photo from chat ready",
+    "notWired": "Auto-attach to {{app}} isn't wired yet. Open the image and drag it in, or paste from clipboard if you copied first.",
+    "openImage": "Open image",
+    "dismiss": "Dismiss"
+  },
+  "phoneSetup": {
+    "hide": "Hide",
+    "show": "Show",
+    "copy": "Copy {{label}}",
+    "loadFailed": "Couldn't load.",
+    "close": "Close",
+    "title": "Back up this phone's photos",
+    "subtitle": "New pictures go to your family's Yorik by themselves, not to a cloud.",
+    "step1": "1. Get the Immich app",
+    "appStore": "Immich in the App Store",
+    "googlePlay": "Immich on Google Play",
+    "otherStore": "Immich for your phone",
+    "step2": "2. Tell it where your photos live",
+    "serverAddress": "Server address (paste it where the app asks)",
+    "needsPublish": "An admin needs to publish the photo library in Tailscale first (Help → Photos).",
+    "step3": "3. Sign in",
+    "signInHint": "If the app shows <b>Sign in with Yorik</b>, tap that. Otherwise:",
+    "email": "Email",
+    "password": "Password",
+    "samePassword": "Password: the same one you use for Yorik.",
+    "step4": "4. Switch on backup",
+    "backupHint": "In Immich, tap the cloud symbol at the top, choose <b>Recents</b> (or all albums) and switch <b>Backup</b> on. Allow access to all photos when the phone asks.",
+    "done": "Done"
+  }
+}

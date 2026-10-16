@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import i18n from "@/i18n";
+import i18n, { locale } from "@/i18n";
 import { formatDate, formatMoney, currency as householdCurrency } from "@/i18n/format";
 import {
   Loader2, Send, Plus, Search, Trash2, MessageSquare, Sparkles,
@@ -61,6 +61,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 export function ChatApp() {
+  const { t: tr } = useTranslation();
   const { data: me } = useApi<{ user?: { id: number; name: string; first_name?: string; role: string } }>("/api/auth/me", []);
   const role = me?.user?.role || "admin";
 
@@ -141,8 +142,8 @@ export function ChatApp() {
 
   const tri = useTriPane();
   const activeConv = conversations.find(c => c.id === activeId);
-  const headerTitle = draftConversation ? "New conversation"
-    : readableTitle(activeConv?.preview || "").slice(0, 30) || "Chat";
+  const headerTitle = draftConversation ? tr("chat.list.newConversation")
+    : readableTitle(activeConv?.preview || "").slice(0, 30) || tr("chat.list.title");
 
   return (
     <div className="flex h-screen bg-background text-foreground relative">
@@ -161,15 +162,15 @@ export function ChatApp() {
               <Sparkles className="w-4 h-4 text-violet-500" />
             </div>
             <div>
-              <div className="font-semibold leading-none">Chat</div>
+              <div className="font-semibold leading-none">{tr("chat.list.title")}</div>
               <div className="text-2xs text-muted-foreground mt-0.5">
-                {conversations.length} thread{conversations.length === 1 ? "" : "s"}
+                {tr("chat.list.threads", { count: conversations.length })}
               </div>
             </div>
           </div>
           <button
             onClick={startNew}
-            title="New conversation"
+            title={tr("chat.list.newConversation")}
             className="w-8 h-8 inline-flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition"
           >
             <Plus className="w-4 h-4" />
@@ -199,8 +200,8 @@ export function ChatApp() {
 
         <footer className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
           {me?.user
-            ? <>Logged in as <span className="text-foreground font-medium">{me.user.first_name || me.user.name.split(" ")[0] || me.user.name}</span></>
-            : "Loading…"}
+            ? <>{tr("chat.list.loggedInAs")} <span className="text-foreground font-medium">{me.user.first_name || me.user.name.split(" ")[0] || me.user.name}</span></>
+            : tr("common.loading")}
         </footer>
       </aside>
 
@@ -258,6 +259,7 @@ function ConversationList({
   onChanged: () => Promise<void> | void;
   role: string;
 }) {
+  const { t: tr } = useTranslation();
   const [filter, setFilter] = useState("");
   // Per-conversation debug-bundle modal — opened by the Bug icon in
   // each row's action cluster. null when closed.
@@ -280,12 +282,12 @@ function ConversationList({
 
   async function deleteConv(e: React.MouseEvent, id: string) {
     e.stopPropagation();
-    if (!confirm("Delete this conversation?")) return;
+    if (!confirm(tr("chat.list.confirmDelete"))) return;
     try {
       await api.delete(`/api/conversations/${encodeURIComponent(id)}?role=${encodeURIComponent(role)}`);
       await onDeleted();
     } catch (err: any) {
-      alert("Delete failed: " + err.message);
+      alert(tr("chat.list.deleteFailed", { error: err.message }));
     }
   }
 
@@ -298,7 +300,7 @@ function ConversationList({
       );
       await onChanged();
     } catch (err: any) {
-      alert("Pin failed: " + err.message);
+      alert(tr("chat.list.pinFailed", { error: err.message }));
     }
   }
 
@@ -310,7 +312,7 @@ function ConversationList({
           <input
             value={filter}
             onChange={e => setFilter(e.target.value)}
-            placeholder="Search conversations"
+            placeholder={tr("chat.list.searchPlaceholder")}
             className="w-full h-9 pl-9 pr-3 rounded-full bg-muted/70 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
           />
         </div>
@@ -326,8 +328,8 @@ function ConversationList({
               <Sparkles className="w-4 h-4 text-violet-500" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold">New conversation</div>
-              <div className="text-xs text-muted-foreground italic">Start typing below…</div>
+              <div className="text-sm font-semibold">{tr("chat.list.newConversation")}</div>
+              <div className="text-xs text-muted-foreground italic">{tr("chat.list.startTyping")}</div>
             </div>
           </div>
         )}
@@ -348,14 +350,14 @@ function ConversationList({
         {!loading && filtered.length === 0 && !draftActive && (
           <div className="px-4 py-12 text-center text-xs text-muted-foreground">
             <MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-30" />
-            No conversations yet.<br/>Start one with the + button above.
+            {tr("chat.list.empty")}<br/>{tr("chat.list.emptyHint")}
           </div>
         )}
-        {grouped.map(([groupLabel, items]) => (
-          <div key={groupLabel} className="mt-2 first:mt-0">
+        {grouped.map(([groupKey, items]) => (
+          <div key={groupKey} className="mt-2 first:mt-0">
             <div className="px-3 py-1 text-2xs text-muted-foreground/80 font-semibold flex items-center gap-1.5">
-              {groupLabel === "Pinned" && <Pin className="w-2.5 h-2.5" />}
-              {groupLabel}
+              {groupKey === "pinned" && <Pin className="w-2.5 h-2.5" />}
+              {tr(GROUP_LABEL_KEYS[groupKey])}
             </div>
             {items.map(c => (
               <button
@@ -374,14 +376,14 @@ function ConversationList({
                     <span className="text-sm truncate font-medium flex items-center gap-1.5">
                       {c.pinned && <Pin className="w-3 h-3 text-rose-500 shrink-0" />}
                       {readableTitle(c.title || c.preview || "")
-                        || <span className="italic opacity-60">empty</span>}
+                        || <span className="italic opacity-60">{tr("chat.list.untitled")}</span>}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-0.5">
                     <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
                       {c.title && c.preview
                         ? <span className="italic opacity-80">{c.preview.slice(0, 50)}{c.preview.length > 50 ? "…" : ""}</span>
-                        : `${c.message_count} message${c.message_count === 1 ? "" : "s"} · ${formatRelative(c.updated_at)}`}
+                        : `${tr("chat.list.messages", { count: c.message_count })} · ${formatRelative(c.updated_at)}`}
                     </span>
                     {/* Pin + delete. Mobile: always visible at full
                         size (touch has no hover; without this they
@@ -396,8 +398,8 @@ function ConversationList({
                             ? "text-rose-500"
                             : "text-muted-foreground hover:text-rose-500",
                         )}
-                        title={c.pinned ? "Unpin from top" : "Pin to top"}
-                        aria-label={c.pinned ? "Unpin conversation" : "Pin conversation"}
+                        title={c.pinned ? tr("chat.list.unpin") : tr("chat.list.pin")}
+                        aria-label={c.pinned ? tr("chat.list.unpinAria") : tr("chat.list.pinAria")}
                       >
                         {c.pinned
                           ? <PinOff className="w-4 h-4 md:w-3 md:h-3" />
@@ -406,16 +408,16 @@ function ConversationList({
                       <button
                         onClick={(e) => { e.stopPropagation(); setBundleFor(c); }}
                         className="p-1.5 md:p-0 text-muted-foreground hover:text-blue-500 transition"
-                        title="Export debug bundle for bug report"
-                        aria-label="Export debug bundle"
+                        title={tr("chat.list.exportBundle")}
+                        aria-label={tr("chat.list.exportBundleAria")}
                       >
                         <Bug className="w-4 h-4 md:w-3 md:h-3" />
                       </button>
                       <button
                         onClick={(e) => deleteConv(e, c.id)}
                         className="p-1.5 md:p-0 text-muted-foreground hover:text-red-500 transition"
-                        title="Delete conversation"
-                        aria-label="Delete conversation"
+                        title={tr("chat.list.deleteConversation")}
+                        aria-label={tr("chat.list.deleteConversation")}
                       >
                         <Trash2 className="w-4 h-4 md:w-3 md:h-3" />
                       </button>
@@ -760,7 +762,7 @@ function Thread({
     const message = text.trim();
     if (!message || sending) return;
     setSending(true);
-    setProgress("Yorik is thinking…");
+    setProgress(i18n.t("chat.thread.thinking"));
     setStreamingText("");
     streamedRef.current = "";
     setText("");
@@ -821,7 +823,7 @@ function Thread({
 
       setLocalMessages(prev => [...prev, {
         role: "assistant",
-        content: r.response || "(no response)",
+        content: r.response || i18n.t("chat.thread.noResponse"),
         documents: docs.length > 0 ? docs : undefined,
         photos: photos.length > 0 ? photos : undefined,
         ui_actions: otherActions.length > 0 ? otherActions : undefined,
@@ -861,7 +863,7 @@ function Thread({
         // Expired session, not an offline LLM: hand over to the login
         // screen instead of painting the "offline" banner.
         notifySessionExpired("/api/ask/stream");
-        throw new Error("session expired — please log in again");
+        throw new Error(i18n.t("chat.thread.sessionExpired"));
       }
       if (!resp.ok || !resp.body) {
         throw new Error(`HTTP ${resp.status}`);
@@ -890,7 +892,7 @@ function Thread({
           if (phase === "iter_start") {
             // Don't overwrite a tool-specific status with the generic
             // "thinking" — let the next tool_start refresh it.
-            setProgress(prev => prev && prev !== "Yorik is thinking…" ? prev : "Yorik is thinking…");
+            setProgress(prev => prev && prev !== i18n.t("chat.thread.thinking") ? prev : i18n.t("chat.thread.thinking"));
           } else if (phase === "text_delta") {
             // Token-level streaming — append to the in-progress buffer.
             // The progress hint clears since the model is now producing
@@ -918,7 +920,7 @@ function Thread({
           } else if (phase === "error") {
             setLocalMessages(prev => [...prev, {
               role: "assistant",
-              content: `_Yorik failed: ${evt.error}_`,
+              content: i18n.t("chat.thread.failed", { error: evt.error }),
             }]);
           }
         }
@@ -926,7 +928,7 @@ function Thread({
       if (!gotFinal) {
         setLocalMessages(prev => [...prev, {
           role: "assistant",
-          content: "_Stream ended without a final response._",
+          content: i18n.t("chat.thread.noFinal"),
         }]);
       }
     } catch (err: any) {
@@ -939,19 +941,19 @@ function Thread({
         if (partial && partial.trim()) {
           setLocalMessages(prev => [...prev, {
             role: "assistant",
-            content: partial + (stalled ? "\n\n_(no response for 2 minutes — stopped)_" : "\n\n_(stopped)_"),
+            content: partial + (stalled ? i18n.t("chat.thread.stoppedStalled") : i18n.t("chat.thread.stopped")),
           }]);
         } else if (stalled) {
           setLocalMessages(prev => [...prev, {
             role: "assistant",
-            content: "_Yorik didn't respond for 2 minutes — the language model may be stuck. Try again; if it keeps happening, check Settings → LLM._",
+            content: i18n.t("chat.thread.stalled"),
           }]);
         }
       } else {
-        setLlmOffline({ reason: err?.message || "network error" });
+        setLlmOffline({ reason: err?.message || i18n.t("chat.thread.networkError") });
         setLocalMessages(prev => [...prev, {
           role: "assistant",
-          content: `_Couldn't reach Yorik: ${err.message}_`,
+          content: i18n.t("chat.thread.unreachable", { error: err.message }),
         }]);
       }
     } finally {
@@ -1013,7 +1015,7 @@ function Thread({
         const next = [...prev];
         next[messageIdx] = {
           role: "assistant",
-          content: r.response || "(no response)",
+          content: r.response || i18n.t("chat.thread.noResponse"),
           documents: docs.length > 0 ? docs : undefined,
           photos: photos.length > 0 ? photos : undefined,
           ui_actions: otherActions.length > 0 ? otherActions : undefined,
@@ -1027,7 +1029,7 @@ function Thread({
       });
       onTurnAppended();
     } catch (err: any) {
-      setLlmOffline({ reason: err?.message || "regenerate failed" });
+      setLlmOffline({ reason: err?.message || i18n.t("chat.thread.regenerateFailed") });
     } finally {
       setRegenIdx(null);
     }
@@ -1056,13 +1058,13 @@ function Thread({
               {conversationId
                 ? (loaded.data?.title
                     || loaded.data?.messages?.[0]?.content?.slice(0, 60)
-                    || "Conversation")
-                : "New conversation"}
+                    || tr("chat.thread.conversation"))
+                : tr("chat.list.newConversation")}
             </div>
             <div className="text-xs text-muted-foreground">
               {messages.length === 0
-                ? "Ask me anything — calendar, docs, tasks…"
-                : `${messages.length} message${messages.length === 1 ? "" : "s"}`}
+                ? tr("chat.thread.askAnything")
+                : tr("chat.list.messages", { count: messages.length })}
             </div>
           </div>
         </div>
@@ -1155,7 +1157,7 @@ function Thread({
           {sending && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground pl-10 md:pl-12 pt-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>{progress || "Yorik is thinking…"}</span>
+              <span>{progress || tr("chat.thread.thinking")}</span>
               {/* Stop button lives in the send-button slot now — a fixed
                   target you can find without chasing the moving status
                   text. See the composer below. */}
@@ -1172,7 +1174,7 @@ function Thread({
             if (el) el.scrollTop = el.scrollHeight;
           }}
           className="absolute bottom-24 right-1/2 translate-x-1/2 w-9 h-9 rounded-full bg-card border border-border shadow-md hover:bg-muted text-muted-foreground flex items-center justify-center"
-          title="Scroll to latest"
+          title={tr("chat.thread.scrollLatest")}
           style={{ position: "relative" }}
         >
           <ArrowDown className="w-4 h-4" />
@@ -1184,17 +1186,17 @@ function Thread({
         <div className="mx-6 mt-2 -mb-1 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-xs flex items-start gap-2">
           <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
           <div className="flex-1 min-w-0">
-            <div className="font-medium">Yorik's brain is offline</div>
+            <div className="font-medium">{tr("chat.thread.offlineTitle")}</div>
             <div className="opacity-80 mt-0.5 leading-relaxed">
               {llmOffline.reason
-                ? <>The local LLM endpoint isn't responding ({llmOffline.reason}). Start it and your messages will go through again.</>
-                : "The local LLM endpoint isn't responding. Start it and your messages will go through again."}
+                ? tr("chat.thread.offlineReason", { reason: llmOffline.reason })
+                : tr("chat.thread.offline")}
             </div>
           </div>
           <button
             onClick={() => setLlmOffline(null)}
             className="text-amber-700/60 hover:text-amber-700 dark:text-amber-400/60 dark:hover:text-amber-400 shrink-0"
-            title="Dismiss"
+            title={tr("chat.thread.dismiss")}
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -1232,7 +1234,7 @@ function Thread({
         <div className="max-w-3xl mx-auto w-full relative">
           {dragOver && (
             <div className="text-xs text-amber-700 dark:text-amber-400 text-center mb-2 flex items-center justify-center gap-1.5">
-              <Upload className="w-3.5 h-3.5" /> Drop here — .vcf, .pdf or an image
+              <Upload className="w-3.5 h-3.5" /> {tr("chat.thread.dropHere")}
             </div>
           )}
           {uploadToast && (
@@ -1253,13 +1255,13 @@ function Thread({
           {voiceState === "recording" && (
             <div className="text-xs text-red-600 text-center mb-2 flex items-center justify-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              Recording — {voiceSeconds}s — tap the mic again to insert the text
+              {tr("chat.thread.recording", { seconds: voiceSeconds })}
             </div>
           )}
           {voiceState === "transcribing" && (
             <div className="text-xs text-muted-foreground text-center mb-2 flex items-center justify-center gap-1.5">
               <Loader2 className="w-3 h-3 animate-spin" />
-              Transcribing…
+              {tr("chat.thread.transcribing")}
             </div>
           )}
           {voiceError && voiceState === "idle" && (
@@ -1271,7 +1273,7 @@ function Thread({
                 onClick={() => setVoiceError(null)}
                 className="underline ml-1"
               >
-                ok
+                {tr("chat.thread.ok")}
               </button>
             </div>
           )}
@@ -1315,7 +1317,7 @@ function Thread({
                 detectMentionTrigger(t.value, t.selectionStart ?? 0);
               }}
               rows={1}
-              placeholder="Ask me anything…   try @hans or /event"
+              placeholder={tr("chat.thread.placeholder")}
               // Intentionally NOT disabled during `sending`. Disabling
               // the focused textarea would auto-blur it (browser rule),
               // which is what the user kept noticing as "I get focused
@@ -1346,8 +1348,8 @@ function Thread({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={sending}
-              title="Attach a file (or drop / paste it here)"
-              aria-label="Attach a file"
+              title={tr("chat.thread.attachFile")}
+              aria-label={tr("chat.thread.attachFileAria")}
               className="w-11 h-11 md:w-9 md:h-9 rounded-full flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition disabled:opacity-50"
             >
               <Paperclip className="w-5 h-5 md:w-4 md:h-4" />
@@ -1357,11 +1359,11 @@ function Thread({
               onClick={voiceState === "recording" ? stopVoice : startVoice}
               disabled={sending || voiceState === "transcribing"}
               title={
-                voiceState === "recording" ? `Stop and insert into the input (${voiceSeconds}s)`
-                : voiceState === "transcribing" ? "Transcribing…"
-                : "Speak — text lands in the input for editing"
+                voiceState === "recording" ? tr("chat.thread.voiceStop", { seconds: voiceSeconds })
+                : voiceState === "transcribing" ? tr("chat.thread.transcribing")
+                : tr("chat.thread.voiceStart")
               }
-              aria-label={voiceState === "recording" ? "Stop recording" : "Start voice-to-text"}
+              aria-label={voiceState === "recording" ? tr("chat.thread.stopRecording") : tr("chat.thread.startVoice")}
               className={cn(
                 "w-11 h-11 md:w-9 md:h-9 rounded-full flex items-center justify-center shrink-0 transition disabled:opacity-50",
                 voiceState === "recording"
@@ -1383,8 +1385,8 @@ function Thread({
               id="yorik-chat-send-trigger"
               onClick={sending ? stopGeneration : send}
               disabled={!sending && !text.trim()}
-              title={sending ? "Stop generating (cancel this turn)" : "Send (Enter)"}
-              aria-label={sending ? "Stop generating" : "Send message"}
+              title={sending ? tr("chat.thread.stopGenerating") : tr("chat.thread.sendEnter")}
+              aria-label={sending ? tr("chat.thread.stopGeneratingAria") : tr("chat.thread.sendMessage")}
               className={cn(
                 "w-11 h-11 md:w-9 md:h-9 rounded-full flex items-center justify-center shrink-0 transition",
                 sending
@@ -1404,7 +1406,7 @@ function Thread({
               isn't available. The line just ate one composer's worth
               of vertical space for noise. */}
           <div className="hidden md:block text-2xs text-muted-foreground mt-1.5 text-center">
-            Enter to send · Shift+Enter newline · @ mention · / commands · drop files
+            {tr("chat.thread.shortcuts")}
           </div>
         </div>
       </div>
@@ -1438,7 +1440,7 @@ function Thread({
 
     if (isVcf) { setVcardDrop(file); return; }
     if (isIcs) {
-      setUploadToast({ kind: "err", text: "ICS import isn't wired yet — open the file manually in your calendar." });
+      setUploadToast({ kind: "err", text: tr("chat.thread.icsNotWired") });
       window.setTimeout(() => setUploadToast(null), 4000);
       return;
     }
@@ -1448,7 +1450,7 @@ function Thread({
     }
     setUploadToast({
       kind: "err",
-      text: `${file.name}: unsupported type for chat drop`,
+      text: tr("chat.thread.unsupportedType", { name: file.name }),
     });
     window.setTimeout(() => setUploadToast(null), 3500);
   }
@@ -1667,20 +1669,20 @@ function MessageBubble({
                   type="button"
                   onClick={saveEdit}
                   className="px-2 py-1 rounded bg-violet-500 text-white hover:bg-violet-600 transition"
-                  title="Save (Cmd/Ctrl+Enter)"
+                  title={tr("chat.bubble.saveTitle")}
                 >
-                  Save
+                  {tr("chat.bubble.save")}
                 </button>
                 <button
                   type="button"
                   onClick={cancelEdit}
                   className="px-2 py-1 rounded border border-border hover:bg-muted transition"
-                  title="Discard changes (Esc)"
+                  title={tr("chat.bubble.discardTitle")}
                 >
-                  Cancel
+                  {tr("common.cancel")}
                 </button>
                 <span className="text-muted-foreground ml-1">
-                  edits stay local — they don't change the LLM's history
+                  {tr("chat.bubble.localEdits")}
                 </span>
               </div>
             </div>
@@ -1725,20 +1727,20 @@ function MessageBubble({
               type="button"
               onClick={copyContent}
               className="inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition"
-              title="Copy reply"
+              title={tr("chat.bubble.copyReply")}
             >
               {copied
-                ? <><Check className="w-3 h-3 text-emerald-500" /> copied</>
-                : <><Copy className="w-3 h-3" /> copy</>}
+                ? <><Check className="w-3 h-3 text-emerald-500" /> {tr("chat.bubble.copied")}</>
+                : <><Copy className="w-3 h-3" /> {tr("chat.bubble.copy")}</>}
             </button>
             {onEditContent && (
               <button
                 type="button"
                 onClick={startEdit}
                 className="inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition"
-                title="Edit this message inline (local only)"
+                title={tr("chat.bubble.editTitle")}
               >
-                <Pencil className="w-3 h-3" /> edit
+                <Pencil className="w-3 h-3" /> {tr("chat.bubble.edit")}
               </button>
             )}
             {conversationId && <ReportProblemButton conversationId={conversationId} messageIdx={messageIdx} />}
@@ -1748,11 +1750,11 @@ function MessageBubble({
                 onClick={onRegenerate}
                 disabled={regenDisabled}
                 className="inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition disabled:opacity-50"
-                title="Try another answer (re-runs from the previous user message)"
+                title={tr("chat.bubble.regenTitle")}
               >
                 {regenBusy
-                  ? <><Loader2 className="w-3 h-3 animate-spin" /> regenerating…</>
-                  : <><RefreshCw className="w-3 h-3" /> regenerate</>}
+                  ? <><Loader2 className="w-3 h-3 animate-spin" /> {tr("chat.bubble.regenerating")}</>
+                  : <><RefreshCw className="w-3 h-3" /> {tr("chat.bubble.regenerate")}</>}
               </button>
             )}
           </div>
@@ -2108,7 +2110,7 @@ function MessageBubble({
           <DebugTracePane trace={message.agent_trace} />
         )}
         {/* Feedback thumbs — assistant turns only. Feeds the quality dashboard. */}
-        {!isUser && message.content && message.content !== "(no response)" && (
+        {!isUser && message.content && message.content !== "(no response)" && message.content !== tr("chat.thread.noResponse") && (
           <TurnFeedback conversationId={conversationId} messageIdx={messageIdx} />
         )}
       </div>
@@ -2220,8 +2222,9 @@ function formatToolStatus(tool: string, args: Record<string, any> | undefined): 
     if (name === "recording_status") return i18n.t("chat.status.recordingStatus");
     if (name === "recording_report") return i18n.t("chat.status.recordingReport");
   }
+  const t = (key: string, opts?: Record<string, unknown>) => i18n.t(`chat.tool.${key}`, opts);
   switch (tool) {
-    case "web_search":   return `Searching the web for "${head(a.query || "")}"…`;
+    case "web_search":   return t("webSearch", { query: head(a.query || "") });
     case "web_extract":  {
       const urls = Array.isArray(a.urls) ? a.urls : [];
       const host = (() => {
@@ -2229,34 +2232,34 @@ function formatToolStatus(tool: string, args: Record<string, any> | undefined): 
         catch { return urls[0] || ""; }
       })();
       const more = urls.length > 1 ? ` (+${urls.length - 1})` : "";
-      return `Reading ${head(host, 40)}${more}…`;
+      return t("reading", { host: head(host, 40), more });
     }
-    case "find_contact":           return `Looking up contact "${head(a.query || "")}"…`;
-    case "list_contacts_for_picking": return `Browsing the address book…`;
-    case "find_document":          return `Looking for a document about "${head(a.query || "")}"…`;
-    case "find_photo":             return `Looking for a photo of "${head(a.query || "")}"…`;
-    case "find_provider_nearby":   return `Looking for ${head(a.poi || "")} near ${head(a.near || "you")}…`;
-    case "find_known_provider":    return `Checking who you already know as a ${head(a.category || "provider")}…`;
-    case "calculate_travel_time":  return `Calculating travel time to ${head(a.to || "")}…`;
-    case "compose_check_recipient": return `Checking the recipient address…`;
-    case "compose_check_template_args": return `Checking the template fields…`;
-    case "compose_draft":          return `Drafting…`;
-    case "find_recipient_address_from_documents": return `Looking for the address in old documents…`;
-    case "propose_inline_photo":   return `Looking for photo suggestions…`;
-    case "add_calendar_event":     return `Adding an event…`;
-    case "update_calendar_event":  return `Updating an event…`;
-    case "delete_calendar_event":  return `Removing an event…`;
-    case "check_calendar":         return `Checking your calendar…`;
-    case "add_task":               return `Adding a task…`;
-    case "check_tasks":            return `Checking your tasks…`;
-    case "add_bill":               return `Adding a bill…`;
-    case "check_bills":            return `Checking your bills…`;
-    case "run_sql":                return `Looking it up…`;
-    case "search_documents":       return `Searching your documents…`;
-    case "trigger_connector":      return `Calling ${head(a.name || "connector")}…`;
-    case "navigate_to":            return `Opening ${head(a.app || "app")}…`;
-    case "yorik_help":              return `Checking the help pages${a.topic ? ` (${head(a.topic)})` : ""}…`;
-    default:                       return "Working on it…";
+    case "find_contact":           return t("findContact", { query: head(a.query || "") });
+    case "list_contacts_for_picking": return t("browsingContacts");
+    case "find_document":          return t("findDocument", { query: head(a.query || "") });
+    case "find_photo":             return t("findPhoto", { query: head(a.query || "") });
+    case "find_provider_nearby":   return t("findProviderNearby", { poi: head(a.poi || ""), near: head(a.near || t("nearYou")) });
+    case "find_known_provider":    return t("findKnownProvider", { category: head(a.category || t("provider")) });
+    case "calculate_travel_time":  return t("travelTime", { to: head(a.to || "") });
+    case "compose_check_recipient": return t("checkRecipient");
+    case "compose_check_template_args": return t("checkTemplateArgs");
+    case "compose_draft":          return t("drafting");
+    case "find_recipient_address_from_documents": return t("findAddress");
+    case "propose_inline_photo":   return t("photoSuggestions");
+    case "add_calendar_event":     return t("addEvent");
+    case "update_calendar_event":  return t("updateEvent");
+    case "delete_calendar_event":  return t("deleteEvent");
+    case "check_calendar":         return t("checkCalendar");
+    case "add_task":               return t("addTask");
+    case "check_tasks":            return t("checkTasks");
+    case "add_bill":               return t("addBill");
+    case "check_bills":            return t("checkBills");
+    case "run_sql":                return t("lookingUp");
+    case "search_documents":       return t("searchDocuments");
+    case "trigger_connector":      return t("callingConnector", { name: head(a.name || t("connector")) });
+    case "navigate_to":            return t("opening", { app: head(a.app || t("app")) });
+    case "yorik_help":              return t("help", { topic: a.topic ? t("helpTopic", { topic: head(a.topic) }) : "" });
+    default:                       return t("working");
   }
 }
 
@@ -2290,7 +2293,7 @@ function WebResultsCard({
     // LLM's next turn calls web_fetch on the chosen URL.
     const evt = new CustomEvent("yorik:chat-seed-and-send", {
       detail: {
-        seed: `Please read "${title.slice(0, 60)}" and summarize the key points for me. URL: ${url}`,
+        seed: tr("chat.webCard.summarizeSeed", { title: title.slice(0, 60), url }),
       },
     });
     window.dispatchEvent(evt);
@@ -2300,10 +2303,10 @@ function WebResultsCard({
     <div className="mt-3 rounded-2xl border border-blue-500/30 bg-blue-500/[0.04] overflow-hidden">
       <div className="px-4 py-2.5 border-b border-blue-500/20 flex items-center gap-2 text-xs">
         <Globe className="w-3.5 h-3.5 text-blue-500" />
-        <span className="font-medium">Web search:</span>
+        <span className="font-medium">{tr("chat.webCard.header")}</span>
         <span className="text-muted-foreground truncate">{query}</span>
         <span className="ml-auto text-2xs text-muted-foreground">
-          via {provider}
+          {tr("chat.webCard.via", { provider })}
         </span>
       </div>
       <ul className="divide-y divide-blue-500/15">
@@ -2360,21 +2363,21 @@ function VenueSavedCard({
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">{tr("chat.venue.saved", { name })}</div>
         <div className="text-xs text-muted-foreground truncate">
-          {category && <>as "{category}" · </>}
-          {hasPrices ? "Prices saved · " : ""}
+          {category && tr("chat.venueCard.as", { category })}
+          {hasPrices ? tr("chat.venueCard.pricesSaved") : ""}
           {url ? (
             <a href={url} target="_blank" rel="noopener nofollow"
                 className="text-blue-600 dark:text-blue-300 hover:underline">
-              Website
+              {tr("chat.venueCard.website")}
             </a>
-          ) : "Available instantly next time"}
+          ) : tr("chat.venueCard.instant")}
         </div>
       </div>
       <a
         href={`/r/contacts?id=${contactId}`}
         className="text-xs text-emerald-700 dark:text-emerald-300 underline hover:no-underline shrink-0"
       >
-        Open
+        {tr("chat.venueCard.open")}
       </a>
     </div>
   );
@@ -2387,22 +2390,24 @@ function VenueSavedCard({
 // Instead of auto-navigating (which yanks the user away mid-read), the
 // skill emits this card so the user clicks when they're ready.
 
+/** translation keys, by app id (resolved at render so they follow the language) */
 const HELP_APP_LABELS: Record<string, string> = {
-  home: "Home", calendar: "Calendar", chat: "Chat",
-  contacts: "Contacts", documents: "Documents", compose: "Compose",
-  email: "Email", photos: "Photos", tasks: "Tasks",
-  whatsapp: "WhatsApp", briefing: "Daily briefing", settings: "Settings",
+  home: "apps.home", calendar: "apps.calendar", chat: "apps.chat",
+  contacts: "apps.contacts", documents: "apps.docs", compose: "chat.helpApp.compose",
+  email: "apps.email", photos: "apps.photos", tasks: "apps.tasks",
+  whatsapp: "apps.whatsapp", briefing: "chat.helpApp.briefing", settings: "apps.settings",
 };
 
 function HelpOpenAppCard({ app, path }: { app: string; path: string }) {
+  const { t: tr } = useTranslation();
   const key = (app || "").toLowerCase();
-  const label = HELP_APP_LABELS[key] || (key ? key[0].toUpperCase() + key.slice(1) : "App");
+  const label = HELP_APP_LABELS[key] ? tr(HELP_APP_LABELS[key]) : (key ? key[0].toUpperCase() + key.slice(1) : tr("chat.helpApp.app"));
   return (
     <a
       href={path}
       className="mt-3 inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/[0.06] px-3.5 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-500/[0.12] transition-colors max-w-fit"
     >
-      <span>Open {label}</span>
+      <span>{tr("chat.helpApp.open", { label })}</span>
       <span aria-hidden="true">→</span>
     </a>
   );
@@ -2464,7 +2469,7 @@ function PriceSummaryCard({
       </div>
       {sourceUrl && (
         <div className="px-4 py-1.5 text-2xs text-muted-foreground border-t border-emerald-500/15 truncate">
-          Preise laut{" "}
+          {tr("chat.priceSource")}{" "}
           <a href={sourceUrl} target="_blank" rel="noopener nofollow"
               className="text-blue-600 dark:text-blue-300 hover:underline">
             {shortHost(sourceUrl)}
@@ -2527,21 +2532,21 @@ function ComposeDraftCard({
           )}
           {(missingArgs?.length ?? 0) > 0 && (
             <div className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
-              Still empty: {missingArgs!.join(", ")} — open in Compose to fill in
+              {tr("chat.draftCard.stillEmpty", { list: missingArgs!.join(", ") })}
             </div>
           )}
         </div>
         {(templateName || hasAlts) && (
           <div className="mt-2 pt-2 border-t border-border/50 text-xs">
             <div className="flex items-center gap-1.5 text-muted-foreground">
-              <span>Template:</span>
-              <span className="font-medium text-foreground">{templateName || "none"}</span>
+              <span>{tr("chat.draftCard.template")}</span>
+              <span className="font-medium text-foreground">{templateName || tr("chat.draftCard.none")}</span>
               {hasAlts && (
                 <button
                   onClick={() => setShowAlts(s => !s)}
                   className="ml-auto text-violet-500 hover:underline"
                 >
-                  {showAlts ? "close" : "switch"}
+                  {showAlts ? tr("chat.draftCard.close") : tr("chat.draftCard.switch")}
                 </button>
               )}
             </div>
@@ -2621,7 +2626,7 @@ function TemplatePickerCard({
   if (!templates.length) {
     return (
       <div className="mt-2 px-3 py-2 rounded-xl bg-amber-500/[0.06] border border-amber-500/30 max-w-md text-xs text-foreground">
-        No templates available.
+        {tr("chat.templateNone")}
       </div>
     );
   }
@@ -2648,7 +2653,7 @@ function TemplatePickerCard({
                 <DocKindIcon kind={t.kind} />
                 <span className="text-sm font-medium flex-1 truncate">{t.name}</span>
                 <span className="text-2xs text-blue-500 opacity-0 group-hover:opacity-100 transition">
-                  pick →
+                  {tr("chat.contact.pickArrow")}
                 </span>
               </div>
               {subline && (
@@ -2730,7 +2735,7 @@ function PoiPickerCard({
   return (
     <div className="mt-2 border border-violet-500/30 rounded-xl bg-violet-500/[0.04] overflow-hidden max-w-md">
       <div className="px-3 pt-2.5 pb-1.5 text-xs text-violet-500 font-semibold">
-        {poiCategory}{near ? ` near ${near}` : ""} — please pick one
+        {tr("chat.poiCard.header", { category: poiCategory, near: near ? tr("chat.poiCard.near", { near }) : "" })}
       </div>
       {pois.length > 5 && (
         <div className="px-3 pb-2">
@@ -2738,7 +2743,7 @@ function PoiPickerCard({
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search (name or address)…"
+            placeholder={tr("chat.poiCard.searchPlaceholder")}
             className="w-full px-2 py-1 text-sm bg-background border border-border rounded-md focus:outline-none focus:border-violet-500/50"
           />
         </div>
@@ -2746,7 +2751,7 @@ function PoiPickerCard({
       <div className="divide-y divide-violet-500/10 max-h-64 overflow-y-auto">
         {filtered.length === 0 ? (
           <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-            No matches for "{query}"
+            {tr("chat.poiCard.noMatches", { query })}
           </div>
         ) : filtered.map((p, i) => (
           <button
@@ -2757,7 +2762,7 @@ function PoiPickerCard({
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium flex-1 truncate">{p.name}</span>
               <span className="text-2xs text-violet-500 opacity-0 group-hover:opacity-100 transition">
-                pick →
+                {tr("chat.contact.pickArrow")}
               </span>
             </div>
             {p.address && (
@@ -3094,7 +3099,7 @@ function AllContactsBrowserModal({
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-6 text-right">{i + 1}.</span>
                   <span className="text-sm font-medium flex-1 truncate">{c.display_name}</span>
-                  <span className="text-2xs text-violet-500 shrink-0">pick →</span>
+                  <span className="text-2xs text-violet-500 shrink-0">{tr("chat.contact.pickArrow")}</span>
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1 pl-8">
                   {header}
@@ -3143,7 +3148,7 @@ function BillsFoundCard({ bills, total }: { bills: BillCardRow[]; total: number 
   function fmtAmount(b: BillCardRow): string {
     if (b.amount == null) return "";
     try {
-      return new Intl.NumberFormat(undefined, { style: "currency", currency: b.currency || "EUR" }).format(b.amount);
+      return new Intl.NumberFormat(locale(), { style: "currency", currency: b.currency || "EUR" }).format(b.amount);
     } catch { return `${b.amount} ${b.currency || ""}`.trim(); }
   }
   async function togglePaid(b: BillCardRow, current: boolean) {
@@ -3239,8 +3244,8 @@ function TasksFoundCard({
   const isToday   = (d: string | null) => d === todayIso;
 
   function fmtDue(d: string | null): string {
-    if (!d) return "no date";
-    if (d === todayIso) return "today";
+    if (!d) return tr("chat.tasksCard.noDate");
+    if (d === todayIso) return tr("chat.bills.today");
     // Render YYYY-MM-DD as MMM D for a compact English date
     const dt = new Date(d + "T00:00:00");
     if (Number.isNaN(dt.getTime())) return d;
@@ -3325,7 +3330,7 @@ function TasksFoundCard({
           onClick={() => navigate("/tasks")}
           className="w-full px-3 py-2 text-xs text-emerald-500 hover:bg-emerald-500/[0.06] border-t border-emerald-500/10 text-left"
         >
-          Open all {total} in /tasks →
+          {tr("chat.tasksCard.openAll", { total })}
         </button>
       )}
     </div>
@@ -3360,6 +3365,7 @@ function EventsFoundCard({
   events: EventCardRow[];
   total: number;
 }) {
+  const { t: tr } = useTranslation();
   const navigate = useNavigate();
   if (!events.length) return null;
 
@@ -3370,14 +3376,14 @@ function EventsFoundCard({
     events.every(e => (e.date || e.starts_at.slice(0, 10)) === (events[0].date || events[0].starts_at.slice(0, 10)));
 
   function fmtDate(iso: string): string {
-    if (iso === todayIso) return "today";
+    if (iso === todayIso) return tr("chat.bills.today");
     const dt = new Date(iso + "T00:00:00");
     if (Number.isNaN(dt.getTime())) return iso;
     return formatDate(dt, { weekday: "short", month: "short", day: "numeric" });
   }
 
   function fmtTime(starts: string, ends: string | null, allDay?: boolean): string {
-    if (allDay) return "all day";
+    if (allDay) return tr("chat.events.allDay");
     const startTime = starts.slice(11, 16);
     const endTime = ends ? ends.slice(11, 16) : "";
     return endTime ? `${startTime}–${endTime}` : startTime;
@@ -3387,7 +3393,7 @@ function EventsFoundCard({
     <div className="mt-2 border border-sky-500/30 rounded-xl bg-sky-500/[0.04] overflow-hidden max-w-md">
       <div className="px-3 pt-2.5 pb-1.5 text-xs text-sky-500 font-semibold flex items-center gap-1.5">
         <Calendar className="w-3 h-3" />
-        Termine ({total})
+        {tr("chat.events.header", { total })}
         {allOnOneDate && (
           <span className="font-normal opacity-70 normal-case tracking-normal">
             · {fmtDate(events[0].date || events[0].starts_at.slice(0, 10))}
@@ -3408,7 +3414,7 @@ function EventsFoundCard({
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium flex-1 truncate">{e.title}</span>
                 <span className="text-2xs text-sky-500 opacity-0 group-hover:opacity-100 transition shrink-0">
-                  open →
+                  {tr("chat.events.openArrow")}
                 </span>
               </div>
               <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap tabular-nums">
@@ -3426,7 +3432,7 @@ function EventsFoundCard({
           onClick={() => navigate("/calendar")}
           className="w-full px-3 py-2 text-xs text-sky-500 hover:bg-sky-500/[0.06] border-t border-sky-500/10 text-left"
         >
-          Open all {total} in /calendar →
+          {tr("chat.events.openAll", { total })}
         </button>
       )}
     </div>
@@ -3493,7 +3499,7 @@ function ContactsFoundCard({
     <div className="mt-2 border border-violet-500/30 rounded-xl bg-violet-500/[0.04] overflow-hidden max-w-md">
       <div className="px-3 pt-2.5 pb-1.5 text-xs text-violet-500 font-semibold flex items-center gap-1.5">
         <UsersRound className="w-3 h-3" />
-        Kontakte ({total}{filter ? ` · ${filter}` : ""})
+        {tr("chat.contactsCard.header", { total, filter: filter ? tr("chat.contactsCard.filterSuffix", { filter }) : "" })}
       </div>
       {contacts.length > 5 && (
         <div className="px-3 pb-2">
@@ -3509,7 +3515,7 @@ function ContactsFoundCard({
       <div className="divide-y divide-violet-500/10 max-h-[420px] overflow-y-auto">
         {shown.map((c, i) => {
           const tag = c.relation
-            || (c.kind === "business" ? "Unternehmen" : c.kind === "person" ? "Person" : "");
+            || (c.kind === "business" ? tr("chat.contact.business") : c.kind === "person" ? tr("chat.contact.person") : "");
           return (
             <button
               key={c.id}
@@ -3521,7 +3527,7 @@ function ContactsFoundCard({
                 <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-7 text-right">{i + 1}.</span>
                 <span className="text-sm font-medium flex-1 truncate">{c.display_name}</span>
                 <span className="text-2xs text-violet-500 opacity-0 group-hover:opacity-100 transition shrink-0">
-                  {pickToChat ? "pick →" : "open →"}
+                  {pickToChat ? tr("chat.contact.pickArrow") : tr("chat.events.openArrow")}
                 </span>
               </div>
               {tag && (
@@ -3534,7 +3540,7 @@ function ContactsFoundCard({
         })}
         {shown.length === 0 && q && (
           <div className="px-3 py-3 text-xs text-muted-foreground text-center">
-            No matches for "{q}"
+            {tr("chat.poiCard.noMatches", { query: q })}
           </div>
         )}
       </div>
@@ -3544,7 +3550,7 @@ function ContactsFoundCard({
           onClick={() => navigate("/contacts")}
           className="w-full px-3 py-2 text-xs text-violet-500 hover:bg-violet-500/[0.06] border-t border-violet-500/10 text-left"
         >
-          Open all {total} in /contacts →
+          {tr("chat.contactsCard.openAll", { total })}
         </button>
       )}
     </div>
@@ -3581,6 +3587,7 @@ function AttachToggle({
   onClick: (e: React.MouseEvent) => void;
   className?: string;
 }) {
+  const { t: tr } = useTranslation();
   return (
     <button
       type="button"
@@ -3592,8 +3599,8 @@ function AttachToggle({
           : "bg-black/60 text-white hover:bg-black/80",
         className,
       )}
-      title={attached ? "Remove from email attachments" : "Attach to email"}
-      aria-label={attached ? "Remove" : "Attach"}
+      title={attached ? tr("chat.photos.removeFromEmail") : tr("chat.photos.attachToEmail")}
+      aria-label={attached ? tr("chat.photos.remove") : tr("chat.photos.attach")}
     >
       {attached ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
     </button>
@@ -3611,6 +3618,7 @@ function PhotoResultGrid({
   // secondary strip so the user gets one clear answer with context.
   // The lightbox can walk through ALL photos via prev/next, so even
   // photos that don't fit in the strip are still reachable.
+  const { t: tr } = useTranslation();
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   if (photos.length === 0) return null;
   const [primary, ...rest] = photos;
@@ -3638,7 +3646,7 @@ function PhotoResultGrid({
         >
           <img
             src={primary.thumbnail_url}
-            alt={primary.original_name || "Photo"}
+            alt={primary.original_name || tr("chat.photos.photo")}
             className="w-full h-auto max-h-[420px] object-cover group-hover:scale-[1.01] transition-transform"
             loading="lazy"
           />
@@ -3671,7 +3679,7 @@ function PhotoResultGrid({
                   }
                   className="relative w-full aspect-square overflow-hidden rounded-md border border-border bg-muted hover:border-violet-500/40 transition block"
                   title={isLastSlot
-                    ? `+${hidden} more`
+                    ? tr("chat.photos.more", { n: hidden })
                     : (p.original_name || "")}
                 >
                   <img
@@ -3706,7 +3714,7 @@ function PhotoResultGrid({
           {photos[0].taken_at && (
             <span className="opacity-70"> · {photos[0].taken_at.slice(0, 10)}</span>
           )}
-          {photos.length > 1 && <span className="opacity-70"> · +{photos.length - 1} more</span>}
+          {photos.length > 1 && <span className="opacity-70"> · {tr("chat.photos.more", { n: photos.length - 1 })}</span>}
         </div>
       )}
 
@@ -3734,6 +3742,7 @@ function PhotoLightbox({
   onAttach?: (item: StashItem) => void;
   isAttached?: (url: string, filename: string) => boolean;
 }) {
+  const { t: tr } = useTranslation();
   const [busy, setBusy] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const swipeFrom = useRef<{ x: number; y: number } | null>(null);
@@ -3783,9 +3792,9 @@ function PhotoLightbox({
         const png = await imageToPngBlob(img);
         await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
       }
-      flash("Copied to clipboard");
+      flash(tr("chat.photos.copied"));
     } catch (e: any) {
-      flash("Copy failed: " + (e?.message || "unknown"));
+      flash(tr("chat.photos.copyFailed", { error: e?.message || tr("chat.photos.unknown") }));
     } finally {
       setBusy(null);
     }
@@ -3826,9 +3835,9 @@ function PhotoLightbox({
     const item = photoToStashItem(photo);
     if (!isAttached?.(item.url, item.filename)) {
       onAttach(item);
-      flash("Added to email attachments");
+      flash(tr("chat.photos.added"));
     } else {
-      flash("Already attached");
+      flash(tr("chat.photos.alreadyAttached"));
     }
   }
 
@@ -3873,12 +3882,12 @@ function PhotoLightbox({
       <div className="relative h-14 shrink-0 flex items-center justify-center">
         {photos.length > 1 && (
           <div className="text-xs text-white/85 bg-black/55 px-3 py-1 rounded-full">
-            Photo {safeIdx + 1} of {photos.length}
+            {tr("chat.photos.counter", { n: safeIdx + 1, total: photos.length })}
           </div>
         )}
         <button
           type="button"
-          aria-label="Close"
+          aria-label={tr("common.close")}
           onClick={(e) => { e.stopPropagation(); onClose(); }}
           className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition cursor-pointer"
         >
@@ -3890,7 +3899,7 @@ function PhotoLightbox({
       <div className="relative flex-1 min-h-0 mx-3 sm:mx-20">
         <img
           src={displayUrl}
-          alt={photo.original_name || "Photo"}
+          alt={photo.original_name || tr("chat.photos.photo")}
           onClick={e => e.stopPropagation()}
           className="absolute inset-0 m-auto max-w-full max-h-full object-contain rounded-lg shadow-2xl cursor-default"
         />
@@ -3902,7 +3911,7 @@ function PhotoLightbox({
         <>
           <button
             type="button"
-            aria-label="Previous photo"
+            aria-label={tr("chat.photos.prev")}
             disabled={!hasPrev}
             onClick={(e) => { e.stopPropagation(); if (hasPrev) onChangeIndex(safeIdx - 1); }}
             className={cn(arrow, "left-2 sm:left-4")}
@@ -3911,7 +3920,7 @@ function PhotoLightbox({
           </button>
           <button
             type="button"
-            aria-label="Next photo"
+            aria-label={tr("chat.photos.next")}
             disabled={!hasNext}
             onClick={(e) => { e.stopPropagation(); if (hasNext) onChangeIndex(safeIdx + 1); }}
             className={cn(arrow, "right-2 sm:right-4")}
@@ -3930,27 +3939,27 @@ function PhotoLightbox({
           onClick={e => e.stopPropagation()}
           className="bg-card/95 backdrop-blur border border-border rounded-xl shadow-2xl px-2 py-1.5 flex items-center gap-1 cursor-default flex-wrap justify-center max-w-full"
         >
-          <LbAction onClick={copyToClipboard} busy={busy === "copy"} title="Copy to clipboard">
-            <Copy className="w-4 h-4" /> <span className="hidden sm:inline">Copy</span>
+          <LbAction onClick={copyToClipboard} busy={busy === "copy"} title={tr("chat.bundle.copy")}>
+            <Copy className="w-4 h-4" /> <span className="hidden sm:inline">{tr("chat.photos.copy")}</span>
           </LbAction>
-          <LbAction onClick={download} title="Download">
-            <Download className="w-4 h-4" /> <span className="hidden sm:inline">Download</span>
+          <LbAction onClick={download} title={tr("chat.photos.download")}>
+            <Download className="w-4 h-4" /> <span className="hidden sm:inline">{tr("chat.photos.download")}</span>
           </LbAction>
-          <LbAction onClick={shareToWhatsApp} title="Send via WhatsApp">
+          <LbAction onClick={shareToWhatsApp} title={tr("chat.photos.sendWhatsApp")}>
             <MessageSquare className="w-4 h-4" /> <span className="hidden sm:inline">WhatsApp</span>
           </LbAction>
           {onAttach && (
             <LbAction
               onClick={attachToEmailStash}
-              title="Attach this photo to email"
+              title={tr("chat.photos.attachThis")}
             >
               {isAttached?.(photoToStashItem(photo).url, photoToStashItem(photo).filename)
-                ? <><Check className="w-4 h-4" /> <span className="hidden sm:inline">Attached</span></>
-                : <><Plus className="w-4 h-4" /> <span className="hidden sm:inline">Email</span></>}
+                ? <><Check className="w-4 h-4" /> <span className="hidden sm:inline">{tr("chat.photos.attached")}</span></>
+                : <><Plus className="w-4 h-4" /> <span className="hidden sm:inline">{tr("chat.photos.email")}</span></>}
             </LbAction>
           )}
-          <LbAction onClick={openInPhotos} title="Open the Photos app">
-            <Eye className="w-4 h-4" /> <span className="hidden sm:inline">Photos app</span>
+          <LbAction onClick={openInPhotos} title={tr("chat.photos.openPhotos")}>
+            <Eye className="w-4 h-4" /> <span className="hidden sm:inline">{tr("chat.photos.photosApp")}</span>
           </LbAction>
         </div>
         <div className="h-4 max-w-full truncate text-xs text-white/60">
@@ -4021,6 +4030,7 @@ function DocumentResultCard({
   onAttach?: (item: StashItem) => void;
   isAttached?: (url: string, filename: string) => boolean;
 }) {
+  const { t: tr } = useTranslation();
   const [previewing, setPreviewing] = useState(false);
   // Paperless mirror rows tunnel through the Paperless reverse proxy;
   // local uploads through Yorik's own /api/documents/{id}/raw.
@@ -4052,7 +4062,7 @@ function DocumentResultCard({
                   {date && (
                     <span
                       className="shrink-0 text-2xs tabular-nums px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border"
-                      title="Document date (from Paperless)"
+                      title={tr("chat.doc.date")}
                     >
                       {date}
                     </span>
@@ -4069,16 +4079,16 @@ function DocumentResultCard({
               <button
                 onClick={() => setPreviewing(true)}
                 className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-muted hover:bg-muted/70 transition"
-                title="Preview"
+                title={tr("chat.doc.preview")}
               >
-                <Eye className="w-3 h-3" /> Preview
+                <Eye className="w-3 h-3" /> {tr("chat.doc.preview")}
               </button>
               <a
                 href={downloadUrl}
                 className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-violet-500/10 hover:bg-violet-500/20 text-violet-500 transition"
-                title="Download"
+                title={tr("chat.photos.download")}
               >
-                <Download className="w-3 h-3" /> Download
+                <Download className="w-3 h-3" /> {tr("chat.photos.download")}
               </a>
               {onAttach && (() => {
                 // Same URL the Download link uses, so a member who can
@@ -4105,11 +4115,11 @@ function DocumentResultCard({
                         ? "bg-violet-500/20 text-violet-600 dark:text-violet-300"
                         : "hover:bg-muted/70 text-muted-foreground hover:text-foreground",
                     )}
-                    title={attached ? "Already attached to email" : "Attach to email"}
+                    title={attached ? tr("chat.doc.alreadyAttached") : tr("chat.photos.attachToEmail")}
                   >
                     {attached
-                      ? <><Check className="w-3 h-3" /> Attached</>
-                      : <><Plus className="w-3 h-3" /> Email</>}
+                      ? <><Check className="w-3 h-3" /> {tr("chat.photos.attached")}</>
+                      : <><Plus className="w-3 h-3" /> {tr("chat.photos.email")}</>}
                   </button>
                 );
               })()}
@@ -4119,12 +4129,12 @@ function DocumentResultCard({
               <a
                 href={`/r/documents?doc=${encodeURIComponent(doc.doc_id)}&source=${encodeURIComponent(doc.source || "paperless")}`}
                 className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-muted/70 transition text-muted-foreground hover:text-foreground"
-                title="Open in Documents"
+                title={tr("chat.doc.openInDocuments")}
               >
-                <FileText className="w-3 h-3" /> Open
+                <FileText className="w-3 h-3" /> {tr("chat.doc.open")}
               </a>
               {typeof doc.distance === "number" && (
-                <span className="ml-auto text-2xs text-muted-foreground" title="Cosine distance — lower is closer">
+                <span className="ml-auto text-2xs text-muted-foreground" title={tr("chat.doc.distance")}>
                   {doc.distance.toFixed(2)}
                 </span>
               )}
@@ -4141,6 +4151,7 @@ function DocumentResultCard({
 
 function DocumentPreviewModal({ doc, src, onClose }:
   { doc: DocumentHit; src: string; onClose: () => void }) {
+  const { t: tr } = useTranslation();
   useEffect(() => {
     function esc(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
     window.addEventListener("keydown", esc);
@@ -4171,13 +4182,13 @@ function DocumentPreviewModal({ doc, src, onClose }:
               href={src + "&download=1"}
               className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-md bg-violet-500/10 hover:bg-violet-500/20 text-violet-500 transition"
             >
-              <Download className="w-3 h-3" /> Download
+              <Download className="w-3 h-3" /> {tr("chat.photos.download")}
             </a>
             <button
               onClick={onClose}
               className="w-10 h-10 md:w-7 md:h-7 rounded-md hover:bg-muted text-muted-foreground flex items-center justify-center"
-              title="Close (Esc)"
-              aria-label="Close"
+              title={tr("chat.doc.closeEsc")}
+              aria-label={tr("common.close")}
             >
               <X className="w-5 h-5 md:w-4 md:h-4" />
             </button>
@@ -4198,12 +4209,12 @@ function DocumentPreviewModal({ doc, src, onClose }:
           {!isPdf && !isImage && !isText && (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
               <FileText className="w-12 h-12 opacity-30" />
-              <div>No inline preview for {mime || "this file type"}.</div>
+              <div>{tr("chat.doc.noPreview", { mime: mime || tr("chat.doc.thisFileType") })}</div>
               <a
                 href={src + "&download=1"}
                 className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-violet-500 text-white hover:bg-violet-600 transition"
               >
-                <Download className="w-4 h-4" /> Download
+                <Download className="w-4 h-4" /> {tr("chat.photos.download")}
               </a>
             </div>
           )}
@@ -4218,21 +4229,22 @@ function DocumentPreviewModal({ doc, src, onClose }:
 // ---------------------------------------------------------------------------
 
 function EmptyThread({ onStartNew }: { onStartNew: () => void }) {
+  const { t: tr } = useTranslation();
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
       <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/30 to-blue-500/30 flex items-center justify-center mb-5">
         <Sparkles className="w-7 h-7 text-violet-500" />
       </div>
-      <div className="font-semibold text-lg">Yorik Chat</div>
+      <div className="font-semibold text-lg">{tr("chat.empty.title")}</div>
       <div className="text-sm text-muted-foreground mt-1 max-w-md">
-        Ask about your calendar, tasks, bills, or any document you've uploaded.
-        Yorik can also write to the database — schedule events, mark bills paid, add tasks.
+        {tr("chat.empty.intro1")}{" "}
+        {tr("chat.empty.intro2")}
       </div>
       <button
         onClick={onStartNew}
         className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500 hover:bg-violet-600 text-white text-sm shadow-md transition"
       >
-        <Plus className="w-4 h-4" /> Start a conversation
+        <Plus className="w-4 h-4" /> {tr("chat.empty.start")}
       </button>
     </div>
   );
@@ -4241,15 +4253,16 @@ function EmptyThread({ onStartNew }: { onStartNew: () => void }) {
 function ConversationStarter({ onPick }: { onPick: (s: string) => void }) {
   // Retained for back-compat with anywhere else that still imports it.
   // The chat thread itself now uses <TodayDigest> for the empty state.
+  const { t: tr } = useTranslation();
   const suggestions = [
-    "What's on my calendar this week?",
-    "Find my insurance policy",
-    "Add 'Pick up dry cleaning' to my tasks",
-    "How many unpaid bills are due this month?",
+    tr("chat.empty.s1"),
+    tr("chat.empty.s2"),
+    tr("chat.empty.s3"),
+    tr("chat.empty.s4"),
   ];
   return (
     <div className="py-8">
-      <div className="text-xs text-muted-foreground text-center mb-3">Try one of these:</div>
+      <div className="text-xs text-muted-foreground text-center mb-3">{tr("chat.empty.tryOne")}</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-2xl mx-auto">
         {suggestions.map(s => (
           <button
@@ -4303,10 +4316,11 @@ function readableTitle(t: string): string {
   const m = /^\[Email context\]\s*From:\s*([^<\n]*?)\s*<?([^>\n]*)>?/.exec(t);
   if (!m) return t;
   const who = m[1].trim() || m[2].trim();
-  return who ? `Email from ${who}` : "About an email";
+  return who ? i18n.t("chat.list.emailFrom", { who }) : i18n.t("chat.list.aboutEmail");
 }
 
 function ToolTraceSummary({ entries }: { entries: ToolTraceEntry[] }) {
+  const { t: tr } = useTranslation();
   const auth = useAuth();
   const devMode = !!(auth.user as any)?.dev_mode;
   const [open, setOpen] = useState(false);
@@ -4317,12 +4331,12 @@ function ToolTraceSummary({ entries }: { entries: ToolTraceEntry[] }) {
         type="button"
         onClick={() => setOpen(o => !o)}
         className="inline-flex items-center gap-1 hover:text-foreground transition"
-        title={open ? "Hide the steps" : "Show what Yorik did"}
+        title={open ? tr("chat.tool.hideSteps") : tr("chat.tool.showSteps")}
       >
         {open
           ? <ChevronDown className="w-3 h-3" />
           : <ChevronRight className="w-3 h-3" />}
-        <span>Yorik took {n} step{n !== 1 ? "s" : ""}</span>
+        <span>{tr("chat.tool.steps", { count: n })}</span>
       </button>
       {open && (
         <div className="mt-1 pl-3 ml-1.5 border-l border-border/60 space-y-1">
@@ -4367,9 +4381,9 @@ function describeStep(tool: string, args: Record<string, any> | undefined): stri
     const t = s.replace(/[_-]+/g, " ").trim();
     return t.charAt(0).toUpperCase() + t.slice(1);
   };
-  if (tool === "skill_view") return "Looked up how to do it";
+  if (tool === "skill_view") return i18n.t("chat.tool.lookedUp");
   const line = formatToolStatus(tool, args);
-  if (line === "Working on it…") {
+  if (line === i18n.t("chat.tool.working")) {
     if ((tool === "invoke_skill" || tool === "use_skill") && args?.name) {
       return humanize(String(args.name));
     }
@@ -4409,6 +4423,7 @@ interface TodayDigestData {
 }
 
 function TodayDigest({ onPick }: { onPick: (s: string) => void }) {
+  const { t: tr } = useTranslation();
   const digest = useApi<TodayDigestData>("/api/today", []);
   const d = digest.data;
 
@@ -4425,7 +4440,7 @@ function TodayDigest({ onPick }: { onPick: (s: string) => void }) {
   if (digest.loading) {
     return (
       <div className="py-8 text-center text-xs text-muted-foreground">
-        <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Looking at your day…
+        <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> {tr("chat.digest.looking")}
       </div>
     );
   }
@@ -4435,43 +4450,43 @@ function TodayDigest({ onPick }: { onPick: (s: string) => void }) {
 
   const greeting = (() => {
     const h = new Date().getHours();
-    if (h < 12) return "Good morning";
-    if (h < 18) return "Good afternoon";
-    return "Good evening";
+    if (h < 12) return tr("chat.digest.morning");
+    if (h < 18) return tr("chat.digest.afternoon");
+    return tr("chat.digest.evening");
   })();
 
   return (
     <div className="py-6">
       <div className="text-xs text-muted-foreground text-center mb-4">
-        {greeting} — here's your day.
+        {tr("chat.digest.yourDay", { greeting })}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-2xl mx-auto">
         {d!.events_today.length > 0 && (
           <DigestCard
             icon={<Calendar className="w-4 h-4 text-violet-500" />}
-            title={`${d!.events_today.length} event${d!.events_today.length === 1 ? "" : "s"} today`}
+            title={tr("chat.digest.events", { count: d!.events_today.length })}
             subtitle={d!.events_today.slice(0, 2).map(e => {
               const t = e.starts_at?.slice(11, 16);
               return `${t} ${e.title}`;
             }).join(" · ")}
-            onClick={() => onPick("What's on today?")}
+            onClick={() => onPick(tr("chat.digest.askToday"))}
           />
         )}
         {d!.tasks_overdue_count > 0 && (
           <DigestCard
             icon={<CheckSquare className="w-4 h-4 text-amber-500" />}
-            title={`${d!.tasks_overdue_count} overdue task${d!.tasks_overdue_count === 1 ? "" : "s"}`}
+            title={tr("chat.digest.overdue", { count: d!.tasks_overdue_count })}
             subtitle={d!.tasks_overdue_sample.slice(0, 2).map(t => t.title).join(" · ")}
-            onClick={() => onPick("Which tasks are overdue?")}
+            onClick={() => onPick(tr("chat.digest.askOverdue"))}
             tone="amber"
           />
         )}
         {d!.contacts_pending_count > 0 && (
           <DigestCard
             icon={<UsersRound className="w-4 h-4 text-rose-500" />}
-            title={`${d!.contacts_pending_count} contact${d!.contacts_pending_count === 1 ? "" : "s"} waiting for review`}
-            subtitle="From email, WhatsApp, or vCard import"
-            onClick={() => onPick("Show me the pending contacts.")}
+            title={tr("chat.digest.pending", { count: d!.contacts_pending_count })}
+            subtitle={tr("chat.digest.pendingSub")}
+            onClick={() => onPick(tr("chat.digest.askPending"))}
           />
         )}
         {d!.birthdays_this_week.length > 0 && (
@@ -4479,21 +4494,23 @@ function TodayDigest({ onPick }: { onPick: (s: string) => void }) {
             icon={<Cake className="w-4 h-4 text-pink-500" />}
             title={
               d!.birthdays_this_week.length === 1
-                ? `${d!.birthdays_this_week[0].display_name}'s birthday ${d!.birthdays_this_week[0].days_away === 0 ? "is today" : `is in ${d!.birthdays_this_week[0].days_away} day${d!.birthdays_this_week[0].days_away === 1 ? "" : "s"}`}`
-                : `${d!.birthdays_this_week.length} birthdays this week`
+                ? (d!.birthdays_this_week[0].days_away === 0
+                    ? tr("chat.digest.birthdayToday", { name: d!.birthdays_this_week[0].display_name })
+                    : tr("chat.digest.birthdayIn", { name: d!.birthdays_this_week[0].display_name, count: d!.birthdays_this_week[0].days_away }))
+                : tr("chat.digest.birthdays", { count: d!.birthdays_this_week.length })
             }
             subtitle={d!.birthdays_this_week.slice(0, 2).map(b =>
-              `${b.display_name}${b.days_away === 0 ? " (today)" : ""}`
+              `${b.display_name}${b.days_away === 0 ? tr("chat.digest.todaySuffix") : ""}`
             ).join(" · ")}
             onClick={() => {
               const first = d!.birthdays_this_week[0];
-              onPick(`Write ${first.display_name} a short birthday note.`);
+              onPick(tr("chat.digest.askBirthday", { name: first.display_name }));
             }}
           />
         )}
       </div>
       <div className="text-2xs text-muted-foreground/70 text-center mt-4">
-        Or just ask something else ↓
+        {tr("chat.digest.orElse")}
       </div>
     </div>
   );
@@ -4544,13 +4561,14 @@ function diagErrorsOn(): Promise<boolean> {
   return _diagErrorsOn;
 }
 
+/** `key` goes to the backend; `label` is a translation key resolved at render. */
 const FEEDBACK_REASONS: Array<{ key: string; label: string }> = [
-  { key: "wrong_answer", label: "wrong answer" },
-  { key: "found_nothing", label: "found nothing" },
-  { key: "wrong_person", label: "wrong person or thing" },
-  { key: "too_slow", label: "too slow" },
-  { key: "error", label: "an error" },
-  { key: "other", label: "something else" },
+  { key: "wrong_answer", label: "chat.feedback.reason.wrongAnswer" },
+  { key: "found_nothing", label: "chat.feedback.reason.foundNothing" },
+  { key: "wrong_person", label: "chat.feedback.reason.wrongPerson" },
+  { key: "too_slow", label: "chat.feedback.reason.tooSlow" },
+  { key: "error", label: "chat.feedback.reason.error" },
+  { key: "other", label: "chat.feedback.reason.other" },
 ];
 
 /** 👍 / 👎 under every answer — always visible (they used to show only
@@ -4559,6 +4577,7 @@ const FEEDBACK_REASONS: Array<{ key: string; label: string }> = [
  *  offers the diagnostic report (reviewed before it goes). */
 function TurnFeedback({ conversationId, messageIdx }:
   { conversationId: string | null; messageIdx: number }) {
+  const { t: tr } = useTranslation();
   const [rated, setRated] = useState<1 | -1 | null>(null);
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState<string | null>(null);
@@ -4600,7 +4619,7 @@ function TurnFeedback({ conversationId, messageIdx }:
         <button
           onClick={() => rate(1)}
           disabled={busy}
-          title="This was helpful"
+          title={tr("chat.feedback.helpful")}
           className={cn(
             "w-7 h-7 rounded-md flex items-center justify-center transition",
             rated === 1
@@ -4613,7 +4632,7 @@ function TurnFeedback({ conversationId, messageIdx }:
         <button
           onClick={() => rate(-1)}
           disabled={busy}
-          title="This wasn't helpful"
+          title={tr("chat.feedback.notHelpful")}
           className={cn(
             "w-7 h-7 rounded-md flex items-center justify-center transition",
             rated === -1
@@ -4623,8 +4642,8 @@ function TurnFeedback({ conversationId, messageIdx }:
         >
           <ThumbsDown className="w-4 h-4" />
         </button>
-        {rated === 1 && <span className="text-2xs text-muted-foreground ml-1">Thanks!</span>}
-        {rated === -1 && !open && <span className="text-2xs text-muted-foreground ml-1">{sent ? "Report sent · thanks" : "Logged · we'll improve it"}</span>}
+        {rated === 1 && <span className="text-2xs text-muted-foreground ml-1">{tr("chat.feedback.thanks")}</span>}
+        {rated === -1 && !open && <span className="text-2xs text-muted-foreground ml-1">{sent ? tr("chat.feedback.reportSent") : tr("chat.feedback.logged")}</span>}
       </div>
       {open && rated === -1 && (
         <div className="mt-1.5 rounded-lg border border-border bg-muted/20 p-2.5 max-w-xl space-y-2">
@@ -4634,23 +4653,23 @@ function TurnFeedback({ conversationId, messageIdx }:
                       onClick={() => { setReason(r.key); void post(-1, r.key, note); }}
                       className={cn("px-2 py-1 rounded-full text-2xs border transition",
                         reason === r.key ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted")}>
-                {r.label}
+                {tr(r.label)}
               </button>
             ))}
           </div>
           <div className="flex items-center gap-2">
             <input value={note} onChange={e => setNote(e.target.value.slice(0, 300))}
                    onBlur={() => { if (note) void post(-1, reason, note); }}
-                   placeholder="What should have happened? (optional)"
+                   placeholder={tr("chat.feedback.placeholder")}
                    className="flex-1 h-8 px-2 rounded-md bg-background border border-border text-xs" />
             {canReport && conversationId && !sent && (
               <button type="button" onClick={() => setModal(true)}
                       className="h-8 px-2.5 rounded-md text-2xs text-white bg-gradient-to-r from-violet-500 to-blue-500 whitespace-nowrap"
-                      title="Prepare a pseudonymised report for Yorik's makers — you see it before it goes">
-                Send a diagnostic report
+                      title={tr("chat.feedback.reportTitle")}>
+                {tr("chat.feedback.sendReport")}
               </button>
             )}
-            <button type="button" onClick={() => setOpen(false)} className="text-2xs text-muted-foreground hover:text-foreground">done</button>
+            <button type="button" onClick={() => setOpen(false)} className="text-2xs text-muted-foreground hover:text-foreground">{tr("chat.feedback.done")}</button>
           </div>
         </div>
       )}
@@ -4666,6 +4685,7 @@ function TurnFeedback({ conversationId, messageIdx }:
 /** "Report a problem" in the reply's action row — for anything that is
  *  not a thumbs-down, e.g. a tool that failed. */
 function ReportProblemButton({ conversationId, messageIdx }: { conversationId: string; messageIdx: number }) {
+  const { t: tr } = useTranslation();
   const [canReport, setCanReport] = useState(false);
   const [modal, setModal] = useState(false);
   const [sent, setSent] = useState(false);
@@ -4675,8 +4695,8 @@ function ReportProblemButton({ conversationId, messageIdx }: { conversationId: s
     <>
       <button type="button" onClick={() => setModal(true)} disabled={sent}
               className="inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition disabled:opacity-50"
-              title="Prepare a pseudonymised report for Yorik's makers — you see it before it goes">
-        <ShieldAlert className="w-3 h-3" /> {sent ? "reported" : "report a problem"}
+              title={tr("chat.feedback.reportTitle")}>
+        <ShieldAlert className="w-3 h-3" /> {sent ? tr("chat.feedback.reported") : tr("chat.feedback.reportProblem")}
       </button>
       {modal && (
         <DiagnosticsReportModal conversationId={conversationId} messageIdx={messageIdx} trigger="report_problem"
@@ -4712,10 +4732,10 @@ function formatRelative(iso: string): string {
   const d = new Date(iso.replace(" ", "T") + (iso.includes("T") ? "" : "Z"));
   if (isNaN(d.getTime())) return iso;
   const diffMin = (Date.now() - d.getTime()) / 60_000;
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${Math.round(diffMin)}m ago`;
-  if (diffMin < 24 * 60) return `${Math.round(diffMin / 60)}h ago`;
-  if (diffMin < 7 * 24 * 60) return `${Math.round(diffMin / (24 * 60))}d ago`;
+  if (diffMin < 1) return i18n.t("chat.list.justNow");
+  if (diffMin < 60) return i18n.t("chat.list.minAgo", { n: Math.round(diffMin) });
+  if (diffMin < 24 * 60) return i18n.t("chat.list.hoursAgo", { n: Math.round(diffMin / 60) });
+  if (diffMin < 7 * 24 * 60) return i18n.t("chat.list.daysAgo", { n: Math.round(diffMin / (24 * 60)) });
   return formatDate(d, { day: "numeric", month: "short" });
 }
 
@@ -4753,13 +4773,22 @@ function groupConversations(
   }
 
   const out: Array<[string, ConversationSummary[]]> = [];
-  if (pinned.length)    out.push(["Pinned", pinned]);
-  if (today.length)     out.push(["Today", today]);
-  if (yesterday.length) out.push(["Yesterday", yesterday]);
-  if (lastWeek.length)  out.push(["Last 7 days", lastWeek]);
-  if (earlier.length)   out.push(["Earlier", earlier]);
+  if (pinned.length)    out.push(["pinned", pinned]);
+  if (today.length)     out.push(["today", today]);
+  if (yesterday.length) out.push(["yesterday", yesterday]);
+  if (lastWeek.length)  out.push(["last7", lastWeek]);
+  if (earlier.length)   out.push(["earlier", earlier]);
   return out;
 }
+
+/** Translation key for each sidebar group returned by groupConversations. */
+const GROUP_LABEL_KEYS: Record<string, string> = {
+  pinned: "chat.list.group.pinned",
+  today: "common.today",
+  yesterday: "common.yesterday",
+  last7: "chat.list.group.last7",
+  earlier: "chat.list.group.earlier",
+};
 
 // ---------------------------------------------------------------------------
 // Debug bundle modal
@@ -4795,6 +4824,7 @@ function DebugBundleModal({
   conversation: ConversationSummary;
   onClose: () => void;
 }) {
+  const { t: tr } = useTranslation();
   const [bundle, setBundle] = useState<DebugBundleResponse | null>(null);
   const [editedJson, setEditedJson] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -4816,11 +4846,11 @@ function DebugBundleModal({
       })
       .catch(e => {
         if (cancelled) return;
-        setError(String(e?.message || "failed to build bundle"));
+        setError(String(e?.message || tr("chat.bundle.buildFailed")));
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [conversation.id]);
+  }, [conversation.id]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   function doCopy() {
     navigator.clipboard.writeText(editedJson).then(
@@ -4828,7 +4858,7 @@ function DebugBundleModal({
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       },
-      () => setError("Copy to clipboard failed"),
+      () => setError(tr("chat.bundle.copyFailed")),
     );
   }
 
@@ -4865,7 +4895,7 @@ function DebugBundleModal({
             <Bug className="w-4 h-4 text-blue-500" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-sm">Export debug bundle</div>
+            <div className="font-semibold text-sm">{tr("chat.bundle.title")}</div>
             <div className="text-xs text-muted-foreground truncate">
               {conversation.title || conversation.id}
             </div>
@@ -4873,7 +4903,7 @@ function DebugBundleModal({
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition flex items-center justify-center"
-            aria-label="Close"
+            aria-label={tr("common.close")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -4883,20 +4913,16 @@ function DebugBundleModal({
           <div className="flex items-start gap-2">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 text-amber-600 shrink-0" />
             <div className="text-muted-foreground leading-snug">
-              <strong className="text-foreground">Review before sharing.</strong>{" "}
-              Auto-redaction strips well-shaped tokens (emails, phone numbers,
-              IBANs, IPv4 addresses, API keys / passwords / bearer tokens /
-              bcrypt hashes). It does <strong>not</strong> strip names,
-              free-text addresses, OCR content, or message text — edit those
-              out by hand below if you don't want to share them.
+              <strong className="text-foreground">{tr("chat.bundle.review")}</strong>{" "}
+              {tr("chat.bundle.introA")} <strong>{tr("chat.bundle.not")}</strong> {tr("chat.bundle.introB")}
             </div>
           </div>
           {bundle && (
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="text-muted-foreground">Auto-redacted:</span>
+              <span className="text-muted-foreground">{tr("chat.bundle.autoRedacted")}</span>
               {redactedTotal === 0 ? (
                 <span className="text-muted-foreground italic">
-                  nothing matched (didn't find any obvious PII tokens)
+                  {tr("chat.bundle.nothingMatched")}
                 </span>
               ) : (
                 Object.entries(counts).map(([k, n]) => (
@@ -4935,14 +4961,14 @@ function DebugBundleModal({
 
         <footer className="px-5 py-3 border-t border-border flex items-center justify-between gap-3 bg-muted/20">
           <div className="text-xs text-muted-foreground">
-            {bundle ? `${bundle.message_count} messages · ${(editedJson.length / 1024).toFixed(1)} KB` : ""}
+            {bundle ? tr("chat.bundle.stats", { count: bundle.message_count, kb: (editedJson.length / 1024).toFixed(1) }) : ""}
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
               className="px-3 py-1.5 rounded-md text-sm hover:bg-muted text-muted-foreground transition"
             >
-              Cancel
+              {tr("common.cancel")}
             </button>
             <button
               onClick={doDownload}
@@ -4950,7 +4976,7 @@ function DebugBundleModal({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border border-border hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               <Download className="w-3.5 h-3.5" />
-              Download .json
+              {tr("chat.bundle.download")}
             </button>
             <button
               onClick={doCopy}
@@ -4958,7 +4984,7 @@ function DebugBundleModal({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? "Copied" : "Copy to clipboard"}
+              {copied ? tr("chat.bundle.copied") : tr("chat.bundle.copy")}
             </button>
           </div>
         </footer>

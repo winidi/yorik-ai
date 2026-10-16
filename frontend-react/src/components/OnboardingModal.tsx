@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
+import { Trans, useTranslation } from "react-i18next";
 import {
   Sparkles, Cpu, Mail, MessageSquare, Check, X, ArrowRight, Loader2,
   Database, AlertCircle, Smartphone,
@@ -42,14 +43,10 @@ interface HealthState {
   model: string;
 }
 
-const TRY_EXAMPLES = [
-  "Was steht heute an?",
-  "Find my insurance contract",
-  "Schedule the dentist Friday at 2pm",
-];
-
 export function OnboardingModal() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const tryExamples = [t("onboarding.tour.try1"), t("onboarding.tour.try2"), t("onboarding.tour.try3")];
   const [state, setState] = useState<OnboardingState | null>(null);
   const [health, setHealth] = useState<HealthState | null>(null);
   const [step, setStep] = useState(0);
@@ -75,12 +72,12 @@ export function OnboardingModal() {
         setState(s => (s ? { ...s, has_events: true, has_bills: true } : s));
         setStep(s => s + 1);
       } else {
-        setSeedError(msg || "demo seed failed");
+        setSeedError(msg || t("onboarding.tour.seedFailed"));
       }
     } finally {
       setSeedBusy(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     (async () => {
@@ -142,64 +139,56 @@ export function OnboardingModal() {
       key: "welcome",
       icon: Sparkles,
       tint: "from-violet-500 to-blue-500",
-      title: "Welcome to Yorik",
+      title: t("onboarding.tour.welcomeTitle"),
       body: (
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Yorik is your family and business OS — calendar, email, documents,
-          photos, chat. Everything runs locally on this machine. No cloud,
-          no subscriptions, no data leaves the house.
+          {t("onboarding.tour.welcomeBody")}
         </p>
       ),
-      cta: "Let's go",
+      cta: t("onboarding.welcome.letsGo"),
     },
     {
       key: "llm",
       icon: Cpu,
       tint: "from-emerald-500 to-teal-500",
-      title: "Local AI",
+      title: t("onboarding.tour.llmTitle"),
       body: (
         <div className="text-sm">
           {health?.llm_reachable ? (
             <div className="flex items-start gap-2">
               <Check className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" />
               <div className="text-muted-foreground leading-relaxed">
-                Your local model <span className="font-mono text-foreground">{health.model}</span> is
-                running and ready. Voice + chat will work out of the box.
+                <Trans i18nKey="onboarding.tour.llmOk" values={{ model: health.model }} components={{ mono: <span className="font-mono text-foreground" /> }} />
               </div>
             </div>
           ) : (
             <div className="flex items-start gap-2">
               <X className="w-4 h-4 mt-0.5 text-amber-500 shrink-0" />
               <div className="text-muted-foreground leading-relaxed">
-                Local LLM isn't reachable. Start your llama-swap (or similar)
-                container at <span className="font-mono">localhost:8080</span>,
-                or point Yorik elsewhere in Settings → LLM.
+                <Trans i18nKey="onboarding.tour.llmDown" components={{ mono: <span className="font-mono" /> }} />
               </div>
             </div>
           )}
         </div>
       ),
-      cta: "Next",
+      cta: t("onboarding.tour.next"),
     },
     {
       key: "demo",
       icon: Database,
       tint: "from-amber-500 to-orange-500",
-      title: state.has_events ? "Example data is loaded" : "See it with example data",
+      title: state.has_events ? t("onboarding.tour.demoLoadedTitle") : t("onboarding.tour.demoTitle"),
       body: state.has_events ? (
         <div className="flex items-start gap-2 text-sm">
           <Check className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" />
           <div className="text-muted-foreground leading-relaxed">
-            A week of events, a few tasks, a couple of bills are loaded.
-            You can remove them any time in Settings → Demo.
+            {t("onboarding.tour.demoLoadedBody")}
           </div>
         </div>
       ) : (
         <div className="space-y-3 text-sm text-muted-foreground leading-relaxed">
           <p>
-            Want a populated app to click around in? One click loads a
-            week of fake events, tasks, and bills (with a friendly note
-            in the bell). Removable in one click from Settings → Demo.
+            {t("onboarding.tour.demoBody")}
           </p>
           {seedError && (
             <div className="flex items-start gap-2 text-amber-600 dark:text-amber-400">
@@ -217,54 +206,51 @@ export function OnboardingModal() {
             )}
           >
             {seedBusy
-              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…</>
-              : <><Database className="w-3.5 h-3.5" /> Load example data</>}
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}</>
+              : <><Database className="w-3.5 h-3.5" /> {t("onboarding.tour.loadDemo")}</>}
           </button>
         </div>
       ),
-      cta: "Skip",
+      cta: t("onboarding.tour.skip"),
     },
     {
       key: "email",
       icon: Mail,
       tint: "from-sky-500 to-blue-500",
-      title: state.has_email ? "Email is connected" : "Connect your email (optional)",
+      title: state.has_email ? t("onboarding.tour.emailDoneTitle") : t("onboarding.tour.emailTitle"),
       body: state.has_email ? (
         <div className="flex items-start gap-2 text-sm">
           <Check className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" />
           <div className="text-muted-foreground leading-relaxed">
-            You've already wired up an email account. Yorik will summarise,
-            triage, and auto-draft replies for you.
+            {t("onboarding.tour.emailDoneBody")}
           </div>
         </div>
       ) : (
         <div className="space-y-3 text-sm text-muted-foreground leading-relaxed">
           <p>
-            Connecting an IMAP account lets Yorik triage bills, propose
-            calendar slots, and draft replies. Optional — you can do this later.
+            {t("onboarding.tour.emailBody")}
           </p>
           <button
             onClick={() => setShowEmailWizard(true)}
             className="text-sm font-medium px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition inline-flex items-center gap-1.5"
           >
-            <Mail className="w-3.5 h-3.5" /> Set up email now
+            <Mail className="w-3.5 h-3.5" /> {t("onboarding.tour.setupEmail")}
           </button>
         </div>
       ),
-      cta: "Next",
+      cta: t("onboarding.tour.next"),
     },
     {
       key: "try",
       icon: MessageSquare,
       tint: "from-fuchsia-500 to-pink-500",
-      title: "Try saying…",
+      title: t("onboarding.tour.tryTitle"),
       body: (
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
-            Tap one to send it to Yorik. The mic in the bottom-right does the
-            same thing by voice.
+            {t("onboarding.tour.tryBody")}
           </p>
-          {TRY_EXAMPLES.map((ex, i) => (
+          {tryExamples.map((ex, i) => (
             <button
               key={i}
               onClick={async () => {
@@ -276,18 +262,18 @@ export function OnboardingModal() {
               }}
               className="w-full text-left text-sm bg-card border border-border rounded-lg px-3 py-2 hover:border-primary/40 hover:bg-primary/[0.04] transition"
             >
-              "{ex}"
+              {t("onboarding.tour.quoted", { text: ex })}
             </button>
           ))}
         </div>
       ),
-      cta: "Next",
+      cta: t("onboarding.tour.next"),
     },
     {
       key: "phone",
       icon: Smartphone,
       tint: "from-indigo-500 to-violet-500",
-      title: "Use Yorik on your phone",
+      title: t("onboarding.tour.phoneTitle"),
       body: (() => {
         const host = typeof window !== "undefined" ? window.location.host : "";
         const isTailscale = host.includes(".ts.net");
@@ -295,42 +281,40 @@ export function OnboardingModal() {
         const isIOS     = /iPad|iPhone|iPod/.test(ua);
         const isAndroid = /Android/.test(ua);
         const installHint = isIOS
-          ? "On iPhone Safari: tap the Share button, then 'Add to Home Screen'."
+          ? t("onboarding.tour.installIos")
           : isAndroid
-            ? "On Android Chrome: tap the ⋮ menu, then 'Install app' or 'Add to Home screen'."
-            : "On your phone's browser: open this URL, then use Share / menu → 'Add to Home Screen' so Yorik opens like a native app.";
+            ? t("onboarding.tour.installAndroid")
+            : t("onboarding.tour.installOther");
         return (
           <div className="space-y-3 text-sm text-muted-foreground leading-relaxed">
             {isTailscale ? (
               <div className="flex items-start gap-2 text-emerald-600 dark:text-emerald-400">
                 <Check className="w-4 h-4 mt-0.5 shrink-0" />
                 <div className="text-xs leading-snug">
-                  You're already on a Tailscale URL — open the same address
-                  (<span className="font-mono">{host}</span>) on your phone.
+                  <Trans i18nKey="onboarding.tour.tailscaleAlready" values={{ host }} components={{ mono: <span className="font-mono" /> }} />
                 </div>
               </div>
             ) : (
               <p>
-                Yorik is reachable across your devices via{" "}
+                {t("onboarding.tour.tailscaleBefore")}{" "}
                 <a
                   href="https://tailscale.com/download"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline inline-flex items-center gap-0.5"
                 >
-                  Tailscale <ArrowRight className="w-3 h-3 -rotate-45" />
+                  {t("onboarding.tour.tailscaleLink")} <ArrowRight className="w-3 h-3 -rotate-45" />
                 </a>{" "}
-                (free for personal use, no port-forwarding). Install it on
-                this box and on your phone, then visit{" "}
+                {t("onboarding.tour.tailscaleAfter")}{" "}
                 <span className="font-mono">your-box.your-tailnet.ts.net:8000</span>{" "}
-                on the phone.
+                {t("onboarding.tour.tailscaleEnd")}
               </p>
             )}
             <p className="text-xs">{installHint}</p>
           </div>
         );
       })(),
-      cta: "Done",
+      cta: t("onboarding.tour.done"),
     },
   ];
 
@@ -356,7 +340,7 @@ export function OnboardingModal() {
             <button
               onClick={finish}
               className="text-muted-foreground hover:text-foreground transition"
-              title="Skip the welcome tour"
+              title={t("onboarding.tour.skipTitle")}
             >
               <X className="w-4 h-4" />
             </button>

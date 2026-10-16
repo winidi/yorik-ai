@@ -145,9 +145,9 @@ export function InlineComposeDraft({
       setDraft(d);
       setLoadError(null);
     } catch (e: any) {
-      setLoadError(e?.message || "Couldn't load draft");
+      setLoadError(e?.message || tr("chat.compose.loadFailed"));
     }
-  }, [draftId]);
+  }, [draftId, tr]);
 
   const loadVersions = useCallback(async () => {
     try {
@@ -172,7 +172,7 @@ export function InlineComposeDraft({
       await loadVersions();
       setHighlightedVersionId(r.new_version_id);
     } catch (e: any) {
-      setRefineError(`Restore failed: ${e?.message || e}`);
+      setRefineError(tr("chat.compose.restoreFailed", { error: e?.message || e }));
     }
   }
 
@@ -182,7 +182,7 @@ export function InlineComposeDraft({
       StarterKit.configure({ link: false, underline: false }),
       Underline,
       Link.configure({ openOnClick: false }),
-      Placeholder.configure({ placeholder: "Empty draft — start typing or use Refine below…" }),
+      Placeholder.configure({ placeholder: () => tr("chat.compose.placeholder") }),
       // allowBase64=true mirrors ComposeApp.tsx: data: URLs land in
       // body_html via compose_draft's inline_image_url embed pass
       // (signature_data_url + find_photo thumbnails). Without this
@@ -329,7 +329,7 @@ export function InlineComposeDraft({
       }
     } catch (e: any) {
       if (e?.name !== "AbortError") {
-        setRefineError(e?.message || "Refine failed");
+        setRefineError(e?.message || tr("chat.compose.refineFailed"));
       }
     } finally {
       setRefining(false);
@@ -366,11 +366,11 @@ export function InlineComposeDraft({
   async function handleSend() {
     if (sending) return;
     if (method !== "pdf" && !pickedContact) {
-      setSendError("Pick a recipient first");
+      setSendError(tr("chat.compose.pickRecipient"));
       return;
     }
     if (method !== "pdf" && !methodReachable) {
-      setSendError(`${pickedContact!.display_name} has no ${method} channel — add one in Contacts first`);
+      setSendError(tr("chat.compose.noChannel", { name: pickedContact!.display_name, method }));
       return;
     }
     setSending(true);
@@ -386,7 +386,7 @@ export function InlineComposeDraft({
         window.open(r.pdf_url, "_blank");
       }
     } catch (e: any) {
-      setSendError(e?.message || "Send failed");
+      setSendError(e?.message || tr("chat.compose.sendFailed"));
     } finally {
       setSending(false);
     }
@@ -414,7 +414,7 @@ export function InlineComposeDraft({
   if (loadError) {
     return (
       <div className="mt-2 border border-red-500/30 bg-red-500/5 rounded-xl p-3 max-w-xl text-xs text-red-700 dark:text-red-300">
-        Couldn't load draft #{draftId}: {loadError}
+        {tr("chat.compose.loadError", { id: draftId, error: loadError })}
       </div>
     );
   }
@@ -429,47 +429,47 @@ export function InlineComposeDraft({
           <span className="text-2xs text-muted-foreground font-mono">#{draftId}</span>
           {saveState === "saving" && (
             <span className="ml-auto text-2xs text-muted-foreground inline-flex items-center gap-1">
-              <Loader2 className="w-2.5 h-2.5 animate-spin" /> saving
+              <Loader2 className="w-2.5 h-2.5 animate-spin" /> {tr("chat.compose.saving")}
             </span>
           )}
           {saveState === "saved" && (
             <span className="ml-auto text-2xs text-emerald-600 inline-flex items-center gap-1">
-              <Check className="w-2.5 h-2.5" /> saved
+              <Check className="w-2.5 h-2.5" /> {tr("chat.compose.saved")}
             </span>
           )}
           {saveState === "idle" && (
             <button
               onClick={() => navigate(`/compose?draft_id=${draftId}`)}
               className="ml-auto text-2xs text-muted-foreground hover:text-foreground transition inline-flex items-center gap-1"
-              title="Open in Compose for the full editor"
+              title={tr("chat.compose.openCompose")}
             >
-              <ExternalLink className="w-2.5 h-2.5" /> Compose
+              <ExternalLink className="w-2.5 h-2.5" /> {tr("chat.compose.compose")}
             </button>
           )}
         </div>
         <div className="space-y-0.5 text-xs">
           {recipientLabel && (
             <div>
-              <span className="text-muted-foreground">An:</span>{" "}
+              <span className="text-muted-foreground">{tr("chat.draft.toLabel")}</span>{" "}
               <span className="font-medium">{recipientLabel}</span>
             </div>
           )}
           {subjectLabel && (
             <div>
-              <span className="text-muted-foreground">Betreff:</span>{" "}
+              <span className="text-muted-foreground">{tr("chat.draft.subjectLabel")}</span>{" "}
               <span className="font-medium">{subjectLabel}</span>
             </div>
           )}
           {(missingArgs?.length ?? 0) > 0 && (
             <div className="mt-1.5 text-xs text-amber-600 dark:text-amber-400 inline-flex items-center gap-1">
               <AlertCircle className="w-3 h-3" />
-              Still empty: {missingArgs!.join(", ")} — open in Compose to fill in
+              {tr("chat.draftCard.stillEmpty", { list: missingArgs!.join(", ") })}
             </div>
           )}
         </div>
         {templateName && (
           <div className="mt-1.5 text-2xs text-muted-foreground">
-            Vorlage: <span className="text-foreground/80 font-medium">{templateName}</span>
+            {tr("chat.draftCard.template")} <span className="text-foreground/80 font-medium">{templateName}</span>
           </div>
         )}
       </div>
@@ -479,16 +479,16 @@ export function InlineComposeDraft({
         <div className="px-3 py-1.5 border-b border-border/40 flex items-center gap-1 overflow-x-auto bg-muted/30">
           <History className="w-3 h-3 text-muted-foreground shrink-0" />
           <span className="text-2xs text-muted-foreground shrink-0">
-            History
+            {tr("chat.compose.history")}
           </span>
           {versions.map((v, idx) => {
             const isCurrent = v.id === highlightedVersionId;
             const labelTip = v.source === "refine" && v.instruction
               ? `"${v.instruction}"`
               : v.source === "restore"
-                ? `Restored from v${versions.findIndex(x => x.id === v.restored_from) + 1 || "?"}`
+                ? tr("chat.compose.restoredFrom", { n: versions.findIndex(x => x.id === v.restored_from) + 1 || "?" })
                 : v.source === "initial"
-                  ? "Initial draft"
+                  ? tr("chat.compose.initialDraft")
                   : v.source;
             return (
               <button
@@ -513,10 +513,10 @@ export function InlineComposeDraft({
             <button
               onClick={() => restoreVersion(versions[versions.length - 1].id)}
               disabled={refining}
-              title="Jump to the most recent version"
+              title={tr("chat.compose.latestTitle")}
               className="ml-1 text-2xs px-1.5 py-0.5 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground inline-flex items-center gap-0.5 shrink-0"
             >
-              <RotateCcw className="w-2.5 h-2.5" /> Latest
+              <RotateCcw className="w-2.5 h-2.5" /> {tr("chat.compose.latest")}
             </button>
           )}
         </div>
@@ -526,7 +526,7 @@ export function InlineComposeDraft({
       {!draft ? (
         <div className="px-3 py-6 text-center text-xs text-muted-foreground">
           <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
-          Loading draft…
+          {tr("chat.compose.loading")}
         </div>
       ) : (
         <div className="relative border-y border-border/60 bg-background">
@@ -536,12 +536,12 @@ export function InlineComposeDraft({
           {refining && (
             <div className="absolute inset-0 overflow-y-auto p-3 bg-background/95 backdrop-blur-[2px]">
               <div className="flex items-center gap-1.5 text-2xs text-violet-700 dark:text-violet-300 mb-1.5">
-                <Sparkles className="w-3 h-3 animate-pulse" /> LLM is rewriting…
+                <Sparkles className="w-3 h-3 animate-pulse" /> {tr("chat.compose.rewriting")}
                 <button
                   onClick={stopRefine}
                   className="ml-auto text-red-600 hover:underline normal-case tracking-normal text-xs"
                 >
-                  Stop
+                  {tr("chat.compose.stop")}
                 </button>
               </div>
               <div className="text-xs leading-relaxed whitespace-pre-wrap font-mono text-foreground/85">
@@ -564,7 +564,7 @@ export function InlineComposeDraft({
               if (e.key === "Enter") { e.preventDefault(); handleRefine(); }
             }}
             disabled={refining || !draft}
-            placeholder="Ask LLM to refine: 'make it shorter', 'use Sie form', …"
+            placeholder={tr("chat.compose.refinePlaceholder")}
             className="flex-1 h-7 px-2 bg-background border border-border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-violet-500/40 placeholder:text-muted-foreground/60"
           />
           <button
@@ -578,8 +578,8 @@ export function InlineComposeDraft({
             )}
           >
             {refining
-              ? <><Loader2 className="w-3 h-3 animate-spin" /> Refining…</>
-              : <><Sparkles className="w-3 h-3" /> Refine</>}
+              ? <><Loader2 className="w-3 h-3 animate-spin" /> {tr("chat.compose.refining")}</>
+              : <><Sparkles className="w-3 h-3" /> {tr("chat.compose.refine")}</>}
           </button>
         </div>
         {refineError && (
@@ -594,13 +594,13 @@ export function InlineComposeDraft({
           <div className="flex-1">
             <div className="font-medium">
               {sendResult.method === "pdf"
-                ? "PDF rendered — opening in a new tab"
-                : `Sent via ${sendResult.method} to ${sendResult.to}`}
+                ? tr("chat.compose.pdfRendered")
+                : tr("chat.compose.sentVia", { method: sendResult.method, to: sendResult.to })}
             </div>
             {sendResult.method === "pdf" && sendResult.pdf_url && (
               <a href={sendResult.pdf_url} target="_blank" rel="noopener"
                  className="text-xs underline mt-0.5 inline-block">
-                Re-open PDF
+                {tr("chat.compose.reopenPdf")}
               </a>
             )}
           </div>
@@ -622,7 +622,7 @@ export function InlineComposeDraft({
               chosen={method === "email"}
               onClick={() => setMethod("email")}
               icon={<Mail className="w-3 h-3" />}
-              label="Email"
+              label={tr("chat.compose.email")}
               tint="sky"
               reachable={!!pickedContact?.channels.some(c => c.kind === "email")}
             />
@@ -638,7 +638,7 @@ export function InlineComposeDraft({
               chosen={method === "pdf"}
               onClick={() => setMethod("pdf")}
               icon={<FileText className="w-3 h-3" />}
-              label="PDF"
+              label={tr("chat.compose.pdf")}
               tint="amber"
               reachable={true}
             />
@@ -653,8 +653,8 @@ export function InlineComposeDraft({
               )}
             >
               {sending
-                ? <><Loader2 className="w-3 h-3 animate-spin" /> Sending…</>
-                : <><Send className="w-3 h-3" /> Send</>}
+                ? <><Loader2 className="w-3 h-3 animate-spin" /> {tr("chat.compose.sending")}</>
+                : <><Send className="w-3 h-3" /> {tr("chat.compose.send")}</>}
             </button>
           </div>
           {sendError && (
@@ -664,7 +664,7 @@ export function InlineComposeDraft({
           )}
           {method !== "pdf" && pickedContact && !methodReachable && (
             <div className="text-2xs text-amber-600">
-              {pickedContact.display_name} has no {method} channel on file.
+              {tr("chat.compose.noChannelOnFile", { name: pickedContact.display_name, method })}
             </div>
           )}
         </div>
@@ -685,6 +685,7 @@ function MethodChip({
   tint:      "sky" | "emerald" | "amber";
   reachable: boolean;
 }) {
+  const { t: tr } = useTranslation();
   const tintClasses: Record<string, string> = {
     sky:     "bg-sky-500/15 text-sky-700 dark:text-sky-300 ring-sky-500/40",
     emerald: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 ring-emerald-500/40",
@@ -700,7 +701,7 @@ function MethodChip({
           : "text-muted-foreground hover:bg-muted/60",
         !reachable && chosen && "opacity-70",
       )}
-      title={!reachable ? "Contact has no channel of this type — pick another method or add the channel" : ""}
+      title={!reachable ? tr("chat.compose.chipNoChannel") : ""}
     >
       {icon} {label}
     </button>
@@ -720,6 +721,7 @@ function RecipientInlinePicker({
   // (e.g. an int contact_id passed as draft.recipient before the
   // backend forces the field to a name string) can't crash the
   // picker. Mirrors the defensive String() at the call site above.
+  const { t: tr } = useTranslation();
   const [query, setQuery] = useState(String(initialQuery ?? ""));
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<ContactHit[]>([]);
@@ -773,17 +775,17 @@ function RecipientInlinePicker({
           <div className="font-medium truncate">{picked.display_name}</div>
           <div className="text-2xs text-muted-foreground truncate">
             {picked.channels.length === 0
-              ? "no channels"
+              ? tr("chat.compose.noChannels")
               : picked.channels
                   .filter(c => ["email", "phone", "whatsapp"].includes(c.kind))
                   .map(c => `${c.kind}: ${c.value}`)
-                  .join(" · ") || "no email/whatsapp channels"}
+                  .join(" · ") || tr("chat.compose.noEmailWa")}
           </div>
         </div>
         <button
           onClick={() => { onPick(null); setOpen(true); setQuery(""); }}
           className="p-1 hover:bg-muted rounded text-muted-foreground"
-          title="Change recipient"
+          title={tr("chat.compose.changeRecipient")}
         >
           <Pencil className="w-3 h-3" />
         </button>
@@ -796,14 +798,14 @@ function RecipientInlinePicker({
         value={query}
         onChange={e => { setQuery(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
-        placeholder="Search recipient…"
+        placeholder={tr("chat.compose.searchRecipient")}
         className="w-full h-7 px-2 bg-background border border-border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-ring/40 placeholder:text-muted-foreground/60"
       />
       {open && (loading || results.length > 0) && (
         <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-card border border-border rounded-md shadow-lg overflow-hidden max-h-[240px] overflow-y-auto">
           {loading && (
             <div className="px-2 py-1.5 text-2xs text-muted-foreground">
-              <Loader2 className="w-3 h-3 animate-spin inline" /> searching…
+              <Loader2 className="w-3 h-3 animate-spin inline" /> {tr("chat.compose.searching")}
             </div>
           )}
           {results.map(c => (
@@ -817,13 +819,13 @@ function RecipientInlinePicker({
                 {c.channels
                   .filter(ch => ["email", "phone", "whatsapp"].includes(ch.kind))
                   .map(ch => `${ch.kind}: ${ch.value}`)
-                  .join(" · ") || "no contact channels"}
+                  .join(" · ") || tr("chat.compose.noContactChannels")}
               </div>
             </button>
           ))}
           {!loading && results.length === 0 && query.length >= 2 && (
             <div className="px-2 py-1.5 text-2xs text-muted-foreground italic">
-              No matches for "{query}".
+              {tr("chat.compose.noMatches", { query })}
             </div>
           )}
         </div>

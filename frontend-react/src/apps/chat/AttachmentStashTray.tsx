@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Mail, X, Paperclip, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 
 export interface StashItem {
@@ -118,6 +119,7 @@ interface TrayProps {
  *  is empty so it doesn't take up vertical space for users who never
  *  attach anything. */
 export function AttachmentStashTray({ items, onRemove, onClear }: TrayProps) {
+  const { t } = useTranslation();
   const [sending, setSending] = useState(false);
 
   if (items.length === 0) return null;
@@ -143,7 +145,7 @@ export function AttachmentStashTray({ items, onRemove, onClear }: TrayProps) {
       <div className="flex items-center gap-2 mb-1.5">
         <Paperclip className="w-3.5 h-3.5 text-violet-500" />
         <div className="text-xs font-medium text-foreground/80">
-          {items.length} {items.length === 1 ? "attachment" : "attachments"} ready to send
+          {t("chat.stash.ready", { count: items.length })}
         </div>
         <div className="flex-1" />
         <button
@@ -151,7 +153,7 @@ export function AttachmentStashTray({ items, onRemove, onClear }: TrayProps) {
           onClick={onClear}
           className="text-xs text-muted-foreground hover:text-foreground transition px-1.5 py-0.5 rounded"
         >
-          Clear all
+          {t("chat.stash.clearAll")}
         </button>
         <button
           type="button"
@@ -160,8 +162,8 @@ export function AttachmentStashTray({ items, onRemove, onClear }: TrayProps) {
           className="text-xs inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-violet-500 hover:bg-violet-600 text-white shadow-sm transition disabled:opacity-50"
         >
           {sending
-            ? <><Loader2 className="w-3 h-3 animate-spin" /> Opening…</>
-            : <><Mail className="w-3 h-3" /> Send via email</>}
+            ? <><Loader2 className="w-3 h-3 animate-spin" /> {t("chat.stash.opening")}</>
+            : <><Mail className="w-3 h-3" /> {t("chat.stash.sendEmail")}</>}
         </button>
       </div>
       <div className="flex flex-wrap gap-1.5">
@@ -176,7 +178,7 @@ export function AttachmentStashTray({ items, onRemove, onClear }: TrayProps) {
               type="button"
               onClick={() => onRemove(i)}
               className="text-muted-foreground hover:text-foreground shrink-0"
-              aria-label="Remove"
+              aria-label={t("chat.stash.remove")}
             >
               <X className="w-3 h-3" />
             </button>

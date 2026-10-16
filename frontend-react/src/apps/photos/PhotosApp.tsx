@@ -16,6 +16,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { Trans, useTranslation } from "react-i18next";
 import { Camera, ExternalLink, AlertCircle, Server, Smartphone } from "lucide-react";
 import { PhotosPhoneSetup } from "@/components/PhotosPhoneSetup";
 import { Dock } from "@/components/Dock";
@@ -37,6 +38,7 @@ function defaultImmichUrl(): string {
 }
 
 export function PhotosApp() {
+  const { t } = useTranslation();
   const [params] = useSearchParams();
   const role = useAuth().user?.role;
   const isAdmin = role === "admin" || role === "platform_admin";
@@ -82,22 +84,22 @@ export function PhotosApp() {
         <div className="w-7 h-7 rounded-md bg-emerald-500/15 flex items-center justify-center">
           <Camera className="w-3.5 h-3.5 text-emerald-500" />
         </div>
-        <span className="text-sm font-medium">Photos</span>
+        <span className="text-sm font-medium">{t("photos.app.title")}</span>
         <div className="ml-auto flex items-center gap-1">
           <button
             onClick={() => setPhoneSetup(true)}
             className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition"
           >
-            <Smartphone className="w-3 h-3" /> Back up this phone
+            <Smartphone className="w-3 h-3" /> {t("photos.app.backUpPhone")}
           </button>
           <a
             href={src}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition"
-            title="Open Immich in a new tab"
+            title={t("photos.app.openImmichTitle")}
           >
-            <ExternalLink className="w-3 h-3" /> New tab
+            <ExternalLink className="w-3 h-3" /> {t("photos.app.newTab")}
           </a>
         </div>
       </header>
@@ -109,19 +111,19 @@ export function PhotosApp() {
               <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-amber-500/10 flex items-center justify-center">
                 <Server className="w-6 h-6 text-amber-500" />
               </div>
-              <div className="text-base font-semibold mb-1">Photos aren't available right now</div>
+              <div className="text-base font-semibold mb-1">{t("photos.app.downTitle")}</div>
               <div className="text-sm text-muted-foreground mb-4">
-                The photo library on this Yorik isn't running. Your photos are safe; they're just not reachable at the moment.
+                {t("photos.app.downBody")}
               </div>
               {isAdmin && (
                 <details className="text-left">
-                  <summary className="text-xs text-muted-foreground cursor-pointer">For the admin</summary>
-                  <div className="text-xs mt-2 text-muted-foreground">Yorik can't reach Immich at <code className="text-xs">{serverImmichUrl || defaultImmichUrl()}</code>. Start it in the yorik-ai directory:</div>
+                  <summary className="text-xs text-muted-foreground cursor-pointer">{t("photos.app.forAdmin")}</summary>
+                  <div className="text-xs mt-2 text-muted-foreground"><Trans i18nKey="photos.app.cantReach" values={{ url: serverImmichUrl || defaultImmichUrl() }} components={{ code: <code className="text-xs" /> }} /></div>
                   <div className="text-xs mt-2 bg-muted/40 border border-border rounded-md p-3 font-mono leading-relaxed">
                     docker compose up -d immich-server immich-machine-learning immich-postgres immich-redis
                   </div>
                   <div className="text-xs text-muted-foreground mt-2">
-                    Running elsewhere? Set <code>HOMEOS_IMMICH_BASE_URL</code> in <code>config.env</code>.
+                    <Trans i18nKey="photos.app.runningElsewhere" components={{ code: <code /> }} />
                   </div>
                 </details>
               )}
@@ -169,7 +171,7 @@ export function PhotosApp() {
           <div className="absolute inset-0 flex items-center justify-center p-8 text-center bg-background">
             <div>
               <AlertCircle className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
-              <div className="font-medium">JavaScript is required to load Immich.</div>
+              <div className="font-medium">{t("photos.app.jsRequired")}</div>
             </div>
           </div>
         </noscript>

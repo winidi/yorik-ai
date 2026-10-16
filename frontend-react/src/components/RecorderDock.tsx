@@ -18,7 +18,9 @@
  * fresh MediaRecorder continues with the next chunk sequence number.
  */
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Circle, Loader2, Pause, Play, Square, X } from "lucide-react";
+import i18n from "@/i18n";
 import { api } from "@/lib/api";
 import { drainUiActions } from "@/lib/uiActions";
 import { cn } from "@/lib/utils";
@@ -140,7 +142,7 @@ async function drainQueue(): Promise<void> {
       set({ pendingUploads: queue.length });
     }
   } catch (e: any) {
-    set({ error: e?.message || "upload failed", pendingUploads: queue.length });
+    set({ error: e?.message || i18n.t("recordings.recorder.uploadFailed"), pendingUploads: queue.length });
   } finally {
     uploading = false;
   }
@@ -187,7 +189,7 @@ function startLevelWatch(st: MediaStream) {
       silentSince = silentSince ?? Date.now();
       if (Date.now() - silentSince >= SILENT_AFTER_MS) {
         if (!state.micSilent) {
-          set({ micSilent: true, error: "no sound from the microphone — keep the phone unlocked and in the app" });
+          set({ micSilent: true, error: i18n.t("recordings.recorder.micSilentKeepUnlocked") });
           try { navigator.vibrate?.([200, 100, 200]); } catch {}
         }
         void reopenMic("silent");
@@ -211,7 +213,7 @@ async function reopenMic(why: string): Promise<void> {
     silentSince = null;
     console.info(`recorder: microphone reopened (${why})`);
   } catch (e: any) {
-    set({ error: e?.message || "the microphone could not be reopened" });
+    set({ error: e?.message || i18n.t("recordings.recorder.reopenFailed") });
   }
 }
 
@@ -223,12 +225,12 @@ function attachRecorder(rec: MediaRecorder) {
     set({ pendingUploads: queue.length });
     void drainQueue();
   };
-  rec.onerror = () => set({ error: "the microphone stopped" });
+  rec.onerror = () => set({ error: i18n.t("recordings.recorder.micStopped") });
 }
 
 async function openMic(): Promise<MediaRecorder> {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-    throw new Error("this browser cannot record audio");
+    throw new Error(i18n.t("recordings.recorder.cannotRecord"));
   }
   stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find(m => (MediaRecorder as any).isTypeSupported?.(m));
@@ -265,9 +267,9 @@ function teardown() {
 export async function startRecording(opts: { id: number; title?: string; upload_token?: string | null }): Promise<void> {
   if (active && state.phase !== "idle" && state.phase !== "done" && state.phase !== "error") {
     if (active.id === opts.id) return;
-    throw new Error("another recording is running");
+    throw new Error(i18n.t("recordings.recorder.anotherRunning"));
   }
-  active = { id: opts.id, title: opts.title || "Recording", token: opts.upload_token || null, seq: 0, startedAt: Date.now(), pausedMs: 0, pausedAt: null };
+  active = { id: opts.id, title: opts.title || i18n.t("recordings.fallbackTitle"), token: opts.upload_token || null, seq: 0, startedAt: Date.now(), pausedMs: 0, pausedAt: null };
   queue.length = 0;
   stopping = false;
   set({ phase: "starting", recordingId: opts.id, title: active.title, seconds: 0, pendingUploads: 0, error: null, needsResume: false });
@@ -281,7 +283,7 @@ export async function startRecording(opts: { id: number; title?: string; upload_
     window.dispatchEvent(new CustomEvent("yorik:recorder:started", { detail: { id: opts.id } }));
   } catch (e: any) {
     teardown();
-    set({ phase: "error", error: e?.message || "could not start" });
+    set({ phase: "error", error: e?.message || i18n.t("recordings.recorder.startFailed") });
     active = null;
     persist();
     throw e;
@@ -335,7 +337,7 @@ export async function stopRecording(): Promise<void> {
   const hdr = headers();
   teardown();
   if (queue.length) {
-    set({ phase: "error", error: `${queue.length} piece(s) could not be uploaded; the recording is kept on this device until the network is back` });
+    set({ phase: "error", error: i18n.t("recordings.recorder.piecesNotUploaded", { count: queue.length }) });
     stopping = false;
     return;
   }
@@ -346,9 +348,9 @@ export async function stopRecording(): Promise<void> {
     try {
       const res = await fetch(`/api/recordings/${id}/finish`, { method: "POST", credentials: "include",
         headers: { "content-type": "application/json", ...(hdr || {}) }, body: JSON.stringify({ duration_s: duration }) });
-      if (!res.ok) throw new Error(`finish failed (${res.status})`);
+      if (!res.ok) throw new Error(i18n.t("recordings.recorder.finishFailedStatus", { status: res.status }));
     } catch (e2: any) {
-      set({ phase: "error", error: e2?.message || e?.message || "finish failed" });
+      set({ phase: "error", error: e2?.message || e?.message || i18n.t("recordings.recorder.finishFailed") });
       stopping = false;
       return;
     }
@@ -386,7 +388,7 @@ export async function resumeAfterReload(): Promise<boolean> {
     return true;
   } catch {
     teardown();
-    set({ phase: "paused", needsResume: true, error: "tap Resume to continue recording" });
+    set({ phase: "paused", needsResume: true, error: i18n.t("recordings.recorder.tapResume") });
     return false;
   }
 }
@@ -397,6 +399,7 @@ function fmt(s: number): string {
 }
 
 export function RecorderDock() {
+  const { t } = useTranslation();
   const [s, setS] = useState<RecorderState>(state);
 
   useEffect(() => subscribeRecorder(setS), []);
@@ -443,36 +446,36 @@ export function RecorderDock() {
             ? <Circle className="w-3 h-3 fill-emerald-400 text-emerald-400" />
             : <Circle className={cn("w-3 h-3", live ? "fill-red-500 text-red-500 animate-pulse" : "fill-amber-400 text-amber-400")} />}
         <div className="min-w-0">
-          <div className="font-medium truncate max-w-[12rem]">{s.title || "Recording"}</div>
+          <div className="font-medium truncate max-w-[12rem]">{s.title || t("recordings.fallbackTitle")}</div>
           <div className="text-xs text-white/70">
-            {s.phase === "starting" && "starting…"}
-            {(live || s.phase === "paused") && (<>{fmt(s.seconds)}{s.phase === "paused" && " · paused"}{s.pendingUploads > 0 && ` · uploading ${s.pendingUploads}`}</>)}
-            {live && s.micSilent && <span className="block text-amber-300">{s.error || "no sound from the microphone"}</span>}
-            {s.phase === "finishing" && "uploading the last piece…"}
-            {s.phase === "done" && `${fmt(s.seconds)} · transcript is being written; everybody gets a notification`}
+            {s.phase === "starting" && t("recordings.dock.starting")}
+            {(live || s.phase === "paused") && (<>{fmt(s.seconds)}{s.phase === "paused" && ` · ${t("recordings.dock.paused")}`}{s.pendingUploads > 0 && ` · ${t("recordings.dock.uploading", { count: s.pendingUploads })}`}</>)}
+            {live && s.micSilent && <span className="block text-amber-300">{s.error || t("recordings.dock.noSound")}</span>}
+            {s.phase === "finishing" && t("recordings.dock.uploadingLast")}
+            {s.phase === "done" && t("recordings.dock.done", { time: fmt(s.seconds) })}
             {s.phase === "error" && <span className="text-red-300">{s.error}</span>}
           </div>
         </div>
         {(live || s.phase === "paused") && (
           <>
             {s.needsResume
-              ? <button onClick={() => { void resumeAfterReload(); }} className="p-2 rounded-full hover:bg-white/10" title="Resume"><Play className="w-4 h-4" /></button>
+              ? <button onClick={() => { void resumeAfterReload(); }} className="p-2 rounded-full hover:bg-white/10" title={t("recordings.dock.resume")}><Play className="w-4 h-4" /></button>
               : live
-                ? <button onClick={pauseRecording} className="p-2 rounded-full hover:bg-white/10" title="Pause"><Pause className="w-4 h-4" /></button>
-                : <button onClick={resumeRecording} className="p-2 rounded-full hover:bg-white/10" title="Resume"><Play className="w-4 h-4" /></button>}
-            <button onClick={() => { void stopRecording(); }} className="flex items-center gap-1 rounded-full bg-red-500 hover:bg-red-400 text-white px-3 py-1.5 text-xs font-semibold" title="Stop and write the transcript">
-              <Square className="w-3 h-3 fill-current" /> Stop
+                ? <button onClick={pauseRecording} className="p-2 rounded-full hover:bg-white/10" title={t("recordings.dock.pause")}><Pause className="w-4 h-4" /></button>
+                : <button onClick={resumeRecording} className="p-2 rounded-full hover:bg-white/10" title={t("recordings.dock.resume")}><Play className="w-4 h-4" /></button>}
+            <button onClick={() => { void stopRecording(); }} className="flex items-center gap-1 rounded-full bg-red-500 hover:bg-red-400 text-white px-3 py-1.5 text-xs font-semibold" title={t("recordings.dock.stopTitle")}>
+              <Square className="w-3 h-3 fill-current" /> {t("recordings.dock.stop")}
             </button>
           </>
         )}
         {s.phase === "error" && (
           <>
-            {s.recordingId && <button onClick={() => { void stopRecording(); }} className="rounded-full bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs">Retry</button>}
-            <button onClick={cancelRecording} className="p-2 rounded-full hover:bg-white/10" title="Dismiss"><X className="w-4 h-4" /></button>
+            {s.recordingId && <button onClick={() => { void stopRecording(); }} className="rounded-full bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs">{t("recordings.dock.retry")}</button>}
+            <button onClick={cancelRecording} className="p-2 rounded-full hover:bg-white/10" title={t("recordings.dock.dismiss")}><X className="w-4 h-4" /></button>
           </>
         )}
         {s.phase === "done" && (
-          <button onClick={() => set({ phase: "idle", recordingId: null, title: "" })} className="p-2 rounded-full hover:bg-white/10" title="Dismiss"><X className="w-4 h-4" /></button>
+          <button onClick={() => set({ phase: "idle", recordingId: null, title: "" })} className="p-2 rounded-full hover:bg-white/10" title={t("recordings.dock.dismiss")}><X className="w-4 h-4" /></button>
         )}
       </div>
     </div>

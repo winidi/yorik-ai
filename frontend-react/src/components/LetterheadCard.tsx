@@ -10,6 +10,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FileDown, ImagePlus, Loader2, Save, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +19,7 @@ type Letterhead = { id: number; name: string; is_default: boolean; data: Data; l
 type Font = { id: string; label: string; css: string };
 type Kind = "letter" | "invoice" | "quote";
 
-const KINDS: Array<{ id: Kind; label: string }> = [{ id: "letter", label: "Letter" }, { id: "invoice", label: "Invoice" }, { id: "quote", label: "Quote" }];
+const KINDS: Kind[] = ["letter", "invoice", "quote"];
 const ACCENTS = ["#1f3a5f", "#0a7d4f", "#b43c5a", "#6b4fd3", "#c2571a", "#27272a"];
 const SHEET_PX = 794 + 60;     // 210 mm at 96 dpi plus the preview's grey edge
 
@@ -32,6 +33,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const [lh, setLh] = useState<Letterhead | null>(null);
   const [fonts, setFonts] = useState<Font[]>([]);
   const [form, setForm] = useState<Data>({});
@@ -50,9 +52,9 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
       setLh(mine); setFonts(r.fonts); setForm(mine.data); setDirty(false);
     } catch (e: any) {
       // a frontend that is ahead of the running backend: no card, no alarm
-      if (e?.status !== 404) toast(`Couldn't load your letterhead: ${e?.message || e}`, "error");
+      if (e?.status !== 404) toast(t("settings.letterhead.loadFailed", { msg: e?.message || e }), "error");
     }
-  }, [toast]);
+  }, [toast, t]);
   useEffect(() => { load(); }, [load]);
 
   // live preview: what the form says now, a moment after the last keystroke
@@ -85,8 +87,8 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
     try {
       const out = await api.patch<Letterhead>(`/api/letterheads/${lh.id}`, { data: form });
       setLh(out); setForm(out.data); setDirty(false);
-      toast("Letterhead saved", "success");
-    } catch (e: any) { toast(`Couldn't save: ${e?.message || e}`, "error"); }
+      toast(t("settings.letterhead.saved"), "success");
+    } catch (e: any) { toast(t("settings.letterhead.saveFailed", { msg: e?.message || e }), "error"); }
     finally { setBusy(null); }
   }
 
@@ -97,8 +99,8 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
       const fd = new FormData(); fd.append("image", file, file.name);
       const out = await api.postForm<Letterhead>(`/api/letterheads/${lh.id}/logo`, fd);
       setLh(l => l && { ...l, logo_url: out.logo_url });
-      toast("Logo saved", "success");
-    } catch (e: any) { toast(`Couldn't upload: ${e?.message || e}`, "error"); }
+      toast(t("settings.letterhead.logoSaved"), "success");
+    } catch (e: any) { toast(t("settings.letterhead.uploadFailed", { msg: e?.message || e }), "error"); }
     finally { setBusy(null); if (fileRef.current) fileRef.current.value = ""; }
   }
 
@@ -106,7 +108,7 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
     if (!lh) return;
     setBusy("logo");
     try { const out = await api.delete<Letterhead>(`/api/letterheads/${lh.id}/logo`); setLh(l => l && { ...l, logo_url: out.logo_url }); }
-    catch (e: any) { toast(`Couldn't remove: ${e?.message || e}`, "error"); }
+    catch (e: any) { toast(t("settings.letterhead.removeFailed", { msg: e?.message || e }), "error"); }
     finally { setBusy(null); }
   }
 
@@ -124,43 +126,43 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
 
   return (
     <div className="bg-card border border-border rounded-xl p-5">
-      <h3 className="text-xs font-semibold text-muted-foreground mb-1">Your letterhead</h3>
+      <h3 className="text-xs font-semibold text-muted-foreground mb-1">{t("settings.letterhead.title")}</h3>
       <p className="text-xs text-muted-foreground mb-4">
-        How your letters, invoices and quotes look — always the same, whoever or whatever writes the text. Started from your profile; change what you like.
+        {t("settings.letterhead.intro")}
       </p>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="grid gap-5 content-start">
-          <Section title="Look">
+          <Section title={t("settings.letterhead.look")}>
             <div className="col-span-2 flex flex-wrap items-center gap-2">
               {ACCENTS.map(c => (
-                <button key={c} onClick={() => set("accent", c)} title={c} aria-label={`Accent ${c}`}
+                <button key={c} onClick={() => set("accent", c)} title={c} aria-label={t("settings.letterhead.accent", { color: c })}
                         className={cn("w-7 h-7 rounded-full ring-offset-2 ring-offset-background transition", text("accent").toLowerCase() === c ? "ring-2 ring-foreground scale-110" : "hover:scale-105")}
                         style={{ background: c }} />
               ))}
               <input type="color" value={text("accent") || "#1f3a5f"} onChange={e => set("accent", e.target.value)}
-                     className="w-8 h-8 rounded-full border-0 bg-transparent cursor-pointer" aria-label="Custom accent colour" />
+                     className="w-8 h-8 rounded-full border-0 bg-transparent cursor-pointer" aria-label={t("settings.letterhead.customAccent")} />
             </div>
             <label className="grid gap-1 min-w-0 text-xs text-muted-foreground">
-              Font
+              {t("settings.letterhead.font")}
               <select value={text("font")} onChange={e => set("font", e.target.value)}
                       className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary">
                 {fonts.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
               </select>
             </label>
             <label className="grid gap-1 min-w-0 text-xs text-muted-foreground">
-              Logo position
+              {t("settings.letterhead.logoPosition")}
               <select value={text("logo_place")} onChange={e => set("logo_place", e.target.value)}
                       className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary">
-                <option value="right">Right</option><option value="left">Left</option><option value="center">Centred</option>
+                <option value="right">{t("settings.letterhead.right")}</option><option value="left">{t("settings.letterhead.left")}</option><option value="center">{t("settings.letterhead.centred")}</option>
               </select>
             </label>
             <label className="col-span-2 grid gap-1 min-w-0 text-xs text-muted-foreground">
-              Letter style
+              {t("settings.letterhead.style")}
               <select value={text("style") || "auto"} onChange={e => set("style", e.target.value)}
                       className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary">
-                <option value="auto">Automatic — private letter unless a business name is set</option>
-                <option value="private">Private letter — your name once above the address and under the letter</option>
-                <option value="business">Business letterhead — name at the top and in the footer</option>
+                <option value="auto">{t("settings.letterhead.styleAuto")}</option>
+                <option value="private">{t("settings.letterhead.stylePrivate")}</option>
+                <option value="business">{t("settings.letterhead.styleBusiness")}</option>
               </select>
             </label>
             <div className="col-span-2 flex items-center gap-2">
@@ -168,51 +170,51 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
               {lh.logo_url && <img src={lh.logo_url} alt="" className="h-9 max-w-[120px] object-contain rounded bg-white p-1" />}
               <button onClick={() => fileRef.current?.click()} disabled={busy === "logo"}
                       className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50">
-                {busy === "logo" ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />} {lh.logo_url ? "Change logo" : "Add logo"}
+                {busy === "logo" ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />} {lh.logo_url ? t("settings.letterhead.changeLogo") : t("settings.letterhead.addLogo")}
               </button>
               {lh.logo_url && (
                 <button onClick={removeLogo} disabled={busy === "logo"} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50">
-                  <Trash2 className="w-4 h-4" /> Remove
+                  <Trash2 className="w-4 h-4" /> {t("settings.letterhead.remove")}
                 </button>
               )}
             </div>
           </Section>
 
-          <Section title="Sender">
-            {field("sender_name", "Your name")}
-            {field("business_name", "Business (optional)")}
-            {field("street", "Street and number", true)}
-            {field("postcode", "Postcode")}
-            {field("city", "City")}
-            {field("phone", "Phone")}
-            {field("email", "Email")}
-            {field("website", "Website")}
-            {field("country", "Country code (DE, AT, US …)")}
+          <Section title={t("settings.letterhead.sender")}>
+            {field("sender_name", t("settings.letterhead.fields.senderName"))}
+            {field("business_name", t("settings.letterhead.fields.businessName"))}
+            {field("street", t("settings.letterhead.fields.street"), true)}
+            {field("postcode", t("settings.letterhead.fields.postcode"))}
+            {field("city", t("settings.letterhead.fields.city"))}
+            {field("phone", t("settings.letterhead.fields.phone"))}
+            {field("email", t("settings.letterhead.fields.email"))}
+            {field("website", t("settings.letterhead.fields.website"))}
+            {field("country", t("settings.letterhead.fields.country"))}
           </Section>
 
-          <Section title="Footer: bank and tax">
-            {field("bank_name", "Bank")}
-            {field("iban", "IBAN")}
-            {field("bic", "BIC")}
-            {field("vat_id", "VAT ID")}
-            {field("tax_id", "Tax number")}
-            {field("register", "Register (e.g. Amtsgericht, HRB)")}
+          <Section title={t("settings.letterhead.footer")}>
+            {field("bank_name", t("settings.letterhead.fields.bank"))}
+            {field("iban", t("settings.letterhead.fields.iban"))}
+            {field("bic", t("settings.letterhead.fields.bic"))}
+            {field("vat_id", t("settings.letterhead.fields.vatId"))}
+            {field("tax_id", t("settings.letterhead.fields.taxId"))}
+            {field("register", t("settings.letterhead.fields.register"))}
           </Section>
 
-          <Section title="Standard sentences">
-            {field("closing", "Closing")}
-            {field("signature_name", "Name under the closing")}
+          <Section title={t("settings.letterhead.sentences")}>
+            {field("closing", t("settings.letterhead.fields.closing"))}
+            {field("signature_name", t("settings.letterhead.fields.signatureName"))}
             <label className="grid gap-1 min-w-0 text-xs text-muted-foreground">
-              Payment within (days)
+              {t("settings.letterhead.paymentDays")}
               <input type="number" min={0} max={365} value={Number(form.payment_days ?? 14)} onChange={e => set("payment_days", Number(e.target.value))}
                      className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary" />
             </label>
             <label className="flex items-center gap-2 text-xs text-foreground self-end pb-1.5">
               <input type="checkbox" checked={!!form.small_business} onChange={e => set("small_business", e.target.checked)} />
-              Small business, no VAT charged (in Germany: § 19 UStG)
+              {t("settings.letterhead.smallBusiness")}
             </label>
             <label className="col-span-2 grid gap-1 min-w-0 text-xs text-muted-foreground">
-              Payment sentence — {"{faellig}"} becomes the due date, {"{betrag}"} the amount
+              {t("settings.letterhead.paymentText", { due: "{faellig}", amount: "{betrag}" })}
               <textarea value={text("payment_text")} onChange={e => set("payment_text", e.target.value)} rows={2}
                         className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary resize-y" />
             </label>
@@ -221,27 +223,27 @@ export function LetterheadCard({ toast }: { toast: (text: string, kind?: "info" 
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={save} disabled={!dirty || busy === "save"}
                     className="flex items-center gap-2 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium disabled:opacity-50">
-              {busy === "save" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save letterhead
+              {busy === "save" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {t("settings.letterhead.save")}
             </button>
             <a href={`/api/letterheads/${lh.id}/sample.pdf?kind=${kind}`} target="_blank" rel="noreferrer"
                className={cn("flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted", dirty && "pointer-events-none opacity-50")}
-               title={dirty ? "Save first: the PDF shows the saved letterhead" : "Open a sample PDF"}>
-              <FileDown className="w-4 h-4" /> Sample PDF
+               title={dirty ? t("settings.letterhead.saveFirst") : t("settings.letterhead.openSample")}>
+              <FileDown className="w-4 h-4" /> {t("settings.letterhead.samplePdf")}
             </a>
-            {dirty && <span className="text-xs text-muted-foreground">Not saved yet — the preview already shows it.</span>}
+            {dirty && <span className="text-xs text-muted-foreground">{t("settings.letterhead.notSaved")}</span>}
           </div>
         </div>
 
         <div className="min-w-0">
           <div className="mb-2 flex gap-1">
             {KINDS.map(k => (
-              <button key={k.id} onClick={() => setKind(k.id)}
-                      className={cn("rounded-full px-3 py-1 text-xs font-medium", kind === k.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}>{k.label}</button>
+              <button key={k} onClick={() => setKind(k)}
+                      className={cn("rounded-full px-3 py-1 text-xs font-medium", kind === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}>{t(`settings.letterhead.kinds.${k}`)}</button>
             ))}
           </div>
           <div ref={boxRef} className="rounded-lg overflow-hidden border border-border bg-[#d9d9de] lg:sticky lg:top-4" style={{ height: Math.round(1190 * scale) }}>
             {/* the sample page brings its own styles and no scripts; the frame allows none */}
-            <iframe title="Letterhead preview" sandbox="" srcDoc={html} tabIndex={-1}
+            <iframe title={t("settings.letterhead.preview")} sandbox="" srcDoc={html} tabIndex={-1}
                     style={{ width: SHEET_PX, height: 1190, border: 0, transform: `scale(${scale})`, transformOrigin: "top left", pointerEvents: "none" }} />
           </div>
         </div>

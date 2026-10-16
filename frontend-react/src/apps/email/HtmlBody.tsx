@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   html: string;
@@ -182,6 +183,7 @@ export function HtmlBody({
   html, className = "", fill = false, flow = false,
   messageId, allowImages = false, cidMap,
 }: Props) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(fill ? 0 : 400);
 
@@ -241,7 +243,7 @@ export function HtmlBody({
       //   body iframe stays just as sandboxed as before.
       // NOT allowed: scripts, forms, top-navigation, modals, downloads.
       sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin"
-      title="email body"
+      title={t("email.htmlBody.title")}
       srcDoc={fullSrc}
       className={`w-full border-0 bg-white ${flow ? "" : "rounded-lg"} ${className}`}
       style={fill && !flow ? { height: "100%" } : { height: `${height}px` }}

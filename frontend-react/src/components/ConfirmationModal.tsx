@@ -26,8 +26,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, X, FlaskConical, AlertCircle, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import i18n, { locale } from "@/i18n";
 
 interface PendingAction {
   pending_id: string;
@@ -45,6 +47,7 @@ interface ConfirmResponse {
 }
 
 export function ConfirmationModal() {
+  const { t } = useTranslation();
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [busy, setBusy] = useState<"confirm" | "cancel" | "test" | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -101,11 +104,11 @@ export function ConfirmationModal() {
       setPending(null);
       voiceListenRef.current?.stop();
     } catch (e: any) {
-      setErr(e?.message || "Failed to resolve. Try again or cancel.");
+      setErr(e?.message || t("chat.confirm.failed"));
     } finally {
       setBusy(null);
     }
-  }, [pending]);
+  }, [pending, t]);
 
   // Voice listen window: when a modal opens, briefly listen for ja/nein/passt
   // so a voice user doesn't have to reach for the screen.
@@ -129,7 +132,7 @@ export function ConfirmationModal() {
               <AlertCircle className="w-4 h-4 text-violet-500" />
             </div>
             <div>
-              <div className="text-sm font-semibold">Does this look right?</div>
+              <div className="text-sm font-semibold">{t("chat.pending.looksRight")}</div>
               <div className="text-2xs text-muted-foreground font-mono">
                 {pending.skill}
                 {pending.llm_model && ` · ${pending.llm_model}`}
@@ -138,7 +141,7 @@ export function ConfirmationModal() {
           </div>
           <button
             onClick={() => resolve("cancel")}
-            aria-label="Close"
+            aria-label={t("common.close")}
             className="w-7 h-7 rounded-md hover:bg-muted text-muted-foreground flex items-center justify-center"
             disabled={busy !== null}
           >
@@ -155,7 +158,7 @@ export function ConfirmationModal() {
             </div>
           )}
           <div className="mt-3 text-2xs text-muted-foreground italic">
-            Listening for "ja" / "nein" / "passt" / "abbrechen"…
+            {t("chat.confirm.listening")}
           </div>
         </div>
 
@@ -168,12 +171,12 @@ export function ConfirmationModal() {
               "hover:bg-muted transition inline-flex items-center justify-center gap-1.5",
               busy === "test" && "opacity-60 cursor-wait",
             )}
-            title="Run it, but don't count toward the LLM's success rate"
+            title={t("chat.confirm.testTitle")}
           >
             {busy === "test"
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
               : <FlaskConical className="w-3.5 h-3.5 text-amber-500" />}
-            Just testing
+            {t("chat.pending.justTesting")}
           </button>
           <button
             onClick={() => resolve("cancel")}
@@ -184,7 +187,7 @@ export function ConfirmationModal() {
               busy === "cancel" && "opacity-60 cursor-wait",
             )}
           >
-            {busy === "cancel" ? "Cancelling…" : "Cancel"}
+            {busy === "cancel" ? t("chat.confirm.cancelling") : t("chat.pending.cancel")}
           </button>
           <button
             onClick={() => resolve("confirm")}
@@ -198,7 +201,7 @@ export function ConfirmationModal() {
             {busy === "confirm"
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
               : <CheckCircle2 className="w-3.5 h-3.5" />}
-            Looks good
+            {t("chat.pending.looksGood")}
           </button>
         </footer>
       </div>
@@ -209,7 +212,7 @@ export function ConfirmationModal() {
 // ── Per-skill preview renderers ─────────────────────────────────────
 
 function SkillPreview({ skill, preview }: { skill: string; preview: any }) {
-  if (!preview) return <div className="text-sm text-muted-foreground italic">(no preview available)</div>;
+  if (!preview) return <div className="text-sm text-muted-foreground italic">{i18n.t("chat.confirm.noPreview")}</div>;
 
   if (skill === "add_calendar_event") return <CalendarCreatePreview p={preview} />;
   if (skill === "update_calendar_event") return <CalendarUpdatePreview p={preview} />;
@@ -227,7 +230,7 @@ function fmtDateTime(iso?: string): string {
   if (!iso) return "—";
   try {
     const d = new Date(iso);
-    return d.toLocaleString([], {
+    return d.toLocaleString(locale(), {
       weekday: "short",
       day: "numeric",
       month: "short",
@@ -240,30 +243,32 @@ function fmtDateTime(iso?: string): string {
 }
 
 function CalendarCreatePreview({ p }: { p: any }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-2 text-sm">
-      <Row label="Create event" value={p.title} bold />
-      <Row label="When" value={`${fmtDateTime(p.starts_at)} → ${fmtDateTime(p.ends_at)}`} />
-      {p.person && <Row label="Who" value={p.person} />}
-      {p.notes && <Row label="Notes" value={p.notes} />}
-      {p.all_day && <div className="text-xs text-amber-600">All day</div>}
+      <Row label={t("chat.confirm.createEvent")} value={p.title} bold />
+      <Row label={t("chat.confirm.when")} value={`${fmtDateTime(p.starts_at)} → ${fmtDateTime(p.ends_at)}`} />
+      {p.person && <Row label={t("chat.confirm.who")} value={p.person} />}
+      {p.notes && <Row label={t("chat.confirm.notes")} value={p.notes} />}
+      {p.all_day && <div className="text-xs text-amber-600">{t("chat.confirm.allDay")}</div>}
     </div>
   );
 }
 
 function CalendarUpdatePreview({ p }: { p: any }) {
+  const { t } = useTranslation();
   const fields = ["title", "starts_at", "ends_at", "person", "notes", "all_day"] as const;
   const changed = fields.filter(k => p.before?.[k] !== p.after?.[k]);
   return (
     <div className="space-y-2 text-sm">
-      <Row label="Update event" value={`#${p.event_id}`} bold />
-      {changed.length === 0 && <div className="text-xs text-muted-foreground italic">No changes detected.</div>}
+      <Row label={t("chat.confirm.updateEvent")} value={`#${p.event_id}`} bold />
+      {changed.length === 0 && <div className="text-xs text-muted-foreground italic">{t("chat.confirm.noChanges")}</div>}
       {changed.map(k => {
         const before = k.includes("_at") ? fmtDateTime(p.before[k]) : String(p.before[k] ?? "—");
         const after  = k.includes("_at") ? fmtDateTime(p.after[k])  : String(p.after[k] ?? "—");
         return (
           <div key={k} className="text-xs">
-            <span className="text-muted-foreground capitalize">{k.replace("_", " ")}:</span>{" "}
+            <span className="text-muted-foreground capitalize">{t(`chat.preview.field.${k}`, { defaultValue: k.replace("_", " ") })}:</span>{" "}
             <span className="line-through text-red-500/80">{before}</span>{" → "}
             <span className="font-medium text-emerald-600">{after}</span>
           </div>
@@ -274,9 +279,10 @@ function CalendarUpdatePreview({ p }: { p: any }) {
 }
 
 function CalendarDeletePreview({ p }: { p: any }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-2 text-sm">
-      <Row label="Delete event" value={`#${p.event_id}`} bold />
+      <Row label={t("chat.confirm.deleteEvent")} value={`#${p.event_id}`} bold />
       <div className="p-2 bg-red-500/5 border border-red-500/20 rounded text-xs">
         <div className="font-medium">{p.event?.title}</div>
         <div className="text-muted-foreground">
@@ -285,7 +291,7 @@ function CalendarDeletePreview({ p }: { p: any }) {
         </div>
         {p.event?.notes && <div className="mt-1 text-muted-foreground">{p.event.notes}</div>}
       </div>
-      <div className="text-2xs text-amber-600">This will be deleted permanently.</div>
+      <div className="text-2xs text-amber-600">{t("chat.confirm.permanent")}</div>
     </div>
   );
 }

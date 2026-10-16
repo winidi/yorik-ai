@@ -196,7 +196,7 @@ async def run_briefing(template_id: str, user_id: str, role: str = "admin",
         "template":   t.to_manifest(),
         "sections":   section_results,
         "generated_at": _now_iso(),
-        "summary_line": _summary_line(section_results),
+        "summary_line": _summary_line(section_results, _language_of(user_id)),
     }
 
     if t.synthesize and t.synthesize.get("enabled") and t.synthesize.get("prompt"):
@@ -330,18 +330,26 @@ def _now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
-def _summary_line(sections: list[dict]) -> str:
-    """One-line scannable summary, composed from section payloads.
+def _language_of(user_id: Any) -> str:
+    from backend.messages import language_of
+    return language_of(user_id)
+
+
+def _summary_line(sections: list[dict], lang: str = "en") -> str:
+    """One-line scannable summary, composed from section payloads in the
+    person's language (backend.messages).
 
     Pulls counts straight from the standardised result shapes the
-    new check_* skills return (events / tasks / bills / photos). Order
+    check_* skills return (events / tasks / bills / photos). Order
     chosen so time-bound things come first (events > tasks > bills),
     photos last (informational, not actionable). Empty briefings get
     a friendly fallback so the line is never blank.
-
-    Kept English-only for now to match the rest of the briefing chrome
-    — a localised pass can mirror the dashboard_routes labels later.
     """
+    from backend.messages import tr
+
+    def one_or_many(one: str, many: str, n: int) -> str:
+        return tr(f"briefing.summary.{one if n == 1 else many}", lang, n=n)
+
     parts: list[str] = []
     for s in sections or []:
         if not s.get("ok") or s.get("hidden"):
@@ -349,37 +357,35 @@ def _summary_line(sections: list[dict]) -> str:
         r = s.get("result") or {}
         events = r.get("events")
         if isinstance(events, list) and events:
-            parts.append(f"{len(events)} event{'s' if len(events) != 1 else ''}")
+            parts.append(one_or_many("event", "events", len(events)))
             continue
         tasks = r.get("tasks")
         if isinstance(tasks, list) and tasks:
             open_n = sum(1 for t in tasks if not t.get("done"))
             done_n = len(tasks) - open_n
             if open_n and done_n:
-                parts.append(f"{open_n} open + {done_n} done task{'s' if (open_n+done_n) != 1 else ''}")
+                parts.append(tr("briefing.summary.tasks_mixed", lang, open=open_n, done=done_n))
             elif open_n:
-                parts.append(f"{open_n} task{'s' if open_n != 1 else ''}")
+                parts.append(one_or_many("task_open", "tasks_open", open_n))
             elif done_n:
-                parts.append(f"{done_n} task{'s' if done_n != 1 else ''} done")
+                parts.append(one_or_many("task_done", "tasks_done", done_n))
             continue
         bills = r.get("bills")
         if isinstance(bills, list) and bills:
-            parts.append(f"{len(bills)} bill{'s' if len(bills) != 1 else ''} due")
+            parts.append(one_or_many("bill_due", "bills_due", len(bills)))
             continue
         photos = r.get("photos")
         if isinstance(photos, list) and photos:
-            parts.append(f"{len(photos)} photo{'s' if len(photos) != 1 else ''}")
+            parts.append(one_or_many("photo", "photos", len(photos)))
             continue
         # Email/whatsapp summaries return a `summary` markdown — no
         # count, but presence is signal. Skip if empty.
         if isinstance(r.get("summary"), str) and r["summary"].strip():
-            # We don't have a count for unstructured text; just hint
-            # at activity for the most common section ids.
             sid = (s.get("id") or "").lower()
-            if "email" in sid: parts.append("email digest ready")
-            elif "whatsapp" in sid: parts.append("WhatsApp digest ready")
+            if "email" in sid: parts.append(tr("briefing.summary.email_ready", lang))
+            elif "whatsapp" in sid: parts.append(tr("briefing.summary.whatsapp_ready", lang))
     if not parts:
-        return "Nothing to brief — all clear."
+        return tr("briefing.summary.nothing", lang)
     return ", ".join(parts) + "."
 
 

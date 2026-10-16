@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { PinPad } from "@/components/PinPad";
 import { Loader2, Mail, Lock, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ interface DeviceInfo { known: boolean; first_name?: string; color?: string; avat
 /** A phone that joined by QR knows its person: it asks only for the PIN.
  *  Everyone else (and "Sign in with email instead") gets the form. */
 export function LoginScreen({ onLoggedIn }: Props) {
+  const { t } = useTranslation();
   const [device, setDevice] = useState<DeviceInfo | null>(null);
   const [useForm, setUseForm] = useState(false);
   const [pinBusy, setPinBusy] = useState(false);
@@ -39,7 +41,7 @@ export function LoginScreen({ onLoggedIn }: Props) {
       onLoggedIn();
       return true;
     } catch (e: any) {
-      setPinErr(e?.message || "That PIN isn't right.");
+      setPinErr(e?.message || t("onboarding.login.wrongPin"));
       return false;
     } finally { setPinBusy(false); }
   }
@@ -61,10 +63,10 @@ export function LoginScreen({ onLoggedIn }: Props) {
             ? <img src={device.avatar_url} alt="" className="w-20 h-20 rounded-full object-cover" />
             : <span className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-semibold text-white"
                     style={{ background: device.color || "#6d5bd0" }}>{(device.first_name || "?")[0].toUpperCase()}</span>}
-          <PinPad prompt={`Hi ${device.first_name}! Your PIN, please`} busy={pinBusy} errorText={pinErr} onSubmit={pinLogin} />
+          <PinPad prompt={t("onboarding.login.pinPrompt", { name: device.first_name })} busy={pinBusy} errorText={pinErr} onSubmit={pinLogin} />
           <div className="flex gap-4 text-sm text-muted-foreground">
-            <button onClick={() => setUseForm(true)} className="underline hover:text-foreground">Sign in with email instead</button>
-            <button onClick={forgetDevice} className="underline hover:text-foreground">Not {device.first_name}?</button>
+            <button onClick={() => setUseForm(true)} className="underline hover:text-foreground">{t("onboarding.login.useEmail")}</button>
+            <button onClick={forgetDevice} className="underline hover:text-foreground">{t("onboarding.login.notYou", { name: device.first_name })}</button>
           </div>
         </div>
       </ScrollPage>
@@ -75,6 +77,7 @@ export function LoginScreen({ onLoggedIn }: Props) {
 }
 
 function PasswordLogin({ onLoggedIn }: Props) {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -89,7 +92,7 @@ function PasswordLogin({ onLoggedIn }: Props) {
       await api.post("/api/auth/login", { email: email.trim(), password });
       onLoggedIn();
     } catch (e: any) {
-      setErr(e.message || "Sign-in failed");
+      setErr(e.message || t("onboarding.login.failed"));
     } finally {
       setBusy(false);
     }
@@ -104,9 +107,9 @@ function PasswordLogin({ onLoggedIn }: Props) {
             alt="Yorik"
             className="w-16 h-16 object-contain mb-4 dark:invert"
           />
-          <div className="text-2xl font-semibold">Welcome back</div>
+          <div className="text-2xl font-semibold">{t("onboarding.login.welcomeBack")}</div>
           <div className="text-sm text-muted-foreground mt-1">
-            Sign in to your Yorik
+            {t("onboarding.login.subtitle")}
           </div>
         </div>
 
@@ -115,7 +118,7 @@ function PasswordLogin({ onLoggedIn }: Props) {
           className="bg-card border border-border rounded-2xl shadow-xl p-6 space-y-3"
         >
           <label className="block">
-            <div className="text-xs text-muted-foreground mb-1">Email</div>
+            <div className="text-xs text-muted-foreground mb-1">{t("onboarding.fields.email")}</div>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <input
@@ -124,7 +127,7 @@ function PasswordLogin({ onLoggedIn }: Props) {
                 autoComplete="username"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder={t("onboarding.fields.emailPlaceholder")}
                 className="w-full h-10 pl-9 pr-3 rounded-md bg-muted/60 text-sm focus:outline-none focus:bg-muted focus:ring-2 focus:ring-ring/30 transition"
                 required
               />
@@ -132,7 +135,7 @@ function PasswordLogin({ onLoggedIn }: Props) {
           </label>
 
           <label className="block">
-            <div className="text-xs text-muted-foreground mb-1">Password</div>
+            <div className="text-xs text-muted-foreground mb-1">{t("onboarding.fields.password")}</div>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <input
@@ -164,12 +167,12 @@ function PasswordLogin({ onLoggedIn }: Props) {
                 : "bg-muted text-muted-foreground cursor-not-allowed",
             )}
           >
-            {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Signing in…</> : "Sign in"}
+            {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> {t("onboarding.login.signingIn")}</> : t("onboarding.login.signIn")}
           </button>
         </form>
 
         <div className="text-xs text-muted-foreground text-center mt-6">
-          Local-first · your data stays on this machine
+          {t("onboarding.login.footer")}
         </div>
       </div>
       <style>{`

@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Loader2, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/AuthGate";
 import { PersonAvatar } from "@/components/PersonAvatar";
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 type Look = { color: string; avatar_url: string | null; palette: string[] };
 
 export function ProfileLookCard({ toast }: { toast: (text: string, kind?: "info" | "success" | "error") => void }) {
+  const { t } = useTranslation();
   const auth = useAuth();
   const name = (auth.user as any)?.name || "";
   const [look, setLook] = useState<Look | null>(null);
@@ -23,8 +25,8 @@ export function ProfileLookCard({ toast }: { toast: (text: string, kind?: "info"
 
   const load = useCallback(async () => {
     try { setLook(await api.get<Look>("/api/profile/look")); }
-    catch (e: any) { toast(`Couldn't load your look: ${e.message}`, "error"); }
-  }, [toast]);
+    catch (e: any) { toast(t("settings.look.loadFailed", { msg: e.message }), "error"); }
+  }, [toast, t]);
   useEffect(() => { load(); }, [load]);
 
   async function setColor(color: string) {
@@ -32,8 +34,8 @@ export function ProfileLookCard({ toast }: { toast: (text: string, kind?: "info"
     try {
       setLook(await api.patch<Look>("/api/profile/look", { color }));
       invalidatePeople();
-      toast("Colour saved", "success");
-    } catch (e: any) { toast(`Couldn't save: ${e?.message || e}`, "error"); }
+      toast(t("settings.look.colourSaved"), "success");
+    } catch (e: any) { toast(t("settings.look.saveFailed", { msg: e?.message || e }), "error"); }
     finally { setBusy(null); }
   }
 
@@ -44,8 +46,8 @@ export function ProfileLookCard({ toast }: { toast: (text: string, kind?: "info"
       form.append("image", file, file.name);
       setLook(await api.postForm<Look>("/api/profile/avatar", form));
       invalidatePeople();
-      toast("Photo saved", "success");
-    } catch (e: any) { toast(`Couldn't upload: ${e?.message || e}`, "error"); }
+      toast(t("settings.look.photoSaved"), "success");
+    } catch (e: any) { toast(t("settings.look.uploadFailed", { msg: e?.message || e }), "error"); }
     finally { setBusy(null); if (fileRef.current) fileRef.current.value = ""; }
   }
 
@@ -54,34 +56,33 @@ export function ProfileLookCard({ toast }: { toast: (text: string, kind?: "info"
     try {
       setLook(await api.delete<Look>("/api/profile/avatar"));
       invalidatePeople();
-      toast("Photo removed", "success");
-    } catch (e: any) { toast(`Couldn't remove: ${e?.message || e}`, "error"); }
+      toast(t("settings.look.photoRemoved"), "success");
+    } catch (e: any) { toast(t("settings.look.removeFailed", { msg: e?.message || e }), "error"); }
     finally { setBusy(null); }
   }
 
   if (!look) return null;
   return (
     <div className="bg-card border border-border rounded-xl p-5">
-      <h3 className="text-xs font-semibold text-muted-foreground mb-3">Your colour and photo</h3>
+      <h3 className="text-xs font-semibold text-muted-foreground mb-3">{t("settings.look.title")}</h3>
       <div className="flex items-start gap-4">
         <PersonAvatar name={name} color={look.color} avatarUrl={look.avatar_url} size={72} className="ring-4 ring-background shadow" />
         <div className="flex-1 min-w-0">
           <p className="text-xs text-muted-foreground">
-            This is how the household sees you: in the calendar, on the task board, on the wall tablet. Your personal
-            calendar takes the same colour.
+            {t("settings.look.intro")}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {look.palette.map(c => (
               <button key={c} onClick={() => setColor(c)} disabled={busy === "color"} title={c}
                       className={cn("w-8 h-8 rounded-full ring-offset-2 ring-offset-background transition",
                                     look.color === c ? "ring-2 ring-foreground scale-110" : "hover:scale-105")}
-                      style={{ background: c }} aria-label={`Colour ${c}`} />
+                      style={{ background: c }} aria-label={t("settings.look.colour", { color: c })} />
             ))}
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground ml-1">
               <input type="color" value={custom || look.color} onChange={e => setCustom(e.target.value)}
                      onBlur={() => custom && custom !== look.color && setColor(custom)}
-                     className="w-8 h-8 rounded-full border-0 bg-transparent cursor-pointer" aria-label="Custom colour" />
-              custom
+                     className="w-8 h-8 rounded-full border-0 bg-transparent cursor-pointer" aria-label={t("settings.look.customColour")} />
+              {t("settings.look.custom")}
             </label>
           </div>
           <div className="mt-3 flex items-center gap-2">
@@ -90,16 +91,16 @@ export function ProfileLookCard({ toast }: { toast: (text: string, kind?: "info"
             <button onClick={() => fileRef.current?.click()} disabled={busy === "photo"}
                     className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50">
               {busy === "photo" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-              {look.avatar_url ? "Change photo" : "Add photo"}
+              {look.avatar_url ? t("settings.look.changePhoto") : t("settings.look.addPhoto")}
             </button>
             {look.avatar_url && (
               <button onClick={removePhoto} disabled={busy === "photo"}
                       className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50">
-                <Trash2 className="w-4 h-4" /> Remove
+                <Trash2 className="w-4 h-4" /> {t("settings.look.remove")}
               </button>
             )}
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Square crop, 256 px, stays on your Yorik box.</p>
+          <p className="mt-2 text-xs text-muted-foreground">{t("settings.look.cropNote")}</p>
         </div>
       </div>
     </div>

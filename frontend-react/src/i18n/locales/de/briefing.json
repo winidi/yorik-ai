@@ -1,0 +1,63 @@
+{
+  "tabs": {
+    "yesterday": "Gestern",
+    "today": "Heute",
+    "tomorrow": "Morgen",
+    "recap": "Rückblick"
+  },
+  "failed": "Briefing fehlgeschlagen",
+  "refreshTitle": "Neu laden (ohne Zwischenspeicher)",
+  "older": "Älter",
+  "newer": "Neuer",
+  "snapshot": "Momentaufnahme",
+  "quiet": {
+    "title": "Ruhiger Tag",
+    "body": "Nichts im Kalender, keine überfälligen Aufgaben, keine fälligen Rechnungen, keine neue E-Mail. Yorik meldet sich von selbst, wenn etwas Neues kommt."
+  },
+  "generatedAt": "Erstellt {{when}}",
+  "sectionError": "Fehler: {{error}}",
+  "empty": {
+    "photos": "Keine Fotos.",
+    "tasks": "Keine Aufgaben.",
+    "bills": "Keine Rechnungen fällig.",
+    "list": "Heute nichts.",
+    "calendar": "Nichts im Kalender.",
+    "markdown": "(leer)"
+  },
+  "freeSlots": "Freie Zeiten",
+  "due": {
+    "today": "heute",
+    "tomorrow": "morgen",
+    "yesterday": "gestern"
+  },
+  "card": {
+    "markPaidFailed": "Als bezahlt markieren ging nicht: {{error}}",
+    "bill": "Rechnung",
+    "amount": "Betrag",
+    "due": "Fällig",
+    "recurring": "Wiederkehrend",
+    "notes": "Notizen",
+    "noSource": "Von Hand eingetragen oder aus Beispieldaten. Keine Quell-E-Mail verknüpft.",
+    "openEmail": "E-Mail öffnen",
+    "markPaid": "Als bezahlt markieren",
+    "open": "öffnen"
+  },
+  "sectionTitle": {
+    "billsWeek": "Rechnungen diese Woche",
+    "calendar": "Kalender",
+    "email": "E-Mail",
+    "emailToday": "E-Mail heute",
+    "inbox": "Posteingang",
+    "photos": "Fotos",
+    "photosToday": "Fotos von heute",
+    "tasksDone": "Erledigte Aufgaben",
+    "tasksDue": "Fällige Aufgaben",
+    "tasksOverdue": "Aufgaben (+ überfällig)",
+    "today": "Heute",
+    "todaySchedule": "Heute im Kalender",
+    "tomorrow": "Morgen",
+    "whatsapp": "WhatsApp",
+    "whatsappToday": "WhatsApp heute",
+    "yesterday": "Gestern"
+  }
+}

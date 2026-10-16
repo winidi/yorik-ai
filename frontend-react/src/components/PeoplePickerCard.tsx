@@ -18,6 +18,7 @@
 
 import { useState } from "react";
 import { Loader2, Check, UserPlus, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 
@@ -46,6 +47,7 @@ interface Props {
 }
 
 export function PeoplePickerCard({ action, onSubmit }: Props) {
+  const { t } = useTranslation();
   // candidateId → assigned name (one of action.missing_names) or null
   const [assignments, setAssignments] = useState<Record<string, string | null>>({});
   const [labeling, setLabeling] = useState<string | null>(null);
@@ -63,7 +65,7 @@ export function PeoplePickerCard({ action, onSubmit }: Props) {
       setAssignments(a => ({ ...a, [candidateId]: name }));
       setLabeledIds(s => new Set(s).add(candidateId));
     } catch (e: any) {
-      setErrors(err => ({ ...err, [candidateId]: e?.message || "Label failed" }));
+      setErrors(err => ({ ...err, [candidateId]: e?.message || t("chat.people.labelFailed") }));
     } finally {
       setLabeling(null);
     }
@@ -131,7 +133,7 @@ export function PeoplePickerCard({ action, onSubmit }: Props) {
     return (
       <div className="mt-2 border border-emerald-500/30 bg-emerald-500/10 rounded-xl p-3 text-xs text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-2 max-w-md">
         <Check className="w-4 h-4 shrink-0" />
-        Re-running photo search with the freshly labeled faces…
+        {t("chat.people.rerunning")}
       </div>
     );
   }
@@ -141,18 +143,18 @@ export function PeoplePickerCard({ action, onSubmit }: Props) {
       <div className="px-3 pt-2.5 pb-2 border-b border-border/60">
         <div className="flex items-center gap-1.5 mb-1">
           <UserPlus className="w-3.5 h-3.5 text-violet-500" />
-          <span className="text-xs font-semibold">Identify the face(s)</span>
+          <span className="text-xs font-semibold">{t("chat.people.title")}</span>
         </div>
         <div className="text-xs text-muted-foreground leading-relaxed">
           {action.missing_names.length === 1 ? (
-            <>Immich doesn't have a face labeled <strong className="text-foreground">{action.missing_names[0]}</strong> yet — tap the right thumbnail below.</>
+            <>{t("chat.people.missingOneA")} <strong className="text-foreground">{action.missing_names[0]}</strong> {t("chat.people.missingOneB")}</>
           ) : (
-            <>Immich doesn't have these labeled yet: <strong className="text-foreground">{action.missing_names.join(", ")}</strong>. Tap a thumbnail and pick the name.</>
+            <>{t("chat.people.missingManyA")} <strong className="text-foreground">{action.missing_names.join(", ")}</strong>{t("chat.people.missingManyB")}</>
           )}
           {action.candidates.some(c => c.name) && (
             <span className="block mt-1 text-2xs">
               <span className="inline-block w-2 h-2 rounded bg-amber-500/80 align-middle mr-1" />
-              Amber tiles are already labeled — tap to use that label instead.
+              {t("chat.people.amberHint")}
             </span>
           )}
         </div>
@@ -197,7 +199,7 @@ export function PeoplePickerCard({ action, onSubmit }: Props) {
                     onClick={() => pickExistingLabel(c.id, c.name!)}
                     disabled={!!labeling || submitted}
                     className="w-full text-2xs py-0.5 px-1.5 rounded bg-amber-500/90 text-white font-medium hover:bg-amber-500 transition truncate"
-                    title={`Use existing label "${c.name}" for this search`}
+                    title={t("chat.people.useExisting", { name: c.name })}
                   >
                     = {c.name}
                   </button>
@@ -221,7 +223,7 @@ export function PeoplePickerCard({ action, onSubmit }: Props) {
                       disabled={!!labeling}
                       className="w-full text-2xs py-0.5 px-1 rounded bg-violet-500/90 text-white font-medium border-0 cursor-pointer truncate"
                     >
-                      <option value="">Label…</option>
+                      <option value="">{t("chat.people.labelPlaceholder")}</option>
                       {action.missing_names.filter(n => !assignedNames.has(n)).map(n => (
                         <option key={n} value={n}>{n}</option>
                       ))}
@@ -247,14 +249,14 @@ export function PeoplePickerCard({ action, onSubmit }: Props) {
       <div className="px-3 py-2 border-t border-border/60 bg-muted/30 flex items-center gap-2">
         <span className="text-2xs text-muted-foreground flex-1">
           {labeledIds.size > 0
-            ? `${labeledIds.size} labeled · click Done to re-run search`
-            : "Pick a face above, or skip if none match"}
+            ? t("chat.people.labeledCount", { count: labeledIds.size })
+            : t("chat.people.pickHint")}
         </span>
         <button
           onClick={() => done(true)}
           className="text-xs px-2 py-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted inline-flex items-center gap-1"
         >
-          <X className="w-3 h-3" /> Skip
+          <X className="w-3 h-3" /> {t("chat.people.skip")}
         </button>
         <button
           onClick={() => done(false)}
@@ -266,7 +268,7 @@ export function PeoplePickerCard({ action, onSubmit }: Props) {
               : "bg-violet-500 hover:bg-violet-600 text-white",
           )}
         >
-          <Check className="w-3 h-3" /> Done
+          <Check className="w-3 h-3" /> {t("chat.people.done")}
         </button>
       </div>
     </div>

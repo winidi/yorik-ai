@@ -6,6 +6,7 @@
  * Backend: backend/member_invites.py.
  */
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ interface Preview { name: string; color: string | null; role: string; palette: s
 type Step = "loading" | "problem" | "name" | "pin" | "confirm" | "phone";
 
 export function JoinScreen() {
+  const { t } = useTranslation();
   const token = new URLSearchParams(window.location.search).get("t") || "";
   const [step, setStep] = useState<Step>("loading");
   const [problem, setProblem] = useState("");
@@ -28,21 +30,21 @@ export function JoinScreen() {
   const [pinError, setPinError] = useState<string | undefined>();
 
   useEffect(() => {
-    if (!token) { setProblem("This link is missing its code. Scan the QR code again."); setStep("problem"); return; }
+    if (!token) { setProblem(t("onboarding.join.missingCode")); setStep("problem"); return; }
     api.get<Preview>(`/api/auth/invite/${encodeURIComponent(token)}`)
       .then(p => { setPreview(p); setName(p.name); setColor(p.color || p.palette[0]); setStep("name"); })
-      .catch(e => { setProblem(e?.message || "This invite can't be opened."); setStep("problem"); });
-  }, [token]);
+      .catch(e => { setProblem(e?.message || t("onboarding.join.cantOpen")); setStep("problem"); });
+  }, [token]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function finish(confirmPin: string) {
-    if (confirmPin !== pin) { setPinError("That didn't match. Pick your 4 digits again."); setPin(""); setStep("pin"); return false; }
+    if (confirmPin !== pin) { setPinError(t("onboarding.join.pinMismatch")); setPin(""); setStep("pin"); return false; }
     setBusy(true);
     try {
       await api.post(`/api/auth/invite/${encodeURIComponent(token)}/accept`, { name: name.trim(), color, pin });
       setStep("phone");
       return true;
     } catch (e: any) {
-      setProblem(e?.message || "Joining didn't work."); setStep("problem");
+      setProblem(e?.message || t("onboarding.join.failed")); setStep("problem");
       return true;
     } finally { setBusy(false); }
   }
@@ -65,30 +67,30 @@ export function JoinScreen() {
               <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
               <p className="text-sm">{problem}</p>
             </div>
-            <a href="/r/home" className="block text-center text-sm text-muted-foreground underline">Open Yorik</a>
+            <a href="/r/home" className="block text-center text-sm text-muted-foreground underline">{t("onboarding.join.openYorik")}</a>
           </div>
         )}
 
         {step === "name" && preview && (
           <div className="space-y-6">
             <div>
-              <h1 className="text-3xl font-semibold leading-tight">Welcome to your family's Yorik</h1>
-              <p className="text-muted-foreground mt-2">Two quick questions and you're in.</p>
+              <h1 className="text-3xl font-semibold leading-tight">{t("onboarding.join.title")}</h1>
+              <p className="text-muted-foreground mt-2">{t("onboarding.join.subtitle")}</p>
             </div>
             <div className="flex justify-center">
               <span className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-semibold text-white"
                     style={{ background: color || "#6d5bd0" }}>{initial}</span>
             </div>
             <label className="block">
-              <span className="text-sm font-medium">What should we call you?</span>
+              <span className="text-sm font-medium">{t("onboarding.join.nameLabel")}</span>
               <input value={name} onChange={e => setName(e.target.value)} maxLength={60} autoComplete="given-name"
                      className="mt-1.5 w-full h-12 px-4 rounded-xl bg-card border border-border text-lg focus:outline-none focus:ring-2 focus:ring-ring/40" />
             </label>
             <div>
-              <span className="text-sm font-medium">Your colour on the family board</span>
+              <span className="text-sm font-medium">{t("onboarding.join.colourLabel")}</span>
               <div className="mt-2 flex flex-wrap gap-3">
                 {preview.palette.map(c => (
-                  <button key={c} onClick={() => setColor(c)} aria-label={`Colour ${c}`}
+                  <button key={c} onClick={() => setColor(c)} aria-label={t("onboarding.join.colourAria", { color: c })}
                           className={cn("w-10 h-10 rounded-full transition", color === c && "ring-4 ring-offset-2 ring-offset-background ring-foreground/60")}
                           style={{ background: c }} />
                 ))}
@@ -96,30 +98,30 @@ export function JoinScreen() {
             </div>
             <button onClick={() => setStep("pin")} disabled={!name.trim()}
                     className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-medium disabled:opacity-50">
-              Next
+              {t("onboarding.join.next")}
             </button>
           </div>
         )}
 
         {step === "pin" && (
           <div className="space-y-4">
-            <p className="text-muted-foreground text-sm text-center">You'll open Yorik with these 4 digits on this phone. No password to remember.</p>
-            <PinPad prompt="Pick 4 digits" errorText={pinError}
+            <p className="text-muted-foreground text-sm text-center">{t("onboarding.join.pinExplain")}</p>
+            <PinPad prompt={t("onboarding.join.pickPin")} errorText={pinError}
                     onSubmit={(p) => { setPin(p); setPinError(undefined); setStep("confirm"); return true; }} />
           </div>
         )}
 
         {step === "confirm" && (
-          <PinPad prompt="Once more, to be sure" busy={busy} onSubmit={finish} onCancel={() => { setPin(""); setStep("pin"); }} />
+          <PinPad prompt={t("onboarding.join.confirmPin")} busy={busy} onSubmit={finish} onCancel={() => { setPin(""); setStep("pin"); }} />
         )}
 
         {step === "phone" && (
           <div className="space-y-6">
             <div>
-              <h1 className="text-3xl font-semibold leading-tight">You're in, {name.trim().split(" ")[0]}!</h1>
-              <p className="text-muted-foreground mt-2">Two last things for this phone.</p>
+              <h1 className="text-3xl font-semibold leading-tight">{t("onboarding.join.youreIn", { name: name.trim().split(" ")[0] })}</h1>
+              <p className="text-muted-foreground mt-2">{t("onboarding.join.lastThings")}</p>
             </div>
-            <PhoneSetup doneLabel="Open Yorik" onDone={() => { window.location.href = "/r/home"; }} />
+            <PhoneSetup doneLabel={t("onboarding.join.openYorik")} onDone={() => { window.location.href = "/r/home"; }} />
           </div>
         )}
       </div>

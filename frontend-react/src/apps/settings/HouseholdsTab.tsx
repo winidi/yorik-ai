@@ -17,9 +17,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { Loader2, Plus, Copy, Trash2, Check, AlertTriangle, KeyRound, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { locale } from "@/i18n";
 
 interface InviteRow {
   token:         string;
@@ -54,6 +56,7 @@ interface Props {
 }
 
 export function HouseholdsTab({ toast }: Props) {
+  const { t } = useTranslation();
   const [tenants, setTenants] = useState<TenantRow[] | null>(null);
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -74,9 +77,9 @@ export function HouseholdsTab({ toast }: Props) {
         return;
       }
       const msg = err instanceof ApiError ? err.message : String(err);
-      toast(`Couldn't load households: ${msg}`, "error");
+      toast(t("settings.households.loadFailed", { msg }), "error");
     }
-  }, [toast]);
+  }, [toast, t]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -87,13 +90,12 @@ export function HouseholdsTab({ toast }: Props) {
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
             <div>
-              <h2 className="font-semibold mb-1">Households unavailable here</h2>
+              <h2 className="font-semibold mb-1">{t("settings.households.unavailableTitle")}</h2>
               <p className="text-sm text-muted-foreground">
                 {unavailable}
               </p>
               <p className="text-sm text-muted-foreground mt-2">
-                Add households from the maintainer's Yorik instance instead —
-                the box that hosts the shared Immich and Paperless.
+                {t("settings.households.unavailableHint")}
               </p>
             </div>
           </div>
@@ -106,19 +108,16 @@ export function HouseholdsTab({ toast }: Props) {
     <div className="max-w-3xl space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold">Hosted families</h2>
+          <h2 className="text-xl font-semibold">{t("settings.households.title")}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Run a separate Yorik for <strong>another</strong> family on this computer
-            (grandparents, friends): their own data, their own sign-ins, sharing only
-            the photo and document services. To add someone to <em>your</em> family,
-            use Household › People instead.
+            {t("settings.households.intro")}
           </p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
           className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:opacity-90 shrink-0"
         >
-          <Plus className="w-4 h-4" /> Add household
+          <Plus className="w-4 h-4" /> {t("settings.households.add")}
         </button>
       </header>
 
@@ -132,11 +131,11 @@ export function HouseholdsTab({ toast }: Props) {
 
       {tenants === null ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground">
-          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading…
+          <Loader2 className="w-5 h-5 animate-spin mr-2" /> {t("settings.households.loading")}
         </div>
       ) : tenants.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          No households yet. Hit “Add household” to invite the first one.
+          {t("settings.households.empty")}
         </div>
       ) : (
         <div className="space-y-2">
@@ -158,9 +157,9 @@ export function HouseholdsTab({ toast }: Props) {
             setShowCreate(false);
             setCreatedInvite(result);
             if (result.unit_started === false || result.unit_warning) {
-              toast(`'${result.tenant_name}' was created, but its Yorik didn't start: ${result.unit_warning || "unknown reason"}. The link won't work until it runs.`, "error");
+              toast(t("settings.households.createdNotStarted", { name: result.tenant_name, reason: result.unit_warning || t("settings.households.unknownReason") }), "error");
             } else {
-              toast(`Family '${result.tenant_name}' created`, "success");
+              toast(t("settings.households.created", { name: result.tenant_name }), "success");
             }
           }}
           toast={toast}
@@ -179,34 +178,35 @@ function InvitePanel({
   onDismiss: () => void;
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const copy = useCallback(() => {
     navigator.clipboard.writeText(created.invite_url).then(
       () => {
         setCopied(true);
-        toast("Invite link copied", "success");
+        toast(t("settings.households.inviteCopied"), "success");
         setTimeout(() => setCopied(false), 2500);
       },
-      () => toast("Couldn't copy link — select it manually", "error"),
+      () => toast(t("settings.households.copyFailed"), "error"),
     );
-  }, [created.invite_url, toast]);
+  }, [created.invite_url, toast, t]);
 
   return (
     <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-5">
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
           <h3 className="font-semibold">
-            Invite link for {created.display_label || created.tenant_name}
+            {t("settings.households.inviteLinkFor", { name: created.display_label || created.tenant_name })}
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            One-time link · expires {new Date(created.expires_at).toLocaleString()}
+            {t("settings.households.oneTimeExpires", { when: new Date(created.expires_at).toLocaleString(locale()) })}
           </p>
         </div>
         <button
           onClick={onDismiss}
           className="text-xs text-muted-foreground hover:text-foreground"
         >
-          Dismiss
+          {t("settings.households.dismiss")}
         </button>
       </div>
       <div className="flex items-stretch gap-2">
@@ -226,12 +226,11 @@ function InvitePanel({
           )}
         >
           {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-          {copied ? "Copied" : "Copy"}
+          {copied ? t("settings.households.copied") : t("settings.households.copy")}
         </button>
       </div>
       <p className="text-xs text-muted-foreground mt-3">
-        Send this link to the household admin. They'll set their password on
-        the first open. The link becomes invalid after they use it once.
+        {t("settings.households.inviteHint")}
       </p>
     </div>
   );
@@ -246,6 +245,7 @@ function TenantCard({
   onRefresh: () => void;
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [confirmDrop, setConfirmDrop] = useState(false);
   const [resetEmail, setResetEmail] = useState<string | null>(null);
@@ -265,34 +265,34 @@ function TenantCard({
       setResetEmail(null);
     } catch (err: any) {
       const msg = err instanceof ApiError ? err.message : String(err);
-      toast(`Reset failed: ${msg}`, "error");
+      toast(t("settings.households.resetFailed", { msg }), "error");
     } finally {
       setBusy(false);
     }
-  }, [tenant.name, toast]);
+  }, [tenant.name, toast, t]);
 
   const drop = useCallback(async () => {
     setBusy(true);
     try {
       await api.delete(`/api/tenants/${encodeURIComponent(tenant.name)}`);
-      toast(`Household '${tenant.name}' dropped`, "success");
+      toast(t("settings.households.dropped", { name: tenant.name }), "success");
       onRefresh();
     } catch (err: any) {
       const msg = err instanceof ApiError ? err.message : String(err);
-      toast(`Drop failed: ${msg}`, "error");
+      toast(t("settings.households.dropFailed", { msg }), "error");
     } finally {
       setBusy(false);
       setConfirmDrop(false);
     }
-  }, [tenant.name, toast, onRefresh]);
+  }, [tenant.name, toast, onRefresh, t]);
 
   const inviteStatus = tenant.invite
     ? tenant.invite.consumed_at
-      ? { label: "Active", color: "text-emerald-600 bg-emerald-500/10" }
+      ? { label: t("settings.households.status.active"), color: "text-emerald-600 bg-emerald-500/10" }
       : new Date(tenant.invite.expires_at) < new Date()
-        ? { label: "Invite expired", color: "text-muted-foreground bg-muted/40" }
-        : { label: "Invite pending", color: "text-amber-600 bg-amber-500/10" }
-    : { label: "No invite", color: "text-muted-foreground bg-muted/40" };
+        ? { label: t("settings.households.status.expired"), color: "text-muted-foreground bg-muted/40" }
+        : { label: t("settings.households.status.pending"), color: "text-amber-600 bg-amber-500/10" }
+    : { label: t("settings.households.status.none"), color: "text-muted-foreground bg-muted/40" };
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -308,23 +308,23 @@ function TenantCard({
           </div>
           <div className="text-xs text-muted-foreground mt-1 font-mono">
             yorik_tenant_{tenant.name}
-            {tenant.port != null && <> · port {tenant.port}</>}
+            {tenant.port != null && <> · {t("settings.households.port", { port: tenant.port })}</>}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setResetEmail("")}
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1"
-            title="Issue password reset link"
+            title={t("settings.households.resetTitle")}
           >
-            <KeyRound className="w-3.5 h-3.5" /> Reset
+            <KeyRound className="w-3.5 h-3.5" /> {t("settings.households.reset")}
           </button>
           <button
             onClick={() => setConfirmDrop(true)}
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-red-500 px-2 py-1"
-            title="Drop this household"
+            title={t("settings.households.dropTitle")}
           >
-            <Trash2 className="w-3.5 h-3.5" /> Drop
+            <Trash2 className="w-3.5 h-3.5" /> {t("settings.households.drop")}
           </button>
         </div>
       </div>
@@ -364,6 +364,7 @@ function DropTenantConfirmModal({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
   const [typed, setTyped] = useState("");
   const matches = typed.trim() === tenant.name;
   return createPortal(
@@ -376,26 +377,24 @@ function DropTenantConfirmModal({
         onClick={(e) => e.stopPropagation()}
       >
         <header className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <div className="font-semibold text-red-600 dark:text-red-400">Drop household</div>
+          <div className="font-semibold text-red-600 dark:text-red-400">{t("settings.households.dropModal.title")}</div>
           <button
             onClick={onClose}
             disabled={busy}
             className="p-1.5 hover:bg-muted rounded-md text-muted-foreground disabled:opacity-50"
-            aria-label="Close"
+            aria-label={t("settings.households.dropModal.close")}
           >
             <X className="w-4 h-4" />
           </button>
         </header>
         <div className="p-5 space-y-4">
           <div className="text-sm leading-relaxed">
-            This <strong className="text-red-600 dark:text-red-400">permanently deletes</strong> the Postgres database{" "}
-            <span className="font-mono text-xs">yorik_tenant_{tenant.name}</span>,
-            tears down the systemd unit, and removes the household's Paperless + Immich users.
-            Backups already taken are kept; live data is gone.
+            {t("settings.households.dropModal.warnBefore")}<strong className="text-red-600 dark:text-red-400">{t("settings.households.dropModal.warnStrong")}</strong>{t("settings.households.dropModal.warnDb")}{" "}
+            <span className="font-mono text-xs">yorik_tenant_{tenant.name}</span>{t("settings.households.dropModal.warnAfter")}
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1.5">
-              Type <span className="font-mono text-foreground">{tenant.name}</span> to confirm:
+              {t("settings.households.dropModal.typeBefore")}<span className="font-mono text-foreground">{tenant.name}</span>{t("settings.households.dropModal.typeAfter")}
             </label>
             <input
               autoFocus
@@ -412,7 +411,7 @@ function DropTenantConfirmModal({
               disabled={busy}
               className="flex-1 px-3 py-2 rounded-md text-sm font-medium border border-border hover:bg-muted transition disabled:opacity-50"
             >
-              Cancel
+              {t("settings.households.cancel")}
             </button>
             <button
               onClick={onConfirm}
@@ -425,7 +424,7 @@ function DropTenantConfirmModal({
                 busy && "opacity-50 cursor-wait",
               )}
             >
-              {busy ? "Dropping…" : "Drop household"}
+              {busy ? t("settings.households.dropModal.dropping") : t("settings.households.dropModal.confirm")}
             </button>
           </div>
         </div>
@@ -444,6 +443,7 @@ function ResetEmailPrompt({
   onCancel: () => void;
   onSubmit: (email: string) => void;
 }) {
+  const { t } = useTranslation();
   const [email, setEmail] = useState(initial);
   return (
     <form
@@ -455,7 +455,7 @@ function ResetEmailPrompt({
         type="email"
         value={email}
         onChange={e => setEmail(e.target.value)}
-        placeholder={`Admin email in ${tenant.name}`}
+        placeholder={t("settings.households.adminEmailIn", { name: tenant.name })}
         className="flex-1 px-3 py-1.5 text-sm bg-background border border-border rounded-md"
         required
       />
@@ -464,7 +464,7 @@ function ResetEmailPrompt({
         disabled={busy || !email.trim()}
         className="text-xs font-medium px-2.5 py-1.5 rounded bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
       >
-        {busy ? "Issuing…" : "Issue reset"}
+        {busy ? t("settings.households.issuing") : t("settings.households.issueReset")}
       </button>
       <button
         type="button"
@@ -472,7 +472,7 @@ function ResetEmailPrompt({
         disabled={busy}
         className="text-xs px-2.5 py-1.5 rounded border border-border hover:bg-muted"
       >
-        Cancel
+        {t("settings.households.cancel")}
       </button>
     </form>
   );
@@ -485,17 +485,18 @@ function ResetInvitePanel({
   onDismiss: () => void;
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const copy = useCallback(() => {
     navigator.clipboard.writeText(result.invite_url).then(
-      () => { setCopied(true); toast("Reset link copied", "success"); setTimeout(() => setCopied(false), 2500); },
-      () => toast("Couldn't copy — select manually", "error"),
+      () => { setCopied(true); toast(t("settings.households.resetLinkCopied"), "success"); setTimeout(() => setCopied(false), 2500); },
+      () => toast(t("settings.households.copyFailedShort"), "error"),
     );
-  }, [result.invite_url, toast]);
+  }, [result.invite_url, toast, t]);
   return (
     <div className="mt-3 pt-3 border-t border-amber-500/30 bg-amber-500/5 rounded-md p-3">
       <div className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-2">
-        Reset link for {result.target_email} · expires {new Date(result.expires_at).toLocaleString()}
+        {t("settings.households.resetLinkFor", { email: result.target_email, when: new Date(result.expires_at).toLocaleString(locale()) })}
       </div>
       <div className="flex items-stretch gap-2">
         <input
@@ -514,13 +515,13 @@ function ResetInvitePanel({
           )}
         >
           {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-          {copied ? "Copied" : "Copy"}
+          {copied ? t("settings.households.copied") : t("settings.households.copy")}
         </button>
         <button
           onClick={onDismiss}
           className="text-xs px-2 py-1.5 text-muted-foreground hover:text-foreground"
         >
-          Dismiss
+          {t("settings.households.dismiss")}
         </button>
       </div>
     </div>
@@ -536,6 +537,7 @@ function CreateHouseholdModal({
   onCreated: (r: CreateResponse) => void;
   toast: (text: string, kind?: "info" | "success" | "error") => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [displayLabel, setDisplayLabel] = useState("");
   const [expiresHours, setExpiresHours] = useState(168);
@@ -545,7 +547,7 @@ function CreateHouseholdModal({
     e.preventDefault();
     const slug = name.trim().toLowerCase();
     if (!/^[a-z][a-z0-9_]{0,23}$/.test(slug)) {
-      toast("Name must be lowercase letters + digits + underscore (≤24 chars, starting with a letter)", "error");
+      toast(t("settings.households.create.nameRule"), "error");
       return;
     }
     setBusy(true);
@@ -558,61 +560,61 @@ function CreateHouseholdModal({
       onCreated(r);
     } catch (err: any) {
       const msg = err instanceof ApiError ? err.message : String(err);
-      toast(`Create failed: ${msg}`, "error");
+      toast(t("settings.households.create.failed", { msg }), "error");
     } finally {
       setBusy(false);
     }
-  }, [name, displayLabel, expiresHours, onCreated, toast]);
+  }, [name, displayLabel, expiresHours, onCreated, toast, t]);
 
   return (
     <div className="fixed inset-0 bg-black/40 z-[800] flex items-center justify-center p-4">
       <div className="bg-card rounded-xl border border-border shadow-xl max-w-md w-full max-h-full overflow-y-auto">
         <form onSubmit={submit}>
           <div className="px-5 py-4 border-b border-border">
-            <h3 className="font-semibold">Add household</h3>
+            <h3 className="font-semibold">{t("settings.households.add")}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Creates an isolated Yorik instance + invite link.
+              {t("settings.households.create.intro")}
             </p>
           </div>
           <div className="px-5 py-4 space-y-4">
             <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">Slug</span>
+              <span className="text-xs font-medium text-muted-foreground">{t("settings.households.create.slug")}</span>
               <input
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder="e.g. mom, parents, alex"
+                placeholder={t("settings.households.create.slugPlaceholder")}
                 className="mt-1 w-full px-3 py-2 text-sm bg-background border border-border rounded-lg font-mono"
                 autoFocus
                 required
               />
               <span className="block text-xs text-muted-foreground mt-1">
-                Becomes <code>yorik_tenant_{name || "<slug>"}</code> in Postgres. Cannot be changed later.
+                {t("settings.households.create.slugHintBefore")}<code>yorik_tenant_{name || "<slug>"}</code>{t("settings.households.create.slugHintAfter")}
               </span>
             </label>
             <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">Display label</span>
+              <span className="text-xs font-medium text-muted-foreground">{t("settings.households.create.label")}</span>
               <input
                 value={displayLabel}
                 onChange={e => setDisplayLabel(e.target.value)}
-                placeholder="Mom, Parents, Alex's family"
+                placeholder={t("settings.households.create.labelPlaceholder")}
                 className="mt-1 w-full px-3 py-2 text-sm bg-background border border-border rounded-lg"
               />
               <span className="block text-xs text-muted-foreground mt-1">
-                Shown to the household on their setup page. Optional.
+                {t("settings.households.create.labelHint")}
               </span>
             </label>
             <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">Invite expires after</span>
+              <span className="text-xs font-medium text-muted-foreground">{t("settings.households.create.expires")}</span>
               <select
                 value={expiresHours}
                 onChange={e => setExpiresHours(Number(e.target.value))}
                 className="mt-1 w-full px-3 py-2 text-sm bg-background border border-border rounded-lg"
               >
-                <option value={24}>24 hours</option>
-                <option value={72}>3 days</option>
-                <option value={168}>7 days</option>
-                <option value={336}>14 days</option>
-                <option value={720}>30 days</option>
+                <option value={24}>{t("settings.households.create.hours", { count: 24 })}</option>
+                <option value={72}>{t("settings.households.create.days", { count: 3 })}</option>
+                <option value={168}>{t("settings.households.create.days", { count: 7 })}</option>
+                <option value={336}>{t("settings.households.create.days", { count: 14 })}</option>
+                <option value={720}>{t("settings.households.create.days", { count: 30 })}</option>
               </select>
             </label>
           </div>
@@ -623,7 +625,7 @@ function CreateHouseholdModal({
               disabled={busy}
               className="px-3 py-1.5 text-sm rounded-lg border border-border hover:bg-muted disabled:opacity-50"
             >
-              Cancel
+              {t("settings.households.cancel")}
             </button>
             <button
               type="submit"
@@ -631,7 +633,7 @@ function CreateHouseholdModal({
               className="px-3 py-1.5 text-sm rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-2"
             >
               {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {busy ? "Creating…" : "Create + invite"}
+              {busy ? t("settings.households.create.creating") : t("settings.households.create.submit")}
             </button>
           </div>
         </form>

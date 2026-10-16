@@ -12,6 +12,8 @@ import { useEffect, useRef, useState } from "react";
 import { Mail, MessageSquare, Calendar, FileText, Loader2, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { useTranslation } from "react-i18next";
+import { locale } from "@/i18n";
 
 interface PersonData {
   identifier: string;
@@ -97,10 +99,11 @@ export function PersonHover({ identifier, children }: Props) {
 /** "Save as contact" / "Confirm as contact" — the one step from a mail
  *  or a chat to a contact. Yorik never creates it by itself. */
 function SaveAsContact({ data, onDone }: { data: PersonData; onDone: () => void }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const c = data.contact;
   if (c && c.status !== "pending") {
-    return <div className="text-2xs text-muted-foreground mt-1.5">In your contacts{c.display_name && c.display_name !== data.primary_name ? ` as ${c.display_name}` : ""}</div>;
+    return <div className="text-2xs text-muted-foreground mt-1.5">{c.display_name && c.display_name !== data.primary_name ? t("contacts.person.inContactsAs", { name: c.display_name }) : t("contacts.person.inContacts")}</div>;
   }
   if (!data.channel) return null;
   async function run() {
@@ -122,13 +125,14 @@ function SaveAsContact({ data, onDone }: { data: PersonData; onDone: () => void 
   return (
     <button type="button" onClick={run} disabled={busy}
       className="mt-2 text-xs px-2 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-50">
-      {busy ? "…" : c ? "Confirm as contact" : "Save as contact"}
+      {busy ? "…" : c ? t("contacts.person.confirmAsContact") : t("contacts.person.saveAsContact")}
     </button>
   );
 }
 
 
 function PersonContent({ identifier }: { identifier: string }) {
+  const { t } = useTranslation();
   const [data, setData] = useState<PersonData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -136,14 +140,14 @@ function PersonContent({ identifier }: { identifier: string }) {
     let cancelled = false;
     api.get<PersonData>(`/api/people/${encodeURIComponent(identifier)}`)
       .then(d => { if (!cancelled) setData(d); })
-      .catch(e => { if (!cancelled) setError(e.message || "failed"); });
+      .catch(e => { if (!cancelled) setError(e.message || t("contacts.person.failed")); });
     return () => { cancelled = true; };
-  }, [identifier]);
+  }, [identifier, t]);
 
   if (error) return <div className="p-4 text-sm text-destructive">{error}</div>;
   if (!data) return (
     <div className="p-4 flex items-center gap-2 text-sm text-muted-foreground">
-      <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+      <Loader2 className="w-4 h-4 animate-spin" /> {t("contacts.person.loading")}
     </div>
   );
 
@@ -163,14 +167,14 @@ function PersonContent({ identifier }: { identifier: string }) {
         )}
         {data.names_used.length > 1 && (
           <div className="text-2xs text-muted-foreground mt-1.5">
-            also known as: {data.names_used.filter(n => n !== data.primary_name).join(" · ")}
+            {t("contacts.person.alsoKnownAs", { names: data.names_used.filter(n => n !== data.primary_name).join(" · ") })}
           </div>
         )}
         <SaveAsContact data={data} onDone={() => { setData(null); api.get<PersonData>(`/api/people/${encodeURIComponent(identifier)}`).then(setData).catch(() => {}); }} />
       </div>
 
       {data.feed.length > 0 && (
-        <Section title="Recent contact">
+        <Section title={t("contacts.person.recentContact")}>
           {data.feed.map((f, i) => {
             const Icon = f.kind === "email" ? Mail
                         : f.kind === "wa" ? MessageSquare
@@ -191,7 +195,7 @@ function PersonContent({ identifier }: { identifier: string }) {
       )}
 
       {data.documents.length > 0 && (
-        <Section title={`Documents · ${data.documents.length}`}>
+        <Section title={t("contacts.person.documents", { count: data.documents.length })}>
           {data.documents.map((d, i) => (
             <a
               key={i}
@@ -210,7 +214,7 @@ function PersonContent({ identifier }: { identifier: string }) {
       )}
 
       {data.events_recent.length > 0 && (
-        <Section title="Calendar">
+        <Section title={t("contacts.person.calendar")}>
           {data.events_recent.map(ev => (
             <div key={ev.id} className="flex items-start gap-2 py-1 text-xs">
               <Calendar className="w-3.5 h-3.5 shrink-0 mt-0.5 text-violet-500" />
@@ -232,7 +236,7 @@ function PersonContent({ identifier }: { identifier: string }) {
             className="flex-1 text-center py-1.5 rounded bg-primary/10 text-primary hover:bg-primary/20"
           >
             <Mail className="w-3 h-3 inline mr-1" />
-            New email
+            {t("contacts.person.newEmail")}
           </a>
         )}
         {data.wa_chats[0] && (
@@ -241,7 +245,7 @@ function PersonContent({ identifier }: { identifier: string }) {
             className="flex-1 text-center py-1.5 rounded bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
           >
             <MessageSquare className="w-3 h-3 inline mr-1" />
-            Open WA
+            {t("contacts.person.openWa")}
           </a>
         )}
       </div>
@@ -266,17 +270,17 @@ function formatWhen(ts?: number): string {
   if (isNaN(d.getTime())) return "";
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   }
   if (d.getFullYear() === now.getFullYear()) {
-    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+    return d.toLocaleDateString(locale(), { month: "short", day: "numeric" });
   }
-  return d.toLocaleDateString([], { year: "2-digit", month: "short" });
+  return d.toLocaleDateString(locale(), { year: "2-digit", month: "short" });
 }
 
 function shortDate(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString([], { month: "short", day: "numeric", year: "2-digit" }) +
-    " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString(locale(), { month: "short", day: "numeric", year: "2-digit" }) +
+    " " + d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 }

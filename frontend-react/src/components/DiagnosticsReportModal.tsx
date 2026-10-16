@@ -43,11 +43,11 @@ export function DiagnosticsReportModal({ conversationId, messageIdx, trigger, re
         setQuestion(d.payload?.question?.text || "");
         setNoteText(d.payload?.feedback?.note || "");
       } catch (e: any) {
-        if (alive) setErr(e?.message || "Could not prepare the report.");
+        if (alive) setErr(e?.message || t("settings.diagnostics.prepareFailed"));
       }
     })();
     return () => { alive = false; };
-  }, [conversationId, messageIdx, trigger, reason, note]);
+  }, [conversationId, messageIdx, trigger, reason, note, t]);
 
   const replaced = draft?.scrub_summary?.replaced || {};
   const replacedText = Object.entries(replaced).filter(([, n]) => n > 0).map(([k, n]) => `${n} ${k}`).join(", ");
@@ -61,7 +61,7 @@ export function DiagnosticsReportModal({ conversationId, messageIdx, trigger, re
       await api.post(`/api/diagnostics/reports/${draft.id}/send`, { question, note: noteText });
       setDone("sent");
     } catch (e: any) {
-      setErr(e?.message || "Could not send.");
+      setErr(e?.message || t("settings.diagnostics.sendFailed"));
     } finally { setBusy(false); }
   }
 
@@ -82,7 +82,7 @@ export function DiagnosticsReportModal({ conversationId, messageIdx, trigger, re
               {t("chat.diag.intro", "This is exactly what would leave this computer. People, addresses and chats are already numbers; the words of your mails and messages are never included. You can shorten the text; nothing is sent until you click Send.")}
             </div>
           </div>
-          <button onClick={() => (done === "sent" ? onClose(true) : decline())} className="p-1 rounded hover:bg-muted" title="Close"><X className="w-4 h-4" /></button>
+          <button onClick={() => (done === "sent" ? onClose(true) : decline())} className="p-1 rounded hover:bg-muted" title={t("common.close", "Close")}><X className="w-4 h-4" /></button>
         </div>
         <div className="px-5 pb-4 overflow-y-auto space-y-3 flex-1 min-h-0">
           {!draft && !err && <div className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> {t("chat.diag.preparing", "Preparing the report …")}</div>}

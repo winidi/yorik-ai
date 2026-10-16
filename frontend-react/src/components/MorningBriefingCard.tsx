@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { Calendar, FileText, CheckSquare, Mail, ArrowRight, Loader2, X, Check, ExternalLink, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -80,6 +81,7 @@ interface Digest {
 }
 
 export function MorningBriefingCard() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [data, setData] = useState<Digest | null>(null);
   const [loading, setLoading] = useState(true);
@@ -295,7 +297,7 @@ export function MorningBriefingCard() {
               setOpenBill(null);
               await refresh();
             } catch (e: any) {
-              toast("Failed to mark paid: " + (e?.message || e));
+              toast(t("briefing.card.markPaidFailed", { error: e?.message || e }));
             }
           }}
           onOpenEmail={openBill.email_message_id
@@ -313,6 +315,7 @@ function BillDetailModal({ bill, onClose, onPaid, onOpenEmail }: {
   onPaid: () => void;
   onOpenEmail?: () => void;
 }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   return createPortal(
     <div
@@ -330,22 +333,22 @@ function BillDetailModal({ bill, onClose, onPaid, onOpenEmail }: {
             </div>
             <div className="min-w-0">
               <div className="font-semibold leading-tight truncate" title={bill.name}>{bill.name}</div>
-              <div className="text-2xs text-muted-foreground mt-0.5">Bill</div>
+              <div className="text-2xs text-muted-foreground mt-0.5">{t("briefing.card.bill")}</div>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition" aria-label="Close">
+          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition" aria-label={t("common.close")}>
             <X className="w-4 h-4" />
           </button>
         </header>
 
         <div className="p-5 space-y-3 text-sm">
-          <DetailRow label="Amount" value={`${bill.amount.toFixed(2)} ${bill.currency}`} valueClassName="text-base font-semibold tabular-nums" />
-          <DetailRow label="Due" value={bill.due_date} />
-          {bill.recurring && <DetailRow label="Recurring" value={bill.recurring} />}
-          {bill.notes && <DetailRow label="Notes" value={bill.notes} />}
+          <DetailRow label={t("briefing.card.amount")} value={`${bill.amount.toFixed(2)} ${bill.currency}`} valueClassName="text-base font-semibold tabular-nums" />
+          <DetailRow label={t("briefing.card.due")} value={bill.due_date} />
+          {bill.recurring && <DetailRow label={t("briefing.card.recurring")} value={bill.recurring} />}
+          {bill.notes && <DetailRow label={t("briefing.card.notes")} value={bill.notes} />}
           {!bill.email_message_id && !bill.notes && (
             <div className="text-xs text-muted-foreground italic pt-1">
-              Manually added or from seed data. No source email linked.
+              {t("briefing.card.noSource")}
             </div>
           )}
         </div>
@@ -357,7 +360,7 @@ function BillDetailModal({ bill, onClose, onPaid, onOpenEmail }: {
               className="px-3 py-1.5 rounded-md text-sm font-medium hover:bg-muted transition inline-flex items-center gap-1.5"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              Open email
+              {t("briefing.card.openEmail")}
             </button>
           )}
           <button
@@ -366,7 +369,7 @@ function BillDetailModal({ bill, onClose, onPaid, onOpenEmail }: {
             className="px-3 py-1.5 rounded-md bg-emerald-500/90 hover:bg-emerald-500 text-white text-sm font-medium transition inline-flex items-center gap-1.5 disabled:opacity-50"
           >
             {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-            Mark paid
+            {t("briefing.card.markPaid")}
           </button>
         </footer>
       </div>
@@ -395,6 +398,7 @@ function BriefingSection({
   onAll?: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="bg-card/60 border border-border/60 rounded-xl p-3">
       <div className="flex items-center justify-between mb-2">
@@ -407,7 +411,7 @@ function BriefingSection({
             onClick={onAll}
             className="text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-0.5"
           >
-            open <ArrowRight className="w-3 h-3" />
+            {t("briefing.card.open")} <ArrowRight className="w-3 h-3" />
           </button>
         )}
       </div>

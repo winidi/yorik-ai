@@ -16,6 +16,7 @@
  */
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
@@ -38,9 +39,10 @@ const CONFIDENCE_TINT: Record<string, string> = {
   low:    "bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/20",
 };
 
+// Suggestion type → catalogue key (resolved with t() at render time).
 const TYPE_LABEL: Record<string, string> = {
-  draft_reply:          "Reply",
-  propose_meeting_slot: "Meeting",
+  draft_reply:          "email.suggestions.type.reply",
+  propose_meeting_slot: "email.suggestions.type.meeting",
 };
 
 export function SuggestionPanel({
@@ -52,6 +54,7 @@ export function SuggestionPanel({
   sourceId: number;
   onAfterAccept?: () => void;
 }) {
+  const { t } = useTranslation();
   const listApi = useApi<{ items: Suggestion[] }>(
     `/api/suggestions?source_kind=${sourceKind}&source_id=${sourceId}`,
     [sourceKind, sourceId],
@@ -64,7 +67,7 @@ export function SuggestionPanel({
   return (
     <div className="mt-4 space-y-2">
       <div className="text-xs text-muted-foreground font-medium">
-        Yorik suggests
+        {t("email.suggestions.title")}
       </div>
       {items.map((s) => (
         <SuggestionCard
@@ -87,13 +90,14 @@ function SuggestionCard({
   suggestion: Suggestion;
   onAfterAction: () => void;
 }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState<"" | "accept" | "dismiss">("");
   const [error, setError] = useState<string | null>(null);
   const [edited, setEdited] = useState<Record<string, any> | null>(null);
   const [editing, setEditing] = useState(false);
 
   const tint = CONFIDENCE_TINT[suggestion.confidence] || CONFIDENCE_TINT.medium;
-  const label = TYPE_LABEL[suggestion.type] || suggestion.type;
+  const label = TYPE_LABEL[suggestion.type] ? t(TYPE_LABEL[suggestion.type]) : suggestion.type;
   const payload = edited ?? suggestion.payload;
 
   async function accept() {
@@ -104,7 +108,7 @@ function SuggestionCard({
       await api.post(`/api/suggestions/${suggestion.id}/accept`, body);
       onAfterAction();
     } catch (e: any) {
-      setError(e?.message || "Accept failed");
+      setError(e?.message || t("email.suggestions.acceptFailed"));
     } finally {
       setBusy("");
     }
@@ -117,7 +121,7 @@ function SuggestionCard({
       await api.post(`/api/suggestions/${suggestion.id}/dismiss`, {});
       onAfterAction();
     } catch (e: any) {
-      setError(e?.message || "Dismiss failed");
+      setError(e?.message || t("email.suggestions.dismissFailed"));
     } finally {
       setBusy("");
     }
@@ -130,7 +134,7 @@ function SuggestionCard({
           {label}
         </span>
         <span className="text-xs text-muted-foreground capitalize">
-          {suggestion.confidence}
+          {t(`email.suggestions.confidence.${suggestion.confidence}`, { defaultValue: suggestion.confidence })}
         </span>
         {suggestion.reason && (
           <span className="text-xs text-muted-foreground truncate flex-1" title={suggestion.reason}>
@@ -174,21 +178,21 @@ function SuggestionCard({
           disabled={!!busy}
           className="text-xs px-3 py-1 rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
         >
-          {busy === "accept" ? "Accepting…" : edited ? "Accept edited" : "Accept"}
+          {busy === "accept" ? t("email.suggestions.accepting") : edited ? t("email.suggestions.acceptEdited") : t("email.suggestions.accept")}
         </button>
         <button
           onClick={() => setEditing((v) => !v)}
           disabled={!!busy}
           className="text-xs px-3 py-1 rounded bg-muted hover:bg-muted/70 text-foreground disabled:opacity-50"
         >
-          {editing ? "Done editing" : "Edit"}
+          {editing ? t("email.suggestions.doneEditing") : t("email.suggestions.edit")}
         </button>
         <button
           onClick={dismiss}
           disabled={!!busy}
           className="text-xs px-3 py-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-50"
         >
-          {busy === "dismiss" ? "…" : "Dismiss"}
+          {busy === "dismiss" ? "…" : t("email.suggestions.dismiss")}
         </button>
       </div>
     </div>
@@ -204,6 +208,7 @@ function DraftReplyPreview({
   editing: boolean;
   onEdit: (body: string) => void;
 }) {
+  const { t } = useTranslation();
   const body = (payload?.body as string) || "";
   if (editing) {
     return (
@@ -217,7 +222,7 @@ function DraftReplyPreview({
   }
   return (
     <div className="text-sm whitespace-pre-wrap leading-relaxed bg-muted/30 rounded p-2 max-h-48 overflow-y-auto">
-      {body || "(empty draft)"}
+      {body || t("email.suggestions.emptyDraft")}
     </div>
   );
 }
@@ -231,6 +236,7 @@ function MeetingSlotPreview({
   editing: boolean;
   onEdit: (fields: Record<string, any>) => void;
 }) {
+  const { t } = useTranslation();
   const title = (payload?.title as string) || "";
   const start = (payload?.starts_at as string) || "";
   const end = (payload?.ends_at as string) || "";
@@ -241,7 +247,7 @@ function MeetingSlotPreview({
         <input
           value={title}
           onChange={(e) => onEdit({ title: e.target.value })}
-          placeholder="Title"
+          placeholder={t("email.suggestions.titlePlaceholder")}
           className="w-full px-2 py-1 rounded border border-border bg-background"
         />
         <div className="flex gap-2">
@@ -261,7 +267,7 @@ function MeetingSlotPreview({
         <input
           value={location}
           onChange={(e) => onEdit({ location: e.target.value })}
-          placeholder="Location (optional)"
+          placeholder={t("email.suggestions.locationPlaceholder")}
           className="w-full px-2 py-1 rounded border border-border bg-background"
         />
       </div>
@@ -269,7 +275,7 @@ function MeetingSlotPreview({
   }
   return (
     <div className="text-sm">
-      <div className="font-medium">{title || "(untitled)"}</div>
+      <div className="font-medium">{title || t("email.suggestions.untitled")}</div>
       <div className="text-muted-foreground">
         {start} → {end}
         {location && <span> · {location}</span>}

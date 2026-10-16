@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Check, ChevronRight, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ interface Step { id: string; title: string; hint: string; done: boolean; action:
 interface List { steps: Step[]; done: number; total: number; hidden: boolean }
 
 export function SetupChecklist() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [list, setList] = useState<List | null>(null);
   const [modal, setModal] = useState<"invite" | "phone" | null>(null);
@@ -50,10 +52,10 @@ export function SetupChecklist() {
     <section className="mb-8 bg-card border border-border rounded-2xl p-5" data-tour="checklist">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-          <h2 className="text-lg font-semibold">Set up Yorik</h2>
-          <p className="text-sm text-muted-foreground">{list.done} of {list.total} done. Take your time; this list waits.</p>
+          <h2 className="text-lg font-semibold">{t("settings.checklist.title")}</h2>
+          <p className="text-sm text-muted-foreground">{t("settings.checklist.progress", { done: list.done, total: list.total })}</p>
         </div>
-        <button onClick={hide} className="text-muted-foreground hover:text-foreground p-1" title="Hide this list" aria-label="Hide this list">
+        <button onClick={hide} className="text-muted-foreground hover:text-foreground p-1" title={t("settings.checklist.hide")} aria-label={t("settings.checklist.hide")}>
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -90,7 +92,7 @@ export function SetupChecklist() {
       {modal === "phone" && (
         <div className="fixed inset-0 z-[850] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setModal(null)}>
           <div className="w-full max-w-md bg-background border border-border rounded-2xl shadow-2xl p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-xl font-semibold mb-4">Yorik on your phone</h2>
+            <h2 className="text-xl font-semibold mb-4">{t("settings.startHere.phoneTitle")}</h2>
             <PhoneSetup onDone={() => { setModal(null); load(); }} />
           </div>
         </div>

@@ -11,7 +11,8 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { applyLanguage } from "@/i18n";
+import { useTranslation } from "react-i18next";
+import i18n, { applyLanguage } from "@/i18n";
 import { setHouseholdCurrency } from "@/i18n/format";
 import { Loader2, Sparkles } from "lucide-react";
 import { api, registerSessionExpiredHandler as api_registerSessionExpiredHandler } from "@/lib/api";
@@ -42,6 +43,7 @@ export function useAuth(): AuthContextValue {
 }
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const [state, setState] = useState<AuthMe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +54,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       setState(me);
       setError(null);
     } catch (e: any) {
-      setError(e.message || "Auth check failed");
+      setError(e.message || i18n.t("onboarding.gate.authFailed"));
     } finally {
       setLoading(false);
     }
@@ -183,7 +185,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (error && !state) {
     return (
       <FullPageMessage
-        title="Can't reach Yorik"
+        title={t("onboarding.gate.unreachable")}
         body={
           <>
             <p className="text-muted-foreground">{error}</p>
@@ -191,7 +193,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
               onClick={refresh}
               className="mt-4 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium"
             >
-              Retry
+              {t("onboarding.gate.retry")}
             </button>
           </>
         }
