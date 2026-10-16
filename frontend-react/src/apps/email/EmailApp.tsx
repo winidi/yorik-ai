@@ -2385,7 +2385,6 @@ function Reader({
               listens for. */}
           <AskYorikButton message={messageRow} detail={m} onReply={onReply} />
         </div>
-        <ToolbarBtn icon={MoreVertical} label="More" onClick={() => {}} />
       </div>
 
       {/* Header strip: sender + subject, shrink-0 so it doesn't get squeezed.

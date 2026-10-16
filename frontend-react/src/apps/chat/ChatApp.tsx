@@ -210,8 +210,6 @@ export function ChatApp() {
         <MobileTopBar
           title={headerTitle}
           onMenuClick={() => tri.setLeftOpen(true)}
-          onContextClick={() => tri.setRightOpen(true)}
-          contextLabel="Context"
         />
         {(activeId || draftConversation) ? (
           <Thread
@@ -1235,7 +1233,7 @@ function Thread({
         <div className="max-w-3xl mx-auto w-full relative">
           {dragOver && (
             <div className="text-xs text-amber-700 dark:text-amber-400 text-center mb-2 flex items-center justify-center gap-1.5">
-              <Upload className="w-3.5 h-3.5" /> Drop here — .vcf, .pdf, image, or .ics
+              <Upload className="w-3.5 h-3.5" /> Drop here — .vcf, .pdf or an image
             </div>
           )}
           {uploadToast && (
@@ -1336,7 +1334,7 @@ function Thread({
             <input
               ref={fileInputRef}
               type="file"
-              accept=".vcf,.pdf,.docx,.txt,.md,.ics,image/*"
+              accept=".vcf,.pdf,.docx,.txt,.md,image/*"
               className="hidden"
               onChange={e => {
                 const f = e.target.files?.[0];
