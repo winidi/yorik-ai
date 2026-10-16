@@ -18,6 +18,8 @@ prompts keep working unchanged.
 """
 from __future__ import annotations
 
+import re
+
 from typing import Any, Optional
 
 
@@ -50,13 +52,32 @@ async def execute(
     if src in ("household", "auto"):
         household_rows = await _query_household(query, role, limit, ctx=ctx)
 
-    if src in ("contacts", "auto"):
+    # "meine Mama", "der Vermieter": a relation word, not a name. The
+    # relation field is free text in whatever language the person typed
+    # ("landlord", "Mama (Mutter)"), so the word is widened to its
+    # synonyms in German and English before the name search runs. One
+    # contact carrying the relation wins outright; several fall through
+    # to the usual picker (live test 2026-10-16: "Vermieter" never found
+    # the contact tagged "landlord", "meiner Mama" asked which Mama).
+    relation_rows: list[dict[str, Any]] = []
+    if query and src in ("contacts", "auto") and _looks_relational(query):
+        relation_rows = _by_relation(query, ctx)
+
+    if src in ("contacts", "auto") and len(relation_rows) == 1:
+        contact_rows = relation_rows
+        contact_payload = {"contacts": contact_rows,
+                           "_llm_hint": f"Matched by relation: {relation_rows[0].get('display_name')!r} is the "
+                                        f"contact whose relation says {relation_rows[0].get('relation')!r}."}
+    elif src in ("contacts", "auto"):
         contact_payload = await _query_contacts(
             query=query, kind=kind, status=status,
             channel_kind=channel_kind, channel_value=channel_value,
             limit=limit, ctx=ctx,
         )
         contact_rows = contact_payload.get("contacts") or []
+        if relation_rows:
+            seen = {c.get("id") for c in relation_rows}
+            contact_rows = relation_rows + [c for c in contact_rows if c.get("id") not in seen]
 
     # Genitive-s retry — if the original query found nothing AND has a
     # token plausibly stripped of a possessive 's' or German genitive
@@ -145,6 +166,66 @@ async def execute(
         "source":      src,
         "_llm_hint":   "\n\n".join(parts) if parts else None,
     }
+
+
+_RELATION_SYNONYMS: list[set[str]] = [
+    {"mother", "mom", "mum", "mama", "mutter", "mutti"},
+    {"father", "dad", "papa", "vater", "vati"},
+    {"landlord", "vermieter", "vermieterin", "hausverwaltung"},
+    {"tenant", "mieter", "mieterin"},
+    {"dentist", "zahnarzt", "zahnärztin"},
+    {"doctor", "arzt", "ärztin", "hausarzt", "hausärztin"},
+    {"friend", "freund", "freundin", "kumpel"},
+    {"brother", "bruder"}, {"sister", "schwester"},
+    {"grandma", "grandmother", "oma", "großmutter", "grossmutter"},
+    {"grandpa", "grandfather", "opa", "großvater", "grossvater"},
+    {"uncle", "onkel"}, {"aunt", "tante"}, {"cousin", "cousine"},
+    {"neighbor", "neighbour", "nachbar", "nachbarin"},
+    {"boss", "chef", "chefin"}, {"colleague", "kollege", "kollegin"},
+    {"client", "customer", "kunde", "kundin"}, {"vendor", "anbieter"},
+    {"plumber", "klempner"}, {"electrician", "elektriker"},
+    {"accountant", "steuerberater", "steuerberaterin"},
+    {"lawyer", "anwalt", "anwältin"},
+]
+
+
+def _relation_synonyms(query: str) -> set[str]:
+    words = [w for w in re.split(r"[\s,;]+", (query or "").lower()) if w]
+    out: set[str] = set()
+    for w in words:
+        if w not in _RELATIONAL_WORDS:
+            continue
+        out.add(w)
+        for group in _RELATION_SYNONYMS:
+            if w in group:
+                out |= group
+    return out
+
+
+def _by_relation(query: str, ctx) -> list[dict[str, Any]]:
+    """Contacts whose relation field names this role, newest contact
+    first, each read as the person (visibility rules apply)."""
+    syn = _relation_synonyms(query)
+    if not syn:
+        return []
+    from backend.database import get_conn
+    from backend import contacts as _contacts_mod
+    clauses = " OR ".join(["LOWER(COALESCE(relation,'')) LIKE ?"] * len(syn))
+    params = [f"%{w}%" for w in sorted(syn)]
+    with get_conn() as conn:
+        ids = [r["id"] for r in conn.execute(
+            f"SELECT id FROM contacts WHERE status = 'active' AND merged_into_id IS NULL AND ({clauses}) "
+            "ORDER BY last_interaction_at DESC NULLS LAST, id LIMIT 10", params).fetchall()]
+    rows: list[dict[str, Any]] = []
+    for cid in ids:
+        try:
+            c = _contacts_mod.get(int(cid), role=(getattr(ctx, "role", None) or "member"),
+                                 user_id=getattr(ctx, "user_id", None))
+        except Exception:  # noqa: BLE001
+            c = None
+        if c:
+            rows.append(c)
+    return rows
 
 
 _RELATIONAL_WORDS = {
