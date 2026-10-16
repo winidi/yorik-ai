@@ -1168,6 +1168,7 @@ function MobileDayEventList({
   onAdd: () => void;
 }) {
   const { t } = useTranslation();
+  const visualOf = useEventVisualFn();
   if (events.length === 0) {
     return (
       <button
@@ -1183,7 +1184,6 @@ function MobileDayEventList({
     if (!!a.all_day !== !!b.all_day) return a.all_day ? -1 : 1;
     return (a.starts_at || "").localeCompare(b.starts_at || "");
   });
-  const visualOf = useEventVisualFn();
   return (
     <div className="space-y-1.5">
       {sorted.map(e => {
@@ -3416,6 +3416,9 @@ function EventBlock({
 }) {
   const { t } = useTranslation();
   const HOUR_PX = useContext(HourPxContext);
+  // Hooks before the early return: a block that is clipped away on one
+  // render and drawn on the next must call the same hooks both times.
+  const visualOf = useEventVisualFn();
   // Clip the block to the visible window so an event starting at 5am
   // doesn't get drawn at negative top.
   const visStart = Math.max(startMin, GRID_START_HOUR * 60);
@@ -3426,7 +3429,6 @@ function EventBlock({
   const height = Math.max(22, (visEnd - visStart) * (HOUR_PX / 60));
   const widthPct = 100 / columnCount;
   const leftPct  = column * widthPct;
-  const visualOf = useEventVisualFn();
   const vis = visualOf(event, !!highlighted);
 
   return (
@@ -3493,10 +3495,10 @@ function AllDayStrip({
   onEventClick: (e: CalendarEvent) => void;
 }) {
   const { t } = useTranslation();
+  const visualOf = useEventVisualFn();
   // Only render the strip if at least one day has an all-day event.
   const anyAllDay = days.some(d => (eventsByDay.get(isoDate(d)) || []).some(e => e.all_day));
   if (!anyAllDay) return null;
-  const visualOf = useEventVisualFn();
   return (
     <div className="flex border-b border-border bg-muted/20 shrink-0">
       <div className="w-14 shrink-0 text-2xs text-muted-foreground text-right pr-2 pt-1.5 font-medium">
