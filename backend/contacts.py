@@ -306,6 +306,31 @@ def is_transactional_email(email: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def is_whatsapp_stranger(contact: Dict[str, Any]) -> bool:
+    """A contact the WhatsApp sync created from a group, never written
+    with directly: findable, but never a first guess (2026-10-16)."""
+    if not contact or contact.get("source") != "wa_sync":
+        return False
+    channels = contact.get("channels") or []
+    if not channels:
+        with conn_ctx() as conn:
+            channels = [dict(r) for r in conn.execute(
+                "SELECT kind, value FROM contact_channels WHERE contact_id = ?", (int(contact["id"]),)).fetchall()]
+    if any(ch.get("kind") != "whatsapp" for ch in channels):
+        return False
+    jids = [ch.get("value") for ch in channels if ch.get("kind") == "whatsapp" and ch.get("value")]
+    if not jids:
+        return False
+    with conn_ctx() as conn:
+        for jid in jids:
+            row = conn.execute(
+                "SELECT 1 FROM wa_chats WHERE jid = ? AND COALESCE(is_group, 0) = 0 AND last_message_ts IS NOT NULL LIMIT 1",
+                (jid,)).fetchone()
+            if row:
+                return False
+    return True
+
+
 def find_by_channel(kind: str, value: str) -> Optional[Dict[str, Any]]:
     """Return the contact row whose channel matches (kind, normalised value).
 

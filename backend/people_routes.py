@@ -105,8 +105,21 @@ def get_person(identifier: str, user: dict = Depends(current_user)) -> dict[str,
     # channels. Newest first, cap to 8.
     feed = _compose_feed(emails, wa_messages, events, limit=8)
 
+    # Is there a contact for this address? The card offers "save as
+    # contact" when not, "confirm" when it is only pending (2026-10-16).
+    contact = None
+    try:
+        from . import contacts as _contacts
+        ch_kind = "email" if kind == "email" else ("whatsapp" if kind == "wa_jid" else ("phone" if kind == "phone" else None))
+        hit = _contacts.find_by_channel(ch_kind, normalized) if ch_kind else None
+        if hit and not hit.get("merged_into_id"):
+            contact = {"id": int(hit["id"]), "status": hit.get("status"), "display_name": hit.get("display_name")}
+    except Exception:  # noqa: BLE001
+        contact = None
     return {
         "identifier":    identifier,
+        "contact":       contact,
+        "channel":       {"kind": ch_kind, "value": normalized} if ch_kind else None,
         "primary_name":  primary_name,
         "primary_email": primary_email,
         "primary_phone": primary_phone,

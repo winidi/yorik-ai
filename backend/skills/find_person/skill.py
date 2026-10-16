@@ -111,7 +111,40 @@ async def execute(
             "contact_id": c.get("id"),
         })
 
+    # Group-only WhatsApp strangers come last and say so.
+    try:
+        from backend import contacts as _cm
+        for r in results:
+            if r.get("source") != "contacts" or not r.get("contact_id"):
+                continue
+            # the result row's "source" says "contacts"; the contact's own
+            # source (wa_sync, manual, …) sits on the stored row
+            full = _cm.get(int(r["contact_id"]), include_children=True)
+            if full and _cm.is_whatsapp_stranger(full):
+                r["whatsapp_stranger"] = True
+        results.sort(key=lambda r: 1 if r.get("whatsapp_stranger") else 0)
+    except Exception:  # noqa: BLE001
+        pass
+
     ambiguous = len(results) > 1 and bool(query)
+
+    # Two of the hits are one WhatsApp account (LID and number): say so
+    # once and leave a merge proposal in Contacts; never merge here.
+    twin_note = None
+    try:
+        from backend import contact_twins as _twins
+        ids = [r.get("contact_id") for r in results if r.get("source") == "contacts"]
+        pairs = _twins.twins_among(str(getattr(ctx, "user_id", "") or ""), [i for i in ids if i])
+        if pairs:
+            _twins.propose_twins(str(getattr(ctx, "user_id", "") or ""))
+            names = {int(r["contact_id"]): r.get("display_name") for r in results if r.get("source") == "contacts"}
+            a, b = pairs[0]
+            twin_note = (f"NOTE: {names.get(a)!r} (id={a}) and {names.get(b)!r} (id={b}) are the same WhatsApp "
+                         "account according to WhatsApp; a merge proposal now waits in Contacts. Treat them as "
+                         "one person: use the id with the phone number, and tell the user in one short sentence "
+                         "that Yorik found duplicate entries and they can merge them in Contacts.")
+    except Exception:  # noqa: BLE001
+        twin_note = None
 
     # Compose the routing hint. When find_contact already built a
     # detailed hint (single match w/ postal info, or ambiguous w/
@@ -159,6 +192,8 @@ async def execute(
         # Inherit find_contact's rich hint when it spoke up.
         parts.append(contact_payload["_llm_hint"])
 
+    if twin_note:
+        parts.append(twin_note)
     return {
         "results":     results,
         "count":       len(results),

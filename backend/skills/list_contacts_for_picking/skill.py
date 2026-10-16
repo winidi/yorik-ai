@@ -174,7 +174,7 @@ def _fetch_padding_contacts(
     """Top recently-used visible contacts not in `exclude`. Used to pad
     a thin ranked_picks list up to the 5-row floor."""
     from backend.database import conn_ctx
-    from backend.contacts import _visibility_clause, get as contacts_get
+    from backend.contacts import _visibility_clause, get as contacts_get, is_whatsapp_stranger as _is_stranger
 
     where: list[str] = ["status IN ('active', 'pending')"]
     params: list[Any] = []
@@ -201,7 +201,7 @@ def _fetch_padding_contacts(
         if len(padded) >= limit:
             break
         full = contacts_get(r["id"], role=role, user_id=user_id)
-        if not full or _junk_name(full.get("display_name")):
+        if not full or _junk_name(full.get("display_name")) or _is_stranger(full):
             continue
         channels = full.get("channels") or []
         padded.append({

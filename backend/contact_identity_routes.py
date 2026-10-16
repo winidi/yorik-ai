@@ -43,6 +43,13 @@ class MergeIn(BaseModel):
 @router.get("/proposals")
 def proposals(status: str = "pending", user: Dict[str, Any] = Depends(_current_user())):
     _may_edit(user)
+    # WhatsApp twins (one person, two rows) become proposals here, so the
+    # card shows them whenever Contacts opens; nothing merges by itself.
+    try:
+        from . import contact_twins as _twins
+        _twins.propose_twins(str(user.get("id")))
+    except Exception:  # noqa: BLE001
+        pass
     if status not in ("pending", "accepted", "rejected"):
         raise HTTPException(status_code=400, detail="status must be pending|accepted|rejected")
     return {"proposals": I.list_proposals(status)}
@@ -96,6 +103,14 @@ def merge(body: MergeIn, user: Dict[str, Any] = Depends(_current_user())):
                                              decided_by=str(user.get("id")))}
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+
+
+@router.post("/proposals/scan-whatsapp-twins")
+def scan_whatsapp_twins(user: Dict[str, Any] = Depends(_current_user())) -> Dict[str, Any]:
+    """Turn every LID ↔ number pair of this person's WhatsApp that lives
+    in two contact rows into a merge proposal (backend/contact_twins.py)."""
+    from . import contact_twins as _twins
+    return _twins.propose_twins(str(user.get("id")))
 
 
 @router.post("/proposals/scan-signatures")

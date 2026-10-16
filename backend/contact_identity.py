@@ -419,6 +419,31 @@ def _now() -> str:
 _scan_state: Dict[str, Any] = {"state": "idle", "contacts": 0, "messages": 0, "proposals": 0, "message": ""}
 
 
+def household_numbers() -> set:
+    """The family's own phone numbers (profiles and WhatsApp accounts):
+    they show up in signatures and forwarded mails and are never a reason
+    to merge a stranger with a family member (two wrong proposals on
+    2026-10-05)."""
+    out: set = set()
+    try:
+        with conn_ctx() as c:
+            for r in c.execute("SELECT phone FROM user_profiles WHERE COALESCE(phone, '') <> ''").fetchall():
+                e = to_e164(str(r["phone"] or ""))
+                if e:
+                    out.add(e)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        with conn_ctx() as c:
+            for r in c.execute("SELECT me_jid FROM wa_self_identity").fetchall():
+                e = to_e164(str(r["me_jid"] or "").split(":")[0] + ("@s.whatsapp.net" if "@" not in str(r["me_jid"] or "") else ""))
+                if e:
+                    out.add(e)
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
 def scan_status() -> Dict[str, Any]:
     return dict(_scan_state)
 
@@ -459,6 +484,7 @@ def scan_email_signatures(*, per_sender: int = 3, max_messages: int = 5000) -> D
             for e in signature_phones((r["body_text"] if r else "") or ""):
                 seen_by.setdefault(e, set()).add(cid)
     ignore = {e for e, who in seen_by.items() if len(who) >= 3}
+    ignore |= household_numbers()
     for i, (cid, mid, allow_add) in enumerate(todo, 1):
         _signature_bridge(cid, mid, allow_add, ignore_numbers=ignore, min_occurrences=2)
         if i % 50 == 0:

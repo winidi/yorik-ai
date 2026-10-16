@@ -297,6 +297,14 @@ class PlanEntry:
     matched_via: Optional[str] = None  # 'email:foo@bar' for the user UI
     new_channels: List[Dict[str, Any]] = field(default_factory=list)
     new_addresses: List[Dict[str, Any]] = field(default_factory=list)
+    # The person's decisions in the preview (2026-10-16: Yorik suggests,
+    # the human ticks). `selected` = do this card at all; `use_card_name`
+    # = on a name conflict, take the card's name and add its channels.
+    selected: bool = True
+    use_card_name: bool = False
+    # Other existing contacts the same card matches (a phone on one row,
+    # an email on another): a merge *proposal* between them, never a merge.
+    also_matches: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -324,6 +332,7 @@ def plan_import(cards: List[ParsedCard]) -> ImportPlan:
         existing_id: Optional[int] = None
         existing_name: Optional[str] = None
         matched_via: Optional[str] = None
+        also: List[Dict[str, Any]] = []
 
         for ch in card.channels:
             if ch.kind not in ("email", "phone", "whatsapp"):
@@ -334,11 +343,15 @@ def plan_import(cards: List[ParsedCard]) -> ImportPlan:
                 continue
             normed = norm[1]
             existing = _ident.owner_of(ch.kind, ch.value)
-            if existing:
+            if not existing:
+                continue
+            if existing_id is None:
                 existing_id = int(existing["id"])
                 existing_name = existing.get("display_name")
                 matched_via = f"{ch.kind}:{normed}"
-                break
+            elif int(existing["id"]) != existing_id and all(a["id"] != int(existing["id"]) for a in also):
+                also.append({"id": int(existing["id"]), "display_name": existing.get("display_name"),
+                             "matched_via": f"{ch.kind}:{normed}"})
 
         card_dict = _to_dict(card)
         if existing_id is None:
@@ -354,6 +367,9 @@ def plan_import(cards: List[ParsedCard]) -> ImportPlan:
                 outcome="name_conflict", card=card_dict,
                 existing_id=existing_id, existing_name=existing_name,
                 matched_via=matched_via,
+                new_channels=[asdict(c) for c in _diff_channels(existing_id, card.channels)],
+                new_addresses=[asdict(a) for a in _diff_addresses(existing_id, card.addresses)],
+                also_matches=also,
             ))
             continue
 
@@ -367,6 +383,7 @@ def plan_import(cards: List[ParsedCard]) -> ImportPlan:
             matched_via=matched_via,
             new_channels=[asdict(c) for c in added_channels],
             new_addresses=[asdict(a) for a in added_addresses],
+            also_matches=also,
         ))
     return ImportPlan(entries=entries)
 
@@ -455,14 +472,21 @@ def apply_import(
     result = ApplyResult()
     for entry in plan.entries:
         try:
+            if not entry.selected:
+                result.skipped += 1
+                continue
             if entry.outcome == "new":
                 cid = _create_one(entry.card, target_status, user_id)
                 result.created_ids.append(cid)
-            elif entry.outcome == "merge":
+            elif entry.outcome == "merge" or (entry.outcome == "name_conflict" and entry.use_card_name):
                 _merge_one(entry)
+                if entry.outcome == "name_conflict" and entry.existing_id is not None:
+                    # the person chose the card's name over the stored one
+                    _contacts.update(entry.existing_id, display_name=(entry.card or {}).get("display_name"))
                 if entry.existing_id is not None:
                     result.merged_ids.append(entry.existing_id)
-            else:  # name_conflict
+                _propose_also(entry, user_id)
+            else:  # name_conflict left as it is
                 result.skipped += 1
         except Exception as exc:  # noqa: BLE001
             log.exception(
@@ -520,6 +544,25 @@ def _create_one(card_dict: Dict[str, Any],
     return cid
 
 
+def _propose_also(entry: PlanEntry, user_id: Optional[int]) -> None:
+    """A card that matches two existing contacts (phone on one, email on
+    the other) is the strongest sign they are one person. Still a
+    proposal, never a merge (Dirk 2026-10-16)."""
+    if entry.existing_id is None:
+        return
+    from . import contact_identity as _ident
+    for other in entry.also_matches or []:
+        try:
+            _ident.propose(kind=_ident.PROPOSAL_MERGE, contact_id=int(entry.existing_id),
+                           other_contact_id=int(other["id"]),
+                           reason=(f"the imported card {(entry.card or {}).get('display_name')!r} carries "
+                                   f"{entry.matched_via} and {other.get('matched_via')}"),
+                           evidence={"source": "vcard_import"}, confidence=0.9,
+                           user_id=str(user_id) if user_id is not None else None)
+        except Exception as exc:  # noqa: BLE001
+            log.info("import: proposal for %s skipped: %s", other, exc)
+
+
 def _merge_one(entry: PlanEntry) -> None:
     cid = entry.existing_id
     if cid is None:
@@ -570,5 +613,8 @@ def plan_from_jsonable(blob: Dict[str, Any]) -> ImportPlan:
             matched_via=e.get("matched_via"),
             new_channels=e.get("new_channels") or [],
             new_addresses=e.get("new_addresses") or [],
+            selected=bool(e.get("selected", True)),
+            use_card_name=bool(e.get("use_card_name", False)),
+            also_matches=e.get("also_matches") or [],
         ))
     return ImportPlan(entries=entries)
