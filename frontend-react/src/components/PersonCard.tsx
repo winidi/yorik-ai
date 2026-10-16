@@ -15,6 +15,8 @@ import { api } from "@/lib/api";
 
 interface PersonData {
   identifier: string;
+  contact?: { id: number; status?: string | null; display_name?: string | null } | null;
+  channel?: { kind: string; value: string } | null;
   primary_name: string;
   primary_email?: string | null;
   primary_phone?: string | null;
@@ -92,6 +94,40 @@ export function PersonHover({ identifier, children }: Props) {
   );
 }
 
+/** "Save as contact" / "Confirm as contact" — the one step from a mail
+ *  or a chat to a contact. Yorik never creates it by itself. */
+function SaveAsContact({ data, onDone }: { data: PersonData; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const c = data.contact;
+  if (c && c.status !== "pending") {
+    return <div className="text-2xs text-muted-foreground mt-1.5">In your contacts{c.display_name && c.display_name !== data.primary_name ? ` as ${c.display_name}` : ""}</div>;
+  }
+  if (!data.channel) return null;
+  async function run() {
+    setBusy(true);
+    try {
+      if (c && c.status === "pending") {
+        await api.post(`/api/contacts/${c.id}/promote`, {});
+      } else {
+        const created = await api.post<{ id: number }>("/api/contacts", { display_name: data.primary_name, kind: "person" });
+        await api.post(`/api/contacts/${created.id}/channels`, { kind: data.channel!.kind, value: data.channel!.value });
+      }
+      onDone();
+    } catch (e) {
+      console.error("[person] save as contact failed", e);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button type="button" onClick={run} disabled={busy}
+      className="mt-2 text-xs px-2 py-1 rounded-md border border-border hover:bg-muted disabled:opacity-50">
+      {busy ? "…" : c ? "Confirm as contact" : "Save as contact"}
+    </button>
+  );
+}
+
+
 function PersonContent({ identifier }: { identifier: string }) {
   const [data, setData] = useState<PersonData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -130,6 +166,7 @@ function PersonContent({ identifier }: { identifier: string }) {
             also known as: {data.names_used.filter(n => n !== data.primary_name).join(" · ")}
           </div>
         )}
+        <SaveAsContact data={data} onDone={() => { setData(null); api.get<PersonData>(`/api/people/${encodeURIComponent(identifier)}`).then(setData).catch(() => {}); }} />
       </div>
 
       {data.feed.length > 0 && (

@@ -20,6 +20,9 @@ import { api, ApiError } from "@/lib/api";
 
 type VcardImportPlanEntry = {
   outcome: "new" | "merge" | "name_conflict";
+  selected?: boolean;
+  use_card_name?: boolean;
+  also_matches?: { id: number; display_name: string; matched_via: string }[];
   card: { display_name: string; kind?: string; channels?: { kind: string; value: string }[] };
   existing_id?: number | null;
   existing_name?: string | null;
@@ -195,17 +198,19 @@ export function VcardImportModal({ onClose, onApplied, initialFile, initialText,
               </div>
 
               <div className="max-h-[40vh] overflow-y-auto rounded-lg border border-border divide-y divide-border">
-                {plan.entries.map((e, i) => <PlanEntryRow key={i} entry={e} />)}
+                {plan.entries.map((e, i) => (
+                  <PlanEntryRow key={i} entry={e}
+                    onChange={patch => setPlan(p => p ? { ...p, entries: p.entries.map((x, j) => j === i ? { ...x, ...patch } : x) } : p)} />
+                ))}
               </div>
 
               {plan.summary.name_conflict > 0 && (
                 <div className="flex items-start gap-2 text-xs text-muted-foreground bg-amber-500/[0.06] border border-amber-500/20 rounded-md p-2">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                   <span>
-                    Name conflicts are skipped — the existing contact has a
-                    different display name, so the channels won't be silently
-                    merged. Edit the matching contact manually if you want to
-                    add the new channels.
+                    A name conflict is left alone unless you tick "use the card's
+                    name": then the card's name replaces the stored one and its
+                    channels are added. Nothing merges by itself.
                   </span>
                 </div>
               )}
@@ -300,8 +305,9 @@ function SummaryTile({ icon, label, value }: {
 }
 
 
-function PlanEntryRow({ entry }: { entry: VcardImportPlanEntry }) {
-  const { card, outcome, existing_name, matched_via, new_channels } = entry;
+function PlanEntryRow({ entry, onChange }: { entry: VcardImportPlanEntry; onChange: (patch: Partial<VcardImportPlanEntry>) => void }) {
+  const { card, outcome, existing_name, matched_via, new_channels, also_matches } = entry;
+  const selected = entry.selected !== false;
   const tone =
     outcome === "new" ? "text-emerald-500" :
     outcome === "merge" ? "text-sky-500" : "text-amber-500";
@@ -309,7 +315,9 @@ function PlanEntryRow({ entry }: { entry: VcardImportPlanEntry }) {
     outcome === "new" ? UserPlus :
     outcome === "merge" ? GitMerge : AlertTriangle;
   return (
-    <div className="px-3 py-2 text-xs flex items-start gap-2">
+    <div className={cn("px-3 py-2 text-xs flex items-start gap-2", !selected && "opacity-50")}>
+      <input type="checkbox" checked={selected} onChange={e => onChange({ selected: e.target.checked })}
+             className="mt-0.5 shrink-0" title="Do this card" />
       <Icon className={cn("w-3.5 h-3.5 shrink-0 mt-0.5", tone)} />
       <div className="flex-1 min-w-0">
         <div className="font-medium truncate">{card.display_name}</div>
@@ -329,9 +337,20 @@ function PlanEntryRow({ entry }: { entry: VcardImportPlanEntry }) {
           </div>
         )}
         {outcome === "name_conflict" && (
-          <div className="text-muted-foreground text-xs truncate">
-            Conflicts with existing <span className="font-medium">{existing_name}</span>
-            {matched_via && <> on <code className="text-2xs bg-muted px-1 rounded">{matched_via}</code></>} — skipped
+          <div className="text-muted-foreground text-xs">
+            <div className="truncate">
+              Same {matched_via ? matched_via.split(":")[0] : "channel"} as <span className="font-medium">{existing_name}</span>, different name
+            </div>
+            <label className="flex items-center gap-1.5 mt-1 cursor-pointer">
+              <input type="checkbox" checked={!!entry.use_card_name} disabled={!selected}
+                     onChange={e => onChange({ use_card_name: e.target.checked })} />
+              use the card's name "{card.display_name}" and add its channels
+            </label>
+          </div>
+        )}
+        {also_matches && also_matches.length > 0 && (
+          <div className="text-amber-600 text-xs truncate">
+            also matches {also_matches.map(a => a.display_name).join(", ")} — Yorik will propose a merge, you decide
           </div>
         )}
       </div>
