@@ -15,14 +15,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { MessageCircle, ArrowRight, Send, Check } from "lucide-react";
+import { MessageCircle, ArrowRight, Send, Check, Paperclip } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "@/components/Toast";
 
 export const WA_PREFILL_KEY = (jid: string) => `wa-prefill:${jid}`;
 
-export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNewChat, sentText, onSent }: {
+export interface DraftAttachment { url: string; filename: string; mimetype?: string }
+
+export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNewChat, sentText, onSent, attachment }: {
   chatJid: string; recipient: string; text: string; isNewChat?: boolean;
+  /** A file that goes out with the text (photo, PDF, chat attachment);
+   *  sent through /send-media-ref with the text as caption. */
+  attachment?: DraftAttachment | null;
   /** Set when this draft was already sent (remembered on the message):
    *  the card shows what went out, with no Send button. */
   sentText?: string | null;
@@ -37,10 +42,15 @@ export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNew
 
   async function send() {
     const t = text.trim();
-    if (!t || sending) return;
+    if ((!t && !attachment?.url) || sending) return;
     setSending(true);
     try {
-      await api.post(`/api/whatsapp/chats/${encodeURIComponent(chatJid)}/send`, { text: t });
+      if (attachment?.url) {
+        await api.post(`/api/whatsapp/chats/${encodeURIComponent(chatJid)}/send-media-ref`,
+          { url: attachment.url, filename: attachment.filename, caption: t });
+      } else {
+        await api.post(`/api/whatsapp/chats/${encodeURIComponent(chatJid)}/send`, { text: t });
+      }
       setSent(true);
       onSent?.(t);
     } catch (e: any) {
@@ -73,6 +83,11 @@ export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNew
         rows={Math.min(8, Math.max(2, text.split("\n").length + 1))}
         className="mt-3 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-70"
       />
+      {attachment?.filename && (
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground truncate">
+          <Paperclip className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{attachment.filename}</span>
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap justify-end gap-2">
         {!isNewChat && (
           <button
@@ -89,7 +104,7 @@ export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNew
         ) : (
           <button
             onClick={send}
-            disabled={sending || !text.trim()}
+            disabled={sending || (!text.trim() && !attachment?.url)}
             className="flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium disabled:opacity-50"
           >
             <Send className="w-4 h-4" /> {sending ? tr("chat.whatsapp.sending") : tr("chat.whatsapp.send")}

@@ -162,3 +162,5 @@ Thin wrapper around the existing Immich connector. CLIP-based content
 search means a query like "beach sunset" finds matching photos even
 without tags or captions. `of_person` requires you to have named your
 face clusters in Immich's People page first.
+
+The id of a hit is what prepare_email (photo_ids) and whatsapp_draft (photo_id) take to send that photo.

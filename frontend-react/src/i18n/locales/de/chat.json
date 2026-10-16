@@ -33,6 +33,7 @@
     "useAndOpen": "Diese Adresse nehmen und öffnen",
     "noSubject": "(kein Betreff)",
     "to": "an {{to}}",
+    "replacedPrevious": "Ersetzt den vorherigen Entwurf.",
     "openAndSend": "Öffnen und senden",
     "from": "Von",
     "chooseAccount": "Konto wählen…",

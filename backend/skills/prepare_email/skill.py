@@ -1,5 +1,6 @@
-"""prepare_email — stage an email draft (recipient, subject, body, at
-most one attachment: a chat file or an archive document) for the user to review and send themselves in the Email app.
+"""prepare_email — stage an email draft (recipient, subject, body, any
+number of attachments: chat files, archive documents, photos) for the
+user to review and send themselves in the Email app.
 
 Never calls email_sender.send() and never touches SMTP. Two things
 happen:
@@ -35,6 +36,9 @@ async def execute(
     attachment_id: Optional[int] = None,
     from_email: Optional[str] = None,
     paperless_doc_id: Optional[int] = None,
+    attachment_ids: Optional[list] = None,
+    paperless_doc_ids: Optional[list] = None,
+    photo_ids: Optional[list] = None,
 ) -> dict[str, Any]:
     user_id = getattr(ctx, "user_id", None)
     if not user_id:
@@ -45,33 +49,26 @@ async def execute(
         return {"ok": False, "_llm_hint": f"REJECTED: {to!r} doesn't look like an email address. "
                                           f"Ask the user for a real recipient."}
 
-    # The attachment is optional: "schreib Dirk, dass ich später komme"
-    # has none, and until 2026-09-26 the chat asked for "an empty file".
-    # An archive document comes through the Paperless proxy as the
-    # person themselves, so a document they may not see cannot be sent.
-    attachments: list[dict[str, Any]] = []
-    attachment_filename = ""
+    # Attachments are optional ("schreib Dirk, dass ich später komme"
+    # has none). Any mix of chat files, archive documents and photos;
+    # the singular names stay as aliases for the model. Every file is
+    # looked up as the person (own chat row, own Paperless token, own
+    # Immich key), so a file they may not see cannot be sent.
+    from backend import send_attachments as _sa
+    attachments, problems = _sa.resolve(
+        str(user_id),
+        attachment_ids=list(attachment_ids or []) + ([attachment_id] if attachment_id not in (None, "", 0) else []),
+        paperless_doc_ids=list(paperless_doc_ids or []) + ([paperless_doc_id] if paperless_doc_id not in (None, "", 0) else []),
+        photo_ids=list(photo_ids or []),
+    )
+    if problems:
+        return {"ok": False, "problems": problems,
+                "_llm_hint": "REJECTED: " + " ".join(problems) + " Nothing was staged; fix the ids or ask the user."}
+    # The Composer and the staged draft know only url/filename/mimetype.
+    attachments = [{k: a[k] for k in ("url", "filename", "mimetype")} for a in attachments]
+    attachment_filenames = [a["filename"] for a in attachments]
+    attachment_filename = ", ".join(attachment_filenames)
     row = None
-    if attachment_id not in (None, "", 0):
-        from backend import chat_attachments as A
-        row = A.get(int(attachment_id), str(user_id))
-        if not row:
-            return {"ok": False, "_llm_hint": "REJECTED: there is no attachment with this number for this user. "
-                                              "Ask them to attach or create the file again."}
-        attachment_filename = row["filename"]
-        attachments.append({"url": f"/api/chat/attachments/{row['id']}/raw", "filename": row["filename"],
-                            "mimetype": row["mime_type"] or "application/octet-stream"})
-    elif paperless_doc_id not in (None, "", 0):
-        from backend.paperless_ingest import _fetch_doc, user_creds
-        creds = user_creds(user_id)
-        meta = _fetch_doc(int(paperless_doc_id), creds_override=creds) if creds else None
-        if not meta:
-            return {"ok": False, "_llm_hint": "REJECTED: this archive document is not available to this user. "
-                                              "Search again with search_documents and use a doc_id from there."}
-        attachment_filename = (meta.get("original_file_name") or f"{meta.get('title') or 'Dokument'}.pdf")
-        attachments.append({"url": f"/paperless/api/documents/{int(paperless_doc_id)}/download/",
-                            "filename": attachment_filename,
-                            "mimetype": meta.get("mime_type") or "application/pdf"})
 
     # An address the person never used and did not type gets a card with
     # the closest known addresses (Dirk 2026-09-27); nothing is staged yet.
@@ -130,6 +127,14 @@ async def execute(
         "attachments": attachments,
     }
 
+    # One staged draft per person: a newer one replaces the older. The
+    # card says so, so nobody opens the first card and sends the second
+    # mail (seen live 2026-10-16).
+    from backend.database import get_conn as _gc0
+    with _gc0() as conn:
+        replaced_previous = bool(conn.execute(
+            "SELECT 1 FROM app_settings WHERE key = ?", (f"pending_email_draft_{user_id}",)).fetchone())
+
     # 1. A real card in the chat, not just a sentence — mirrors
     # writing_draft_created's WritingDraftCard for letters/invoices.
     body_preview = (body or "").strip().replace("\n", " ")
@@ -142,6 +147,8 @@ async def execute(
         "subject":             payload["subject"],
         "preview":             body_preview,
         "attachment_filename": attachment_filename,
+        "attachment_filenames": attachment_filenames,
+        "replaced_previous":   replaced_previous,
         "account_id":          account_id,
         "accounts":            [{"id": a["id"], "email": a["email"],
                                  "name": a.get("display_name") or ""} for a in own] if len(own) > 1 else [],
@@ -164,7 +171,8 @@ async def execute(
     return {
         "ok":            True,
         "staged_to":     to,
-        "attachment_id": row["id"] if row else None,
+        "attachments":   attachment_filenames,
+        "replaced_previous_draft": replaced_previous,
         "_llm_hint": (
             f"Staged, NOT sent — a card with an 'open and send' button already showed the user everything "
             f"(recipient, subject, preview, attachment). Just confirm in one short line that it's ready; don't "

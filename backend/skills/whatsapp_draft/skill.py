@@ -21,6 +21,9 @@ async def execute(
     variants: int = 1,
     state: Optional[str] = None,
     persist: bool = True,
+    attachment_id: Optional[int] = None,
+    paperless_doc_id: Optional[int] = None,
+    photo_id: Optional[str] = None,
 ) -> dict[str, Any]:
     """See skill.md for the contract. Returns
         {drafts: [{label, text}], sources: [...]}
@@ -63,6 +66,20 @@ async def execute(
     # data, not admin's.
     from backend.skills.registry import require_user_id
     user_id = require_user_id(ctx)
+
+    # One file may ride along (WhatsApp sends one per message): a chat
+    # attachment, an archive document or a photo, looked up as the
+    # person. The card sends it with the text as caption.
+    attachment = None
+    if any(v not in (None, "", 0) for v in (attachment_id, paperless_doc_id, photo_id)):
+        from backend import send_attachments as _sa
+        entries, problems = _sa.resolve(str(user_id), attachment_ids=attachment_id,
+                                        paperless_doc_ids=paperless_doc_id, photo_ids=photo_id)
+        if problems or len(entries) != 1:
+            return {"ok": False, "drafts": [],
+                    "_llm_hint": "REJECTED: " + (" ".join(problems) or "pass exactly one file") +
+                                 " No draft was made; fix the id or drop the file."}
+        attachment = entries[0]
 
     # A contact card with several candidates went up in this turn and
     # the draft is for one of them: the person has not picked yet. Ask
@@ -200,7 +217,7 @@ async def execute(
         # so the user reads it in chat and either says "send it" (which
         # routes through /send and creates the real row) or refines /
         # discards it.
-        _show_card(chat_jid, contact_name, drafts, is_new_chat=True)
+        _show_card(chat_jid, contact_name, drafts, is_new_chat=True, attachment=attachment)
         return {"drafts": drafts, "sources": sources, "group_id": group_id,
                  "chat_jid": chat_jid, "initiate": True,
                  # Surface "not persisted" so the frontend draft-options
@@ -292,11 +309,12 @@ async def execute(
             conn.commit()
 
     recipient = (contact_obj or {}).get("display_name") or chat_row["name"] or ""
-    _show_card(chat_jid, recipient, drafts, is_new_chat=False)
+    _show_card(chat_jid, recipient, drafts, is_new_chat=False, attachment=attachment)
     return {"drafts": drafts, "sources": sources, "group_id": group_id}
 
 
-def _show_card(chat_jid: str, recipient: str, drafts: list, *, is_new_chat: bool) -> None:
+def _show_card(chat_jid: str, recipient: str, drafts: list, *, is_new_chat: bool,
+               attachment: Optional[dict] = None) -> None:
     """The chat's WhatsAppDraftCard: the draft in an editable box with
     Send. Without it the chat said "you can send it below" and there was
     nothing below. Outside a chat turn the ui-action list is simply
@@ -304,9 +322,13 @@ def _show_card(chat_jid: str, recipient: str, drafts: list, *, is_new_chat: bool
     if not drafts:
         return
     from backend.ui_tools import _append
-    _append({"type": "whatsapp_draft_created", "chat_jid": chat_jid,
-             "recipient": recipient or "", "text": drafts[0].get("text") or "",
-             "is_new_chat": bool(is_new_chat)})
+    card = {"type": "whatsapp_draft_created", "chat_jid": chat_jid,
+            "recipient": recipient or "", "text": drafts[0].get("text") or "",
+            "is_new_chat": bool(is_new_chat)}
+    if attachment:
+        card["attachment"] = {"url": attachment["url"], "filename": attachment["filename"],
+                              "mimetype": attachment["mimetype"]}
+    _append(card)
 
 
 def _build_initiate_prompt(

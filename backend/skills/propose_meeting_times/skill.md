@@ -6,11 +6,12 @@ when_to_use: |
   - "reply to this email with 3 meeting times next week"
   - "send him three suggestions for when we can talk on the phone"
   - Any combination of: "reply to an email" + "with meeting times" + "from my calendar"
+  - "schlag meiner Mama drei Termine vor" (no mail to reply to): call without message_id and use the slots.
 inputs:
   message_id:
     type: integer
-    required: true
-    description: The email message id to reply to (from email_messages.id). Get it from the user's context — they're usually replying to a visible email.
+    required: false
+    description: The email message id to reply to (from email_messages.id). Leave it out to only get free slots for a proposal to someone without a mail; then pass the slots to prepare_email or whatsapp_draft.
   num_slots:
     type: integer
     required: false

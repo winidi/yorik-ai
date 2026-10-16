@@ -35,7 +35,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.database import get_conn
 from backend import auth_sessions as _auth
@@ -1812,6 +1812,38 @@ async def send_media(
     uid = user["id"]
     mime = (file.content_type or "").split(";")[0].strip().lower()
     filename = os.path.basename(file.filename or "") or "file"
+    data = await file.read()
+    return await _send_media_bytes(uid, jid, data, mime, filename, caption)
+
+
+class SendMediaRefBody(BaseModel):
+    url: str = Field(..., min_length=1, max_length=2048)
+    filename: Optional[str] = Field(None, max_length=256)
+    caption: str = Field("", max_length=4096)
+
+
+@router.post("/chats/{jid:path}/send-media-ref")
+async def send_media_ref(
+    jid: str,
+    body: SendMediaRefBody,
+    user: dict[str, Any] = Depends(_auth.current_user),
+) -> dict[str, Any]:
+    """Send a file Yorik already holds — a chat attachment, an archive
+    document or a photo — by its same-origin url, with a caption. The
+    chat's WhatsApp card uses this; the file is read as the person
+    (backend/send_attachments.py), never with an admin key."""
+    from . import send_attachments as _sa
+    uid = user["id"]
+    try:
+        data, mime, filename = await asyncio.to_thread(_sa.fetch_bytes, str(uid), body.url)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+    name = os.path.basename(body.filename or "") or filename
+    return await _send_media_bytes(uid, jid, data, (mime or "").split(";")[0].strip().lower(), name, body.caption)
+
+
+async def _send_media_bytes(uid: Any, jid: str, data: bytes, mime: str, filename: str,
+                            caption: str) -> dict[str, Any]:
     if mime in _SEND_IMAGE_MIMES:
         kind = "image"
     elif mime in _SEND_VIDEO_MIMES:
@@ -1822,7 +1854,6 @@ async def send_media(
         raise HTTPException(415, "HEIC photos cannot be sent — choose JPEG in the phone's camera settings (Most compatible)")
     else:
         raise HTTPException(415, f"{mime or 'this file type'} cannot be sent — a photo (JPEG, PNG), a video (MP4) or a PDF")
-    data = await file.read()
     if not data:
         raise HTTPException(400, "empty file")
     if len(data) > SEND_MEDIA_MAX_BYTES:

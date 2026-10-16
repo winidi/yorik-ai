@@ -5,6 +5,7 @@ when_to_use: |
   - The user receives a WhatsApp message and asks "what should I reply?"
   - The user clicks the manual "Draft" or "Regenerate" button in the WhatsApp UI
   - The user wants to start a new WhatsApp conversation with someone whose number Yorik already has (no prior thread). Pass `contact_id` + `intent` instead of `chat_jid`.
+  - The user wants to send a photo, a document or a chat file by WhatsApp: pass exactly one of attachment_id, paperless_doc_id, photo_id; the card sends it with the text as caption.
 inputs:
   chat_jid:
     type: string
@@ -22,6 +23,18 @@ inputs:
     type: string
     required: false
     description: Tone or intent nudge from the user ("keep it formal", "in German", "be brief")
+  attachment_id:
+    type: integer
+    required: false
+    description: One chat attachment number to send with the text (WhatsApp takes one file per message).
+  paperless_doc_id:
+    type: integer
+    required: false
+    description: One archive document id to send with the text.
+  photo_id:
+    type: string
+    required: false
+    description: One photo id (from find_photo) to send with the text.
   variants:
     type: integer
     required: false

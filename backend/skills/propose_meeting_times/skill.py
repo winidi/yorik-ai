@@ -7,7 +7,7 @@ result, sendable in two clicks.
 """
 from __future__ import annotations
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Optional
 
 
 _WEEKDAY_DE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
@@ -16,14 +16,17 @@ _WEEKDAY_EN = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday
 
 async def execute(
     ctx,
-    message_id: int,
+    message_id: Optional[int] = None,
     num_slots: int = 3,
     window_days: int = 7,
     duration_minutes: int = 60,
     earliest_hour: int = 9,
     latest_hour: int = 18,
 ) -> dict[str, Any]:
-    if not isinstance(message_id, int) or message_id <= 0:
+    # Without a mail to reply to, the skill only finds the slots; the
+    # model puts them into prepare_email or whatsapp_draft (the chat
+    # used to have no way to "propose three afternoons to Mama").
+    if message_id not in (None, "", 0) and (not isinstance(message_id, int) or message_id <= 0):
         raise ValueError("message_id must be a positive int")
     num_slots = max(1, min(int(num_slots), 5))
     window_days = max(1, min(int(window_days), 30))
@@ -122,6 +125,14 @@ async def execute(
             "Let me know which one suits you best.",
         ]
     body = "\n".join(body_lines)
+
+    if message_id in (None, "", 0):
+        return {
+            "slots": chosen,
+            "drafts": [],
+            "_llm_hint": (f"{len(chosen)} free slot(s) found. Put EXACTLY these into prepare_email or "
+                          "whatsapp_draft (intent) for the person the user named; do not invent other times."),
+        }
 
     # ── 3. Hand off to email_draft, which produces the chat card ──────
     from backend.skills.email_draft.skill import execute as draft_email

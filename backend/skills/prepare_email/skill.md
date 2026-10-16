@@ -10,6 +10,7 @@ when_to_use: |
   Write `subject` and `body` yourself from the conversation — a short,
   plain cover message is enough. Pass `from_email` only if the user
   named which of their own accounts to send from.
+  To send a photo the user found, pass the hit's id in photo_ids; documents and chat files can go in the same mail.
   A card with an "open and send" button appears in the chat on its
   own — don't repeat recipient/subject/attachment in your reply, just
   confirm briefly that it's ready. Nothing is sent by this skill.
@@ -30,14 +31,26 @@ inputs:
     type: string
     required: true
     description: A short plain-text cover message, written from the conversation.
+  attachment_ids:
+    type: array
+    required: false
+    description: "Chat attachment numbers to send along (from attachment #<n> or read_attachment). Any number."
+  paperless_doc_ids:
+    type: array
+    required: false
+    description: Archive document ids to send along (from search_documents / read_document). Any number.
+  photo_ids:
+    type: array
+    required: false
+    description: Photo ids to send along (the id of a find_photo hit). Any number.
   attachment_id:
     type: integer
     required: false
-    description: "The attachment number (attachment #<n>) of the file to include."
+    description: "One attachment number (attachment #<n>); same as a one-item attachment_ids."
   paperless_doc_id:
     type: integer
     required: false
-    description: A document from the archive (doc_id from search_documents) to attach instead of a chat attachment.
+    description: One archive document id; same as a one-item paperless_doc_ids.
   from_email:
     type: string
     required: false

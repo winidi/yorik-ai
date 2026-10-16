@@ -33,6 +33,7 @@
     "useAndOpen": "Use this address and open",
     "noSubject": "(no subject)",
     "to": "to {{to}}",
+    "replacedPrevious": "Replaces the earlier draft.",
     "openAndSend": "Open and send",
     "from": "From",
     "chooseAccount": "Choose an account…",

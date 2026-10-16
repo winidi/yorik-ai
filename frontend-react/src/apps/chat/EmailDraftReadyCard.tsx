@@ -23,8 +23,12 @@ import { toast } from "@/components/Toast";
 
 interface Account { id: number; email: string; name?: string }
 
-export function EmailDraftReadyCard({ to, subject, preview, attachmentFilename, accounts = [], accountId = null, done }: {
+export function EmailDraftReadyCard({ to, subject, preview, attachmentFilename, attachmentFilenames, replacedPrevious, accounts = [], accountId = null, done }: {
   to: string; subject: string; preview?: string; attachmentFilename?: string;
+  /** Every file that rides along; the singular is kept for old cards. */
+  attachmentFilenames?: string[];
+  /** This draft took the place of an earlier staged one. */
+  replacedPrevious?: boolean;
   /** The person's own accounts — only sent when there is a choice. */
   accounts?: Account[];
   accountId?: number | null;
@@ -59,8 +63,11 @@ export function EmailDraftReadyCard({ to, subject, preview, attachmentFilename, 
           <div className="font-semibold truncate">{subject || t("chat.email.noSubject")}</div>
           <div className="text-xs text-muted-foreground truncate">{t("chat.email.to", { to })}</div>
           {preview && <p className="mt-2 text-sm text-muted-foreground line-clamp-3">{preview}</p>}
-          {attachmentFilename && (
-            <div className="mt-2 text-xs text-muted-foreground truncate">📎 {attachmentFilename}</div>
+          {(attachmentFilenames && attachmentFilenames.length > 0 ? attachmentFilenames : (attachmentFilename ? [attachmentFilename] : [])).map((name, i) => (
+            <div key={i} className="mt-1 text-xs text-muted-foreground truncate">📎 {name}</div>
+          ))}
+          {replacedPrevious && done !== "sent" && done !== "discarded" && (
+            <div className="mt-2 text-xs text-muted-foreground">{t("chat.email.replacedPrevious")}</div>
           )}
         </div>
       </div>

@@ -1846,6 +1846,7 @@ function MessageBubble({
           .map((a: any, i: number) => (
             <EmailDraftReadyCard key={i} to={a.to || ""} subject={a.subject || ""}
                                   preview={a.preview} attachmentFilename={a.attachment_filename}
+                                  attachmentFilenames={a.attachment_filenames} replacedPrevious={!!a.replaced_previous}
                                   accounts={a.accounts || []} accountId={a.account_id ?? null} done={a.done} />
           ))}
         {!isUser && message.ui_actions && message.ui_actions
@@ -1898,7 +1899,7 @@ function MessageBubble({
           .filter(a => a.type === "whatsapp_draft_created")
           .map((a: any, i: number) => (
             <WhatsAppDraftCard key={`${a.chat_jid}-${i}`} chatJid={a.chat_jid} recipient={a.recipient || ""}
-                               text={a.text || ""} isNewChat={!!a.is_new_chat}
+                               text={a.text || ""} isNewChat={!!a.is_new_chat} attachment={a.attachment || null}
                                sentText={a.done === "sent" ? (a.done_data?.text ?? a.text ?? "") : null}
                                onSent={(t) => markCard(a.uid, "sent", { text: t })} />
           ))}
