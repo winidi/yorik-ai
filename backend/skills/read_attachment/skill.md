@@ -6,7 +6,7 @@ when_to_use: |
   Use it again with `question` when the user asks something specific about the same attachment, and always for a question about a picture.
   After reading, tell the user in one or two sentences what the file is (kind, sender, date, amount), then follow `_llm_hint` about filing.
 when_not_to_use: |
-  The document is already in Paperless or in the library; that is find_document and read_document.
+  The document is already in Paperless or in the library; that is search_documents and read_document.
 inputs:
   attachment_id:
     type: integer

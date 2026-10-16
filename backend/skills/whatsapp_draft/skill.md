@@ -4,8 +4,6 @@ description: Generate one or more reply drafts for a WhatsApp conversation
 when_to_use: |
   - The user receives a WhatsApp message and asks "what should I reply?"
   - The user clicks the manual "Draft" or "Regenerate" button in the WhatsApp UI
-  - Another skill (e.g. whatsapp_send_with_photo) needs a body text generated
-    in context before sending
   - The user wants to start a new WhatsApp conversation with someone whose number Yorik already has (no prior thread). Pass `contact_id` + `intent` instead of `chat_jid`.
 inputs:
   chat_jid:

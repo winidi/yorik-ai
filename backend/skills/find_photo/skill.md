@@ -14,7 +14,6 @@ when_to_use: |
   - **A date range** ("photos from last March", "photos from summer 2020") → pass `start_iso='YYYY-MM-DDT00:00:00'` and `end_iso='YYYY-MM-DDT23:59:59'`. Auto-routes to op='taken_on'.
   - "Any photos from this week?" / "recent photos" → op='recent'.
   - **"How many photos do I have"** / "how many photos are there" — call with op='stats' (or just op='recent', which also returns counts). The result includes total_photos, total_videos, total_assets library-wide. NEVER answer "I don't have access to the count" — this skill provides it.
-  - Another skill (whatsapp_send_with_photo) needs to attach a relevant image
 
   When results.length >= 1 the skill emits `photos_found` automatically — do
   NOT enumerate filenames or describe the photos in text. Reply ONE short
@@ -163,7 +162,3 @@ Thin wrapper around the existing Immich connector. CLIP-based content
 search means a query like "beach sunset" finds matching photos even
 without tags or captions. `of_person` requires you to have named your
 face clusters in Immich's People page first.
-
-Pairs with the future `whatsapp_send_with_photo` composite skill:
-the `id` field this skill returns is the `immich_asset_id` that skill
-consumes — no JID translation, no separate auth, native composition.

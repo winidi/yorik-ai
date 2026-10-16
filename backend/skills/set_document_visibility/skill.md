@@ -9,14 +9,14 @@ when_to_use: |
   - User wants to mark a document as business-shared ("the invoice is for everyone in the business") → visibility="business".
   - User wants to lock a document back to private ("only I should see that") → visibility="private".
 
-  ALWAYS call find_document first if you don't know the document_id. Quote the document's title in your reply so the user knows which one you changed.
+  ALWAYS call search_documents first if you don't know the document_id. Quote the document's title in your reply so the user knows which one you changed.
 
   Only the document's owner (or admin) can change visibility. Members get a clear permission error if they try on someone else's document.
 inputs:
   document_id:
     type: integer
     required: true
-    description: Paperless document id, as returned by `find_document`.
+    description: Paperless document id, as returned by `search_documents`.
   visibility:
     type: string
     required: true

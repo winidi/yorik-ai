@@ -4,7 +4,6 @@ description: Generate one or more reply drafts for an email thread
 when_to_use: |
   - User opens an email and asks "what should I reply?"
   - Auto-draft on incoming (debounced) so when the user opens the message, drafts are already waiting
-  - Composite "send_with_…" skills that need a body before sending
   - If you don't have message_id, call find_email_by_subject first.
 inputs:
   message_id:

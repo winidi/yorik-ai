@@ -1,6 +1,6 @@
 """read_document — fetch the full extracted text of one indexed doc.
 
-Pair with find_document (which only returns ranked snippets). When the
+Pair with search_documents (which only returns ranked snippets). When the
 LLM needs to actually READ a document end-to-end — e.g. to extract
 landlord name + contract start date from a Mietvertrag so it can
 draft a Mietkündigung — call this with the doc_id.

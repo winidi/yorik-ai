@@ -45,6 +45,6 @@ async def execute(
             f"in the user's language). Do NOT enumerate names, amounts, or "
             f"due dates in your text — the bills card carries those. If the "
             f"user asks 'zeig mir die Rechnung' next: use document_id for "
-            f"read_document if set, else fall back to find_document."
+            f"read_document if set, else fall back to search_documents."
         )
     return out

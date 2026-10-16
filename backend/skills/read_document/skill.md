@@ -2,11 +2,11 @@
 name: read_document
 description: Fetch the full extracted text of one document by id (capped at 40k chars)
 when_to_use: |
-  Pair with find_document. find_document gives you ranked snippets
+  Pair with search_documents. search_documents gives you ranked snippets
   across many docs; read_document gives you the WHOLE text of ONE doc.
 
   Call this when:
-  - You have a doc_id (from find_document, from a document bucket
+  - You have a doc_id (from search_documents, from a document bucket
     seed, from a previous tool call) AND you need to extract structured
     facts from the body (landlord name, contract dates, IBAN, amounts).
   - The user dropped several documents into the chat's document bucket
@@ -15,7 +15,7 @@ when_to_use: |
     landlord + start date.
 
   Do NOT use:
-  - For free-text search across many docs — that's find_document.
+  - For free-text search across many docs — that's search_documents.
   - To stream the raw bytes back — there's no UI for that; the
     chat just shows text.
 
@@ -26,7 +26,7 @@ inputs:
   doc_id:
     type: integer
     required: true
-    description: The id of the document to read (from find_document or a document-bucket seed).
+    description: The id of the document to read (from search_documents or a document-bucket seed).
 outputs:
   ok:
     type: boolean
@@ -54,4 +54,4 @@ tags: [documents, rag, read]
 # read_document
 
 Concatenates the indexed chunks for one doc and returns the full text.
-Use it as the second step in find_document → read_document → act.
+Use it as the second step in search_documents → read_document → act.

@@ -1059,9 +1059,12 @@ _CATEGORY_PROSE: dict[str, str] = {
     "documents":
         "Paperless + native uploads. Pipeline for \"find / show X\": search_documents (hybrid semantic + keyword). "
         "Read content: read_document for text PDFs, read_document_vision when OCR is garbled. "
-        "Address mining for letters: find_recipient_address_from_documents (Compose-adjacent).",
+        "Address mining for letters: find_recipient_address_from_documents (for letters).",
     "email":
-        "IMAP mailbox. Composing a new email goes through Compose with kind=\"email\". "
+        "IMAP mailbox. A new email: prepare_email (recipient, subject, body, optional attachment); "
+        "it stages a card and the user clicks send. Proposing meeting times to a person without an "
+        "email to reply to: check_calendar(include_free_slots=true), then prepare_email or "
+        "whatsapp_draft with the chosen slots. "
         "For \"find / get me the email from X / about Y\": find_email_by_subject — "
         "NEVER web_search (web_search is the public internet; find_email_by_subject reads the user's mailbox). "
         "Inbox actions: find_email_by_subject → read_email (full body) / email_draft (reply) / update_email (star / unread).",
