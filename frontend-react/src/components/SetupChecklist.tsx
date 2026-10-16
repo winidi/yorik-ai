@@ -79,8 +79,8 @@ export function SetupChecklist() {
                 {s.done && <Check className="w-4 h-4" strokeWidth={3} />}
               </span>
               <span className="flex-1 min-w-0">
-                <span className={cn("block text-sm font-medium", s.done && "line-through")}>{s.title}</span>
-                {!s.done && <span className="block text-xs text-muted-foreground">{s.hint}</span>}
+                <span className={cn("block text-sm font-medium", s.done && "line-through")}>{t(`settings.checklist.steps.${s.id}.title`, { defaultValue: s.title })}</span>
+                {!s.done && <span className="block text-xs text-muted-foreground">{t(`settings.checklist.steps.${s.id}.hint`, { defaultValue: s.hint })}</span>}
               </span>
               {!s.done && <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
             </button>

@@ -715,7 +715,37 @@
   "checklist": {
     "title": "Set up Yorik",
     "progress": "{{done}} of {{total}} done. Take your time; this list waits.",
-    "hide": "Hide this list"
+    "hide": "Hide this list",
+    "steps": {
+      "look": {
+        "title": "Your colour and photo",
+        "hint": "So the family recognises you"
+      },
+      "ask": {
+        "title": "Ask Yorik something",
+        "hint": "Try: remind me tomorrow at 9"
+      },
+      "phone": {
+        "title": "Yorik on your phone",
+        "hint": "Home screen and reminders"
+      },
+      "family": {
+        "title": "Invite your family",
+        "hint": "A QR code per person, two minutes"
+      },
+      "mail": {
+        "title": "Connect your email",
+        "hint": "Gmail, GMX, Web.de, iCloud …"
+      },
+      "calendar": {
+        "title": "Bring in your calendar",
+        "hint": "Your Google or iPhone dates"
+      },
+      "backup": {
+        "title": "Turn on backups",
+        "hint": "So nothing gets lost"
+      }
+    }
   },
   "tabs": {
     "start": "Start here",

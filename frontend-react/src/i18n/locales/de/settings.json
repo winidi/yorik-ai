@@ -715,7 +715,37 @@
   "checklist": {
     "title": "Yorik einrichten",
     "progress": "{{done}} von {{total}} erledigt. Lass dir Zeit; die Liste wartet.",
-    "hide": "Diese Liste ausblenden"
+    "hide": "Diese Liste ausblenden",
+    "steps": {
+      "look": {
+        "title": "Deine Farbe und dein Foto",
+        "hint": "Damit die Familie dich erkennt"
+      },
+      "ask": {
+        "title": "Frag Yorik etwas",
+        "hint": "Zum Beispiel: erinnere mich morgen um 9"
+      },
+      "phone": {
+        "title": "Yorik auf deinem Handy",
+        "hint": "Startbildschirm und Erinnerungen"
+      },
+      "family": {
+        "title": "Lade deine Familie ein",
+        "hint": "Ein QR-Code pro Person, zwei Minuten"
+      },
+      "mail": {
+        "title": "Verbinde deine E-Mail",
+        "hint": "Gmail, GMX, Web.de, iCloud …"
+      },
+      "calendar": {
+        "title": "Hol deinen Kalender dazu",
+        "hint": "Deine Google- oder iPhone-Termine"
+      },
+      "backup": {
+        "title": "Schalte Backups ein",
+        "hint": "Damit nichts verloren geht"
+      }
+    }
   },
   "tabs": {
     "start": "Erste Schritte",
