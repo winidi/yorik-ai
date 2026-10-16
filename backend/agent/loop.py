@@ -485,16 +485,17 @@ async def ask(
                 and isinstance(args.get("name"), str)
                 and not _has_seen_skill_view_for(messages, args["name"])
             ):
-                hint = _INVOKE_NEEDS_READ_HINT.format(name=args["name"])
-                messages.append(tool_message(tc["id"], name, hint))
-                if include_trace:
-                    iter_tool_calls.append({
-                        "name":   name,
-                        "args":   _truncate_args(args),
-                        "rejected_read_first": True,
-                        "duration_s": 0.0,
-                    })
-                continue
+                fits, hint = _auto_read(args["name"], args.get("args"))
+                if not fits:
+                    messages.append(tool_message(tc["id"], name, hint))
+                    if include_trace:
+                        iter_tool_calls.append({
+                            "name":   name,
+                            "args":   _truncate_args(args),
+                            "rejected_read_first": True,
+                            "duration_s": 0.0,
+                        })
+                    continue
 
             # Inline audit — captures SQL, mutation flag, delete counter.
             audit.record_tool_call(name, args)
@@ -1222,13 +1223,14 @@ async def ask_stream(
                 and isinstance(ready.arguments.get("name"), str)
                 and not _has_seen_skill_view_for(messages, ready.arguments["name"])
             ):
-                hint = _INVOKE_NEEDS_READ_HINT.format(name=ready.arguments["name"])
-                yield _stream.ToolResultEvent(
-                    id=ready.id, name=ready.name,
-                    result_for_llm=hint, ui_actions=[],
-                )
-                messages.append(tool_message(ready.id, ready.name, hint))
-                continue
+                fits, hint = _auto_read(ready.arguments["name"], ready.arguments.get("args"))
+                if not fits:
+                    yield _stream.ToolResultEvent(
+                        id=ready.id, name=ready.name,
+                        result_for_llm=hint, ui_actions=[],
+                    )
+                    messages.append(tool_message(ready.id, ready.name, hint))
+                    continue
             audit.record_tool_call(ready.name, ready.arguments)
             result = await registry.dispatch(ready.name, ready.arguments, tool_ctx)
             _raw = _grounding.raw_from(ready.name, ready.arguments, result)
@@ -1403,6 +1405,54 @@ _INVOKE_NEEDS_READ_HINT = (
 )
 
 
+# ─── read-for-you on the first invoke ───────────────────────────────
+# Until 2026-10-16 the first invoke_skill of a skill in a turn was
+# rejected until the model had called skill_view, and the model guessed
+# argument names from the index (id vs doc_id, name vs query): two
+# wasted steps in almost every turn of the live test. Now the loop reads
+# the manifest itself on that first call. If the arguments fit, the
+# skill runs at once; if not, the model gets the manifest and what was
+# wrong in one message and calls again. (Dirk's go, 2026-10-16.)
+_AUTO_READ_PREFIX = "[manifest read for you: {name}]"
+
+
+def _auto_read(skill_name: str, skill_args: Any) -> tuple[bool, str]:
+    """(True, "") when the call may run now; (False, text) with the
+    manifest and what does not fit."""
+    import json as _json
+    from backend.skills import get_registry as _get_skills
+    from backend.skills.registry import _get_disabled_skills as _disabled
+    name = (skill_name or "").strip()
+    if name in _disabled():
+        return (False, _AUTO_READ_PREFIX.format(name=name) +
+                f" Skill {name!r} is disabled by admin; it is not in your skill index. Pick another one.")
+    view = _get_skills().view(name)
+    if view is None:
+        return (False, _AUTO_READ_PREFIX.format(name=name) +
+                f" No skill named {name!r}. The skill index in your system prompt lists every available "
+                "skill; re-scan it for the right name and do not guess names that are not on the list.")
+    inputs = view.get("inputs") if isinstance(view, dict) else None
+    given = skill_args if isinstance(skill_args, dict) else {}
+    if not isinstance(inputs, dict) or not inputs:
+        return (True, "")
+    unknown = sorted(k for k in given if k not in inputs)
+    missing = sorted(k for k, meta in inputs.items()
+                     if isinstance(meta, dict) and meta.get("required") and k not in given)
+    if not unknown and not missing:
+        return (True, "")
+    problems = []
+    if unknown:
+        problems.append("unknown argument(s): " + ", ".join(unknown))
+    if missing:
+        problems.append("missing required argument(s): " + ", ".join(missing))
+    rendered = _json.dumps(view, ensure_ascii=False, indent=1)
+    return (False, _AUTO_READ_PREFIX.format(name=name) +
+            f" You had not read this manifest in this turn, so here it is:\n{rendered}\n\n"
+            f"NOT RUN — your call did not fit: {'; '.join(problems)}. "
+            f"Call invoke_skill(name={name!r}, args={{…}}) again with the keys from `inputs`; "
+            "the manifest above counts as read.")
+
+
 def _has_seen_skill_view_for(
     messages: List[Dict[str, Any]],
     target_skill: str,
@@ -1427,8 +1477,12 @@ def _has_seen_skill_view_for(
         if isinstance(m, dict) and m.get("role") == "user":
             cutoff = i
             break
+    auto_prefix = _AUTO_READ_PREFIX.format(name=target)
     for m in messages[cutoff:]:
         if not isinstance(m, dict): continue
+        if (m.get("role") == "tool" and isinstance(m.get("content"), str)
+                and m["content"].startswith(auto_prefix)):
+            return True
         if m.get("role") != "assistant": continue
         for tc in (m.get("tool_calls") or []):
             fn = (tc.get("function") or {})
@@ -1486,10 +1540,15 @@ def _prune_recent_skill_view(
     if not target:
         return 0
 
+    auto_prefix = _AUTO_READ_PREFIX.format(name=target)
     for i in range(len(messages) - 1, -1, -1):
         m = messages[i]
         if not isinstance(m, dict): continue
         if m.get("role") != "tool": continue
+        c = m.get("content")
+        if isinstance(c, str) and c.startswith(auto_prefix) and len(c) > len(auto_prefix) + 120:
+            m["content"] = auto_prefix + " " + _PRUNE_PLACEHOLDER
+            return max(0, len(c) - len(m["content"]))
         if m.get("name") != "skill_view": continue
         content = m.get("content")
         if not isinstance(content, str): continue

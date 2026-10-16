@@ -378,6 +378,37 @@ def copy_from_sources(quote: str, texts: Iterable[str]) -> Optional[str]:
     return re.sub(r"\s+", " ", text[start:end]).strip()
 
 
+# "In den Kontakten habe ich keinen Vermieter gefunden" with no lookup in
+# the turn (live test 2026-10-16): the answer describes a search that
+# never ran. Numbers and quotes were checked; claims of actions were not.
+CLAIMED_LOOKUP = "[claimed lookup]"
+_CLAIMED_LOOKUP = re.compile(
+    r"(?i)(?:"
+    r"\b(?:ich habe|habe ich|hab ich|ich hab)\b[^.\n]{0,60}\b(?:gesucht|nachgesehen|nachgeschaut|nachgeschlagen|"
+    r"geprüft|durchsucht|gefunden|nicht gefunden)\b"
+    r"|\b(?:die|meine) suche\b[^.\n]{0,40}\b(?:lieferte|ergab|fand|findet)\b"
+    r"|\b(?:in den kontakten|im adressbuch|im kalender|in den dokumenten|in deinen mails|in deinen e-mails|"
+    r"in den fotos)\b[^.\n]{0,50}\b(?:kein|keine|keinen|nichts|nicht)\b"
+    r"|\bI (?:have )?(?:searched|looked|checked|found no|couldn'?t find|could not find|did not find|didn'?t find)\b"
+    r")")
+
+
+def _turn_had_lookup(messages: List[Dict[str, Any]]) -> bool:
+    """True when a tool answered in this turn (since the last message
+    the person wrote). The prefetch search counts: it is a search."""
+    cutoff = 0
+    for i in range(len(messages) - 1, -1, -1):
+        m = messages[i]
+        if isinstance(m, dict) and m.get("role") == "user" and not m.get("internal"):
+            cutoff = i
+            break
+    # A second answer after the check sent the model back is not a
+    # fresh claim: "Das habe ich nicht gefunden" is then the honest end.
+    return any(isinstance(m, dict) and m.get("role") == "tool"
+               and (not m.get("internal") or m.get("name") == "check_facts")
+               for m in messages[cutoff:])
+
+
 def check(answer: str, messages: List[Dict[str, Any]], raws: Optional[List[Tuple[str, Any]]] = None) -> Verdict:
     raws = raws or []
     evidence = _texts(messages) + [_dump(r) for _, r in raws]
@@ -471,6 +502,10 @@ def check(answer: str, messages: List[Dict[str, Any]], raws: Optional[List[Tuple
         else:
             missing.append("„" + q.strip("„“”\"«» ") + "“")
 
+    if _CLAIMED_LOOKUP.search(answer or "") and not raws and not _turn_had_lookup(messages):
+        checked += 1
+        missing.append(CLAIMED_LOOKUP)
+
     return Verdict(ok=not missing, missing=missing, sources=sources[:5], checked=checked,
                    text=corrected if corrected != answer else None)
 
@@ -490,9 +525,15 @@ def nudge_message(missing: List[str]) -> List[Dict[str, Any]]:
     a message from the person: as a user message the model answered it
     to Mama — "Die Summe 366,44 € taucht in keinem Tool-Ergebnis auf"
     (2026-09-27). Both messages are internal: never evidence, never shown."""
-    note = (f"{NUDGE_MARK} Not in any tool result: {', '.join(missing[:6])}. "
-            "Look it up and quote it exactly; a number you worked out: compute it with calculate; "
-            "otherwise say you did not find it.")
+    if CLAIMED_LOOKUP in missing and len(missing) == 1:
+        note = (f"{NUDGE_MARK} You wrote that you looked something up, but no lookup ran in this turn. "
+                "Call the matching skill now (find_person, search_documents, check_calendar, "
+                "find_email_by_subject, universal_search, …) and answer from its result. Never describe "
+                "a search you did not run.")
+    else:
+        note = (f"{NUDGE_MARK} Not in any tool result: {', '.join(m for m in missing[:6] if m != CLAIMED_LOOKUP)}. "
+                "Look it up and quote it exactly; a number you worked out: compute it with calculate; "
+                "otherwise say you did not find it.")
     call = {"id": CHECK_CALL_ID, "type": "function",
             "function": {"name": "check_facts", "arguments": "{}"}}
     return [{"role": "assistant", "internal": True, "content": None, "tool_calls": [call]},
@@ -528,6 +569,13 @@ def fallback_text(missing: List[str], language: Optional[str], answer: str = "")
     de = (language or "").lower().startswith("de")
     mark = " *(nicht belegt)*" if de else " *(not verified)*"
     text = answer or ""
+    if CLAIMED_LOOKUP in missing:
+        missing = [m for m in missing if m != CLAIMED_LOOKUP]
+        note_lookup = ("Dafür habe ich nicht wirklich nachgesehen – frag mich noch einmal, dann suche ich."
+                       if de else "I did not actually look that up – ask me again and I will search.")
+        if not missing:
+            return f"{text.rstrip()}\n\n_{note_lookup}_"
+        text = f"{text.rstrip()}\n\n_{note_lookup}_"
     quotes = {m.strip("„“") for m in missing if m.startswith("„")}
     if quotes:
         kept = []
