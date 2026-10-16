@@ -8,6 +8,8 @@ summary: Set up Tailscale to access Yorik from your phone, laptop, or any other 
 
 # Remote access via Tailscale
 
+Family members get Yorik on their phone by QR invite (see `phone`); this page is for the admin who wants Yorik reachable from outside the house.
+
 Yorik runs on your home / office machine. By default it's only reachable from the same Wi-Fi. Tailscale creates a private encrypted mesh between your devices so you can reach Yorik from your phone, a laptop while traveling, etc. — without opening any router ports or exposing anything publicly.
 
 This is what makes Yorik usable as a real personal assistant: type a quick task into the chat from your phone on the train, get the answer back, etc.
