@@ -44,6 +44,13 @@ import { toast } from "@/components/Toast";
 
 type Tab = "active" | "pending" | "spam";
 
+// Hidden since 2026-10-16. The rule for contacts is "Yorik suggests, the
+// person decides": suggestions live in the list under the tabs, a pending
+// row is confirmed or marked spam on its card. The LLM triage, auto-classify,
+// enrich, bulk-assist and WhatsApp-names tools stay in the code behind this
+// flag until the new flow has proven itself; flip to true to get them back.
+const LEGACY_CONTACT_TOOLS = false;
+
 const CHANNEL_ICONS: Record<ChannelKind, ReactElement> = {
   email:    <Mail className="w-3.5 h-3.5" />,
   phone:    <Phone className="w-3.5 h-3.5" />,
@@ -224,7 +231,7 @@ export function ContactsApp() {
   useEffect(() => {
     if (searchParams.get("triage") !== "open") return;
     setTab("pending");
-    setTriageModalOpen(true);
+    if (LEGACY_CONTACT_TOOLS) setTriageModalOpen(true);
     const next = new URLSearchParams(searchParams);
     next.delete("triage");
     setSearchParams(next, { replace: true });
@@ -347,9 +354,9 @@ export function ContactsApp() {
               Import stays one-tap-deeper inside the FAB-adjacent
               ⋯ menu (deferred for v2; for now mobile users can
               still import via the settings page). */}
-          <EnrichButton />
-          <YorikAssistBulkButton tab={tab} counts={counts} onDone={refresh} />
-          {tab === "pending" && counts.pending > 0 && (
+          {LEGACY_CONTACT_TOOLS && <EnrichButton />}
+          {LEGACY_CONTACT_TOOLS && <YorikAssistBulkButton tab={tab} counts={counts} onDone={refresh} />}
+          {LEGACY_CONTACT_TOOLS && tab === "pending" && counts.pending > 0 && (
             <>
               <AutoClassifyButton
                 onDone={refresh}
@@ -359,7 +366,7 @@ export function ContactsApp() {
               <TriageButton onOpen={() => setTriageModalOpen(true)} />
             </>
           )}
-          {tab === "pending" && counts.archived > 0 && (
+          {LEGACY_CONTACT_TOOLS && tab === "pending" && counts.archived > 0 && (
             <ReclassifyArchivedButton
               archivedCount={counts.archived}
               onDone={async () => {
@@ -391,7 +398,7 @@ export function ContactsApp() {
               <Upload className="w-3.5 h-3.5" /> From phone
             </button>
           )}
-          <button
+          {LEGACY_CONTACT_TOOLS && <button
             onClick={refreshWhatsappNames}
             disabled={refreshingWaNames}
             className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5 disabled:opacity-60"
@@ -400,7 +407,7 @@ export function ContactsApp() {
             {refreshingWaNames
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
               : <RefreshCw className="w-3.5 h-3.5" />} WhatsApp names
-          </button>
+          </button>}
           <button
             onClick={() => { setImporting(true); }}
             className="hidden md:flex text-xs h-8 px-3 rounded-md bg-card border border-border text-foreground hover:bg-muted items-center gap-1.5"
@@ -567,6 +574,7 @@ export function ContactsApp() {
                 contact={selected}
                 onEdit={() => setEditing(true)}
                 onTogglePin={() => togglePin(selected)}
+                onStatusChange={refresh}
               />
             ) : (
               <div className="h-full flex items-center justify-center text-sm text-muted-foreground italic">
@@ -608,7 +616,7 @@ export function ContactsApp() {
           onApplied={async () => { setImporting(false); await refresh(); }}
         />
       )}
-      {triageModalOpen && createPortal(
+      {LEGACY_CONTACT_TOOLS && triageModalOpen && createPortal(
         <TriageModal
           onClose={() => setTriageModalOpen(false)}
           onApplied={async () => { await refresh(); }}
@@ -1121,13 +1129,27 @@ function YorikAssistRow({ contact }: { contact: Contact }) {
 }
 
 function ContactView({
-  contact, onEdit, onTogglePin,
+  contact, onEdit, onTogglePin, onStatusChange,
 }: {
   contact: Contact;
   onEdit: () => void;
   onTogglePin: () => void;
+  onStatusChange?: () => void;
 }) {
   const navigate = useNavigate();
+  const [busyAction, setBusyAction] = useState<"promote" | "spam" | null>(null);
+  // A pending row (new person from mail or WhatsApp) is decided here on
+  // the card: it is a contact, or it is not. No editor, no triage list.
+  async function decide(action: "promote" | "spam") {
+    if (action === "spam" && !confirm(`Mark "${contact.display_name}" as spam? Future messages from their channels are dropped.`)) return;
+    setBusyAction(action);
+    try {
+      await api.post(`/api/contacts/${contact.id}/${action}`);
+      onStatusChange?.();
+    } catch (e: any) {
+      toast(`${action === "promote" ? "Confirm" : "Mark spam"} failed: ${e?.message || e}`);
+    } finally { setBusyAction(null); }
+  }
   const timelineApi = useApi<ContactTimeline>(`/api/contacts/${contact.id}/timeline?limit=8`, [contact.id]);
   const timeline = timelineApi.data;
 
@@ -1221,7 +1243,28 @@ function ContactView({
         </div>
       </header>
 
-      <YorikAssistRow contact={contact} />
+      {contact.status === "pending" && (
+        <div className="flex gap-2 text-xs">
+          <button
+            onClick={() => decide("promote")}
+            disabled={!!busyAction}
+            className="h-10 md:h-8 px-3 rounded-md bg-emerald-500 text-white hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
+          >
+            {busyAction === "promote" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+            Confirm contact
+          </button>
+          <button
+            onClick={() => decide("spam")}
+            disabled={!!busyAction}
+            className="h-10 md:h-8 px-3 rounded-md border border-border bg-card hover:bg-muted disabled:opacity-50 inline-flex items-center gap-1.5"
+          >
+            {busyAction === "spam" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldAlert className="w-3.5 h-3.5" />}
+            Not a contact
+          </button>
+        </div>
+      )}
+
+      {LEGACY_CONTACT_TOOLS && <YorikAssistRow contact={contact} />}
 
       {/* Employer link — shown for kind="person" rows with a linked
           employer_contact_id (mig 045). Clicking jumps to the business
