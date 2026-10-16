@@ -45,7 +45,11 @@ def sanitise(html: Any) -> str:
 def text_to_html(text: Any) -> str:
     """Plain text (what an LLM or a person types) → paragraphs."""
     from markupsafe import escape
-    blocks = [b.strip() for b in str(text or "").replace("\r\n", "\n").split("\n\n")]
+    # A model sometimes writes the two characters backslash + n where it
+    # means a line break (seen live 2026-10-16: "Quartalsende.\n<br>" in
+    # a letter). Nobody writes that on purpose in a letter.
+    raw = str(text or "").replace("\r\n", "\n").replace("\\n", "\n")
+    blocks = [b.strip() for b in raw.split("\n\n")]
     return "".join(f"<p>{str(escape(b)).replace(chr(10), '<br>')}</p>" for b in blocks if b)
 
 

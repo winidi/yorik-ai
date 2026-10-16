@@ -155,3 +155,10 @@ def test_rewrite_hands_text_to_the_model_and_text_back(fresh_app, monkeypatch):
     assert r.status_code == 200 and r.json()["text"] == "Die Heizung ist leider seit Montag kalt."
     assert "freundlicher" in seen["prompt"] and "Heizung kalt" in seen["prompt"]
     assert client.post("/api/writing/rewrite", json={"text": " ", "instruction": "x"}).status_code == 400
+
+
+def test_a_literal_backslash_n_from_the_model_becomes_a_line_break():
+    from backend.writing.layouts import text_to_html
+    html = text_to_html("Erster Satz.\\nZweiter Satz.\n\nGruß")
+    assert "\\n" not in html
+    assert html == "<p>Erster Satz.<br>Zweiter Satz.</p><p>Gruß</p>"
