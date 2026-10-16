@@ -31,6 +31,8 @@ skill_index every turn):
 
 from __future__ import annotations
 
+import re
+
 from typing import Any, List, Optional
 
 
@@ -70,6 +72,13 @@ async def _render_ranked(
             return 0.0
 
     submitted = list(ranked_picks or [])
+    # A pick the model only guessed ("könnte Vermieter sein", 0.5) is
+    # shown as a plain row, not as the top candidate with a score — the
+    # live test 2026-10-16 showed "Erbbaurecht 50 %" above the real one.
+    for p in submitted:
+        if isinstance(p, dict) and (_conf(p) < 0.75 or _GUESS.search(str(p.get("reason") or ""))):
+            p["confidence"] = 0.0
+            p["reason"] = ""
     ordered = sorted(submitted, key=_conf, reverse=True)[:10]
 
     hydrated: list[dict[str, Any]] = []
@@ -80,7 +89,7 @@ async def _render_ranked(
         except (TypeError, ValueError):
             continue
         full = C.get(cid, role=role, user_id=user_id)
-        if not full:
+        if not full or _junk_name(full.get("display_name")):
             dropped.append(cid)
             continue
         channels = full.get("channels") or []
@@ -146,6 +155,16 @@ async def _render_ranked(
     }
 
 
+_GUESS = re.compile(r"(?i)\b(könnte|koennte|vielleicht|möglicherweise|moeglicherweise|eventuell|maybe|might|possibly|perhaps|could be)\b")
+_JUNK = re.compile(r"^[\d\s()+\-]{3,}$|@(s\.whatsapp\.net|lid|g\.us)$|^0$")
+
+
+def _junk_name(name) -> bool:
+    """A bare number, a WhatsApp id or '0' is not a name a person can pick."""
+    n = (name or "").strip()
+    return not n or bool(_JUNK.search(n))
+
+
 def _fetch_padding_contacts(
     role: Optional[str],
     user_id: Optional[int],
@@ -174,13 +193,15 @@ def _fetch_padding_contacts(
             f"SELECT id FROM contacts WHERE {where_sql} "
             f"ORDER BY (last_used_at IS NULL), last_used_at DESC, "
             f"display_name ASC LIMIT ?",
-            params + [int(limit)],
+            params + [int(limit) * 3],
         ).fetchall()
 
-    padded: List[dict] = []
+    padded: List[dict] = []  # junk names (bare numbers, ids) never pad the list
     for r in rows:
+        if len(padded) >= limit:
+            break
         full = contacts_get(r["id"], role=role, user_id=user_id)
-        if not full:
+        if not full or _junk_name(full.get("display_name")):
             continue
         channels = full.get("channels") or []
         padded.append({

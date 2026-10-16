@@ -217,7 +217,7 @@ async def execute(
         # so the user reads it in chat and either says "send it" (which
         # routes through /send and creates the real row) or refines /
         # discards it.
-        _show_card(chat_jid, contact_name, drafts, is_new_chat=True, attachment=attachment)
+        _show_card(chat_jid, contact_name, drafts, is_new_chat=True, attachment=attachment, ctx=ctx)
         return {"drafts": drafts, "sources": sources, "group_id": group_id,
                  "chat_jid": chat_jid, "initiate": True,
                  # Surface "not persisted" so the frontend draft-options
@@ -309,12 +309,12 @@ async def execute(
             conn.commit()
 
     recipient = (contact_obj or {}).get("display_name") or chat_row["name"] or ""
-    _show_card(chat_jid, recipient, drafts, is_new_chat=False, attachment=attachment)
+    _show_card(chat_jid, recipient, drafts, is_new_chat=False, attachment=attachment, ctx=ctx)
     return {"drafts": drafts, "sources": sources, "group_id": group_id}
 
 
 def _show_card(chat_jid: str, recipient: str, drafts: list, *, is_new_chat: bool,
-               attachment: Optional[dict] = None) -> None:
+               attachment: Optional[dict] = None, ctx=None) -> None:
     """The chat's WhatsAppDraftCard: the draft in an editable box with
     Send. Without it the chat said "you can send it below" and there was
     nothing below. Outside a chat turn the ui-action list is simply
@@ -329,6 +329,8 @@ def _show_card(chat_jid: str, recipient: str, drafts: list, *, is_new_chat: bool
         card["attachment"] = {"url": attachment["url"], "filename": attachment["filename"],
                               "mimetype": attachment["mimetype"]}
     _append(card)
+    # An earlier draft for the same chat loses its Send button when the
+    # turn is saved: conversation_io.supersede_cards (2026-10-16).
 
 
 def _build_initiate_prompt(

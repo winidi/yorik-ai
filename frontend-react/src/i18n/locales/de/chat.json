@@ -40,7 +40,8 @@
     "pickAccountFirst": "Erst den Absender wählen",
     "makeDefault": "Immer von diesem Konto senden",
     "sent": "Gesendet",
-    "discarded": "Verworfen"
+    "discarded": "Verworfen",
+    "replaced": "Durch einen neueren Entwurf ersetzt."
   },
   "draftKind": {
     "letter": "Brief",
@@ -129,7 +130,8 @@
     "sent": "Gesendet",
     "sending": "Sende…",
     "send": "Senden",
-    "sendFailed": "Senden fehlgeschlagen: {{error}}"
+    "sendFailed": "Senden fehlgeschlagen: {{error}}",
+    "replaced": "Durch einen neueren Entwurf ersetzt."
   },
   "pending": {
     "deleteThis": "Löschen?",

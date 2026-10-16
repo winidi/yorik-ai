@@ -40,7 +40,8 @@
     "pickAccountFirst": "Choose the sender first",
     "makeDefault": "Always send from this account",
     "sent": "Sent",
-    "discarded": "Thrown away"
+    "discarded": "Thrown away",
+    "replaced": "Replaced by a newer draft."
   },
   "draftKind": {
     "letter": "Letter",
@@ -129,7 +130,8 @@
     "sent": "Sent",
     "sending": "Sending…",
     "send": "Send",
-    "sendFailed": "Sending failed: {{error}}"
+    "sendFailed": "Sending failed: {{error}}",
+    "replaced": "Replaced by a newer draft."
   },
   "pending": {
     "deleteThis": "Delete this?",

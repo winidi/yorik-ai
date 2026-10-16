@@ -67,7 +67,7 @@ def test_invented_twice_gives_the_honest_fallback(uid):
     ])
     out = _run(fake, user_id=uid)
     assert out["response"].startswith("Doch, es ist 1234567890 *(nicht belegt)*.")
-    assert "in keiner Quelle gefunden" in out["response"]
+    assert "nirgends gefunden" in out["response"]
 
 
 def test_backed_value_and_quote_pass_with_sources(uid):
@@ -246,8 +246,11 @@ def test_two_dropped_quote_lines_leave_one_note_and_no_empty_quote_lines():
     from backend.agent.grounding import fallback_text
     answer = "Er schrieb:\n\n> Hey Dirk\n> \n> erste Zeile erfunden\n> \n> zweite Zeile erfunden\n> \n> Grüße\n\nNoch was?"
     out = fallback_text(["„erste Zeile erfunden“", "„zweite Zeile erfunden“"], "de", answer)
-    assert out.count("_(Zitat nicht belegt, weggelassen)_") == 1
-    assert "> Hey Dirk\n_(Zitat nicht belegt, weggelassen)_\n> Grüße" in out
+    # the invented lines and the empty quote lines are gone without a
+    # marker; one plain sentence at the end says a quote was left out
+    assert "> Hey Dirk\n> Grüße" in out
+    assert "erfunden" not in out and "> \n" not in out
+    assert out.count("Ein Zitat habe ich weggelassen") == 1
 
 
 OLIVER = ("Hey Dirk :)\n\n\nwas meinst du konkret mit „monetär\"?\n\n\nDie Akademie ist kostenlos - es gibt lediglich "

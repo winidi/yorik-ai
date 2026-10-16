@@ -77,6 +77,10 @@ export function EmailDraftReadyCard({ to, subject, preview, attachmentFilename, 
             <Check className="w-4 h-4" /> {t("chat.email.sent")}
           </span>
         </div>
+      ) : done === "replaced" ? (
+        <div className="mt-3 flex justify-end">
+          <span className="px-3 py-1.5 text-sm text-muted-foreground">{t("chat.email.replaced")}</span>
+        </div>
       ) : done === "discarded" ? (
         <div className="mt-3 flex justify-end">
           <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground">

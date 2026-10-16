@@ -578,32 +578,28 @@ def fallback_text(missing: List[str], language: Optional[str], answer: str = "")
         text = f"{text.rstrip()}\n\n_{note_lookup}_"
     quotes = {m.strip("„“") for m in missing if m.startswith("„")}
     if quotes:
+        # the unbacked quote lines go, without a marker in their place;
+        # one plain sentence at the end says that something was left out
         kept = []
-        gone = "_(Zitat nicht belegt, weggelassen)_" if de else "_(quote not verified, left out)_"
         for line in text.splitlines():
             body = line.strip().lstrip("> ").strip().strip("„“”\"«» ")
-            if line.strip().startswith(">") and body in quotes:
-                # a note instead of nothing — "… steht:" must not end in the void;
-                # empty quote lines between two dropped ones go too (2026-09-28)
-                while kept and kept[-1].strip() in (">", ""):
-                    blank = kept.pop()
-                    if kept and kept[-1] != gone and not kept[-1].strip().startswith(">"):
-                        kept.append(blank)
-                        break
-                if not kept or kept[-1] != gone:
-                    kept.append(gone)
-                continue
-            if line.strip() == ">" and kept and kept[-1] == gone:
+            if line.strip().startswith(">") and (body in quotes or not body):
                 continue
             kept.append(line)
         text = "\n".join(kept)
     for value in (m for m in missing if not m.startswith("„")):
         text = re.sub(re.escape(value) + r"(?!\s*\*\((?:nicht belegt|not verified)\))", value + mark, text, count=0)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     if not text.strip():
         text = ("Dazu habe ich nichts Sicheres gefunden." if de else "I found nothing reliable on that.")
-    note = ("Werte mit *(nicht belegt)* habe ich in keiner Quelle gefunden." if de
-            else "Values marked *(not verified)* were not found in any source.")
-    return f"{text.rstrip()}\n\n_{note}_"
+    notes = []
+    if quotes:
+        notes.append("Ein Zitat habe ich weggelassen, weil ich es nicht belegen konnte." if de
+                     else "I left out a quote because I could not back it up.")
+    if any(not m.startswith("„") for m in missing):
+        notes.append("Angaben mit *(nicht belegt)* habe ich nirgends gefunden, bitte nachprüfen." if de
+                     else "Anything marked *(not verified)* I could not find anywhere, please check.")
+    return text.rstrip() + ("\n\n" + " ".join(notes) if notes else "")
 
 
 def sources_action(verdict: Verdict) -> Optional[Dict[str, Any]]:

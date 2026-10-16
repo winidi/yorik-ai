@@ -1898,6 +1898,7 @@ function MessageBubble({
             <WhatsAppDraftCard key={`${a.chat_jid}-${i}`} chatJid={a.chat_jid} recipient={a.recipient || ""}
                                text={a.text || ""} isNewChat={!!a.is_new_chat} attachment={a.attachment || null}
                                sentText={a.done === "sent" ? (a.done_data?.text ?? a.text ?? "") : null}
+                               replaced={a.done === "replaced"}
                                onSent={(t) => markCard(a.uid, "sent", { text: t })} />
           ))}
         {/* Template picker — the LLM called compose_draft with a vague
@@ -2897,7 +2898,7 @@ function ContactPickerCard({
               c.email || "",
               wa && wa !== phone ? `WhatsApp ${wa}` : (!phone && c.whatsapp ? "WhatsApp" : ""),
             ].filter(Boolean).join(" · ");
-            const conf = typeof c.confidence === "number" ? Math.round(c.confidence * 100) : null;
+            const conf = typeof c.confidence === "number" && c.confidence >= 0.75 ? Math.round(c.confidence * 100) : null;
             const confTone =
               conf === null      ? "" :
               conf >= 80         ? "bg-emerald-500/15 text-emerald-500" :

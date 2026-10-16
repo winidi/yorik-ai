@@ -23,8 +23,10 @@ export const WA_PREFILL_KEY = (jid: string) => `wa-prefill:${jid}`;
 
 export interface DraftAttachment { url: string; filename: string; mimetype?: string }
 
-export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNewChat, sentText, onSent, attachment }: {
+export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNewChat, sentText, onSent, attachment, replaced }: {
   chatJid: string; recipient: string; text: string; isNewChat?: boolean;
+  /** A newer draft for this chat took its place: no Send button any more. */
+  replaced?: boolean;
   /** A file that goes out with the text (photo, PDF, chat attachment);
    *  sent through /send-media-ref with the text as caption. */
   attachment?: DraftAttachment | null;
@@ -79,7 +81,7 @@ export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNew
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        disabled={sent}
+        disabled={sent || !!replaced}
         rows={Math.min(8, Math.max(2, text.split("\n").length + 1))}
         className="mt-3 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-70"
       />
@@ -97,7 +99,9 @@ export function WhatsAppDraftCard({ chatJid, recipient, text: initialText, isNew
             {tr("chat.whatsapp.openChat")} <ArrowRight className="w-4 h-4" />
           </button>
         )}
-        {sent ? (
+        {replaced && !sent ? (
+          <span className="rounded-lg px-3 py-1.5 text-sm text-muted-foreground">{tr("chat.whatsapp.replaced")}</span>
+        ) : sent ? (
           <span className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-primary">
             <Check className="w-4 h-4" /> {tr("chat.whatsapp.sent")}
           </span>

@@ -646,6 +646,7 @@ async def ask(
             messages[-1]["content"] = stripped
             final_text = stripped
 
+    conversation_io.supersede_cards(older, ui_actions)
     conversation_io.save_messages(
         conversation_id, role, user.id, older + messages,
     )
@@ -1337,6 +1338,7 @@ async def ask_stream(
             messages[-1]["content"] = stripped
             final_text = stripped
 
+    conversation_io.supersede_cards(older, ui_actions)
     conversation_io.save_messages(conversation_id, role, user.id, older + messages)
     conversation_io.save_ledger(conversation_id, ledger, user.id)
 

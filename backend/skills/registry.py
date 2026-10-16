@@ -187,9 +187,11 @@ _DISABLED_SKILLS_KEY = "disabled_skills"
 # niche tools that cost every model attention on every turn — an outside
 # agent, the day planner, venue prices, PDF forms. The first save of the
 # toggles replaces this default with whatever the admin chose.
+# Day planning (plan_my_day, plan_day, remember_planning_rule) left this
+# list on 2026-10-16: "plan mir den Montag" opened an empty day and asked
+# for keywords while the planner sat switched off (live test, F8).
 NICHE_OFF_BY_DEFAULT = frozenset({
     "ask_agent",
-    "plan_my_day", "plan_day", "remember_planning_rule",
     "extract_price_table", "compute_group_price", "save_venue",
     "fill_pdf_form",
 })

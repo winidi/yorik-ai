@@ -299,7 +299,37 @@ def _keep_card_marks(new_messages: List[Dict[str, Any]], old_blob: Any) -> None:
                 a["done_data"] = m["done_data"]
 
 
-CARD_STATES = frozenset({"sent", "deleted", "kept", "discarded", "picked", "done", "cancelled", "undone"})
+CARD_STATES = frozenset({"sent", "deleted", "kept", "discarded", "picked", "done", "cancelled", "undone", "replaced"})
+
+
+# A newer draft takes the place of an earlier one: the old card keeps
+# its text but loses the Send button. One staged mail per person, so any
+# earlier email_ready card is replaced; a WhatsApp draft replaces the
+# earlier drafts for the same chat. Two sendable drafts for one thing on
+# screen misled the person (live test 2026-10-16).
+_SUPERSEDES = {
+    "email_ready": (),
+    "whatsapp_draft_created": ("chat_jid",),
+}
+
+
+def supersede_cards(older: List[Dict[str, Any]], new_actions: List[Dict[str, Any]]) -> int:
+    """Mark, in the in-memory history `older`, every open card that a
+    card in `new_actions` replaces. Called by the loop right before the
+    turn is saved, so the mark survives the save. Returns the count."""
+    n = 0
+    for new in new_actions or []:
+        keys = _SUPERSEDES.get(new.get("type"))
+        if keys is None:
+            continue
+        for a in _cards(older):
+            if a.get("type") != new.get("type") or a.get("done") or a.get("uid") == new.get("uid"):
+                continue
+            if any(a.get(k) != new.get(k) for k in keys):
+                continue
+            a["done"] = "replaced"
+            n += 1
+    return n
 
 
 def mark_card(conversation_id: str, user_id: Any, uid: str, state: str,
