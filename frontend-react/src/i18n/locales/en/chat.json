@@ -176,5 +176,14 @@
     "sentText": "Thank you. The report is queued and leaves with the next send; you can see it under Settings → Developer → Diagnostics.",
     "dontSend": "Don't send",
     "send": "Send this report"
+  },
+  "bills": {
+    "header": "Bills ({{total}})",
+    "markPaid": "Mark as paid",
+    "markUnpaid": "Mark as unpaid",
+    "due": "due {{date}}",
+    "overdue": "overdue since {{date}}",
+    "today": "today",
+    "openAll": "Open all {{total}} in Finance →"
   }
 }

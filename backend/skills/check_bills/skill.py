@@ -29,6 +29,12 @@ async def execute(
             "paid_by", "overdue", "days_left", "source", "source_ref", "email_message_id", "document_id", "link")
     rows = [{k: r.get(k) for k in keep} for r in rows]
 
+    # The card the hint promises ("siehe Karten unten"): until 2026-10-16
+    # there was none and the chat pointed at nothing.
+    from backend.ui_tools import _append
+    if rows:
+        _append({"type": "bills_found", "bills": rows, "total": len(rows)})
+
     out: dict[str, Any] = {
         "bills":  rows,
         "window": {"start_iso": start_iso, "end_iso": end_iso},

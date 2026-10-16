@@ -176,5 +176,14 @@
     "sentText": "Danke. Der Bericht ist eingereiht und geht mit dem nächsten Versand raus; du findest ihn unter Einstellungen → Entwickler → Diagnose.",
     "dontSend": "Nicht senden",
     "send": "Diesen Bericht senden"
+  },
+  "bills": {
+    "header": "Rechnungen ({{total}})",
+    "markPaid": "Als bezahlt markieren",
+    "markUnpaid": "Als offen markieren",
+    "due": "fällig {{date}}",
+    "overdue": "überfällig seit {{date}}",
+    "today": "heute",
+    "openAll": "Alle {{total}} in Finanzen öffnen →"
   }
 }

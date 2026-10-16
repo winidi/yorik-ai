@@ -20,8 +20,7 @@ import {
   FileText, Download, Eye, X, ArrowDown, ThumbsUp, ThumbsDown,
   AlertCircle, Globe, Check, Upload, Paperclip, Copy, RefreshCw, Calendar,
   CheckSquare, UsersRound, Cake, ChevronDown, ChevronLeft, ChevronRight,
-  Pin, PinOff, Mic, Pencil, Square, Bug, ShieldAlert,
-} from "lucide-react";
+  Pin, PinOff, Mic, Pencil, Square, Bug, ShieldAlert, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, notifySessionExpired } from "@/lib/api";
 import { DiagnosticsReportModal } from "@/components/DiagnosticsReportModal";
@@ -1957,6 +1956,13 @@ function MessageBubble({
               total={typeof a.total === "number" ? a.total : (a.tasks || []).length}
             />
           ))}
+        {/* Bills — check_bills emits this so "welche Rechnungen sind offen?"
+            shows rows the person can tick paid or open in Finance. */}
+        {!isUser && message.ui_actions && message.ui_actions
+          .filter(a => a.type === "bills_found")
+          .map((a: any, i: number) => (
+            <BillsFoundCard key={i} bills={a.bills || []} total={typeof a.total === "number" ? a.total : (a.bills || []).length} />
+          ))}
         {/* Calendar events — check_calendar emits this so "what's on today?"
             renders as inline clickable rows (open → /calendar?event=ID)
             instead of forcing the user to switch apps. Sister to tasks_found. */}
@@ -3103,6 +3109,98 @@ function AllContactsBrowserModal({
 
 
 // ---------------------------------------------------------------------------
+// BillsFoundCard — the bills check_bills found: name, payee, amount, due
+// date; tick "paid" without leaving the chat, open the rest in Finance.
+// ---------------------------------------------------------------------------
+
+type BillCardRow = {
+  id: number;
+  name: string;
+  payee?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  due_date?: string | null;
+  paid?: boolean | number | null;
+  overdue?: boolean | null;
+  recurring?: string | null;
+};
+
+function BillsFoundCard({ bills, total }: { bills: BillCardRow[]; total: number }) {
+  const { t: tr } = useTranslation();
+  const navigate = useNavigate();
+  const [localPaid, setLocalPaid] = useState<Record<number, boolean>>({});
+  if (!bills.length) return null;
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  function fmtDue(d?: string | null): string {
+    if (!d) return "";
+    if (d === todayIso) return tr("chat.bills.today");
+    const dt = new Date(d + "T00:00:00");
+    if (Number.isNaN(dt.getTime())) return d;
+    return formatDate(dt, { day: "numeric", month: "short" });
+  }
+  function fmtAmount(b: BillCardRow): string {
+    if (b.amount == null) return "";
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: b.currency || "EUR" }).format(b.amount);
+    } catch { return `${b.amount} ${b.currency || ""}`.trim(); }
+  }
+  async function togglePaid(b: BillCardRow, current: boolean) {
+    setLocalPaid(prev => ({ ...prev, [b.id]: !current }));
+    try {
+      await api.post(`/api/bills/${b.id}/${current ? "unpaid" : "paid"}`, {});
+    } catch (e) {
+      setLocalPaid(prev => ({ ...prev, [b.id]: current }));
+      console.error("[bills_found] toggle failed", e);
+    }
+  }
+
+  return (
+    <div className="mt-2 border border-amber-500/30 rounded-xl bg-amber-500/[0.04] overflow-hidden max-w-md">
+      <div className="px-3 pt-2.5 pb-1.5 text-xs text-amber-600 font-semibold flex items-center gap-1.5">
+        <Receipt className="w-3 h-3" />
+        {tr("chat.bills.header", { total })}
+      </div>
+      <div className="divide-y divide-amber-500/10 max-h-[420px] overflow-y-auto">
+        {bills.map(b => {
+          const paidNow = localPaid[b.id] ?? !!b.paid;
+          const overdue = !paidNow && (!!b.overdue || (!!b.due_date && b.due_date < todayIso));
+          return (
+            <div key={b.id} className="flex items-start gap-2.5 px-3 py-2 hover:bg-amber-500/[0.06] transition">
+              <button
+                type="button"
+                onClick={() => togglePaid(b, paidNow)}
+                className={cn(
+                  "mt-0.5 h-4 w-4 rounded border flex items-center justify-center transition shrink-0",
+                  paidNow ? "bg-amber-500 border-amber-500 text-white" : "border-muted-foreground/40 hover:border-amber-500"
+                )}
+                title={paidNow ? tr("chat.bills.markUnpaid") : tr("chat.bills.markPaid")}
+              >
+                {paidNow && <Check className="w-3 h-3" />}
+              </button>
+              <button type="button" onClick={() => navigate("/finance?tab=bills")} className="flex-1 min-w-0 text-left">
+                <div className={cn("text-sm font-medium truncate", paidNow && "line-through text-muted-foreground")}>
+                  {b.name}
+                </div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {[b.payee, fmtAmount(b), b.due_date ? (overdue ? tr("chat.bills.overdue", { date: fmtDue(b.due_date) }) : tr("chat.bills.due", { date: fmtDue(b.due_date) })) : null]
+                    .filter(Boolean).join(" · ")}
+                </div>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      {total > bills.length && (
+        <button type="button" onClick={() => navigate("/finance?tab=bills")}
+          className="w-full px-3 py-2 text-xs text-amber-600 hover:bg-amber-500/[0.06] text-left">
+          {tr("chat.bills.openAll", { total })}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // TasksFoundCard — clickable task rows inside a chat bubble.
 //   - Checkbox marks the task done via PATCH (optimistic) so the user can
 //     burn through their list without leaving chat.
