@@ -109,12 +109,17 @@ await journey("Clara ticks her chore on her phone (Tasks)", "phone", async (page
 
 if (H.real_llm) await journey("Anna asks the chat on her phone and gets an answer", "phone", async (page) => {
   await login(page, "anna");
-  await page.goto(BASE + "/r/chat");
+  // a fresh thread (?new=1): the most recent one would carry older
+  // answers whose thumbs make "the answer is there" ambiguous
+  await page.goto(BASE + "/r/chat?new=1");
   await page.waitForLoadState("networkidle");
   const box = page.locator("textarea[placeholder^='Ask me'], input[placeholder^='Ask me']").first();
   await box.fill("Welche Termine habe ich morgen?");
   await box.press("Enter");
-  await page.waitForTimeout(12000);
+  // wait for the answer itself, not a fixed time: the model may still be
+  // busy with the previous journey's question
+  await page.getByTitle("This wasn't helpful").last().waitFor({ timeout: 90000 }).catch(() => {});
+  await page.waitForTimeout(500);
   const text = await page.locator("body").innerText();
   const answer = text.split("Welche Termine habe ich morgen?").pop() || "";
   // Four appointments tomorrow (seeded); "keine Termine" is the wrong answer.
@@ -135,11 +140,11 @@ await journey("the admin is asked about diagnostics once, a report shows numbers
                                                                      body: JSON.stringify({ errors: true }) }));
   await page.goto(BASE + "/r/home"); await page.waitForLoadState("networkidle");
   const again = await page.getByText("May Yorik tell its makers").count();
-  await page.goto(BASE + "/r/chat"); await page.waitForLoadState("networkidle");
-  if (await page.getByText("Start a conversation").count()) { await page.getByText("Start a conversation").first().click(); await page.waitForTimeout(600); }
+  await page.goto(BASE + "/r/chat?new=1"); await page.waitForLoadState("networkidle");
   const box = page.locator("textarea[placeholder^='Ask me'], input[placeholder^='Ask me']").first();
   await box.fill("Hat Oma Hilde mir wegen Sonntag Kaffee geschrieben?"); await box.press("Enter");
-  await page.waitForTimeout(6000);
+  await page.getByTitle("This wasn't helpful").last().waitFor({ timeout: 90000 });
+  await page.waitForTimeout(500);
   await page.getByTitle("This wasn't helpful").last().click(); await page.waitForTimeout(500);
   await page.getByText("found nothing").last().click(); await page.waitForTimeout(300);
   await page.getByText("Send a diagnostic report").last().click(); await page.waitForTimeout(4000);
