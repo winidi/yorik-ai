@@ -82,9 +82,16 @@ export function AttachmentCard({ id }: { id: number }) {
 
   return (
     <div className="mt-2 w-full max-w-sm rounded-xl border border-border bg-card text-card-foreground text-left overflow-hidden">
+      {att.is_image && (
+        // A photo is shown as a photo: the person sees at a glance that
+        // the right picture arrived, not only its file name.
+        <a href={att.raw_url} target="_blank" rel="noreferrer" className="block bg-muted">
+          <img src={att.raw_url} alt="" className="block w-full max-h-64 object-cover" />
+        </a>
+      )}
       <a href={att.raw_url} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 hover:bg-muted/40 transition">
         {att.is_image
-          ? <img src={att.raw_url} alt="" className="w-12 h-12 rounded-md object-cover shrink-0 bg-muted" />
+          ? <span className="w-12 h-12 rounded-md bg-sky-500/10 text-sky-600 grid place-items-center shrink-0"><ImageIcon className="w-5 h-5" /></span>
           : <span className="w-12 h-12 rounded-md bg-amber-500/10 text-amber-600 grid place-items-center shrink-0"><FileText className="w-5 h-5" /></span>}
         <span className="min-w-0">
           <span className="block text-sm font-medium truncate">{att.filename}</span>

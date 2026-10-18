@@ -59,7 +59,11 @@
   },
   "upload": {
     "uploading": "{{name}} wird hochgeladen…",
-    "failed": "Upload fehlgeschlagen: {{error}}"
+    "failed": "Upload fehlgeschlagen: {{error}}",
+    "progress": "{{name}} wird hochgeladen … {{pct}} %",
+    "processing": "{{name}} wird gespeichert…",
+    "done": "{{name}} angehängt — Yorik schaut es sich an",
+    "networkError": "Die Verbindung ist abgebrochen"
   },
   "pipeline": {
     "followUp": "Nachfassen: {{title}}",

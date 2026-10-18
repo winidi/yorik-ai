@@ -59,7 +59,11 @@
   },
   "upload": {
     "uploading": "Uploading {{name}}…",
-    "failed": "Upload failed: {{error}}"
+    "failed": "Upload failed: {{error}}",
+    "progress": "{{name}} uploading … {{pct}} %",
+    "processing": "{{name}} is being stored…",
+    "done": "{{name}} attached — Yorik is looking at it",
+    "networkError": "The connection dropped"
   },
   "pipeline": {
     "followUp": "Follow up: {{title}}",

@@ -14,6 +14,7 @@ from typing import Any, Dict
 from ..registry import Trigger, register_trigger
 
 log = logging.getLogger("yorik.suggestions.triggers.email_new")
+_ANALYSES = asyncio.Semaphore(2)
 
 
 async def _on_fire(payload: Dict[str, Any]) -> None:
@@ -23,17 +24,21 @@ async def _on_fire(payload: Dict[str, Any]) -> None:
         log.debug("email.new trigger missing fields: %r", payload)
         return
     from .. import engine
-    try:
-        result = await engine.analyse_message(
-            owner_user_id=str(owner_user_id),
-            source_kind="email",
-            source_id=int(message_id),
-        )
-        if result.get("count"):
-            log.info("email.new analyse → %d suggestions for msg %s",
-                     result["count"], message_id)
-    except Exception as exc:  # noqa: BLE001
-        log.warning("email.new analyse failed for msg %s: %s", message_id, exc)
+    # Two analyses at a time: a burst of new messages (history replay
+    # after a pairing, a first mail sync) must not fill the worker
+    # threads that every other request needs.
+    async with _ANALYSES:
+        try:
+            result = await engine.analyse_message(
+                owner_user_id=str(owner_user_id),
+                source_kind="email",
+                source_id=int(message_id),
+            )
+            if result.get("count"):
+                log.info("email.new analyse → %d suggestions for msg %s",
+                         result["count"], message_id)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("email.new analyse failed for msg %s: %s", message_id, exc)
 
 
 def fire_from_thread(loop: asyncio.AbstractEventLoop,

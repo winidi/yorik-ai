@@ -351,7 +351,15 @@ def _insert_message(m: dict[str, Any], owner_user_id: str) -> None:
         # 1:1 only — groups are filtered above (the .endswith("@g.us")
         # guard), and the engine's contact resolution uses chat_jid
         # which only makes sense for a 1:1 contact.
+        # After a (re)pairing the bridge replays the chat history, a
+        # thousand messages in a minute. Those are not new: analysing
+        # each one starts an LLM call per message and starved every
+        # other request for minutes (2026-10-18). Only a message from
+        # the last quarter hour is worth a suggestion.
+        _age_s = time.time() - int(m.get("timestamp") or 0)
         try:
+            if _age_s > _SUGGEST_MAX_AGE_S:
+                raise _TooOld()
             from . import suggestions as _suggestions_pkg
             from .suggestions.triggers import wa_new as _wa_trig
             # We need both the surrogate id (engine source_id) and a
@@ -372,6 +380,8 @@ def _insert_message(m: dict[str, Any], owner_user_id: str) -> None:
                 if _loop is not None:
                     _wa_trig.fire_from_thread(
                         _loop, owner_user_id, int(_r["id"]))
+        except _TooOld:
+            pass
         except Exception as exc:
             log.warning("WA suggestions trigger failed: %s", exc)
 
@@ -382,6 +392,13 @@ _PREVIEW_ICON = {"image": "📷", "video": "🎥", "audio": "🎙️", "document
 # What earlier versions stored, English only; mapped to the viewer's
 # language when the chat list is read.
 _LEGACY_PREVIEWS = {"📷 Photo": "image", "🎥 Video": "video", "🎙️ Voice message": "audio", "🩷 Sticker": "sticker"}
+
+
+_SUGGEST_MAX_AGE_S = 15 * 60
+
+
+class _TooOld(Exception):
+    """A replayed message, older than the suggestion window."""
 
 
 def _media_placeholder(m: dict[str, Any], lang: str = "en") -> Optional[str]:

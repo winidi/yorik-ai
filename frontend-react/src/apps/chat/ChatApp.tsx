@@ -515,7 +515,7 @@ function Thread({
   const voiceTickRef = useRef<number | null>(null);
   // Inline toast for non-vcf drops (PDF / image / .ics). Voice and
   // mention popovers don't need this; just file uploads do.
-  const [uploadToast, setUploadToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [uploadToast, setUploadToast] = useState<{ kind: "ok" | "err" | "busy"; text: string } | null>(null);
 
   // Mention/slash popover state — when null, no popover is open.
   // start/end mark the character range in the textarea that the
@@ -1242,9 +1242,13 @@ function Thread({
               "absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full text-xs flex items-center gap-1.5 shadow-md border",
               uploadToast.kind === "ok"
                 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
-                : "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30",
+                : uploadToast.kind === "busy"
+                  ? "bg-card text-foreground border-border"
+                  : "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30",
             )}>
-              {uploadToast.kind === "ok" ? <Check className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+              {uploadToast.kind === "ok" ? <Check className="w-3 h-3" />
+                : uploadToast.kind === "busy" ? <Loader2 className="w-3 h-3 animate-spin" />
+                : <AlertCircle className="w-3 h-3" />}
               <span>{uploadToast.text}</span>
             </div>
           )}
@@ -1460,18 +1464,37 @@ function Thread({
   // the assistant reads it, and filed in Paperless only on the user's
   // yes (card under the message, or "ja, leg das ab").
   async function uploadDocument(file: File) {
-    setUploadToast({ kind: "ok", text: tr("chat.upload.uploading", { name: file.name }) });
+    setUploadToast({ kind: "busy", text: tr("chat.upload.uploading", { name: file.name }) });
     try {
       const fd = new FormData();
       fd.append("file", file);
       const q = conversationId ? `?conversation_id=${encodeURIComponent(conversationId)}` : "";
-      const r = await fetch(`/api/chat/attachments${q}`, { method: "POST", credentials: "include", body: fd });
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({} as any));
-        throw new Error(j.detail || `HTTP ${r.status}`);
-      }
-      const att = await r.json() as { id: number; filename: string };
-      setUploadToast(null);
+      // XMLHttpRequest, not fetch: a phone photo over Tailscale takes a
+      // while, and the person sees the percentage move instead of a
+      // chip that looks stuck. After 100 % the server still stores the
+      // file, so the text changes once more.
+      const att = await new Promise<{ id: number; filename: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `/api/chat/attachments${q}`);
+        xhr.withCredentials = true;
+        xhr.upload.onprogress = ev => {
+          if (!ev.lengthComputable) return;
+          const pct = Math.round((ev.loaded / ev.total) * 100);
+          setUploadToast({ kind: "busy", text: pct >= 100
+            ? tr("chat.upload.processing", { name: file.name })
+            : tr("chat.upload.progress", { name: file.name, pct }) });
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) { resolve(JSON.parse(xhr.responseText)); return; }
+          let detail = "";
+          try { detail = JSON.parse(xhr.responseText).detail || ""; } catch { /* not JSON */ }
+          reject(new Error(detail || `HTTP ${xhr.status}`));
+        };
+        xhr.onerror = () => reject(new Error(tr("chat.upload.networkError")));
+        xhr.send(fd);
+      });
+      setUploadToast({ kind: "ok", text: tr("chat.upload.done", { name: att.filename }) });
+      window.setTimeout(() => setUploadToast(cur => (cur?.kind === "ok" ? null : cur)), 3000);
       const note = text.trim();
       window.dispatchEvent(new CustomEvent("yorik:chat-seed-and-send", {
         detail: { seed: `${note ? note + "\n\n" : ""}${i18n.t("messages.seed.attached", { name: att.filename, id: att.id })}` },
