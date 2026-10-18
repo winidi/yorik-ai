@@ -44,6 +44,7 @@ export function FocusCard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const loc = useLocation();
+  const composerBelow = /^\/r\/(chat|whatsapp)(\/|$)/.test(loc.pathname);
   const [task, setTask] = useState<RunningTask | null>(null);
   const [loadedAt, setLoadedAt] = useState(() => Date.now());
   const [, tick] = useState(0);
@@ -100,9 +101,16 @@ export function FocusCard() {
       role="status"
       className={cn(
         "fixed z-[45] left-1/2 -translate-x-1/2",
-        // Below the mobile top bar; on desktop in the empty middle of
-        // the app headers.
-        "top-[calc(env(safe-area-inset-top)+3rem)] md:top-3",
+        // On a phone the pill sits above the Dock, where no app puts a
+        // control; under the top bar it covered the calendar's Today /
+        // Next / view buttons (e2e crawler, 2026-10-19). In the chat and
+        // WhatsApp the composer sits above the Dock, so the pill goes
+        // above the composer there. On desktop: the empty middle of the
+        // app headers.
+        composerBelow
+          ? "max-md:bottom-[calc(var(--dock-clearance)+5.5rem)]"
+          : "max-md:bottom-[calc(var(--dock-clearance)+0.75rem)]",
+        "md:top-3",
         "max-w-[calc(100vw-2rem)] md:max-w-md",
         "flex items-center gap-2 rounded-full border border-emerald-500/40 bg-card/95 backdrop-blur",
         "pl-3 pr-1.5 py-1.5 shadow-lg shadow-emerald-500/10",
