@@ -525,30 +525,44 @@ function Thread({ jid, chat, onSent }:
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-scroll behavior matching WhatsApp Web's:
-  //   - Opening a chat: ALWAYS land at the bottom (latest messages first).
-  //     Double rAF lets React paint the new messages before we measure
-  //     scrollHeight; otherwise we'd scroll to a stale (too-small) value.
-  //   - Mid-chat new messages: only auto-scroll when the user is already
-  //     near the bottom (don't yank them away if they're scrolling up
-  //     through history).
-  const prevJidRef = useRef<string>("");
+  // Auto-scroll like WhatsApp Web: opening a chat lands at the newest
+  // message, later messages only pull the view down when the person is
+  // already at the bottom. The old code scrolled once on the chat
+  // switch, while the list was still loading; the messages came a
+  // moment later and the view stayed at the top (Dirk, 2026-10-18).
+  // Now: "stick to the bottom" is a wish per chat that is fulfilled on
+  // the first render with messages, and kept while the person stays
+  // at the bottom and the content grows (photos loading, new messages).
+  const wantBottomRef = useRef(true);
+  const atBottomRef = useRef(true);
+  useEffect(() => { wantBottomRef.current = true; atBottomRef.current = true; }, [jid]);
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
-    const jidChanged = prevJidRef.current !== jid;
-    prevJidRef.current = jid;
-    if (jidChanged) {
+    if (!el || messages.length === 0) return;
+    if (wantBottomRef.current || atBottomRef.current) {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           el.scrollTop = el.scrollHeight;
+          wantBottomRef.current = false;
         });
       });
-      return;
     }
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    if (atBottom) requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
   }, [messages.length, jid]);
+  useEffect(() => {
+    const el = scrollRef.current;
+    const inner = el?.firstElementChild;
+    if (!el || !inner) return;
+    const ro = new ResizeObserver(() => {
+      if (wantBottomRef.current || atBottomRef.current) el.scrollTop = el.scrollHeight;
+    });
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, [jid]);
+  function rememberScrollPosition() {
+    const el = scrollRef.current;
+    if (!el) return;
+    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  }
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -635,7 +649,7 @@ function Thread({ jid, chat, onSent }:
       )}
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} onScroll={rememberScrollPosition} className="flex-1 overflow-y-auto">
         <div className="px-6 py-6 max-w-3xl mx-auto">
           {msgsApi.loading && messages.length === 0 && (
             <div className="text-center text-xs text-muted-foreground py-12">{t("whatsapp.thread.loading")}</div>
