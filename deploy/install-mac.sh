@@ -110,6 +110,25 @@ if [[ ! -f .env ]]; then
   ok "settings created with fresh passwords"
 fi
 
+# ── ports ─────────────────────────────────────────────────────────────
+# Another service on a port Yorik publishes makes `docker compose up`
+# fail with a reason only Docker's logs show; say it here, with the
+# holder. A running Yorik holds the ports itself: first start only.
+if ! docker compose ps -q 2>/dev/null | grep -q .; then
+  port_busy=0
+  yorik_port="$(grep -E '^YORIK_PORT=' .env | cut -d= -f2-)"
+  photos_port="$(grep -E '^YORIK_PHOTOS_PORT=' .env | cut -d= -f2-)"
+  for entry in "${yorik_port:-8000}:Yorik" "${photos_port:-2283}:photos (Immich phone app)"; do
+    port="${entry%%:*}"; desc="${entry#*:}"
+    holder="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | tail -n +2 | awk '{print $1" (pid "$2")"}' | sort -u | head -3)"
+    if [[ -n "$holder" ]]; then
+      warn "port $port is taken (needed for $desc): $holder"
+      port_busy=1
+    fi
+  done
+  (( port_busy )) && fail "one or more ports Yorik needs are in use" "quit the app on that port, or set YORIK_PORT / YORIK_PHOTOS_PORT in $PWD/.env, then start again"
+fi
+
 # ── start ─────────────────────────────────────────────────────────────
 say "starting Yorik (the first start downloads several GB)"
 (( BUILD )) && docker compose build yorik whatsapp-bridge

@@ -70,6 +70,26 @@ else
 fi
 record runtime docker
 
+# The two ports Yorik publishes on this machine. Another service on one
+# of them makes `docker compose up` fail with a reason only Docker's
+# logs show; say it here, with the holder, as install.sh does. A running
+# Yorik holds them itself, so the check is for a first start only.
+if ! docker compose ps -q 2>/dev/null | grep -q .; then
+  port_busy=0
+  yorik_port="$(grep -E '^YORIK_PORT=' .env | cut -d= -f2-)"
+  photos_port="$(grep -E '^YORIK_PHOTOS_PORT=' .env | cut -d= -f2-)"
+  for entry in "${yorik_port:-8000}:Yorik" "${photos_port:-2283}:photos (Immich phone app)"; do
+    port="${entry%%:*}"; desc="${entry#*:}"
+    if ss -lnt "sport = :$port" 2>/dev/null | grep -q LISTEN; then
+      warn "port $port is taken (needed for $desc)"
+      ss -lntp "sport = :$port" 2>/dev/null | tail -n +2 | sed 's/^/    /'
+      port_busy=1
+    fi
+  done
+  (( port_busy )) && fatal "one or more ports Yorik needs are in use" \
+    "stop the service on that port, or set YORIK_PORT / YORIK_PHOTOS_PORT in $INSTALL_DIR/deploy/.env, then start again"
+fi
+
 say "starting Yorik, photos, documents, WhatsApp, the AI model and Tailscale"
 info "the first start downloads several GB of images; later starts take seconds"
 if [[ "$FILES" == *compose.build.yaml* ]]; then

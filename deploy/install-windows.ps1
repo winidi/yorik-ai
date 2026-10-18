@@ -224,6 +224,26 @@ if (-not (Test-Path $envFile)) {
 
 # -- 4. start ---------------------------------------------------------
 Push-Location $Home_
+# Another program on a port Yorik publishes makes "docker compose up"
+# fail with a reason only Docker's logs show; say it here, with the
+# program's name. A running Yorik holds the ports itself: first start only.
+$running = (docker compose ps -q 2>$null) | Where-Object { $_ }
+if (-not $running) {
+  $envText = Get-Content $envFile -Raw
+  $yorikPort  = if ($envText -match "(?m)^YORIK_PORT=(\d+)") { [int]$Matches[1] } else { 8000 }
+  $photosPort = if ($envText -match "(?m)^YORIK_PHOTOS_PORT=(\d+)") { [int]$Matches[1] } else { 2283 }
+  $busy = $false
+  foreach ($pair in @(@($yorikPort, "Yorik"), @($photosPort, "photos (Immich phone app)"))) {
+    $port, $desc = $pair
+    $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+    if ($conns) {
+      $names = ($conns | ForEach-Object { try { (Get-Process -Id $_.OwningProcess -ErrorAction Stop).ProcessName } catch { "pid $($_.OwningProcess)" } } | Sort-Object -Unique) -join ", "
+      Warn "port $port is taken (needed for $desc): $names"
+      $busy = $true
+    }
+  }
+  if ($busy) { Pop-Location; Fail "one or more ports Yorik needs are in use." "Close the program on that port, or set YORIK_PORT / YORIK_PHOTOS_PORT in $envFile, then start this again." }
+}
 Say "starting Yorik (the first start downloads several GB; later starts take seconds)"
 if ($needBuild) { docker compose build yorik whatsapp-bridge }
 docker compose up -d --quiet-pull
