@@ -168,6 +168,8 @@ export async function reachFindings(page) {
     // control cannot be scrolled out from under. A popover, a drawer's
     // backdrop, a toast or the first-visit hint over the page is by design.
     const blocks = (el, top) => {
+      // the hit is the control's own icon or text: nothing lies on top
+      if (el.contains(top)) return false;
       if (top.closest("[data-app-hint]")) return false;
       if (stack(top) === stack(el)) return true;
       if (top.closest('nav[data-tour="dock"]')) return true;
