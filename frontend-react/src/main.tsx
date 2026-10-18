@@ -15,7 +15,6 @@ import { WhatsAppApp } from "./apps/whatsapp/WhatsAppApp";
 import { CalendarApp } from "./apps/calendar/CalendarApp";
 import { ChatApp } from "./apps/chat/ChatApp";
 import { DocumentsApp } from "./apps/documents/DocumentsApp";
-import { ComposeApp } from "./apps/compose/ComposeApp";
 import { WriteApp } from "./apps/write/WriteApp";
 import { SettingsApp } from "./apps/settings/SettingsApp";
 import { HomeApp } from "./apps/home/HomeApp";
@@ -223,7 +222,8 @@ createRoot(document.getElementById("root")!).render(
             <Route path="/calendar" element={<ErrorBoundary><CalendarApp /></ErrorBoundary>} />
             <Route path="/chat" element={<ErrorBoundary><ChatApp /></ErrorBoundary>} />
             <Route path="/documents" element={<ErrorBoundary><DocumentsApp /></ErrorBoundary>} />
-            <Route path="/compose" element={<ErrorBoundary><ComposeApp /></ErrorBoundary>} />
+            {/* Compose is retired; letters, invoices and quotes live in Schreiben. */}
+            <Route path="/compose" element={<Navigate to="/write" replace />} />
             <Route path="/write" element={<ErrorBoundary><WriteApp /></ErrorBoundary>} />
             <Route path="/photos" element={<ErrorBoundary><PhotosApp /></ErrorBoundary>} />
             <Route path="/tasks" element={<ErrorBoundary><TasksApp /></ErrorBoundary>} />

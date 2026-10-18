@@ -45,6 +45,15 @@ export function FocusCard() {
   const navigate = useNavigate();
   const loc = useLocation();
   const composerBelow = /^\/r\/(chat|whatsapp)(\/|$)/.test(loc.pathname);
+  // A phone drawer or a modal locks the body's scroll while it is open
+  // (MobileShell.useTriPane, the dialogs). The pill steps aside then:
+  // it was lying over the task drawer's Done button (e2e, 2026-10-19).
+  const [covered, setCovered] = useState(document.body.style.overflow === "hidden");
+  useEffect(() => {
+    const obs = new MutationObserver(() => setCovered(document.body.style.overflow === "hidden"));
+    obs.observe(document.body, { attributes: true, attributeFilter: ["style"] });
+    return () => obs.disconnect();
+  }, []);
   const [task, setTask] = useState<RunningTask | null>(null);
   const [loadedAt, setLoadedAt] = useState(() => Date.now());
   const [, tick] = useState(0);
@@ -101,6 +110,7 @@ export function FocusCard() {
       role="status"
       className={cn(
         "fixed z-[45] left-1/2 -translate-x-1/2",
+        covered && "max-md:hidden",
         // On a phone the pill sits above the Dock, where no app puts a
         // control; under the top bar it covered the calendar's Today /
         // Next / view buttons (e2e crawler, 2026-10-19). In the chat and
