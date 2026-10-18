@@ -11,6 +11,11 @@ Phase 2 contract:
 
 from __future__ import annotations
 
+# An event in the near future: the scoped lookup searches from today on,
+# and a hard-coded date drifted out of its window (2026-10-18).
+from datetime import date as _date, timedelta as _td
+_soon = (_date.today() + _td(days=1)).isoformat()
+
 import asyncio
 
 import pytest
@@ -51,7 +56,7 @@ def household(fresh_app):
             cur = conn.execute(
                 "INSERT INTO events (title, starts_at, ends_at, all_day, calendar_id, owner_user_id, space_id) "
                 "VALUES (?, ?, ?, 0, ?, ?, ?)",
-                (f"Zahnarzt {who}", "2026-09-10T10:00:00", "2026-09-10T11:00:00",
+                (f"Zahnarzt {who}", f"{_soon}T10:00:00", f"{_soon}T11:00:00",
                  cal["id"], IDS[who], cal["space_id"]),
             )
             rows[f"event_{who}"] = cur.lastrowid
