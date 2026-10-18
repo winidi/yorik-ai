@@ -311,8 +311,11 @@ def _insert_message(m: dict[str, Any], owner_user_id: str) -> None:
     # the chat is called: in a group the pushName is the member who
     # spoke, and on our own messages it is the user — naming the chat
     # after either is how people ended up carrying the wrong name.
+    # The status feed (status@broadcast) is one row for everyone's
+    # posts: it must not take the poster's name, or the chat list shows
+    # "Tabea" at the top as if she had written (Dirk, 2026-10-18).
     chat_name = None
-    if not m.get("fromMe") and not jid.endswith("@g.us"):
+    if not m.get("fromMe") and not jid.endswith("@g.us") and jid != STATUS_JID:
         chat_name = m.get("pushName")
     _upsert_chat(
         jid=jid,
@@ -395,6 +398,7 @@ _LEGACY_PREVIEWS = {"📷 Photo": "image", "🎥 Video": "video", "🎙️ Voice
 
 
 _SUGGEST_MAX_AGE_S = 15 * 60
+STATUS_JID = "status@broadcast"
 
 
 class _TooOld(Exception):
@@ -1573,6 +1577,8 @@ def _merge_same_person(rows: list[dict[str, Any]], uid: str) -> list[dict[str, A
     address sends go to — and every address in `aliases`."""
     from . import whatsapp_aliases as _al
     merged: dict[str, dict[str, Any]] = {}
+    # The status feed is not a conversation: stored for the photo import, never listed.
+    rows = [r for r in rows if r["jid"] != STATUS_JID]
     order: list[str] = []
     for r in rows:
         key = _al.canonical(uid, r["jid"]) if not r.get("is_group") else r["jid"]
