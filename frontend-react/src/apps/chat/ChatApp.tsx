@@ -130,6 +130,7 @@ export function ChatApp() {
 
   function startNew() {
     setThreadKey(k => k + 1);  // fresh Thread for the new draft
+    tri.setLeftOpen(false);    // on a phone the list is a drawer: show the new chat, not the list
     setActiveId(null);
     setDraftConversation({
       id: "",
@@ -186,6 +187,7 @@ export function ChatApp() {
             // Bump the threadKey so React unmounts the current Thread
             // and remounts it with the picked conversation's state.
             setThreadKey(k => k + 1);
+            tri.setLeftOpen(false);
             setActiveId(id);
             setDraftConversation(null);
           }}
