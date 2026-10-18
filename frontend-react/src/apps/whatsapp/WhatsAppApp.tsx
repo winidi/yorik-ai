@@ -663,7 +663,7 @@ function Thread({ jid, chat, onSent }:
           the textarea + send button. */}
       <form
         onSubmit={(e) => { e.preventDefault(); send(); }}
-        className="border-t border-border bg-card/40 backdrop-blur-sm px-6 pt-3 pb-20"
+        className="border-t border-border bg-card/40 backdrop-blur-sm px-6 pt-3 pb-[calc(var(--dock-clearance)+0.5rem)]"
       >
         {attachment && (
           <div className="mb-2 flex items-center gap-3 rounded-xl bg-muted/70 p-2 pr-3 max-w-md">

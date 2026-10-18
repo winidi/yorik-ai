@@ -44,7 +44,6 @@ export function FocusCard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const loc = useLocation();
-  const composerBelow = /^\/r\/(chat|whatsapp)(\/|$)/.test(loc.pathname);
   // A phone drawer or a modal locks the body's scroll while it is open
   // (MobileShell.useTriPane, the dialogs). The pill steps aside then:
   // it was lying over the task drawer's Done button (e2e, 2026-10-19).
@@ -55,6 +54,15 @@ export function FocusCard() {
     return () => obs.disconnect();
   }, []);
   const [task, setTask] = useState<RunningTask | null>(null);
+  // While the pill is shown on a phone, pages, composers and the
+  // microphone button keep its height free above the Dock: nothing
+  // ends up under it, and nothing lies on top of it.
+  useEffect(() => {
+    const phone = window.matchMedia("(max-width: 767px)").matches;
+    if (!task || !phone) return;
+    document.documentElement.style.setProperty("--dock-clearance", "calc(var(--dock-base) + 3.75rem)");
+    return () => { document.documentElement.style.removeProperty("--dock-clearance"); };
+  }, [task?.id]);
   const [loadedAt, setLoadedAt] = useState(() => Date.now());
   const [, tick] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -117,9 +125,7 @@ export function FocusCard() {
         // WhatsApp the composer sits above the Dock, so the pill goes
         // above the composer there. On desktop: the empty middle of the
         // app headers.
-        composerBelow
-          ? "max-md:bottom-[calc(var(--dock-clearance)+5.5rem)]"
-          : "max-md:bottom-[calc(var(--dock-clearance)+0.75rem)]",
+        "max-md:bottom-[calc(var(--dock-base)+0.5rem)]",
         "md:top-3",
         "max-w-[calc(100vw-2rem)] md:max-w-md",
         "flex items-center gap-2 rounded-full border border-emerald-500/40 bg-card/95 backdrop-blur",
