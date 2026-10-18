@@ -341,7 +341,8 @@
       "whatsappTwin": "{{a}} and {{b}} are the same person on WhatsApp ({{number}}).",
       "signatureMerge": "The number {{phone}} in this sender's email signature belongs to {{name}}",
       "signatureAdd": "{{phone}} appears in this contact's email signature",
-      "vcardImport": "The imported card matches both {{b}} and {{a}}"
+      "vcardImport": "The imported card matches both {{b}} and {{a}}",
+      "whatsappTwinSame": "{{a}} is in the list twice; on WhatsApp it is the same person ({{number}})."
     },
     "waAccount": "WhatsApp account",
     "merge": "Merge",

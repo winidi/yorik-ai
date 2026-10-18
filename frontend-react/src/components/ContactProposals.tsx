@@ -41,6 +41,10 @@ function channels(c: Contact | null): string {
     : ch.value).join(" · ");
 }
 
+function sameName(a: Contact, b: Contact): boolean {
+  return a.display_name.trim().toLowerCase() === b.display_name.trim().toLowerCase();
+}
+
 /** The reason in the person's language, built from the evidence; the
  *  stored English sentence only when the source is unknown. */
 function reasonText(p: Proposal, t: (k: string, o?: Record<string, unknown>) => string): string {
@@ -48,7 +52,7 @@ function reasonText(p: Proposal, t: (k: string, o?: Record<string, unknown>) => 
   const a = p.other_contact?.display_name || "?";
   const b = p.contact?.display_name || "?";
   if (p.kind === "merge" && src === "whatsapp_alias_map")
-    return t("contacts.suggestions.reason.whatsappTwin", { a, b, number: "+" + (p.evidence?.number || "").split("@")[0].replace(/\D/g, "") });
+    return t(sameName(p.contact!, p.other_contact!) ? "contacts.suggestions.reason.whatsappTwinSame" : "contacts.suggestions.reason.whatsappTwin", { a, b, number: "+" + (p.evidence?.number || "").split("@")[0].replace(/\D/g, "") });
   if (p.kind === "merge" && src === "email_signature")
     return t("contacts.suggestions.reason.signatureMerge", { phone: p.evidence?.phone || "", name: a });
   if (p.kind === "add_channel" && src === "email_signature")
@@ -56,10 +60,6 @@ function reasonText(p: Proposal, t: (k: string, o?: Record<string, unknown>) => 
   if (p.kind === "merge" && src === "vcard_import")
     return t("contacts.suggestions.reason.vcardImport", { a, b });
   return p.reason;
-}
-
-function sameName(a: Contact, b: Contact): boolean {
-  return a.display_name.trim().toLowerCase() === b.display_name.trim().toLowerCase();
 }
 
 export function ContactProposals({ onChanged, reloadKey = 0 }: { onChanged: () => void; reloadKey?: number }) {
