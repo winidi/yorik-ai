@@ -72,7 +72,7 @@ Already run a model server (llama.cpp, LM Studio, vLLM, Ollama, llama-swap)? Poi
 
 ## Language
 
-Yorik comes from a German household. The interface is mostly English; some apps (Schreiben, Pipelines, Finance), the e-invoicing and parts of the assistant's wording are German. Translations are welcome.
+Yorik comes from a German household. Every screen follows the language in your profile: German and English are complete, and the assistant answers in the language you write. Another language is one folder of catalogue files (`frontend-react/src/i18n/locales/`); translations are welcome.
 
 ## What works / what's rough
 
@@ -116,6 +116,10 @@ Honest breakdown of production-quality vs beta: [docs/EINVOICING.md](docs/EINVOI
 ## Privacy
 
 Yorik runs on your machine. No backend service, no phone-home. Outbound calls only happen to services YOU configure (your email, your LLM, your remote Paperless / Immich), to GitHub for the update check an admin triggers, and — only if the admin switches it on — to Yorik's diagnostics collector, with every person replaced by a number first. Details + GDPR self-hosted scenario: [docs/PRIVACY.md](docs/PRIVACY.md).
+
+## Community
+
+Questions, ideas and your setup: [GitHub Discussions](https://github.com/winidi/yorik-ai/discussions). Reproducible bugs with steps and your version: [Issues](https://github.com/winidi/yorik-ai/issues). German is fine in both.
 
 ## License
 

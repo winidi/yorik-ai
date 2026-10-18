@@ -7,6 +7,50 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-18
+
+The first release for families outside the house. The previews rc1 to rc4 tested the Windows and Mac installers; this is what they install now.
+
+### Highlights
+
+- Yorik speaks German: every screen, button and message follows the language in your profile. English stays for those who want it.
+- Send from the chat: "schick die Rechnung mit dem Foto an den Vermieter" stages one mail with the PDF and the photo; "schick Beate das Foto per WhatsApp" sends the file with the text from a card you confirm.
+- A photo in the chat is read: take a picture of a letter on the phone, the upload shows its progress, the photo appears under your message, and Yorik reads what is on it and offers the next step, such as the appointment it mentions.
+- Contacts: Yorik suggests, you decide. One person who sits in two rows (the WhatsApp number and the WhatsApp account id) becomes one contact with one tap, nothing merges by itself, and undo is always there. A sender in a mail is saved as a contact with one click.
+- Day planning is on: "plan mir den Montag" fills the day from calendar and tasks and asks before it writes.
+- WhatsApp: a chat opens at the newest message, and a friend's status post no longer looks like a message to you.
+
+### Added
+
+- `prepare_email` takes several chat attachments, Paperless documents and Immich photos; the card lists every file and says when it replaces an earlier draft.
+- `whatsapp_draft` takes one file (chat attachment, document or photo); Send goes through `POST /api/whatsapp/chats/{jid}/send-media-ref`.
+- `propose_meeting_times` works without a mail and returns free slots.
+- Open bills get a card in the chat (`bills_found`): tick paid, open Finance.
+- `find_person` understands relation words in both languages ("meine Mama", "landlord"); one relation hit answers without a picker.
+- Contacts: WhatsApp twin proposals from the bridge's alias map, a tick per card in the VCF import preview, "Save as contact" / "Confirm as contact" on a sender, group-only WhatsApp strangers ranked last.
+- The chat loop reads a skill's manifest for the model on the first call and runs it at once when the arguments fit; an answer that claims a search which never ran is sent back once, then marked.
+- Docker installers (Linux, Mac, Windows) name the program holding port 8000 or 2283 before starting, instead of failing inside Docker.
+- Help: "Yorik on a phone" leads with the QR invite from Settings; Tailscale is the step for outside the house.
+- Backend texts that reach the screen (WhatsApp media previews, the briefing summary line) follow the person's language.
+
+### Changed
+
+- The old LLM contact tools (Enrich, Triage, Auto-classify, bulk Yorik assist, WhatsApp names) are hidden; a pending contact is confirmed or marked spam on its card.
+- A replaced draft card (mail or WhatsApp) is marked as replaced in the whole conversation; only the newest draft can be sent.
+- The contact picker hides bare numbers and account ids and never ranks a guess first.
+- When a quote or a number cannot be backed by a source, the answer says so in one plain sentence instead of showing markers.
+- Three buttons that did nothing are gone: the chat's phone "Context", the mail reader's "More", `.ics` in the chat paperclip. Letters open in Schreiben.
+- Standard mail folders read in your language (Posteingang, Gesendet, Entwürfe, Papierkorb); folders you named stay as they are.
+
+### Fixed
+
+- After a WhatsApp re-pairing the replayed history started one suggestion analysis per message and starved the server for minutes; replayed messages are skipped and the WhatsApp and mail triggers run two analyses at a time.
+- Calendar: three components called a hook after an early return; a day that went from empty to busy showed the error page.
+- A literal backslash-n from the model in a letter becomes a line break.
+- The model was pointed at skills that do not exist (find_document, whatsapp_send_with_photo) and at the retired Compose path.
+- Status posts (status@broadcast) renamed and bumped a chat as if the poster had written.
+- On a phone, the plus in the chat and a picked chat close the list drawer.
+
 ## [0.3.0-rc4] - 2026-10-08
 
 ### Fixed
