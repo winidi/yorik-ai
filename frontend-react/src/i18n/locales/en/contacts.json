@@ -332,17 +332,21 @@
     "numbers_one": "{{count}} number",
     "numbers_other": "{{count}} numbers",
     "dismissAllNumbers": "dismiss all number suggestions",
-    "keepTitle": "Keep this one, fold the other into it",
+    "keepTitle": "Both rows become one contact with this name",
     "keep": "Keep {{name}}",
     "addTo": "Add {{value}} to {{name}}",
     "notSamePerson": "Not the same person",
     "undo": "undo",
     "reason": {
-      "whatsappTwin": "WhatsApp says {{a}} is the same account as {{number}} ({{b}})",
+      "whatsappTwin": "{{a}} and {{b}} are the same person on WhatsApp ({{number}}).",
       "signatureMerge": "The number {{phone}} in this sender's email signature belongs to {{name}}",
       "signatureAdd": "{{phone}} appears in this contact's email signature",
       "vcardImport": "The imported card matches both {{b}} and {{a}}"
-    }
+    },
+    "waAccount": "WhatsApp account",
+    "merge": "Merge",
+    "mergeAs": "Merge as:",
+    "mergeHint": "Number and WhatsApp account are both kept; only the name is your choice. You can undo it below."
   },
   "person": {
     "inContacts": "In your contacts",

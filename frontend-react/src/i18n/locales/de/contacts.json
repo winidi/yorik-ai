@@ -332,17 +332,21 @@
     "numbers_one": "{{count}} Nummer",
     "numbers_other": "{{count}} Nummern",
     "dismissAllNumbers": "alle Nummern-Vorschläge ablehnen",
-    "keepTitle": "Diesen behalten, den anderen hineinlegen",
+    "keepTitle": "Beide Einträge werden ein Kontakt mit diesem Namen",
     "keep": "{{name}} behalten",
     "addTo": "{{value}} zu {{name}} hinzufügen",
     "notSamePerson": "Nicht dieselbe Person",
     "undo": "rückgängig",
     "reason": {
-      "whatsappTwin": "Laut WhatsApp ist „{{a}}“ dasselbe Konto wie {{number}} ({{b}})",
+      "whatsappTwin": "„{{a}}“ und „{{b}}“ sind bei WhatsApp dieselbe Person ({{number}}).",
       "signatureMerge": "Die Nummer {{phone}} in der E-Mail-Signatur dieses Absenders gehört zu {{name}}",
       "signatureAdd": "{{phone}} steht in der E-Mail-Signatur dieses Kontakts",
       "vcardImport": "Die importierte Karte passt zu {{b}} und zu {{a}}"
-    }
+    },
+    "waAccount": "WhatsApp-Konto",
+    "merge": "Zusammenführen",
+    "mergeAs": "Zusammenführen als:",
+    "mergeHint": "Nummer und WhatsApp-Konto bleiben beide erhalten, nur der Name ist deine Wahl. Unten kannst du es rückgängig machen."
   },
   "person": {
     "inContacts": "In deinen Kontakten",
