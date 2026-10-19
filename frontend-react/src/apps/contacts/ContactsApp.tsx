@@ -450,7 +450,7 @@ export function ContactsApp() {
             default, detail visible when a contact is selected or the
             user is creating one. Desktop (lg:+): both panes side-by-
             side as before. */}
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(260px,380px)_1fr] gap-4 flex-1">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(320px,2fr)_3fr] gap-4 flex-1">
           {/* List — hidden on mobile while drilled into a detail. The
               max-h-[70vh] cap is dropped on mobile so the list fills
               the viewport when it's the only visible pane. */}
