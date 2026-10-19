@@ -27,8 +27,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, Literal, Optional
 
+import logging
+import time
+
 import psycopg
 from psycopg_pool import ConnectionPool
+
+_log = logging.getLogger("yorik.database")
 
 Schema = Literal["main", "docs"]
 
@@ -97,6 +102,115 @@ def _build_url(name_override: Optional[str] = None) -> str:
 _pool_main: Optional[ConnectionPool] = None
 _pool_docs: Optional[ConnectionPool] = None
 
+# How long a request waits for a free connection before it fails with
+# PoolTimeout (one 500 for one person) instead of blocking a worker
+# thread for good. 2026-10-19 (F27): Postgres restarted for 15 s and
+# the server answered nothing for 8.5 h afterwards.
+POOL_CHECKOUT_TIMEOUT_S = 20.0
+# After this long without being able to reconnect the pool logs a
+# CRITICAL line (and keeps trying); the watchdog restarts the process
+# when requests stop being answered.
+POOL_RECONNECT_TIMEOUT_S = 60.0
+# The SELECT 1 on checkout gets this long; a server that is up at TCP
+# level but answers nothing (frozen, mid-restart) must not hold the
+# request. Verified 2026-10-19 with `docker pause` on Postgres: the
+# library's own check waited for good, this one fails the checkout.
+CHECK_TIMEOUT_S = 5.0
+
+
+def connect_params(search_path: str) -> dict:
+    """libpq parameters every pooled connection is opened with.
+
+    connect_timeout: a dead or unreachable Postgres fails fast instead of
+    hanging a worker in connect(). TCP keepalives: when the container
+    behind the socket vanishes without a FIN (crash, docker restart), the
+    kernel notices after idle+interval*count = 60 s and the pool
+    replaces the connection, rather than a thread waiting on recv()
+    forever."""
+    return {
+        "options": f"-c search_path={search_path}",
+        "connect_timeout": 10,
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 3,
+        # unacknowledged data for longer than this closes the socket
+        # (Linux); covers a query in flight when the peer disappears.
+        "tcp_user_timeout": 60_000,
+    }
+
+
+def check_connection(conn: psycopg.Connection, timeout: float = CHECK_TIMEOUT_S) -> None:
+    """Pool checkout probe: SELECT 1 that gives up after `timeout`.
+
+    psycopg_pool's `check_connection` runs a plain execute(), which
+    waits as long as the server stays silent. This one drives the query
+    through libpq's non-blocking interface and watches the socket with a
+    deadline; on expiry the connection is closed and the pool replaces
+    it (or the request fails with PoolTimeout), never a hang."""
+    import select as _select
+    from psycopg import pq as _pq
+
+    pgconn = conn.pgconn
+    if pgconn.status != _pq.ConnStatus.OK:
+        raise psycopg.OperationalError("connection is not OK")
+    deadline = time.monotonic() + timeout
+
+    def _wait(readers: bool) -> None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            conn.close()
+            raise psycopg.OperationalError(f"connection check timed out after {timeout:.0f} s")
+        r, w, _ = _select.select(
+            [pgconn.socket] if readers else [], [] if readers else [pgconn.socket], [], remaining
+        )
+        if not (r or w):
+            conn.close()
+            raise psycopg.OperationalError(f"connection check timed out after {timeout:.0f} s")
+
+    pgconn.send_query(b"SELECT 1")
+    while pgconn.flush():
+        _wait(readers=False)
+    ok = False
+    while True:
+        _wait(readers=True)
+        pgconn.consume_input()
+        while not pgconn.is_busy():
+            res = pgconn.get_result()
+            if res is None:
+                break
+            if res.status not in (_pq.ExecStatus.TUPLES_OK, _pq.ExecStatus.COMMAND_OK):
+                raise psycopg.OperationalError(
+                    f"connection check failed: {res.error_message.decode(errors='replace')}"
+                )
+            ok = True
+        else:
+            continue
+        break
+    if not ok:
+        raise psycopg.OperationalError("connection check returned nothing")
+    if pgconn.transaction_status == _pq.TransactionStatus.INTRANS:
+        conn.rollback()
+
+
+def pool_options() -> dict:
+    """Resilience settings shared by both pools (see connect_params)."""
+    return {
+        # SELECT 1 on checkout: a connection the server dropped is thrown
+        # away and replaced instead of handed to a request.
+        "check": check_connection,
+        "timeout": POOL_CHECKOUT_TIMEOUT_S,
+        "reconnect_timeout": POOL_RECONNECT_TIMEOUT_S,
+        "reconnect_failed": _reconnect_failed,
+    }
+
+
+def _reconnect_failed(pool: ConnectionPool) -> None:
+    _log.critical(
+        "database pool %s could not reconnect for %.0f s — Postgres down? "
+        "requests fail until it is back", pool.name, POOL_RECONNECT_TIMEOUT_S,
+    )
+
 
 def _configure_uuid_as_text(conn: psycopg.Connection) -> None:
     """Phase E — make every UUID column come back as a Python str
@@ -133,10 +247,12 @@ def _ensure_pool(schema: Schema) -> ConnectionPool:
                 kwargs={
                     "row_factory": _row_factory(),
                     "autocommit": False,
-                    "options": "-c search_path=public,docs",
+                    **connect_params("public,docs"),
                 },
                 configure=_configure_uuid_as_text,
                 open=False,
+                name="main",
+                **pool_options(),
             )
             _pool_main.open()
         return _pool_main
@@ -156,10 +272,12 @@ def _ensure_pool(schema: Schema) -> ConnectionPool:
             kwargs={
                 "row_factory": _row_factory(),
                 "autocommit": False,
-                "options": "-c search_path=docs,public",
+                **connect_params("docs,public"),
             },
             configure=_configure_uuid_as_text,
             open=False,
+            name="docs",
+            **pool_options(),
         )
         _pool_docs.open()
     return _pool_docs

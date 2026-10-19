@@ -7,6 +7,9 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- Yorik no longer hangs for good after the database drops. 2026-10-19 a 15 s Postgres restart left the server answering nothing for eight hours. Pooled connections now use TCP keepalives and connect timeouts, every checkout runs a bounded SELECT 1 and replaces a dead connection, a request waits at most 20 s for a connection and then fails instead of blocking, and an in-process watchdog exits the server when `/api/health/live` stops answering for about two minutes so systemd or Docker restart it (off with `YORIK_WATCHDOG=0`).
+
 ## [0.3.0] — 2026-10-18
 
 The first release for families outside the house. The previews rc1 to rc4 tested the Windows and Mac installers; this is what they install now.

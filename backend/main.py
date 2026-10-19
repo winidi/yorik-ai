@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Final, List, Optional
@@ -192,6 +193,14 @@ async def _suggestions_capture_main_loop() -> None:
     on incoming emails."""
     import asyncio as _asyncio
     _suggestions_pkg.set_main_loop(_asyncio.get_running_loop())
+
+
+@app.on_event("startup")
+async def _start_watchdog() -> None:
+    """Self-restart when the server stops answering (F27, 2026-10-19).
+    Off with YORIK_WATCHDOG=0; never runs under pytest."""
+    from . import watchdog as _watchdog
+    _watchdog.start()
 
 
 @app.on_event("startup")
@@ -2384,6 +2393,7 @@ _AUTH_WHITELIST_PREFIX: Final[tuple[str, ...]] = (
 )
 _AUTH_WHITELIST_EXACT: Final[frozenset[str]] = frozenset({
     "/api/health",                      # health probe
+    "/api/health/live",                 # in-process watchdog (backend/watchdog.py)
     "/api/openapi.json",                # API schema (also gated separately by FastAPI)
 })
 
@@ -2411,6 +2421,7 @@ def _auth_path_allowed(path: str) -> bool:
 # the React shell every few seconds when open.
 _RATE_LIMIT_BYPASS_EXACT: Final[frozenset[str]] = frozenset({
     "/api/health",
+    "/api/health/live",
 })
 
 
@@ -3026,6 +3037,8 @@ def _startup() -> None:
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:
+    from . import watchdog as _watchdog
+    _watchdog.stop()
     from . import whatsapp as wa_mod
     await wa_mod.stop_background()
     from . import email_fetcher as ef_mod
@@ -3246,6 +3259,14 @@ def _llm_offline_response(message: str, conversation_id: Optional[str] = None) -
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@app.get("/api/health/live")
+def health_live() -> Dict[str, Any]:
+    """Liveness only, for the in-process watchdog (backend/watchdog.py):
+    a plain `def` route, so it answers only while the thread pool that
+    serves every other request is alive. No database, no probes."""
+    return {"ok": True, "ts": time.time()}
+
 
 @app.get("/api/health")
 def health() -> Dict[str, Any]:
