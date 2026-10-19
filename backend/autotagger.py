@@ -219,8 +219,12 @@ def _ensure_paperless_tag(
     except requests.RequestException as exc:
         log.warning("autotagger: tag lookup %r failed: %s", name, exc)
         return None
-    # Not found — create. Include color when we have one.
-    payload: Dict[str, Any] = {"name": name, "matching_algorithm": 0}
+    # Not found — create. Include color when we have one. `owner: None`
+    # makes the tag unowned: Paperless shows an owned object only to
+    # its owner and to users it was explicitly shared with, so a tag
+    # owned by Yorik's service account was invisible to every family
+    # member and the Documents app rendered no folders.
+    payload: Dict[str, Any] = {"name": name, "matching_algorithm": 0, "owner": None}
     if color:
         payload["color"] = color
     try:
@@ -313,6 +317,56 @@ def _backfill_tag_colors(
     return updated
 
 
+def _backfill_tag_visibility(
+    base: str, headers: Dict[str, str], taxonomy_names: set[str],
+) -> int:
+    """Make taxonomy tags from earlier runs visible to everyone. Before
+    this fix a new tag was created owned by the service account with
+    no view permissions, so the family members' own Paperless users
+    never saw it (Settings → Embeddings said "tagged", the Documents
+    folder view stayed empty). Only touches tags whose name is in our
+    taxonomy, that have an owner, and that are shared with nobody —
+    a tag a person created and shared deliberately stays as it is.
+    Returns the number of tags patched."""
+    updated = 0
+    try:
+        url: Optional[str] = f"{base}/api/tags/"
+        params: Dict[str, Any] = {"page_size": 500, "full_perms": "true"}
+        while url:
+            r = requests.get(url, headers=headers, params=params, timeout=PAPERLESS_TIMEOUT)
+            if not r.ok:
+                break
+            body = r.json() or {}
+            for t in body.get("results") or []:
+                nm = (t.get("name") or "").strip()
+                if nm not in taxonomy_names or t.get("owner") is None:
+                    continue
+                view = ((t.get("permissions") or {}).get("view") or {})
+                if view.get("users") or view.get("groups"):
+                    continue
+                try:
+                    pr = requests.patch(
+                        f"{base}/api/tags/{int(t['id'])}/",
+                        headers=headers,
+                        json={"owner": None},
+                        timeout=PAPERLESS_TIMEOUT,
+                    )
+                    if pr.status_code in (200, 202):
+                        updated += 1
+                    else:
+                        log.warning("autotagger: unshare tag %r returned %s: %s",
+                                    nm, pr.status_code, pr.text[:200])
+                except requests.RequestException as exc:
+                    log.warning("autotagger: unshare tag %r failed: %s", nm, exc)
+            url = body.get("next")
+            params = {}
+    except requests.RequestException as exc:
+        log.warning("autotagger: tag visibility backfill list failed: %s", exc)
+    if updated:
+        log.info("autotagger: made %d existing taxonomy tag(s) visible to all users", updated)
+    return updated
+
+
 def _build_paperless_tag_id_cache(
     base: str, headers: Dict[str, str], wanted_names: set[str],
 ) -> Dict[str, int]:
@@ -393,6 +447,8 @@ def autotag_all(
     # current color is empty so user-edited colors stay.
     workers.heartbeat("autotagger", "ok", "backfilling tag colors")
     _backfill_tag_colors(base, headers, name_to_color)
+    workers.heartbeat("autotagger", "ok", "sharing tags with the household")
+    _backfill_tag_visibility(base, headers, taxonomy_all_lang_names)
 
     # Prefetch Paperless tag ids for ALL taxonomy names across every
     # language variant — covers installs that previously ran the
