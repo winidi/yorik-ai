@@ -389,7 +389,12 @@ async def call_tool(user: dict[str, Any], name: str, arguments: dict[str, Any],
         payload["cards"] = cards
         hint = result.get("_llm_hint") if isinstance(result, dict) else None
         if isinstance(hint, str) and "shown_to_user" in hint:
-            payload["note"] = "There is no screen here: the rows the chat would show as cards are in `cards`."
+            # The chat's hint ("say 'see the cards below', list nothing") is
+            # wrong without a screen: an agent followed it and pointed the
+            # user at cards nobody saw. It goes; the note says what to do.
+            payload["result"] = {k: v for k, v in result.items() if k != "_llm_hint"}
+            payload["note"] = ("There is no screen here, so tell the user the rows from `cards` "
+                               "briefly in your answer.")
     for action in get_ui_actions():
         if action.get("type") == "pending_confirmation":
             preview = action.get("preview") or {}

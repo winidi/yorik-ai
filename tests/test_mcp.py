@@ -312,3 +312,5 @@ def test_an_agent_gets_the_rows_the_chat_would_show_as_cards(token_client, fresh
     assert "Steuererklärung abgeben" in r.text
     body = r.json()["result"]["structuredContent"]
     assert body["cards"] and body["note"].startswith("There is no screen here")
+    # The chat's "say 'see the cards below', list nothing" does not reach the agent.
+    assert "_llm_hint" not in body["result"] and "rendered as cards" not in r.text
