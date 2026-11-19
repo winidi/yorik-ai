@@ -1,0 +1,6 @@
+name: yorik-guard
+version: "1.0.0"
+description: "Keeps a Hermes agent on Yorik's own tools: blocks tool calls that reach for Yorik's folder, its containers, Paperless or Immich directly, process environments, the Docker socket or .env password files. Installed and kept current by Yorik (integrations/hermes/setup.py); changes nothing else in Hermes."
+author: "Yorik"
+provides_hooks:
+  - pre_tool_call

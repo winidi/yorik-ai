@@ -1227,6 +1227,13 @@ EOPROMPT
   fi
 fi
 
+# A Hermes agent on this machine keeps to Yorik's tools: yorik-guard blocks
+# its ways around them (Yorik's folder, containers, .env files). Installs or
+# updates only that plugin; a no-op without Hermes. See integrations/hermes/.
+if [[ -d "${HERMES_HOME:-$HOME/.hermes}" ]]; then
+  python3 "$(dirname "$0")/integrations/hermes/setup.py" 2>&1 | sed 's/^/  hermes: /' || true
+fi
+
 echo
 cat <<EOF
 ─────────────────────────────────────────────────────────

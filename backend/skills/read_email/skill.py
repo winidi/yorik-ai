@@ -40,7 +40,7 @@ async def execute(
         if not row:
             return {"not_found": True}
         atts = conn.execute(
-            "SELECT filename, mimetype, size_bytes "
+            "SELECT id, filename, mimetype, size_bytes, paperless_state "
             "FROM email_attachments WHERE message_id = ?",
             (message_id,),
         ).fetchall()
@@ -65,7 +65,10 @@ async def execute(
     if not include_html:
         d.pop("body_html", None)
 
-    d["attachments"] = [dict(a) for a in atts]
+    d["attachments"] = [{"attachment_id": a["id"], "filename": a["filename"], "mimetype": a["mimetype"],
+                         "size_bytes": a["size_bytes"],
+                         **({"in_paperless": True} if a["paperless_state"] in ("filed", "auto_filed") else {})}
+                        for a in atts]
     d.pop("thread_id", None)
     from backend.search_routes import _local       # household time with offset, not UTC
     for col in ("date_received", "date_sent"):     # "am 21.09." for a mail of 22.09., 0:00 (2026-09-28)
@@ -82,6 +85,14 @@ async def execute(
                              "date": _local(t["date_received"]), "first_line": (t["snippet"] or "")[:120],
                              **({"this_mail": True} if t["id"] == message_id else {})})
     out: dict[str, Any] = {"message": d, "_full_output": True}
+    from backend import file_links
+    if atts and file_links.for_outside_agent(ctx):
+        # Brepper shows the files with a View button (a 30-minute link).
+        from backend.ui_tools import _append
+        _append({"type": "attachments_found", "subject": d.get("subject") or "",
+                 "attachments": [{"filename": a["filename"], "size_bytes": a["size_bytes"]} for a in atts],
+                 "actions": [file_links.view_action(user_id, "email_attachment", a["id"], a["filename"])
+                             for a in atts]})
     if len(conversation) > 1:
         out["conversation"] = conversation
         # Wording approved by Dirk 2026-09-28.

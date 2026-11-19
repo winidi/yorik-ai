@@ -109,6 +109,8 @@ from . import api_tokens as _api_tokens
 app.include_router(_api_tokens.router)
 from . import mcp_server as _mcp_server
 app.include_router(_mcp_server.router)
+from . import file_links as _file_links
+app.include_router(_file_links.router)
 from . import openai_audio as _openai_audio
 app.include_router(_openai_audio.router)
 from . import contact_identity_routes as _contact_identity_routes
@@ -2390,6 +2392,7 @@ _AUTH_WHITELIST_PREFIX: Final[tuple[str, ...]] = (
     "/api/auth/",                       # login, setup, logout, me, change-password
     "/api/paperless/ingest/",           # Paperless POST_CONSUME_SCRIPT webhook (X-Paperless-Token)
     "/api/internal/",                   # tenant→host RPC, gated by shared bearer token instead of session cookie
+    "/api/file-links/",                 # one file for 30 min, signed token in the path (file_links.py)
 )
 _AUTH_WHITELIST_EXACT: Final[frozenset[str]] = frozenset({
     "/api/health",                      # health probe

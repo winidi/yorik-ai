@@ -365,3 +365,79 @@ def test_yoriks_own_chat_sends_from_the_composer_not_this_skill(fresh_app):
     out = asyncio.run(reg.invoke("send_prepared_email", ctx=SkillContext(reg, role="member", user_id=1, source="chat"),
                                  to="nina@example.com"))
     assert out["sent"] is False and "Send button" in out["_llm_hint"]
+
+
+def _mail_with_attachments(uid, names):
+    from backend.database import get_conn
+    with get_conn() as conn:
+        aid = conn.execute("INSERT INTO email_accounts (owner_user_id, email, imap_host, imap_username, smtp_host, "
+                           "smtp_username, credential_key) VALUES (?, 'me@mail.example', 'i', 'me', 's', 'me', 'k') "
+                           "RETURNING id", (uid,)).fetchone()["id"]
+        mid = conn.execute("INSERT INTO email_messages (account_id, uid, owner_user_id, message_id, from_email, "
+                           "from_name, subject, body_text, has_attachments) VALUES (?, 1, ?, '<inv@x>', "
+                           "'billing@vendor.example', 'Vendor', 'Payment received', 'Thanks', 1) RETURNING id",
+                           (aid, uid)).fetchone()["id"]
+        ids = [conn.execute("INSERT INTO email_attachments (message_id, filename, mimetype, size_bytes, "
+                            "paperless_state) VALUES (?, ?, 'application/pdf', 10, 'suggested') RETURNING id",
+                            (mid, n)).fetchone()["id"] for n in names]
+        conn.commit()
+    return mid, ids
+
+
+def test_an_agent_files_an_email_attachment_and_gets_a_view_link(token_client, fresh_app, monkeypatch):
+    """Asked to put an invoice from a mail into Paperless, an agent had no
+    tool and went around Yorik (2026-11-19). Now it has one, and Brepper
+    gets a View button that opens the file without a login."""
+    client, token, uid, _ = token_client
+    mid, (inv, rec) = _mail_with_attachments(uid, ["Invoice-ZK-3.pdf", "Receipt-ZK-3.pdf"])
+    filed = []
+    from backend import email_routes
+    monkeypatch.setattr(email_routes, "file_attachment",
+                        lambda att_id, user_id, vis=None: filed.append((att_id, vis)) or
+                        {"ok": True, "state": "filed", "visibility": vis or "private"})
+    monkeypatch.setattr("backend.email_actions.fetch_attachment_binary",
+                        lambda att_id, user_id: {"content": b"%PDF-1.4 x", "mimetype": "application/pdf",
+                                                 "filename": "Invoice-ZK-3.pdf"} if att_id == inv else None)
+
+    # read_email lists the attachments with their ids and a View button each.
+    r = _rpc(client, token, "tools/call", {"name": "read_email", "arguments": {"message_id": mid}})
+    body = r.json()["result"]["structuredContent"]
+    assert [a["filename"] for a in body["result"]["message"]["attachments"]] == ["Invoice-ZK-3.pdf", "Receipt-ZK-3.pdf"]
+    card = next(c for c in body["cards"] if c["type"] == "attachments_found")
+    assert [a["label"] for a in card["actions"]] == ["View: Invoice-ZK-3.pdf", "View: Receipt-ZK-3.pdf"]
+
+    # Two attachments and no name: the agent is told to pick, nothing is filed.
+    r = _rpc(client, token, "tools/call", {"name": "file_email_attachment", "arguments": {"message_id": mid}})
+    res = r.json()["result"]["structuredContent"]["result"]
+    assert res["ok"] is False and res["attachments"] == ["Invoice-ZK-3.pdf", "Receipt-ZK-3.pdf"] and filed == []
+
+    r = _rpc(client, token, "tools/call", {"name": "file_email_attachment", "arguments": {
+        "message_id": mid, "filename": "invoice", "visibility": "private"}})
+    body = r.json()["result"]["structuredContent"]
+    assert body["result"]["ok"] is True and filed == [(inv, "private")]
+    card = next(c for c in body["cards"] if c["type"] == "document_filed")
+    link = card["actions"][0]["url"]
+    path = link[link.index("/api/file-links/"):]
+
+    # The link opens that one file, with no session, shown in place.
+    got = TestClient(fresh_app).get(path)
+    assert got.status_code == 200 and got.content.startswith(b"%PDF")
+    assert got.headers["content-disposition"].startswith("inline")
+    # Tampered or for another file: nothing.
+    assert TestClient(fresh_app).get(path[:-3] + "AAA").status_code == 404
+
+    # Another person's mail is not theirs to file.
+    r = _rpc(client, token, "tools/call", {"name": "file_email_attachment", "arguments": {"message_id": mid + 999}})
+    assert r.json()["result"]["structuredContent"]["result"]["ok"] is False
+
+
+def test_file_links_expire_and_only_pdfs_and_pictures_show_in_place(fresh_app, monkeypatch):
+    from backend import file_links
+    tok = file_links.mint("u1", "email_attachment", 5, now=1000)
+    assert file_links.verify(tok, now=1000 + 60)["i"] == 5
+    assert file_links.verify(tok, now=1000 + file_links.TTL_SECONDS + 1) is None
+    monkeypatch.setattr("backend.email_actions.fetch_attachment_binary",
+                        lambda att_id, user_id: {"content": b"<script>x</script>", "mimetype": "text/html",
+                                                 "filename": "page.html"})
+    got = TestClient(fresh_app).get(file_links.PREFIX + file_links.mint("u1", "email_attachment", 5))
+    assert got.status_code == 200 and got.headers["content-disposition"].startswith("attachment")

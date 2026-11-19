@@ -1440,6 +1440,45 @@ async def unsubscribe_route(msg_id: int, user: dict = Depends(current_user)):
     }
 
 
+def file_attachment(att_id: int, user_id: str, visibility: Optional[str] = None) -> dict:
+    """File one of the person's email attachments in Paperless: the Email
+    app's 'File to Paperless' button and the file_email_attachment tool.
+    {"ok", "already_filed"?, "state"?, "visibility"?, "error"?, "status"?}
+    — status is the HTTP code for the route when it fails."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT a.id, a.filename, a.mimetype, a.paperless_state, m.from_email, m.from_name, m.subject "
+            "FROM email_attachments a "
+            "JOIN email_messages m ON m.id = a.message_id "
+            "WHERE a.id=? AND m.owner_user_id=?",
+            (att_id, user_id),
+        ).fetchone()
+    if not row:
+        return {"ok": False, "status": 404, "error": "attachment not found"}
+    if row["paperless_state"] in ("auto_filed", "filed"):
+        return {"ok": True, "already_filed": True, "state": row["paperless_state"]}
+
+    blob = email_actions.fetch_attachment_binary(att_id, user_id)
+    if not blob:
+        return {"ok": False, "status": 502, "error": "attachment binary unavailable on the IMAP server"}
+
+    from .email_fetcher import _file_to_paperless as _upload
+    sender_label = row["from_name"] or row["from_email"] or "unknown sender"
+    ok = _upload(
+        att_id,
+        {"bytes": blob["content"], "filename": row["filename"] or "document.pdf",
+         "mimetype": row["mimetype"] or "application/pdf"},
+        user_id, sender_label, row["subject"] or "",
+        "filed", visibility,
+    )
+    if not ok:
+        return {"ok": False, "status": 502,
+                "error": "Paperless upload failed — check Paperless is reachable + the per-user token is set"}
+    with get_conn() as conn:
+        vis_row = conn.execute("SELECT paperless_visibility FROM email_attachments WHERE id=?", (att_id,)).fetchone()
+    return {"ok": True, "state": "filed", "visibility": vis_row["paperless_visibility"] if vis_row else None}
+
+
 @router.post("/attachments/{att_id}/paperless")
 async def file_attachment_to_paperless(att_id: int, visibility: Optional[str] = Query(None),
                                        user: dict = Depends(current_user)):
@@ -1450,37 +1489,10 @@ async def file_attachment_to_paperless(att_id: int, visibility: Optional[str] = 
     decision. `visibility` is the answer to "sichtbar für": private,
     parents or shared (business too); without it the person's default
     applies."""
-    with get_conn() as conn:
-        row = conn.execute(
-            "SELECT a.id, a.filename, a.mimetype, a.paperless_state, m.from_email, m.from_name, m.subject "
-            "FROM email_attachments a "
-            "JOIN email_messages m ON m.id = a.message_id "
-            "WHERE a.id=? AND m.owner_user_id=?",
-            (att_id, user["id"]),
-        ).fetchone()
-    if not row:
-        raise HTTPException(404, "attachment not found")
-    if row["paperless_state"] in ("auto_filed", "filed"):
-        return {"ok": True, "already_filed": True, "state": row["paperless_state"]}
-
-    blob = await asyncio.to_thread(email_actions.fetch_attachment_binary, att_id, user["id"])
-    if not blob:
-        raise HTTPException(502, "attachment binary unavailable on the IMAP server")
-
-    from .email_fetcher import _file_to_paperless as _upload
-    sender_label = row["from_name"] or row["from_email"] or "unknown sender"
-    ok = await asyncio.to_thread(
-        _upload, att_id,
-        {"bytes": blob["content"], "filename": row["filename"] or "document.pdf",
-         "mimetype": row["mimetype"] or "application/pdf"},
-        user["id"], sender_label, row["subject"] or "",
-        "filed", visibility,
-    )
-    if not ok:
-        raise HTTPException(502, "Paperless upload failed — check Paperless is reachable + the per-user token is set")
-    with get_conn() as conn:
-        vis_row = conn.execute("SELECT paperless_visibility FROM email_attachments WHERE id=?", (att_id,)).fetchone()
-    return {"ok": True, "state": "filed", "visibility": vis_row["paperless_visibility"] if vis_row else None}
+    result = await asyncio.to_thread(file_attachment, att_id, user["id"], visibility)
+    if not result["ok"]:
+        raise HTTPException(result.get("status") or 502, result.get("error") or "filing failed")
+    return result
 
 
 @router.post("/attachments/{att_id}/paperless/undo")
