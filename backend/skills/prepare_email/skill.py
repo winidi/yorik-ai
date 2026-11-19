@@ -153,6 +153,11 @@ async def execute(
         "accounts":            [{"id": a["id"], "email": a["email"],
                                  "name": a.get("display_name") or ""} for a in own] if len(own) > 1 else [],
     }
+    if str(getattr(ctx, "source", "") or "").startswith("token:"):
+        # An outside agent's client (Brepper) shows the card with this
+        # button: a press tells the agent, in the person's own words, to
+        # send it (send_prepared_email). Yorik's chat has its own button.
+        card["actions"] = [_send_action(user_id, to)]
     _append(card)
     # The card learns what became of the draft (sent / thrown away).
     payload["card"] = {"conversation_id": getattr(ctx, "conversation_id", None), "uid": card.get("uid")}
@@ -180,3 +185,19 @@ async def execute(
             f"does that." + account_note
         ),
     }
+
+
+def _send_action(user_id, to: str) -> dict:
+    """The Send button of the card for an outside agent's client: a label,
+    and what pressing it says to the agent, in the person's language."""
+    lang = ""
+    try:
+        from backend.database import get_conn
+        with get_conn() as conn:
+            row = conn.execute("SELECT language FROM user_profiles WHERE id = ?", (user_id,)).fetchone()
+        lang = (row["language"] if row else "") or ""
+    except Exception:  # noqa: BLE001
+        pass
+    if str(lang).lower().startswith("de"):
+        return {"id": "send", "label": "Senden", "say": f"Ja, sende die vorbereitete E-Mail an {to} jetzt."}
+    return {"id": "send", "label": "Send", "say": f"Yes, send the prepared email to {to} now."}

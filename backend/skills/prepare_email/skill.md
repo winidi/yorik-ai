@@ -16,8 +16,7 @@ when_to_use: |
   confirm briefly that it's ready. Nothing is sent by this skill.
 when_not_to_use: |
   - Replying inside an existing email thread — that's email_draft.
-  - Actually sending — no skill in Yorik does this yet; sending is
-    always a manual click in the Email app's Composer.
+  - Actually sending — in Yorik's chat that is the Composer's Send button; an outside agent whose user said to send it calls send_prepared_email.
 inputs:
   to:
     type: string

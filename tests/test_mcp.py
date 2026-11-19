@@ -314,3 +314,54 @@ def test_an_agent_gets_the_rows_the_chat_would_show_as_cards(token_client, fresh
     assert body["cards"] and body["note"].startswith("There is no screen here")
     # The chat's "say 'see the cards below', list nothing" does not reach the agent.
     assert "_llm_hint" not in body["result"] and "rendered as cards" not in r.text
+
+
+def test_an_agent_sends_the_prepared_email_only_to_the_staged_recipient(token_client, fresh_app, monkeypatch):
+    """Brepper shows the email card with a Send button; pressing it tells the
+    agent to call send_prepared_email, which sends exactly the staged draft."""
+    import json as _json
+
+    client, token, uid, _ = token_client
+    from backend import email_addresses, email_sender
+    from backend.database import get_conn
+    with get_conn() as conn:
+        conn.execute("INSERT INTO email_accounts (owner_user_id, email, imap_host, imap_username, smtp_host, "
+                     "smtp_username, credential_key, enabled, is_default) VALUES (?, 'me@mail.example', 'imap.x', "
+                     "'me', 'smtp.x', 'me', 'k', 1, 1)", (uid,))
+        conn.commit()
+    monkeypatch.setattr(email_addresses, "known", lambda *a, **k: {"nina@example.com"})
+    sent = []
+    monkeypatch.setattr(email_sender, "send", lambda *a, **k: sent.append(a) or {"ok": True, "message_id": "<m>"})
+
+    r = _rpc(client, token, "tools/call", {"name": "prepare_email", "arguments": {
+        "to": "nina@example.com", "subject": "Danke", "body": "Hallo Nina, danke!"}})
+    body = r.json()["result"]["structuredContent"]
+    card = next(c for c in body["cards"] if c["type"] == "email_ready")
+    assert card["actions"][0]["id"] == "send" and "nina@example.com" in card["actions"][0]["say"]
+    assert sent == []                                         # preparing sends nothing
+
+    # Another recipient than the staged one: nothing goes out.
+    r = _rpc(client, token, "tools/call", {"name": "send_prepared_email", "arguments": {"to": "x@example.com"}})
+    assert r.json()["result"]["structuredContent"]["result"]["sent"] is False and sent == []
+
+    r = _rpc(client, token, "tools/call", {"name": "send_prepared_email", "arguments": {"to": "Nina@Example.com"}})
+    result = r.json()["result"]["structuredContent"]["result"]
+    assert result["sent"] is True and len(sent) == 1
+    account_id, recipients, subject, text = sent[0][:4]
+    assert recipients == ["nina@example.com"] and subject == "Danke" and text == "Hallo Nina, danke!"
+    # Sent once: the staged draft is gone, a second press sends nothing.
+    r = _rpc(client, token, "tools/call", {"name": "send_prepared_email", "arguments": {"to": "nina@example.com"}})
+    assert r.json()["result"]["structuredContent"]["result"]["sent"] is False and len(sent) == 1
+    with get_conn() as conn:
+        assert conn.execute("SELECT 1 FROM app_settings WHERE key = ?", (f"pending_email_draft_{uid}",)).fetchone() is None
+    assert _json.dumps(card)                                   # the card is plain JSON for any client
+
+
+def test_yoriks_own_chat_sends_from_the_composer_not_this_skill(fresh_app):
+    import asyncio
+
+    from backend.skills import SkillContext, get_registry
+    reg = get_registry()
+    out = asyncio.run(reg.invoke("send_prepared_email", ctx=SkillContext(reg, role="member", user_id=1, source="chat"),
+                                 to="nina@example.com"))
+    assert out["sent"] is False and "Send button" in out["_llm_hint"]
