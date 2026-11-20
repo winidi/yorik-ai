@@ -134,6 +134,15 @@ async def execute(ctx, query: str = "", k: int = 5) -> dict[str, Any]:
             "source":    h.get("source") or "local",
         }
     if seen:
+        from backend import file_links
+        if user_id is not None and file_links.for_outside_agent(ctx):
+            # An outside agent's client (Brepper) opens a document by its
+            # title: a 30-minute link to that one file.
+            for d in seen.values():
+                try:
+                    d["url"] = file_links.document_url(str(user_id), d)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("file link for doc %s failed: %s", d.get("doc_id"), exc)
         _append({
             "type":      "documents_found",
             "query":     q,

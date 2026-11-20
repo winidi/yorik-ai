@@ -17,6 +17,7 @@ kinds:
     email_attachment   an attachment of one of the person's emails (fetched
                        from the mail server, as the Email app's preview)
     document           a Paperless document, through the person's own token
+    upload             one of the person's own uploads (Yorik's local copy)
 """
 
 from __future__ import annotations
@@ -25,7 +26,9 @@ import base64
 import hashlib
 import hmac
 import json
+import mimetypes
 import os
+from pathlib import Path
 import secrets
 import time
 from typing import Any, Optional
@@ -35,7 +38,7 @@ from fastapi.responses import Response
 
 TTL_SECONDS = 30 * 60
 PREFIX = "/api/file-links/"
-KINDS = ("email_attachment", "document")
+KINDS = ("email_attachment", "document", "upload")
 INLINE_TYPES = {"application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp", "text/plain"}
 _STORE_KEY = "file_links_secret"
 _cached_secret: Optional[bytes] = None
@@ -130,6 +133,24 @@ def _paperless_document(doc_id: int, user_id: str) -> Optional[dict[str, Any]]:
     return {"content": r.content, "mimetype": r.headers.get("content-type") or "application/pdf", "filename": name}
 
 
+def _upload(doc_id: int, user_id: str) -> Optional[dict[str, Any]]:
+    from .documents import get_document, owned_by
+    doc = get_document(int(doc_id))
+    if not owned_by(doc, user_id) or not doc.get("path") or not Path(doc["path"]).is_file():
+        return None
+    path = Path(doc["path"])
+    return {"content": path.read_bytes(), "mimetype": doc.get("mime_type") or "", "filename": path.name}
+
+
+def mime_of(blob: dict[str, Any]) -> str:
+    """The file's type; a mail server's application/octet-stream for a
+    PDF is told by the file name instead."""
+    mime = (blob.get("mimetype") or "").split(";")[0].strip().lower()
+    if mime in ("", "application/octet-stream", "binary/octet-stream"):
+        mime = (mimetypes.guess_type(blob.get("filename") or "")[0] or "application/octet-stream").lower()
+    return mime
+
+
 @router.get(PREFIX + "{token}")
 async def open_file_link(token: str):
     import asyncio
@@ -139,12 +160,14 @@ async def open_file_link(token: str):
     if data["k"] == "email_attachment":
         from . import email_actions
         blob = await asyncio.to_thread(email_actions.fetch_attachment_binary, int(data["i"]), data["u"])
+    elif data["k"] == "upload":
+        blob = await asyncio.to_thread(_upload, int(data["i"]), data["u"])
     else:
         blob = await asyncio.to_thread(_paperless_document, int(data["i"]), data["u"])
     if not blob:
         raise HTTPException(404, "the file is not available")
     safe = (blob.get("filename") or "file").replace('"', "_")
-    mime = (blob.get("mimetype") or "application/octet-stream").split(";")[0].strip().lower()
+    mime = mime_of(blob)
     # Shown in place only when it cannot run code on Yorik's origin: a PDF or
     # a plain picture. Anything else (HTML, SVG, office files) downloads.
     how = "inline" if mime in INLINE_TYPES else "attachment"
@@ -169,6 +192,13 @@ def view_action(user_id: str, kind: str, item_id: int, name: str = "") -> dict[s
     label = "Anzeigen" if _language(user_id).lower().startswith("de") else "View"
     return {"id": f"view-{kind}-{int(item_id)}", "label": f"{label}: {name}" if name else label,
             "url": url(user_id, kind, item_id)}
+
+
+def document_url(user_id: str, doc: dict[str, Any]) -> str:
+    """The link for a document hit of search_documents / read_document:
+    an own upload ("local"/"native") or a Paperless document."""
+    kind = "upload" if (doc.get("source") or "paperless") in ("local", "native") else "document"
+    return url(user_id, kind, int(doc["doc_id"]))
 
 
 def for_outside_agent(ctx) -> bool:

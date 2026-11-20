@@ -441,3 +441,42 @@ def test_file_links_expire_and_only_pdfs_and_pictures_show_in_place(fresh_app, m
                                                  "filename": "page.html"})
     got = TestClient(fresh_app).get(file_links.PREFIX + file_links.mint("u1", "email_attachment", 5))
     assert got.status_code == 200 and got.headers["content-disposition"].startswith("attachment")
+
+
+def test_a_pdf_the_mail_server_calls_octet_stream_still_shows_in_place(fresh_app, monkeypatch):
+    """Supabase's invoice came as application/octet-stream (2026-11-20):
+    the browser downloaded it instead of showing it."""
+    from backend import file_links
+    monkeypatch.setattr("backend.email_actions.fetch_attachment_binary",
+                        lambda att_id, user_id: {"content": b"%PDF-1.7 x", "mimetype": "application/octet-stream",
+                                                 "filename": "Receipt-ZK-3.pdf"})
+    got = TestClient(fresh_app).get(file_links.PREFIX + file_links.mint("u1", "email_attachment", 5))
+    assert got.headers["content-type"] == "application/pdf"
+    assert got.headers["content-disposition"].startswith("inline")
+    assert file_links.mime_of({"mimetype": "application/octet-stream", "filename": "setup.exe"}) != "application/pdf"
+
+
+def test_found_documents_open_by_their_title_for_an_outside_agent(token_client, fresh_app, monkeypatch):
+    """Brepper lists what search_documents / read_document found; each
+    title opens that document (Paperless through the person's own token,
+    an own upload from Yorik's copy)."""
+    client, token, uid, _ = token_client
+    from backend import file_links, paperless_ingest
+    monkeypatch.setattr(paperless_ingest, "user_creds", lambda user_id: {"base_url": "http://pl", "api_key": "k"})
+    monkeypatch.setattr(paperless_ingest, "_fetch_doc", lambda doc_id, creds_override=None: {"title": "Invoice 421"})
+    monkeypatch.setattr(file_links, "_paperless_document",
+                        lambda doc_id, user_id: {"content": b"%PDF-1.4 d", "mimetype": "application/pdf",
+                                                 "filename": "invoice.pdf"} if doc_id == 421 and user_id == uid else None)
+    from backend.documents import get_docs_conn, DOCS_DB_PATH
+    with get_docs_conn(DOCS_DB_PATH) as conn:
+        conn.execute("INSERT INTO paperless_chunks (paperless_doc_id, chunk_index, text) VALUES (421, 0, 'Pro plan 25 USD')")
+        conn.commit()
+    r = _rpc(client, token, "tools/call", {"name": "read_document", "arguments": {"doc_id": 421}})
+    body = r.json()["result"]["structuredContent"]
+    card = next(c for c in body["cards"] if c["type"] == "documents_found")
+    link = card["documents"][0]["url"]
+    got = TestClient(fresh_app).get(link[link.index(file_links.PREFIX):])
+    assert got.status_code == 200 and got.content.startswith(b"%PDF")
+    assert got.headers["content-disposition"].startswith("inline")
+    # Another person's token for the same number opens nothing.
+    assert TestClient(fresh_app).get(file_links.PREFIX + file_links.mint("someone-else", "document", 421)).status_code == 404

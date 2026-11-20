@@ -23,6 +23,21 @@ MAX_CHARS = 40_000
 
 
 async def execute(ctx, doc_id: int) -> dict[str, Any]:
+    result = await _read(ctx, doc_id)
+    from backend import file_links
+    user_id = getattr(ctx, "user_id", None)
+    if result.get("ok") and user_id and file_links.for_outside_agent(ctx):
+        # An outside agent's client (Brepper) shows the document as a card
+        # whose title opens the file.
+        from backend.ui_tools import _append
+        doc = {"doc_id": result["doc_id"], "title": result.get("title"), "source": result.get("source"),
+               "created": result.get("created_at")}
+        doc["url"] = file_links.document_url(str(user_id), doc)
+        _append({"type": "documents_found", "documents": [doc]})
+    return result
+
+
+async def _read(ctx, doc_id: int) -> dict[str, Any]:
     try:
         doc_id_int = int(doc_id)
     except (TypeError, ValueError):
