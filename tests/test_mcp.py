@@ -480,3 +480,44 @@ def test_found_documents_open_by_their_title_for_an_outside_agent(token_client, 
     assert got.headers["content-disposition"].startswith("inline")
     # Another person's token for the same number opens nothing.
     assert TestClient(fresh_app).get(file_links.PREFIX + file_links.mint("someone-else", "document", 421)).status_code == 404
+
+
+def test_a_drafted_letter_opens_as_its_pdf_for_an_outside_agent(token_client, fresh_app, monkeypatch):
+    """Brepper cannot open the Writing app: the letter's card brings a
+    button that shows the sheet as a PDF for 30 minutes."""
+    client, token, uid, _ = token_client
+    from backend import file_links
+    from backend import apps
+    from backend.writing import routes
+    apps.set_opt_in_enabled("write", True)
+    monkeypatch.setattr(routes, "_final_pdf", lambda doc, user_id: b"%PDF-1.4 letter")
+    r = _rpc(client, token, "tools/call", {"name": "write_letter", "arguments": {
+        "recipient": "Stadtwerke", "subject": "Kündigung", "text": "Sehr geehrte Damen und Herren, ..."}})
+    body = r.json()["result"]["structuredContent"]
+    card = next(c for c in body["cards"] if c["type"] == "writing_draft_created")
+    link = card["actions"][0]["url"]
+    got = TestClient(fresh_app).get(link[link.index(file_links.PREFIX):])
+    assert got.status_code == 200 and got.content.startswith(b"%PDF")
+    assert got.headers["content-disposition"].startswith("inline")
+    other = file_links.mint(str(__import__("uuid").uuid4()), "writing", card["document_id"])
+    assert TestClient(fresh_app).get(file_links.PREFIX + other).status_code == 404
+
+
+def test_a_photo_link_names_one_asset_and_nothing_else(fresh_app, monkeypatch):
+    from backend import file_links
+    monkeypatch.setattr(file_links, "_photo", lambda asset_id, user_id: {
+        "content": b"\xff\xd8\xff jpeg", "mimetype": "image/jpeg", "filename": "a.jpeg"} if asset_id == "abc-123" else None)
+    got = TestClient(fresh_app).get(file_links.PREFIX + file_links.mint("u1", "photo", "abc-123"))
+    assert got.status_code == 200 and got.headers["content-type"] == "image/jpeg"
+    assert got.headers["content-disposition"].startswith("inline")
+    with pytest.raises(ValueError):
+        file_links.mint("u1", "photo", "../api/x")
+
+
+def test_an_unknown_recipient_brings_a_button_per_known_address(monkeypatch):
+    from backend import file_links
+    from backend.skills.prepare_email import skill
+    monkeypatch.setattr(file_links, "german", lambda user_id: True)
+    actions = skill._pick_actions("u1", ["anna@example.org", "", None])
+    assert [a["label"] for a in actions] == ["anna@example.org"]
+    assert "anna@example.org" in actions[0]["say"] and "Empfänger" in actions[0]["say"]

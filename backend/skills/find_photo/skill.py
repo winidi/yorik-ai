@@ -427,6 +427,15 @@ async def execute(
             "taken_at":      p.get("taken_at") or p.get("date_taken"),
             "type":          p.get("type") or "IMAGE",
         } for p in photos]
+        from backend import file_links
+        if uid and file_links.for_outside_agent(ctx):
+            # An outside agent's client cannot reach /api/photos: each photo
+            # gets a link that shows its preview for 30 minutes.
+            for c in compact:
+                try:
+                    c["url"] = file_links.url(str(uid), "photo", c["id"])
+                except (ValueError, TypeError):
+                    pass
         _append({
             "type":    "photos_found",
             "op":      op,

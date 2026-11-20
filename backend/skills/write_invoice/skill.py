@@ -63,8 +63,10 @@ async def execute(ctx, kind: str, customer: str, lines: List[Dict[str, Any]], su
                else f"{n_lines} Positionen · {total}" + (f" (ohne MwSt{', ' + rule if rule else ''})"
                                                          if data["small_business"] else ""))
     from backend.ui_tools import _append
-    _append({"type": "writing_draft_created", "document_id": doc["id"], "kind": kind, "recipient": doc["recipient"].get("name") or "",
-             "subject": doc["title"] or label, "preview": preview, "missing": missing})
+    from backend.skills.write_letter.skill import _with_view
+    _append(_with_view(ctx, {"type": "writing_draft_created", "document_id": doc["id"], "kind": kind,
+                             "recipient": doc["recipient"].get("name") or "", "subject": doc["title"] or label,
+                             "preview": preview, "missing": missing}, doc))
     ask_vat = not data.get("vat_confirmed")
     out = {"document_id": doc["id"], "net": net, "vat": vat, **({"vat_rate": vat_rate} if vat_charged else {}),
            "total": total, "missing": missing,

@@ -84,8 +84,12 @@ async def execute(
                          (f"pending_email_check_{user_id}", json.dumps(pending)))
             conn.commit()
         from backend.ui_tools import _append
-        _append({"type": "email_recipient_check", "typed": to, "suggestions": suggestions,
-                 "subject": pending["subject"], "attachment_filename": attachment_filename})
+        check = {"type": "email_recipient_check", "typed": to, "suggestions": suggestions,
+                 "subject": pending["subject"], "attachment_filename": attachment_filename}
+        from backend import file_links
+        if file_links.for_outside_agent(ctx):
+            check["actions"] = _pick_actions(user_id, suggestions)
+        _append(check)
         return {"ok": False, "unknown_recipient": to, "suggestions": suggestions,
                 "_llm_hint": (f"UNKNOWN RECIPIENT: {to} is not a known address (contacts, own accounts, earlier "
                               "mail, or typed by the user). A card shows the closest known addresses to pick or "
@@ -185,6 +189,17 @@ async def execute(
             f"does that." + account_note
         ),
     }
+
+
+def _pick_actions(user_id, suggestions) -> list:
+    """Buttons for an outside agent's client: pressing one tells the agent
+    which known address was meant, and it prepares the email again."""
+    from backend import file_links
+    de = file_links.german(str(user_id))
+    say = "Nimm {a} als Empfänger und bereite die E-Mail neu vor." if de else \
+        "Use {a} as the recipient and prepare the email again."
+    return [{"id": f"pick-{i}", "label": a, "say": say.format(a=a)}
+            for i, a in enumerate(suggestions or []) if isinstance(a, str) and a]
 
 
 def _send_action(user_id, to: str) -> dict:

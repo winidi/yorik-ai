@@ -7,6 +7,19 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 
+def _with_view(ctx, card: Dict[str, Any], doc: Dict[str, Any]) -> Dict[str, Any]:
+    """An outside agent's client (Brepper) cannot open the Writing app: its
+    card gets a button that shows the sheet as a PDF."""
+    from backend import file_links
+    if file_links.for_outside_agent(ctx):
+        from backend.writing.routes import _filename
+        try:
+            card["actions"] = [file_links.view_action(str(ctx.user_id), "writing", doc["id"], _filename(doc))]
+        except Exception:  # noqa: BLE001 — the card is still worth showing without it
+            pass
+    return card
+
+
 async def execute(ctx, recipient: str, subject: str, text: str, document_id: Optional[int] = None) -> Dict[str, Any]:
     from backend.writing import layouts, letterhead as lh_mod, recipient as rcp_mod, store
     user_id = getattr(ctx, "user_id", None)
@@ -34,8 +47,9 @@ async def execute(ctx, recipient: str, subject: str, text: str, document_id: Opt
     import re
     preview = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", content["text_html"])).strip()[:180]
     from backend.ui_tools import _append
-    _append({"type": "writing_draft_created", "document_id": doc["id"], "kind": "letter", "recipient": doc["recipient"].get("name") or "",
-             "subject": subject, "preview": preview, "missing": missing})
+    card = {"type": "writing_draft_created", "document_id": doc["id"], "kind": "letter", "recipient": doc["recipient"].get("name") or "",
+            "subject": subject, "preview": preview, "missing": missing}
+    _append(_with_view(ctx, card, doc))
     return {"document_id": doc["id"], "missing": missing,
             "_llm_hint": (f"shown_to_user: the draft letter (document_id={doc['id']}) is on a card the user can open. "
                           + (f"On the sheet still marked as missing: {', '.join(missing)}; mention it in half a sentence, do not ask for it. " if missing else "")

@@ -18,6 +18,9 @@ kinds:
                        from the mail server, as the Email app's preview)
     document           a Paperless document, through the person's own token
     upload             one of the person's own uploads (Yorik's local copy)
+    writing            a letter, invoice or quote of the Writing app, as its PDF
+    photo              a photo of the person's Immich library (its preview
+                       JPEG; the item is Immich's asset id, not a number)
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ import json
 import mimetypes
 import os
 from pathlib import Path
+import re
 import secrets
 import time
 from typing import Any, Optional
@@ -38,7 +42,8 @@ from fastapi.responses import Response
 
 TTL_SECONDS = 30 * 60
 PREFIX = "/api/file-links/"
-KINDS = ("email_attachment", "document", "upload")
+KINDS = ("email_attachment", "document", "upload", "writing", "photo")
+_ASSET_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 INLINE_TYPES = {"application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp", "text/plain"}
 _STORE_KEY = "file_links_secret"
 _cached_secret: Optional[bytes] = None
@@ -74,11 +79,20 @@ def _unb64(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
 
-def mint(user_id: str, kind: str, item_id: int, ttl: int = TTL_SECONDS, now: Optional[float] = None) -> str:
+def _item(kind: str, item_id: Any):
+    """A photo is named by Immich's asset id, everything else by a number."""
+    if kind == "photo":
+        if not _ASSET_ID.match(str(item_id)):
+            raise ValueError("not an asset id")
+        return str(item_id)
+    return int(item_id)
+
+
+def mint(user_id: str, kind: str, item_id: Any, ttl: int = TTL_SECONDS, now: Optional[float] = None) -> str:
     """The token for one file of one person."""
     if kind not in KINDS:
         raise ValueError(f"kind must be one of {KINDS}")
-    body = json.dumps({"u": str(user_id), "k": kind, "i": int(item_id),
+    body = json.dumps({"u": str(user_id), "k": kind, "i": _item(kind, item_id),
                        "e": int((now or time.time()) + ttl)}, separators=(",", ":")).encode()
     sig = hmac.new(_secret(), body, hashlib.sha256).digest()[:18]
     return f"{_b64(body)}.{_b64(sig)}"
@@ -96,6 +110,10 @@ def verify(token: str, now: Optional[float] = None) -> Optional[dict[str, Any]]:
         return None
     if not isinstance(data, dict) or data.get("k") not in KINDS or int(data.get("e", 0)) < (now or time.time()):
         return None
+    try:
+        _item(data["k"], data.get("i"))
+    except (ValueError, TypeError):
+        return None
     return data
 
 
@@ -112,7 +130,7 @@ def base_url() -> str:
     return f"http://127.0.0.1:{os.getenv('HOMEOS_PORT') or os.getenv('PORT') or 8000}"
 
 
-def url(user_id: str, kind: str, item_id: int) -> str:
+def url(user_id: str, kind: str, item_id: Any) -> str:
     return f"{base_url()}{PREFIX}{mint(user_id, kind, item_id)}"
 
 
@@ -142,6 +160,33 @@ def _upload(doc_id: int, user_id: str) -> Optional[dict[str, Any]]:
     return {"content": path.read_bytes(), "mimetype": doc.get("mime_type") or "", "filename": path.name}
 
 
+def _writing(doc_id: int, user_id: str) -> Optional[dict[str, Any]]:
+    """A letter, invoice or quote as the PDF the Writing app shows."""
+    from .writing import store
+    from .writing.routes import _filename, _final_pdf
+    doc = store.get(int(doc_id), str(user_id))
+    if not doc:
+        return None
+    return {"content": _final_pdf(doc, str(user_id)), "mimetype": "application/pdf", "filename": _filename(doc)}
+
+
+def _photo(asset_id: str, user_id: str) -> Optional[dict[str, Any]]:
+    """The preview JPEG of a photo, through the person's own Immich key
+    (no admin fallback: their own library or nothing)."""
+    import requests
+    from .external_users import get_user_immich_creds
+    creds = get_user_immich_creds(str(user_id)) or {}
+    if not creds.get("api_key") or not _ASSET_ID.match(str(asset_id)):
+        return None
+    base = (creds.get("base_url") or "http://localhost:2283").rstrip("/")
+    r = requests.get(f"{base}/api/assets/{asset_id}/thumbnail", params={"size": "preview"},
+                     headers={"x-api-key": creds["api_key"], "Accept": "image/*"}, timeout=30)
+    if not r.ok:
+        return None
+    mime = (r.headers.get("content-type") or "image/jpeg").split(";")[0].strip()
+    return {"content": r.content, "mimetype": mime, "filename": f"{asset_id}.{mime.rsplit('/', 1)[-1]}"}
+
+
 def mime_of(blob: dict[str, Any]) -> str:
     """The file's type; a mail server's application/octet-stream for a
     PDF is told by the file name instead."""
@@ -162,18 +207,29 @@ async def open_file_link(token: str):
         blob = await asyncio.to_thread(email_actions.fetch_attachment_binary, int(data["i"]), data["u"])
     elif data["k"] == "upload":
         blob = await asyncio.to_thread(_upload, int(data["i"]), data["u"])
+    elif data["k"] == "writing":
+        blob = await asyncio.to_thread(_writing, int(data["i"]), data["u"])
+    elif data["k"] == "photo":
+        blob = await asyncio.to_thread(_photo, str(data["i"]), data["u"])
     else:
         blob = await asyncio.to_thread(_paperless_document, int(data["i"]), data["u"])
     if not blob:
         raise HTTPException(404, "the file is not available")
-    safe = (blob.get("filename") or "file").replace('"', "_")
     mime = mime_of(blob)
     # Shown in place only when it cannot run code on Yorik's origin: a PDF or
     # a plain picture. Anything else (HTML, SVG, office files) downloads.
     how = "inline" if mime in INLINE_TYPES else "attachment"
     return Response(content=blob["content"], media_type=mime,
-                    headers={"content-disposition": f'{how}; filename="{safe}"',
+                    headers={"content-disposition": disposition(how, blob.get("filename") or "file"),
                              "cache-control": "private, no-store", "x-content-type-options": "nosniff"})
+
+
+def disposition(how: str, name: str) -> str:
+    """A header is latin-1 at best: "Kündigung.pdf" goes in twice, plain
+    ASCII for old clients and UTF-8 (RFC 5987) for everybody else."""
+    from urllib.parse import quote
+    plain = name.encode("ascii", "ignore").decode("ascii").replace('"', "").replace("\\", "") or "file"
+    return f"{how}; filename=\"{plain}\"; filename*=UTF-8''{quote(name)}"
 
 
 def _language(user_id: str) -> str:
@@ -186,11 +242,16 @@ def _language(user_id: str) -> str:
         return ""
 
 
-def view_action(user_id: str, kind: str, item_id: int, name: str = "") -> dict[str, str]:
+def german(user_id: str) -> bool:
+    """Card buttons speak the person's language: German or English."""
+    return _language(user_id).lower().startswith("de")
+
+
+def view_action(user_id: str, kind: str, item_id: Any, name: str = "") -> dict[str, str]:
     """A card button for an outside agent's client: opens the file
     ("View" or "View: invoice.pdf")."""
-    label = "Anzeigen" if _language(user_id).lower().startswith("de") else "View"
-    return {"id": f"view-{kind}-{int(item_id)}", "label": f"{label}: {name}" if name else label,
+    label = "Anzeigen" if german(user_id) else "View"
+    return {"id": f"view-{kind}-{_item(kind, item_id)}", "label": f"{label}: {name}" if name else label,
             "url": url(user_id, kind, item_id)}
 
 
