@@ -16,7 +16,6 @@
     "stubTitle": "Document {{id}}"
   },
   "upload": {
-    "adminsOnly": "Only admins can upload documents.",
     "failed": "Upload failed: {{error}}",
     "dropTitle": "Drop to upload",
     "dropHint": "PDFs, Word docs, markdown, images — anything you'd file away.",
@@ -30,7 +29,18 @@
     "cancel": "Cancel",
     "uploading": "Uploading…",
     "upload": "Upload",
-    "uploadCount": "Upload {{count}}"
+    "uploadCount": "Upload {{count}}",
+    "allDone_one": "{{count}} document uploaded.",
+    "allDone_other": "{{count}} documents uploaded.",
+    "someFailed": "{{ok}} of {{total}} uploaded. Not uploaded: {{names}}",
+    "progress": "{{done}} of {{total}} …",
+    "retry": "Try again",
+    "reason": {
+      "type": "Yorik does not take this file type. Save it as a PDF (Print → Save as PDF) and upload that.",
+      "size": "Too large. Save it smaller or split it.",
+      "network": "No connection to Yorik. Try again in a moment.",
+      "server": "Yorik refused it: {{error}}"
+    }
   },
   "sync": {
     "failed": "Couldn't sync documents: {{error}}",

@@ -16,7 +16,6 @@
     "stubTitle": "Dokument {{id}}"
   },
   "upload": {
-    "adminsOnly": "Nur Admins können Dokumente hochladen.",
     "failed": "Hochladen fehlgeschlagen: {{error}}",
     "dropTitle": "Loslassen zum Hochladen",
     "dropHint": "PDFs, Word-Dokumente, Markdown, Bilder – alles, was du ablegen würdest.",
@@ -30,7 +29,18 @@
     "cancel": "Abbrechen",
     "uploading": "Lädt hoch …",
     "upload": "Hochladen",
-    "uploadCount": "{{count}} hochladen"
+    "uploadCount": "{{count}} hochladen",
+    "allDone_one": "{{count}} Dokument hochgeladen.",
+    "allDone_other": "{{count}} Dokumente hochgeladen.",
+    "someFailed": "{{ok}} von {{total}} hochgeladen. Nicht hochgeladen: {{names}}",
+    "progress": "{{done}} von {{total}} …",
+    "retry": "Nochmal versuchen",
+    "reason": {
+      "type": "Diesen Dateityp nimmt Yorik nicht. Als PDF speichern (Drucken → Als PDF speichern) und das PDF hochladen.",
+      "size": "Zu groß. Bitte kleiner speichern oder aufteilen.",
+      "network": "Keine Verbindung zu Yorik. Gleich nochmal versuchen.",
+      "server": "Yorik hat abgelehnt: {{error}}"
+    }
   },
   "sync": {
     "failed": "Die Dokumente konnten nicht abgeglichen werden: {{error}}",

@@ -12730,6 +12730,7 @@ async def upload_document(
     suffix = Path(safe_name).suffix
     # Belt + braces: reject suffix containing path separators or null.
     if any(ch in suffix for ch in ("/", "\\", "\x00")):
+        log.warning("document upload refused: invalid file name")
         raise HTTPException(status_code=400, detail="filename contains invalid characters")
 
     # ── MIME allowlist: refuse anything we can't index. Browser-supplied
@@ -12739,6 +12740,7 @@ async def upload_document(
     supplied_mime = (file.content_type or "").lower().strip()
     photo = documents_mod.is_photo(supplied_mime, safe_name)
     if supplied_mime and not photo and supplied_mime not in documents_mod.SUPPORTED_MIME:
+        log.warning("document upload refused: unsupported type %s", supplied_mime)
         raise HTTPException(
             status_code=415,
             detail=f"unsupported file type '{supplied_mime}' — allowed: {sorted(documents_mod.SUPPORTED_MIME)}",
@@ -12757,6 +12759,7 @@ async def upload_document(
             break
         total += len(chunk)
         if total > max_bytes:
+            log.warning("document upload refused: over %d MB", max_bytes // (1024 * 1024))
             raise HTTPException(
                 status_code=413,
                 detail=f"file exceeds {max_bytes // (1024*1024)}MB limit (got {total // (1024*1024)}MB)",
@@ -12767,6 +12770,7 @@ async def upload_document(
         try:
             raw_bytes = documents_mod.photo_to_pdf(raw_bytes)
         except ValueError as exc:
+            log.warning("document upload refused: photo could not become a PDF (%s)", exc)
             raise HTTPException(status_code=415, detail=str(exc))
         safe_name = Path(safe_name).stem + ".pdf"
         suffix = ".pdf"

@@ -33,6 +33,7 @@ import {
 } from "@/components/MobileShell";
 import type { YorikDocument, DocumentSearchHit, DocVisibility, SearchResponse, SearchLegStatus } from "./types";
 import { toast } from "@/components/Toast";
+import { acceptable, uploadAll, UPLOAD_ACCEPT, type UploadResult } from "./upload";
 
 // Facet types — match the backend's /api/documents/facets response.
 type FacetKind = "tag" | "correspondent" | "document_type" | "year";
@@ -251,38 +252,33 @@ export function DocumentsApp() {
   }, [searchQuery, runSearch]);
 
   // ─── upload ────────────────────────────────────────────────────────────
-  const uploadFiles = useCallback(async (files: FileList | File[]) => {
-    if ((role !== "admin" && role !== "platform_admin")) {
-      toast(t("documents.upload.adminsOnly"));
-      return;
+  // Every file on its own (upload.ts): one the server cannot take never
+  // costs the others, and each says how it went.
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
+  const uploadFiles = useCallback(async (files: FileList | File[]): Promise<UploadResult[]> => {
+    if (!canUpload) {
+      toast(t("documents.app.adultsUpload"));
+      return [];
     }
     setUploading(true);
     try {
-      for (const file of Array.from(files)) {
-        const fd = new FormData();
-        fd.append("file", file);
-        const params = new URLSearchParams({
-          role,
-          title: file.name.replace(/\.[^.]+$/, ""),
-          allowed_roles: "admin,member",
-        });
-        const r = await fetch(`/api/documents/upload?${params}`, {
-          method: "POST",
-          body: fd,
-          credentials: "include",
-        });
-        if (!r.ok) {
-          const t = await r.text().catch(() => "");
-          throw new Error(`${file.name}: ${r.status} ${t}`);
-        }
+      const results = await uploadAll(Array.from(files), role,
+                                      (done, total) => setUploadProgress({ done, total }));
+      const ok = results.filter(r => r.ok).length;
+      if (ok) await listApi.refetch();
+      const failed = results.filter(r => !r.ok);
+      if (!failed.length) {
+        toast(t("documents.upload.allDone", { count: ok }));
+      } else {
+        toast(t("documents.upload.someFailed", { ok, total: results.length,
+                                                 names: failed.map(f => f.name).join(", ") }));
       }
-      await listApi.refetch();
-    } catch (err: any) {
-      toast(t("documents.upload.failed", { error: err.message }));
+      return results;
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
-  }, [role, listApi, t]);
+  }, [canUpload, role, listApi, t]);
 
   // Force an immediate Paperless reconcile. The scheduled reconciler
   // runs only every 6 hours; a doc dropped into Paperless's consume
@@ -599,10 +595,13 @@ export function DocumentsApp() {
         <UploadDialog
           onClose={() => setShowUploadDialog(false)}
           onUpload={async (files) => {
-            await uploadFiles(files);
-            setShowUploadDialog(false);
+            const results = await uploadFiles(files);
+            // All in: done. Otherwise the dialog stays and says which and why.
+            if (results.length && results.every(r => r.ok)) setShowUploadDialog(false);
+            return results;
           }}
           uploading={uploading}
+          progress={uploadProgress}
         />
       )}
 
@@ -2179,16 +2178,32 @@ function EmptyPane({ onUpload, canUpload }: { onUpload: () => void; canUpload: b
 // ---------------------------------------------------------------------------
 
 function UploadDialog({
-  onClose, onUpload, uploading,
+  onClose, onUpload, uploading, progress,
 }: {
   onClose: () => void;
-  onUpload: (files: File[]) => Promise<void> | void;
+  onUpload: (files: File[]) => Promise<UploadResult[]>;
   uploading: boolean;
+  progress: { done: number; total: number } | null;
 }) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const [picked, setPicked] = useState<File[]>([]);
+  // After an upload: how each picked file went (same order as picked).
+  const [results, setResults] = useState<UploadResult[] | null>(null);
+  const reasonText = (r: UploadResult) =>
+    r.reason === "type" ? t("documents.upload.reason.type")
+      : r.reason === "size" ? t("documents.upload.reason.size")
+      : r.reason === "network" ? t("documents.upload.reason.network")
+      : t("documents.upload.reason.server", { error: r.detail || "" });
+  async function start(files: File[]) {
+    setResults(null);
+    const res = await onUpload(files);
+    // The ones that went in leave the list; the others stay, to try again.
+    const failed = res.map((r, i) => ({ r, f: files[i] })).filter(x => !x.r.ok);
+    setPicked(failed.map(x => x.f));
+    setResults(failed.map(x => x.r));
+  }
 
   useEffect(() => {
     function esc(e: KeyboardEvent) { if (e.key === "Escape" && !uploading) onClose(); }
@@ -2248,11 +2263,12 @@ function UploadDialog({
             ref={inputRef}
             type="file"
             multiple
-            accept=".pdf,.docx,.txt,.md,image/*"
+            accept={UPLOAD_ACCEPT}
             className="hidden"
             onChange={e => {
               const files = Array.from(e.target.files || []);
-              if (files.length) setPicked(files);
+              if (files.length) { setPicked(p => [...p, ...files]); setResults(null); }
+              e.target.value = "";
             }}
           />
           <input
@@ -2269,12 +2285,23 @@ function UploadDialog({
           />
           {picked.length > 0 && (
             <div className="mt-4 space-y-1">
-              {picked.map((f, i) => (
-                <div key={i} className="text-xs flex items-center justify-between bg-muted/50 rounded-md px-3 py-1.5">
-                  <span className="truncate">{f.name}</span>
-                  <span className="text-muted-foreground shrink-0 ml-2">{fmtBytes(f.size)}</span>
-                </div>
-              ))}
+              {picked.map((f, i) => {
+                const r = results?.[i];
+                const bad = r ? !r.ok : !acceptable(f);
+                return (
+                  <div key={i} className={cn("text-xs rounded-md px-3 py-1.5", bad ? "bg-red-500/10" : "bg-muted/50")}>
+                    <div className="flex items-center justify-between">
+                      <span className="truncate">{f.name}</span>
+                      <span className="text-muted-foreground shrink-0 ml-2">{fmtBytes(f.size)}</span>
+                    </div>
+                    {bad && (
+                      <div className="text-2xs text-red-600 dark:text-red-400 mt-0.5">
+                        {r ? reasonText(r) : t("documents.upload.reason.type")}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {picked.some(f => f.type.startsWith("image/")) && (
                 <div className="text-2xs text-muted-foreground pt-1">
                   {t("documents.upload.photosAsPdf")}
@@ -2292,7 +2319,7 @@ function UploadDialog({
             {t("documents.upload.cancel")}
           </button>
           <button
-            onClick={() => onUpload(picked)}
+            onClick={() => start(picked)}
             disabled={uploading || picked.length === 0}
             className={cn(
               "h-10 md:h-auto px-4 md:px-3 md:py-1.5 text-sm md:text-xs rounded-md font-medium transition inline-flex items-center gap-1.5",
@@ -2302,8 +2329,12 @@ function UploadDialog({
             )}
           >
             {uploading
-              ? <><Loader2 className="w-4 h-4 md:w-3.5 md:h-3.5 animate-spin" /> {t("documents.upload.uploading")}</>
-              : <>{picked.length ? t("documents.upload.uploadCount", { count: picked.length }) : t("documents.upload.upload")}</>}
+              ? <><Loader2 className="w-4 h-4 md:w-3.5 md:h-3.5 animate-spin" /> {progress
+                  ? t("documents.upload.progress", { done: progress.done, total: progress.total })
+                  : t("documents.upload.uploading")}</>
+              : <>{results?.length ? t("documents.upload.retry")
+                  : picked.length ? t("documents.upload.uploadCount", { count: picked.length })
+                  : t("documents.upload.upload")}</>}
           </button>
         </footer>
       </div>

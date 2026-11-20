@@ -142,3 +142,26 @@ def test_upload_filename_traversal_is_sanitised(fresh_app, tmp_path,
             # DOCS_DIR/<doc_id>/passwd, NOT at /etc/passwd.
             f"unexpected filename in sandbox: {p}"
         )
+
+
+def test_a_member_uploads_a_batch_and_a_refused_file_is_logged(fresh_app, monkeypatch, caplog):
+    """2026-11-20: a member picked 13 PDFs and an HTML page on the Documents
+    page and nothing arrived (the page refused non-admins). The server takes
+    a member's PDFs; it refuses the HTML page alone and logs why, never the
+    file name."""
+    import logging
+    from tests.conftest import login_client
+    from backend import documents as documents_mod
+    monkeypatch.setattr(documents_mod, "index_document", lambda doc_id: {"chunks": 1})
+    client, _ = login_client(fresh_app, role="member", name="Member", email="member@example.com")
+    for i in range(3):
+        name, body, mime = _small_pdf(f"Rechnung-{i}.pdf")
+        r = client.post("/api/documents/upload", params={"allowed_roles": "admin,member"},
+                        files={"file": (name, body, mime)})
+        assert r.status_code == 201, r.text
+    with caplog.at_level(logging.WARNING, logger="yorik.main"):
+        r = client.post("/api/documents/upload",
+                        files={"file": ("Bestellung-geheim.html", io.BytesIO(b"<html></html>"), "text/html")})
+    assert r.status_code == 415
+    logged = " ".join(rec.getMessage() for rec in caplog.records)
+    assert "refused: unsupported type text/html" in logged and "geheim" not in logged
