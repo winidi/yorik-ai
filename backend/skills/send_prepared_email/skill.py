@@ -17,6 +17,53 @@ from typing import Any
 log = logging.getLogger("yorik.send_prepared_email")
 
 
+# A press on Send after the email already went out (the agent sent it in
+# the same turn, or a second press) found no draft, and the agent prepared
+# and sent the same email again (seen live 2026-11-23). What went out last
+# is kept for a while, so the answer is "already sent" instead.
+ALREADY_SENT_MINUTES = 30
+
+
+def _last_sent_key(user_id) -> str:
+    return f"last_sent_email_{user_id}"
+
+
+def _remember_sent(user_id, to: str, subject: str, card_uid: str) -> None:
+    import datetime as dt
+    from backend.database import get_conn
+    value = json.dumps({"to": to, "subject": subject, "card_uid": card_uid,
+                        "at": dt.datetime.now(dt.timezone.utc).isoformat()})
+    with get_conn() as conn:
+        conn.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+                     (_last_sent_key(user_id), value))
+        conn.commit()
+
+
+def _recently_sent(user_id, to: str) -> dict:
+    """The email that went out last, when it went to `to` within ALREADY_SENT_MINUTES."""
+    import datetime as dt
+    from backend.database import get_conn
+    with get_conn() as conn:
+        row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (_last_sent_key(user_id),)).fetchone()
+    try:
+        last = json.loads(row["value"]) if row and row["value"] else {}
+        at = dt.datetime.fromisoformat(last["at"])
+    except (TypeError, ValueError, KeyError):
+        return {}
+    if str(last.get("to") or "").strip().lower() != (to or "").strip().lower():
+        return {}
+    if dt.datetime.now(dt.timezone.utc) - at > dt.timedelta(minutes=ALREADY_SENT_MINUTES):
+        return {}
+    return last
+
+
+def _sent_card(to: str, subject: str, card_uid: str) -> None:
+    """Tells the client that the prepared email's card is done: it shows
+    "sent" there instead of its Send button (Brepper: cards.py)."""
+    from backend.ui_tools import _append
+    _append({"type": "email_sent", "to": to, "subject": subject, "card_uid": card_uid})
+
+
 def _staged(user_id) -> dict:
     from backend.database import get_conn
     with get_conn() as conn:
@@ -37,8 +84,15 @@ async def execute(ctx, to: str) -> dict[str, Any]:
                                             "Tell the user to press it."}
     draft = _staged(user_id)
     if not draft.get("to"):
-        return {"sent": False, "_llm_hint": "REJECTED: no prepared email is waiting. Prepare it with prepare_email "
-                                            "first; nothing was sent."}
+        last = _recently_sent(user_id, to)
+        if last:
+            _sent_card(last["to"], last.get("subject") or "", last.get("card_uid") or "")
+            return {"sent": False, "already_sent": True, "to": last["to"], "subject": last.get("subject") or "",
+                    "_llm_hint": ("ALREADY SENT: this email went out already, nothing was sent again. Tell the user "
+                                  "in one short line that it was already sent; do not prepare or send it again.")}
+        return {"sent": False, "_llm_hint": ("REJECTED: no prepared email is waiting, nothing was sent. Do not "
+                                             "prepare and send one on your own: tell the user, and prepare a new "
+                                             "one only when they ask for it.")}
     staged_to = str(draft["to"]).strip()
     if staged_to.lower() != (to or "").strip().lower():
         return {"sent": False, "staged_to": staged_to,
@@ -71,6 +125,12 @@ async def execute(ctx, to: str) -> dict[str, Any]:
         _close_pending_draft(str(user_id), "sent")
     except Exception:  # noqa: BLE001
         log.warning("sent, but the staged draft could not be cleared", exc_info=True)
+    card_uid = str((draft.get("card") or {}).get("uid") or "")
+    try:
+        _remember_sent(user_id, staged_to, draft.get("subject") or "", card_uid)
+    except Exception:  # noqa: BLE001
+        log.warning("sent, but could not remember it", exc_info=True)
+    _sent_card(staged_to, draft.get("subject") or "", card_uid)
     log.info("sent the prepared email for user %s via %s", user_id, getattr(ctx, "source", ""))
     return {"sent": True, "to": staged_to, "subject": draft.get("subject") or "",
             "attachments": [f["filename"] for f in files],

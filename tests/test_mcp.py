@@ -350,9 +350,17 @@ def test_an_agent_sends_the_prepared_email_only_to_the_staged_recipient(token_cl
     assert result["sent"] is True and len(sent) == 1
     account_id, recipients, subject, text = sent[0][:4]
     assert recipients == ["nina@example.com"] and subject == "Danke" and text == "Hallo Nina, danke!"
-    # Sent once: the staged draft is gone, a second press sends nothing.
+    # The client learns that the card's email went out (its Send button goes).
+    done = r.json()["result"]["structuredContent"]["cards"]
+    assert done == [{"type": "email_sent", "to": "nina@example.com", "subject": "Danke",
+                     "card_uid": card["uid"], "uid": done[0]["uid"]}]
+    # Sent once: the staged draft is gone, a second press sends nothing and
+    # says it went out already, so the agent does not send it again.
     r = _rpc(client, token, "tools/call", {"name": "send_prepared_email", "arguments": {"to": "nina@example.com"}})
-    assert r.json()["result"]["structuredContent"]["result"]["sent"] is False and len(sent) == 1
+    again = r.json()["result"]["structuredContent"]
+    assert again["result"]["sent"] is False and again["result"]["already_sent"] is True and len(sent) == 1
+    assert "do not prepare or send it again" in again["result"]["_llm_hint"]
+    assert again["cards"][0]["type"] == "email_sent" and again["cards"][0]["card_uid"] == card["uid"]
     with get_conn() as conn:
         assert conn.execute("SELECT 1 FROM app_settings WHERE key = ?", (f"pending_email_draft_{uid}",)).fetchone() is None
     assert _json.dumps(card)                                   # the card is plain JSON for any client
