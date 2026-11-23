@@ -158,6 +158,8 @@ def test_create_then_delete_round_trip(token_client):
     pending = body["structuredContent"]["pending_confirmation"]
     assert pending["preview"]["mode"] == "confirm_before"
     assert "Yorik app" in pending["next"]
+    # Not the chat's "a confirmation card is on screen": no card shows here.
+    assert "on screen" not in __import__("json").dumps(body["structuredContent"])
     with get_conn() as conn:
         assert conn.execute("SELECT 1 FROM events WHERE id=?", (event_id,)).fetchone()
 

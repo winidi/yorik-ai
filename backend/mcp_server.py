@@ -412,6 +412,13 @@ async def call_tool(user: dict[str, Any], name: str, arguments: dict[str, Any],
                 block["next"] = ("Already applied — nothing to confirm. pending_cancel(pending_id) "
                                  "undoes it within the hour if the user changes their mind.")
             payload["pending_confirmation"] = block
+            hint = result.get("_llm_hint") if isinstance(result, dict) else None
+            if isinstance(hint, str) and "confirmation card" in hint:
+                # The chat's hint ("a confirmation card is on screen, tap
+                # Delete") is wrong here: no card shows, the agent told the
+                # user to tap one that is not there (2026-11-23). `next` says
+                # where it is confirmed.
+                payload["result"] = {k: v for k, v in result.items() if k != "_llm_hint"}
     return payload
 
 
