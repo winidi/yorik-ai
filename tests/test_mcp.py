@@ -338,6 +338,7 @@ def test_an_agent_sends_the_prepared_email_only_to_the_staged_recipient(token_cl
     body = r.json()["result"]["structuredContent"]
     card = next(c for c in body["cards"] if c["type"] == "email_ready")
     assert card["actions"][0]["id"] == "send" and "nina@example.com" in card["actions"][0]["say"]
+    assert card["body"] == "Hallo Nina, danke!" and card["from"] == "me@mail.example"   # to change it by hand
     assert sent == []                                         # preparing sends nothing
 
     # Another recipient than the staged one: nothing goes out.

@@ -162,6 +162,10 @@ async def execute(
         # button: a press tells the agent, in the person's own words, to
         # send it (send_prepared_email). Yorik's chat has its own button.
         card["actions"] = [_send_action(user_id, to)]
+        # The whole text and the sender, so the person can change the
+        # draft there by hand (Brepper: "Edit") and copy or insert it.
+        card["body"] = body or ""
+        card["from"] = next((a["email"] for a in own if a["id"] == account_id), "")
     _append(card)
     # The card learns what became of the draft (sent / thrown away).
     payload["card"] = {"conversation_id": getattr(ctx, "conversation_id", None), "uid": card.get("uid")}
