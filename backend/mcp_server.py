@@ -483,6 +483,8 @@ def _confirm_card(user: dict[str, Any], action: dict[str, Any], may_confirm: boo
     if start[:10].count("-") == 2:
         day = f"{start[8:10]}.{start[5:7]}."
         text += f" · {day} {start[11:16]}".rstrip() if len(start) > 10 else f" · {day}"
+    if preview.get("from"):
+        text += f" · {preview['from']}"                # an email: who it is from
     deleting = preview.get("action") == "delete"
     title = ("Wirklich löschen?" if de else "Delete this?") if deleting else (
         "Bitte bestätigen" if de else "Please confirm")

@@ -645,3 +645,48 @@ def test_an_unknown_recipient_brings_a_button_per_known_address(monkeypatch):
     actions = skill._pick_actions("u1", ["anna@example.org", "", None])
     assert [a["label"] for a in actions] == ["anna@example.org"]
     assert "anna@example.org" in actions[0]["say"] and "Empfänger" in actions[0]["say"]
+
+
+def test_an_agent_deletes_one_email_after_a_yes(token_client, monkeypatch):
+    """delete_email stages one email; the yes moves it to the Trash, through
+    the same question card and limits as every agent deletion."""
+    from backend import email_actions
+    client, token, uid, logged_in = token_client
+    mid, _ = _mail_with_attachments(uid, [])
+    moved = []
+    monkeypatch.setattr(email_actions, "delete_message", lambda m, u: moved.append((m, u)) or True)
+
+    r = _rpc(client, token, "tools/call", {"name": "delete_email", "arguments": {"message_id": mid}})
+    sc = r.json()["result"]["structuredContent"]
+    ask = next(c for c in sc["cards"] if c["type"] == "confirm")
+    assert "Payment received" in ask["text"] and "billing@vendor.example" in ask["text"] and moved == []
+    assert logged_in.patch("/api/profile/agent-deletes", json={"enabled": True}).status_code == 200
+    r = _rpc(client, token, "tools/call", {"name": "pending_confirm", "arguments": {
+        "pending_id": sc["pending_confirmation"]["pending_id"]}})
+    assert r.json()["result"]["isError"] is False and moved == [(mid, str(uid))]
+
+    # Somebody else's email, or a list: nothing is staged.
+    r = _rpc(client, token, "tools/call", {"name": "delete_email", "arguments": {"message_id": mid + 999}})
+    assert r.json()["result"]["isError"] is True
+    r = _rpc(client, token, "tools/call", {"name": "delete_email", "arguments": {"message_id": [mid, mid]}})
+    assert r.json()["result"]["isError"] is True
+
+
+def test_a_reminder_can_be_listed_and_cancelled_but_only_ones_own(token_client):
+    import datetime as dt
+    import uuid
+    from backend import reminders
+    client, token, uid, _ = token_client
+    soon = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1)
+    mine = reminders.create(str(uid), "Zahnarzt anrufen", soon)
+    theirs = reminders.create(str(uuid.uuid4()), "Fremde Erinnerung", soon)
+
+    r = _rpc(client, token, "tools/call", {"name": "cancel_reminder", "arguments": {}})
+    listed = r.json()["result"]["structuredContent"]["result"]["reminders"]
+    assert [x["title"] for x in listed] == ["Zahnarzt anrufen"]                 # only one's own
+    r = _rpc(client, token, "tools/call", {"name": "cancel_reminder", "arguments": {"reminder_id": theirs}})
+    assert r.json()["result"]["structuredContent"]["result"]["cancelled"] is False
+    r = _rpc(client, token, "tools/call", {"name": "cancel_reminder", "arguments": {"reminder_id": mine}})
+    assert r.json()["result"]["structuredContent"]["result"]["cancelled"] is True
+    r = _rpc(client, token, "tools/call", {"name": "cancel_reminder", "arguments": {}})
+    assert r.json()["result"]["structuredContent"]["result"]["reminders"] == []

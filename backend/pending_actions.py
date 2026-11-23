@@ -785,4 +785,12 @@ def apply(pending_id: str) -> Dict[str, Any]:
         from .skills.set_document_visibility.skill import apply_visibility
         return {"applied": kind, **apply_visibility(args)}
 
+    if kind == "delete_email":
+        from . import email_actions
+        message_id = int(args["message_id"])
+        if not email_actions.delete_message(message_id, str(args.get("user_id") or row["user_id"])):
+            raise RuntimeError("the mail server did not move the email to the Trash; it is still there")
+        _append({"type": "refresh_data", "table": "emails",
+                 "reason": f"deleted email: {args.get('subject') or message_id}"})
+        return {"applied": kind, "message_id": message_id, "deleted": 1}
     raise ValueError(f"unknown deferred action kind: {kind!r}")
