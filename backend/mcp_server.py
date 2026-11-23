@@ -365,7 +365,16 @@ async def call_tool(user: dict[str, Any], name: str, arguments: dict[str, Any],
         _mark_viewed(user, skill_name)
         return view
     if name in ("pending_confirm", "pending_cancel"):
-        return await _resolve_pending(user, name, str(arguments.get("pending_id") or ""))
+        pid = str(arguments.get("pending_id") or "")
+        from . import pending_actions as _pa
+        row = _pa.get(pid) if pid else None
+        out = await _resolve_pending(user, name, pid)
+        if row and _pa.is_deferred(row) and isinstance(out, dict):
+            # The client's question card (_confirm_card) says what became of it.
+            params = row.get("params") if isinstance(row.get("params"), dict) else {}
+            deleting = "delete" in str(row.get("skill") or "") or params.get("action") == "delete"
+            out = {**out, "cards": [_done_card(user, pid, name == "pending_confirm", deleting)]}
+        return out
 
     reg = get_registry()
     skill = reg.get(name)
@@ -403,11 +412,18 @@ async def call_tool(user: dict[str, Any], name: str, arguments: dict[str, Any],
                 "skill": action.get("skill"),
                 "preview": preview,
             }
-            if preview.get("mode") == "confirm_before" and not user.get("agent_may_confirm_deletes"):
-                _notify_owner_of_deletion(user, name, action)
-                block["next"] = ("Nothing is deleted yet. The owner confirms this in the Yorik app "
-                                 "(notification bell); pending_confirm is not allowed for this "
-                                 "account. pending_cancel(pending_id) withdraws it.")
+            if preview.get("mode") == "confirm_before":
+                may = bool(user.get("agent_may_confirm_deletes"))
+                if not may:
+                    _notify_owner_of_deletion(user, name, action)
+                    block["next"] = ("Nothing is deleted yet. The owner confirms this in the Yorik app "
+                                     "(notification bell); pending_confirm is not allowed for this "
+                                     "account. pending_cancel(pending_id) withdraws it.")
+                else:
+                    block["next"] = ("Nothing is done yet. The card asks the user; call pending_confirm"
+                                     "(pending_id) only after they said yes, pending_cancel(pending_id) "
+                                     "if they said no.")
+                payload.setdefault("cards", []).append(_confirm_card(user, action, may))
             else:
                 block["next"] = ("Already applied — nothing to confirm. pending_cancel(pending_id) "
                                  "undoes it within the hour if the user changes their mind.")
@@ -445,6 +461,54 @@ def _notify_owner_of_deletion(user: dict[str, Any], skill: str, action: dict[str
         )
     except Exception:  # noqa: BLE001
         log.exception("could not notify owner about staged deletion")
+
+
+def _confirm_card(user: dict[str, Any], action: dict[str, Any], may_confirm: bool) -> dict[str, Any]:
+    """The question as a card for the agent's client (Brepper's "confirm"):
+    its buttons say the answer to the agent. Without the owner's leave for
+    agents to confirm, it says where to confirm and offers only to withdraw."""
+    from . import file_links
+    de = file_links.german(str(user["id"]))
+    pid = str(action.get("pending_id") or "")
+    preview = action.get("preview") or {}
+    item = next((preview[k] for k in ("event", "task", "contact", "draft", "bill", "document")
+                 if isinstance(preview.get(k), dict)), {})
+    what = str(item.get("title") or item.get("name") or item.get("subject") or preview.get("title") or "")
+    text = what
+    start = str(item.get("starts_at") or "")
+    if start[:10].count("-") == 2:
+        day = f"{start[8:10]}.{start[5:7]}."
+        text += f" · {day} {start[11:16]}".rstrip() if len(start) > 10 else f" · {day}"
+    deleting = preview.get("action") == "delete"
+    title = ("Wirklich löschen?" if de else "Delete this?") if deleting else (
+        "Bitte bestätigen" if de else "Please confirm")
+    named = f"„{what}“" if de else f"\"{what}\""
+    if may_confirm:
+        yes = ("Löschen" if de else "Delete") if deleting else ("Bestätigen" if de else "Confirm")
+        actions = [
+            {"id": "confirm", "label": yes,
+             "say": (f"Ja, mach das mit {named} (pending_id {pid})." if de
+                     else f"Yes, go ahead with {named} (pending_id {pid}).")},
+            {"id": "cancel", "label": "Abbrechen" if de else "Cancel",
+             "say": (f"Nein, lass {named} wie es ist (pending_id {pid})." if de
+                     else f"No, leave {named} as it is (pending_id {pid}).")}]
+    else:
+        text += ("\n\nBestätige es in Yorik unter der Glocke." if de
+                 else "\n\nConfirm it in Yorik under the bell.")
+        actions = [{"id": "cancel", "label": "Zurückziehen" if de else "Withdraw",
+                    "say": (f"Zieh das für {named} zurück (pending_id {pid})." if de
+                            else f"Withdraw it for {named} (pending_id {pid}).")}]
+    return {"type": "confirm", "uid": f"p-{pid}", "title": title, "text": text.strip(), "actions": actions}
+
+
+def _done_card(user: dict[str, Any], pending_id: str, confirmed: bool, deleting: bool) -> dict[str, Any]:
+    from . import file_links
+    de = file_links.german(str(user["id"]))
+    if confirmed:
+        text = ("Gelöscht" if de else "Deleted") if deleting else ("Erledigt" if de else "Done")
+    else:
+        text = ("Nicht gelöscht" if de else "Not deleted") if deleting else ("Abgebrochen" if de else "Cancelled")
+    return {"type": "done", "card_uid": f"p-{pending_id}", "text": text}
 
 
 def _preview_subject(preview: dict[str, Any]) -> str:

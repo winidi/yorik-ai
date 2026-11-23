@@ -160,6 +160,11 @@ def test_create_then_delete_round_trip(token_client):
     assert "Yorik app" in pending["next"]
     # Not the chat's "a confirmation card is on screen": no card shows here.
     assert "on screen" not in __import__("json").dumps(body["structuredContent"])
+    # The client gets the question as a card: confirmed in Yorik, so the
+    # only button withdraws it.
+    ask = next(c for c in body["structuredContent"]["cards"] if c["type"] == "confirm")
+    assert ask["uid"] == "p-" + pending["pending_id"] and "MCP dentist" in ask["text"] and "15.01." in ask["text"]
+    assert [a["id"] for a in ask["actions"]] == ["cancel"] and pending["pending_id"] in ask["actions"][0]["say"]
     with get_conn() as conn:
         assert conn.execute("SELECT 1 FROM events WHERE id=?", (event_id,)).fetchone()
 
@@ -188,6 +193,25 @@ def test_create_then_delete_round_trip(token_client):
     assert r.json()["result"]["isError"] is False, r.text
     with get_conn() as conn:
         assert conn.execute("SELECT 1 FROM events WHERE id=?", (event_id,)).fetchone() is None
+    # The question card is closed.
+    done = r.json()["result"]["structuredContent"]["cards"]
+    assert done == [{"type": "done", "card_uid": "p-" + pending["pending_id"], "text": "Deleted"}]
+
+    # With the owner's leave, the card asks right away: Delete or Cancel.
+    r = _rpc(client, token, "tools/call", {"name": "add_calendar_event", "arguments": {
+        "title": "MCP barber", "starts_at": "2030-01-16T10:00:00"}})
+    second = r.json()["result"]["structuredContent"]["result"]
+    second_id = second.get("event_id") or second.get("id") or (second.get("event") or {}).get("id")
+    r = _rpc(client, token, "tools/call", {"name": "delete_calendar_event", "arguments": {"event_id": int(second_id)}})
+    sc = r.json()["result"]["structuredContent"]
+    ask = next(c for c in sc["cards"] if c["type"] == "confirm")
+    assert [a["label"] for a in ask["actions"]] == ["Delete", "Cancel"]
+    assert "pending_confirm" in sc["pending_confirmation"]["next"] and "Already applied" not in sc["pending_confirmation"]["next"]
+    r = _rpc(client, token, "tools/call", {"name": "pending_cancel", "arguments": {
+        "pending_id": sc["pending_confirmation"]["pending_id"]}})
+    assert r.json()["result"]["structuredContent"]["cards"][0]["text"] == "Not deleted"
+    with get_conn() as conn:
+        assert conn.execute("SELECT 1 FROM events WHERE id=?", (second_id,)).fetchone()
 
 
 def test_owner_deletes_from_the_bell(token_client):
