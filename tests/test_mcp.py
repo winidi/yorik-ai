@@ -429,9 +429,36 @@ def test_an_agent_sends_the_prepared_email_only_to_the_staged_recipient(token_cl
     assert again["result"]["sent"] is False and again["result"]["already_sent"] is True and len(sent) == 1
     assert "do not prepare or send it again" in again["result"]["_llm_hint"]
     assert again["cards"][0]["type"] == "email_sent" and again["cards"][0]["card_uid"] == card["uid"]
+
+    # An agent that no longer saw it went out prepares the same email anew
+    # and sends it: still nothing goes out twice.
+    r = _rpc(client, token, "tools/call", {"name": "prepare_email", "arguments": {
+        "to": "nina@example.com", "subject": "Danke", "body": "Hallo Nina, danke!"}})
+    anew = next(c for c in r.json()["result"]["structuredContent"]["cards"] if c["type"] == "email_ready")
+    r = _rpc(client, token, "tools/call", {"name": "send_prepared_email", "arguments": {"to": "nina@example.com"}})
+    twice = r.json()["result"]["structuredContent"]
+    assert twice["result"]["already_sent"] is True and len(sent) == 1
+    assert twice["cards"][0]["card_uid"] == anew["uid"]
     with get_conn() as conn:
         assert conn.execute("SELECT 1 FROM app_settings WHERE key = ?", (f"pending_email_draft_{uid}",)).fetchone() is None
     assert _json.dumps(card)                                   # the card is plain JSON for any client
+
+
+def test_the_same_draft_prepared_again_keeps_its_card(token_client, monkeypatch):
+    """Send on the card the person pressed closes that card, also when the
+    agent prepared the same email once more before sending it."""
+    client, token, uid, _ = token_client
+    from backend import email_addresses
+    monkeypatch.setattr(email_addresses, "known", lambda *a, **k: {"nina@example.com"})
+    args = {"to": "nina@example.com", "subject": "Danke", "body": "Hallo Nina, danke!"}
+
+    def card():
+        r = _rpc(client, token, "tools/call", {"name": "prepare_email", "arguments": args})
+        return next(c for c in r.json()["result"]["structuredContent"]["cards"] if c["type"] == "email_ready")
+    first, same = card(), card()
+    assert same["uid"] == first["uid"] and same["replaced_previous"] is False
+    args["body"] = "Hallo Nina, vielen Dank!"
+    assert card()["uid"] != first["uid"]                       # another text is another email
 
 
 def test_yoriks_own_chat_sends_from_the_composer_not_this_skill(fresh_app):

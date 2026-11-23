@@ -136,8 +136,19 @@ async def execute(
     # mail (seen live 2026-10-16).
     from backend.database import get_conn as _gc0
     with _gc0() as conn:
-        replaced_previous = bool(conn.execute(
-            "SELECT 1 FROM app_settings WHERE key = ?", (f"pending_email_draft_{user_id}",)).fetchone())
+        prev_row = conn.execute(
+            "SELECT value FROM app_settings WHERE key = ?", (f"pending_email_draft_{user_id}",)).fetchone()
+    replaced_previous = bool(prev_row)
+    # The same draft prepared again (an agent that no longer saw it was
+    # staged) keeps its card: Send on that card is still this email.
+    same_card_uid = ""
+    try:
+        prev = json.loads(prev_row["value"]) if prev_row and prev_row["value"] else {}
+    except (TypeError, ValueError):
+        prev = {}
+    if prev and all(prev.get(k) == payload.get(k) for k in ("to", "subject", "body", "account_id", "attachments")):
+        same_card_uid = str((prev.get("card") or {}).get("uid") or "")
+        replaced_previous = False
 
     # 1. A real card in the chat, not just a sentence — mirrors
     # writing_draft_created's WritingDraftCard for letters/invoices.
@@ -157,6 +168,8 @@ async def execute(
         "accounts":            [{"id": a["id"], "email": a["email"],
                                  "name": a.get("display_name") or ""} for a in own] if len(own) > 1 else [],
     }
+    if same_card_uid:
+        card["uid"] = same_card_uid
     if str(getattr(ctx, "source", "") or "").startswith("token:"):
         # An outside agent's client (Brepper) shows the card with this
         # button: a press tells the agent, in the person's own words, to
