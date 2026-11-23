@@ -214,6 +214,48 @@ def test_create_then_delete_round_trip(token_client):
         assert conn.execute("SELECT 1 FROM events WHERE id=?", (second_id,)).fetchone()
 
 
+def test_an_agent_deletes_one_thing_per_yes_and_not_many_in_a_row(token_client, monkeypatch):
+    """With the owner's leave an agent confirms deletions, but one item per
+    yes (a series waits for the owner) and at most one a minute."""
+    from backend import mcp_server
+    from backend.database import get_conn
+    client, token, uid, logged_in = token_client
+    assert logged_in.patch("/api/profile/agent-deletes", json={"enabled": True}).status_code == 200
+
+    def add(title, day):
+        r = _rpc(client, token, "tools/call", {"name": "add_calendar_event", "arguments": {
+            "title": title, "starts_at": f"2030-02-{day:02d}T10:00:00"}})
+        res = r.json()["result"]["structuredContent"]["result"]
+        return int(res.get("event_id") or res.get("id") or (res.get("event") or {}).get("id"))
+
+    def stage(event_id):
+        r = _rpc(client, token, "tools/call", {"name": "delete_calendar_event", "arguments": {"event_id": event_id}})
+        return r.json()["result"]["structuredContent"]["pending_confirmation"]["pending_id"]
+
+    def confirm(pid):
+        return _rpc(client, token, "tools/call", {"name": "pending_confirm", "arguments": {"pending_id": pid}}
+                    ).json()["result"]
+
+    first, second = add("One", 1), add("Two", 2)
+    assert confirm(stage(first))["isError"] is False
+    out = confirm(stage(second))
+    assert out["isError"] is True and "a minute" in str(out)                 # not two in a row
+    with get_conn() as conn:
+        assert conn.execute("SELECT 1 FROM events WHERE id=?", (second,)).fetchone()
+
+    # A deletion that takes more along waits for the owner, however long ago the last was.
+    monkeypatch.setattr(mcp_server, "_agent_deletion_times", lambda user: [])
+    from backend import pending_actions as _pa
+    pid = stage(second)
+    with get_conn() as conn:
+        conn.execute("UPDATE pending_actions SET rollback_args_json = ? WHERE id = ?",
+                     ('{"event_id": %d, "linked_ids": [1, 2]}' % second, pid))
+        conn.commit()
+    assert _pa.get(pid)["rollback_args"]["linked_ids"] == [1, 2]
+    out = confirm(pid)
+    assert out["isError"] is True and "more than one item" in str(out)
+
+
 def test_owner_deletes_from_the_bell(token_client):
     """Default policy: the card in the bell runs the deletion."""
     client, token, uid, logged_in = token_client
@@ -337,7 +379,7 @@ def test_an_agent_gets_the_rows_the_chat_would_show_as_cards(token_client, fresh
     assert r.status_code == 200, r.text
     assert "Steuererklärung abgeben" in r.text
     body = r.json()["result"]["structuredContent"]
-    assert body["cards"] and body["note"].startswith("There is no screen here")
+    assert body["cards"] and "If your client shows cards" in body["note"]
     # The chat's "say 'see the cards below', list nothing" does not reach the agent.
     assert "_llm_hint" not in body["result"] and "rendered as cards" not in r.text
 

@@ -402,8 +402,11 @@ async def call_tool(user: dict[str, Any], name: str, arguments: dict[str, Any],
             # wrong without a screen: an agent followed it and pointed the
             # user at cards nobody saw. It goes; the note says what to do.
             payload["result"] = {k: v for k, v in result.items() if k != "_llm_hint"}
-            payload["note"] = ("There is no screen here, so tell the user the rows from `cards` "
-                               "briefly in your answer.")
+            # Whether the person sees the cards is the client's to say (Brepper
+            # tells its agent it shows them): telling every agent to retell the
+            # rows made it list them under the very cards that show them.
+            payload["note"] = ("The rows are in `cards`. If your client shows cards to the user, do not "
+                               "list them again; otherwise tell the user the rows briefly.")
     for action in get_ui_actions():
         if action.get("type") == "pending_confirmation":
             preview = action.get("preview") or {}
@@ -413,7 +416,8 @@ async def call_tool(user: dict[str, Any], name: str, arguments: dict[str, Any],
                 "preview": preview,
             }
             if preview.get("mode") == "confirm_before":
-                may = bool(user.get("agent_may_confirm_deletes"))
+                # More than one item at once (a series) always waits for the owner.
+                may = bool(user.get("agent_may_confirm_deletes")) and not preview.get("cascaded")
                 if not may:
                     _notify_owner_of_deletion(user, name, action)
                     block["next"] = ("Nothing is deleted yet. The owner confirms this in the Yorik app "
@@ -539,20 +543,75 @@ async def _resolve_pending(user: dict[str, Any], tool: str, pending_id: str) -> 
 
     if not pending_id:
         raise ToolError("pending_id is required")
-    if tool == "pending_confirm" and not user.get("agent_may_confirm_deletes"):
-        from . import pending_actions as _pa
-        row = _pa.get(pending_id)
-        if row and _pa.is_deferred(row):
+    from . import pending_actions as _pa
+    row = _pa.get(pending_id)
+    deferred = bool(row) and _pa.is_deferred(row)
+    if tool == "pending_confirm" and deferred:
+        if not user.get("agent_may_confirm_deletes"):
             raise ToolError(
                 "This deletion waits for the owner in the Yorik app (notification bell). "
                 "Agents may not confirm deletions for this account; ask the person to tap "
                 "Delete there, or use pending_cancel to withdraw it."
             )
+        _agent_may_delete_now(user, row)
     handler = _main.pending_confirm if tool == "pending_confirm" else _main.pending_cancel
     try:
-        return await handler(pending_id, user=user)
+        out = await handler(pending_id, user=user)
     except HTTPException as exc:
         raise ToolError(str(exc.detail)) from exc
+    if tool == "pending_confirm" and deferred:
+        _count_agent_deletion(user)
+    return out
+
+
+# An agent the owner lets confirm deletions still removes one thing per yes,
+# and not many in a row: a series of events (or anything that takes more
+# along) waits for the owner in the Yorik app, and at most one deletion a
+# minute and AGENT_DELETES_PER_DAY a day go through an agent.
+AGENT_DELETES_PER_DAY = 20
+
+
+def _agent_deletes_key(user: dict[str, Any]) -> str:
+    return f"agent_deletes_{user['id']}"
+
+
+def _agent_deletion_times(user: dict[str, Any]) -> list[float]:
+    import json as _json
+    import time as _time
+    from .database import get_conn
+    with get_conn() as conn:
+        row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (_agent_deletes_key(user),)).fetchone()
+    try:
+        times = [float(t) for t in _json.loads(row["value"])] if row and row["value"] else []
+    except (TypeError, ValueError):
+        times = []
+    return [t for t in times if t > _time.time() - 86400]
+
+
+def _agent_may_delete_now(user: dict[str, Any], row: dict[str, Any]) -> None:
+    import time as _time
+    args = row.get("rollback_args") or {}
+    if any(args.get(k) for k in ("linked_ids", "ids", "message_ids")):
+        raise ToolError("This deletion removes more than one item, so it waits for the owner in the Yorik app "
+                        "(notification bell). Tell the user; pending_cancel withdraws it.")
+    times = _agent_deletion_times(user)
+    if times and _time.time() - max(times) < 60:
+        raise ToolError("One deletion a minute through an agent: nothing was deleted. Tell the user to press "
+                        "Delete again in a minute, or to confirm it in the Yorik app.")
+    if len(times) >= AGENT_DELETES_PER_DAY:
+        raise ToolError(f"{AGENT_DELETES_PER_DAY} deletions through an agent today already: nothing was deleted. "
+                        "The owner confirms this one in the Yorik app (notification bell).")
+
+
+def _count_agent_deletion(user: dict[str, Any]) -> None:
+    import json as _json
+    import time as _time
+    from .database import get_conn
+    times = _agent_deletion_times(user) + [_time.time()]
+    with get_conn() as conn:
+        conn.execute("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+                     (_agent_deletes_key(user), _json.dumps(times)))
+        conn.commit()
 
 
 # ─── JSON-RPC over HTTP ─────────────────────────────────────────────
