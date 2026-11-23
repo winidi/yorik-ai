@@ -88,14 +88,26 @@ def _item(kind: str, item_id: Any):
     return int(item_id)
 
 
+# The body starts with this byte, so the token does not look like a JWT:
+# Base64 of '{"' reads "eyJ", and agents that hide secrets in tool results
+# (Hermes) cut such a token to "eyJ1Ij...5huo", which then opens nothing
+# (seen live 2026-11-23). Tokens without it (minted before) still verify.
+_VERSION = b"1"
+
+
 def mint(user_id: str, kind: str, item_id: Any, ttl: int = TTL_SECONDS, now: Optional[float] = None) -> str:
     """The token for one file of one person."""
     if kind not in KINDS:
         raise ValueError(f"kind must be one of {KINDS}")
-    body = json.dumps({"u": str(user_id), "k": kind, "i": _item(kind, item_id),
-                       "e": int((now or time.time()) + ttl)}, separators=(",", ":")).encode()
-    sig = hmac.new(_secret(), body, hashlib.sha256).digest()[:18]
-    return f"{_b64(body)}.{_b64(sig)}"
+    expires = int((now or time.time()) + ttl)
+    while True:
+        body = _VERSION + json.dumps({"u": str(user_id), "k": kind, "i": _item(kind, item_id), "e": expires},
+                                     separators=(",", ":")).encode()
+        sig = hmac.new(_secret(), body, hashlib.sha256).digest()[:18]
+        token = f"{_b64(body)}.{_b64(sig)}"
+        if "eyJ" not in token:          # by chance in the signature: one second later reads differently
+            return token
+        expires -= 1
 
 
 def verify(token: str, now: Optional[float] = None) -> Optional[dict[str, Any]]:
@@ -105,7 +117,7 @@ def verify(token: str, now: Optional[float] = None) -> Optional[dict[str, Any]]:
         body = _unb64(body_s)
         if not hmac.compare_digest(hmac.new(_secret(), body, hashlib.sha256).digest()[:18], _unb64(sig_s)):
             return None
-        data = json.loads(body)
+        data = json.loads(body[len(_VERSION):] if body.startswith(_VERSION) else body)
     except (ValueError, TypeError):
         return None
     if not isinstance(data, dict) or data.get("k") not in KINDS or int(data.get("e", 0)) < (now or time.time()):

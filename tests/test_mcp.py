@@ -452,6 +452,26 @@ def test_file_links_expire_and_only_pdfs_and_pictures_show_in_place(fresh_app, m
     assert got.status_code == 200 and got.headers["content-disposition"].startswith("attachment")
 
 
+def test_a_file_link_does_not_look_like_a_jwt(fresh_app):
+    """Hermes hides JWT-like strings in tool results ("eyJ1Ij...5huo"), so a
+    link that looked like one opened nothing in Brepper (2026-11-23)."""
+    import base64
+    import hashlib
+    import hmac
+    import json as _json
+    import re
+    from backend import file_links
+    jwt = re.compile(r"eyJ[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_=-]{4,}){0,2}")   # Hermes' agent/redact.py
+    for n in range(300):
+        tok = file_links.mint("7f0c2a1e-1111-2222-3333-444455556666", "document", n, now=1000 + n)
+        assert not jwt.search(tok) and file_links.verify(tok, now=1000 + n)["i"] == n
+    # A link minted before still opens until it runs out.
+    body = _json.dumps({"u": "u1", "k": "document", "i": 3, "e": 5000}, separators=(",", ":")).encode()
+    sig = hmac.new(file_links._secret(), body, hashlib.sha256).digest()[:18]
+    old = f"{file_links._b64(body)}.{file_links._b64(sig)}"
+    assert old.startswith("eyJ") and file_links.verify(old, now=1000)["i"] == 3
+
+
 def test_a_pdf_the_mail_server_calls_octet_stream_still_shows_in_place(fresh_app, monkeypatch):
     """Supabase's invoice came as application/octet-stream (2026-11-20):
     the browser downloaded it instead of showing it."""
