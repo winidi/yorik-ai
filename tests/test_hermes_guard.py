@@ -99,3 +99,32 @@ def test_setup_installs_once_and_respects_a_later_disable(tmp_path, monkeypatch)
     # Second run: nothing to copy, and no second enable (a disable sticks).
     assert setup.install(root, root, cfg) == "current"
     assert len(calls) == 2
+
+
+def test_setup_gives_homes_that_use_yorik_its_skill_and_keeps_a_hand_made_one(tmp_path):
+    home = tmp_path / "h"
+    home.mkdir()
+    (home / "config.yaml").write_text("model:\n  name: x\nmcp_servers:\n  other:\n    url: a\n")
+    assert not setup.uses_yorik(home)
+    (home / "config.yaml").write_text("mcp_servers:\n  other:\n    url: a\n  yorik:\n    url: b\nyorik_note: 1\n")
+    assert setup.uses_yorik(home)
+    (home / "config.yaml").write_text("tools:\n  yorik:\n    x: 1\n")      # not under mcp_servers
+    assert not setup.uses_yorik(home)
+
+    shipped = setup.SKILL_SRC.read_bytes()
+    note = home / "skills" / "yorik" / "SKILL.md"
+    assert setup.install_skill(home) == "installed" and note.read_bytes() == shipped
+    assert setup.install_skill(home) == "current"
+    note.write_bytes(b"old shipped text\n")                    # an older one this setup wrote
+    import hashlib
+    (note.parent / setup.SKILL_MARK).write_text(hashlib.sha256(b"old shipped text\n").hexdigest() + "\n")
+    assert setup.install_skill(home) == "updated" and note.read_bytes() == shipped
+    note.write_bytes(shipped + b"\nMy own rule.\n")             # changed by hand: stays
+    assert setup.install_skill(home).startswith("kept") and note.read_bytes().endswith(b"My own rule.\n")
+
+
+def test_the_shipped_skill_names_no_person_and_no_way_around_yorik():
+    text = setup.SKILL_SRC.read_text(encoding="utf-8")
+    assert text.startswith("---\nname: yorik\n")
+    for word in ("docker exec", "psql", "family.db", "Dirk"):
+        assert word not in text

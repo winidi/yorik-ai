@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Put yorik-guard into this machine's Hermes, and keep it current.
+"""Put yorik-guard and Yorik's skill into this machine's Hermes, and keep them current.
 
     python3 integrations/hermes/setup.py [--hermes-home DIR] [--check]
 
 For the Hermes home (~/.hermes, or $HERMES_HOME) and each of its profiles:
 copies integrations/hermes/yorik-guard/ to <home>/plugins/yorik-guard/,
 writes guard.json there (what to protect: this Yorik's folder, its
-containers and their ports), and enables the plugin once. Nothing else in
-Hermes changes. Someone who disables the plugin later keeps it disabled: it
-is enabled only the first time it lands in a home.
+containers and their ports), and enables the plugin once. Someone who
+disables the plugin later keeps it disabled: it is enabled only the first
+time it lands in a home.
+
+Homes that talk to Yorik (an mcp_servers entry named yorik in config.yaml)
+also get integrations/hermes/yorik-skill/SKILL.md as <home>/skills/yorik/,
+the note that tells the agent how to use Yorik's tools. A note someone
+changed by hand stays as it is: it is replaced only when it is missing or
+still the one this setup wrote. Nothing else in Hermes changes.
 
 Run by start.sh on every start (a no-op without Hermes) and by install.sh.
 Standard library only, so it also runs on the host of a Docker install.
@@ -32,6 +38,8 @@ PLUGIN_SRC = HERE / "yorik-guard"
 PLUGIN = "yorik-guard"
 YORIK_DIR = HERE.parent.parent
 ENABLED_MARK = ".enabled-once"
+SKILL_SRC = HERE / "yorik-skill" / "SKILL.md"
+SKILL_MARK = ".written-by-yorik"      # the sha256 of the note this setup wrote
 API_PORT = int(os.environ.get("HOMEOS_PORT") or os.environ.get("YORIK_PORT") or 8000)
 # Model servers hold no household data; the agent may use them.
 NOT_DATA = re.compile(r"llamacpp|-llm\b|search-embed", re.I)
@@ -140,6 +148,45 @@ def install(home: Path, root: Path, cfg: dict) -> str:
     return state
 
 
+def uses_yorik(home: Path) -> bool:
+    """config.yaml has an MCP server named yorik (a plain look at the YAML:
+    the keys indented under mcp_servers)."""
+    try:
+        lines = (home / "config.yaml").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False
+    inside = False
+    for line in lines:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line[0].isspace():
+            inside = line.split("#")[0].strip() == "mcp_servers:"
+        elif inside and re.match(r"^\s+[\"']?yorik[\"']?\s*:", line):
+            return True
+    return False
+
+
+def install_skill(home: Path) -> str:
+    import hashlib
+    dest = home / "skills" / "yorik" / "SKILL.md"
+    mark = dest.parent / SKILL_MARK
+    new = SKILL_SRC.read_bytes()
+    digest = lambda b: hashlib.sha256(b).hexdigest()
+    state = "installed"
+    if dest.exists():
+        have = dest.read_bytes()
+        if have == new:
+            return "current"
+        written = mark.read_text(encoding="utf-8").strip() if mark.exists() else ""
+        if digest(have) != written:
+            return f"kept, changed by hand (Yorik's is {SKILL_SRC})"
+        state = "updated"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(new)
+    mark.write_text(digest(new) + "\n", encoding="utf-8")
+    return state
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--hermes-home", default=os.environ.get("HERMES_HOME") or str(Path.home() / ".hermes"))
@@ -156,6 +203,11 @@ def main() -> int:
         return 0
     for home in targets:
         print(f"{PLUGIN} in {home}: {install(home, root, cfg)}")
+        if uses_yorik(home):
+            try:
+                print(f"yorik skill in {home}: {install_skill(home)}")
+            except OSError as e:
+                print(f"yorik skill in {home}: not written ({e})")
     return 0
 
 
