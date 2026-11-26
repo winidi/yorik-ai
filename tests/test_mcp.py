@@ -690,3 +690,37 @@ def test_a_reminder_can_be_listed_and_cancelled_but_only_ones_own(token_client):
     assert r.json()["result"]["structuredContent"]["result"]["cancelled"] is True
     r = _rpc(client, token, "tools/call", {"name": "cancel_reminder", "arguments": {}})
     assert r.json()["result"]["structuredContent"]["result"]["reminders"] == []
+
+
+def test_an_agent_sees_the_users_mailboxes_and_sends_from_one_by_its_provider(token_client, monkeypatch):
+    """Asked to answer from the Proton mailbox, an agent had only a count of
+    accounts and told the user it was Gmail only (2026-11-26)."""
+    import uuid
+    from backend import email_addresses
+    from backend.database import get_conn
+    client, token, uid, _ = token_client
+    with get_conn() as conn:
+        for owner, email, host, port, default in (
+                (uid, "me@gmail.com", "imap.gmail.com", 993, 1),
+                (uid, "dirk@own-domain.example", "127.0.0.1", 1143, 0),     # an own domain behind Proton Bridge
+                (str(uuid.uuid4()), "other@gmail.com", "imap.gmail.com", 993, 1)):
+            conn.execute("INSERT INTO email_accounts (owner_user_id, email, imap_host, imap_port, imap_username, "
+                         "smtp_host, smtp_username, credential_key, enabled, is_default) "
+                         "VALUES (?, ?, ?, ?, 'u', 's', 'u', 'k', 1, ?)", (owner, email, host, port, default))
+        conn.commit()
+
+    r = _rpc(client, token, "tools/call", {"name": "list_email_accounts", "arguments": {}})
+    accounts = r.json()["result"]["structuredContent"]["result"]["accounts"]
+    assert [(a["email"], a["provider"], a["is_default"]) for a in accounts] == [
+        ("me@gmail.com", "Gmail", True), ("dirk@own-domain.example", "Proton Mail", False)]   # only one's own
+    assert not any("credential" in k or "host" in k for a in accounts for k in a)
+
+    monkeypatch.setattr(email_addresses, "known", lambda *a, **k: {"nina@example.com"})
+    def prepare(sender):
+        r = _rpc(client, token, "tools/call", {"name": "prepare_email", "arguments": {
+            "to": "nina@example.com", "subject": "Hallo", "body": "Hi", "from_email": sender}})
+        return r.json()["result"]["structuredContent"]["result"]
+    assert prepare("Proton")["from"] == "dirk@own-domain.example"
+    assert prepare("DIRK@own-domain.example")["from"] == "dirk@own-domain.example"
+    out = prepare("Outlook")                       # none of theirs: the default, and the agent is told which exist
+    assert out["from"] == "me@gmail.com" and "dirk@own-domain.example (Proton Mail)" in out["_llm_hint"]

@@ -98,15 +98,7 @@ async def execute(
     account_id: Optional[int] = None
     account_note = ""
     if from_email:
-        from backend import email_sender
-        acct = email_sender.resolve_account_for_from_address(from_email)
-        if acct and str(acct.get("owner_user_id")) == str(user_id):
-            account_id = acct["id"]
-        else:
-            account_note = (
-                f" Couldn't find {from_email!r} among the user's own configured email accounts — the Composer's "
-                f"default account will be pre-selected instead; mention that so they can double-check it."
-            )
+        account_id, account_note = _sender_account(str(user_id), from_email)
 
     # Which of the person's own accounts sends it. Without a chosen
     # default and with several accounts, nothing is picked: the card
@@ -197,6 +189,7 @@ async def execute(
     return {
         "ok":            True,
         "staged_to":     to,
+        "from":          next((a["email"] for a in own if a["id"] == account_id), None),
         "attachments":   attachment_filenames,
         "replaced_previous_draft": replaced_previous,
         "_llm_hint": (
@@ -206,6 +199,31 @@ async def execute(
             f"does that." + account_note
         ),
     }
+
+
+def _sender_account(user_id: str, wanted: str) -> tuple[Optional[int], str]:
+    """The user's own account they named: its address, or its provider or
+    name ("Gmail", "Proton"); with the note for the agent when none or
+    several fit."""
+    from backend.database import get_conn
+    from backend.email_providers import provider_name
+    with get_conn() as conn:
+        own = [dict(r) for r in conn.execute(
+            "SELECT id, email, display_name, imap_host, imap_port FROM email_accounts "
+            "WHERE owner_user_id = ? AND enabled = 1 ORDER BY is_default DESC, id", (user_id,)).fetchall()]
+    w = wanted.strip().lower()
+    fits = [a for a in own if a["email"].lower() == w]
+    if not fits and "@" not in w:
+        fits = [a for a in own if w in provider_name(a["email"], a["imap_host"], a["imap_port"]).lower()
+                or w in (a.get("display_name") or "").lower() or w in a["email"].lower()]
+    if len(fits) == 1:
+        return fits[0]["id"], ""
+    names = ", ".join(f"{a['email']} ({provider_name(a['email'], a['imap_host'], a['imap_port']) or '?'})" for a in own)
+    if fits:
+        return None, (f" {wanted!r} fits several of the user's accounts ({names}); ask which one, then prepare "
+                      f"it again with that from_email.")
+    return None, (f" {wanted!r} is none of the user's own accounts ({names or 'none'}); the default one is "
+                  f"pre-selected instead, say so, so they can change it.")
 
 
 def _pick_actions(user_id, suggestions) -> list:

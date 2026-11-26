@@ -148,6 +148,24 @@ def lookup_provider(email: str) -> Optional[dict]:
     return preset
 
 
+def provider_name(email: str, imap_host: str = "", imap_port: Optional[int] = None) -> str:
+    """The provider an account is with: by its IMAP server first (an own
+    domain at Gmail, or Proton Mail Bridge on this machine), then by its
+    address; "" when neither says."""
+    host = (imap_host or "").strip().lower()
+    local = host in ("127.0.0.1", "localhost", "::1")
+    for preset in PROVIDERS.values():
+        if isinstance(preset, str) or not preset.get("imap_host"):
+            continue
+        if preset["imap_host"] == "127.0.0.1":           # a local bridge: told apart by its port
+            if local and int(imap_port or 0) == preset["imap_port"]:
+                return preset["name"]
+        elif host and host == preset["imap_host"].lower():
+            return preset["name"]
+    preset = lookup_provider(email)
+    return preset["name"] if preset else ""
+
+
 def generic_preset() -> dict:
     """Fallback for unknown domains — leaves hosts blank, sane defaults."""
     return {
