@@ -76,6 +76,10 @@ async def execute(
     }
     if nearby:
         out["nearby"] = nearby
+    # A child's school timetable is not a calendar: the family board keeps
+    # it in `timetables`, so "which lesson does Ben have at ten" found
+    # nothing here (2026-11-27). Its lessons come as their own rows.
+    out.update(_school_timetable(start, end, title_needle, user_id=user_id, role=role, everyone=everyone))
     if include_free_slots:
         out["free_slots"] = _compute_free_slots(events, start, end)
 
@@ -107,7 +111,41 @@ async def execute(
             f"language). Optionally call show_calendar with the event ids to "
             f"also open the full view. Do NOT list titles or dates in text — "
             f"the cards carry them."
+            + (" The school_timetable rows are not on the cards — answer a question "
+               "about a lesson from them." if out.get("school_timetable") else "")
         )
+    return out
+
+
+def _school_timetable(start: datetime, end: datetime, title_needle: Optional[str], *,
+                      user_id: Optional[str], role: Optional[str], everyone: bool) -> dict[str, Any]:
+    """The children's weekly timetables laid out on the window. A child
+    gets its own in either scope; a parent gets every child's with
+    everyone=true, and with the default scope a pointer that they exist
+    (whose lessons they are is the default scope's "not mine")."""
+    from backend import timetables as _tt
+    children = _tt.readable_children(user_id, role)
+    plans = _tt.plans_for(list(children))
+    if not plans:
+        return {}
+    me = str(user_id)
+    wanted = {uid: p for uid, p in plans.items() if everyone or uid == me}
+    out: dict[str, Any] = {}
+    if wanted:
+        names = {uid: ("" if uid == me else children.get(uid, "")) for uid in wanted}
+        lessons = _tt.lessons_between(wanted, names, start, end, subject_contains=title_needle)
+        whose = ", ".join("the person's own" if uid == me else children.get(uid, "") for uid in wanted)
+        out["school_timetable"] = {
+            "note": (f"Regular weekly school timetable ({whose}) from the family board, Monday to Friday; "
+                     f"school holidays and cancelled lessons are not known to it."
+                     + ("" if lessons else " No lesson of it" + (" matching the title filter" if title_needle else "")
+                        + " falls in this window.")),
+            "lessons": lessons,
+        }
+    others = [children.get(uid, "") for uid in plans if uid not in wanted]
+    if others:
+        out["also_reachable"] = (f"The school timetable of {', '.join(n for n in others if n) or 'a child'} "
+                                 f"is not in this answer; call check_calendar again with everyone=true to read it.")
     return out
 
 
@@ -177,6 +215,7 @@ def _query_events(start: datetime, end: datetime,
     if title_needle:
         rows = [r for r in rows if title_needle in (r.get("title") or "").lower()]
     owners = _cal.event_owner_names([r.get("owner_user_id") for r in rows])
+    cal_names = _calendar_names([r.get("calendar_id") for r in rows])
     events = []
     for r in rows:
         owner = str(r.get("owner_user_id") or "")
@@ -193,8 +232,22 @@ def _query_events(start: datetime, end: datetime,
             "weekday":   _WEEKDAY_NAMES[datetime.fromisoformat(starts).weekday()] if starts else "",
             "time":      "all day" if r["all_day"] else starts[11:16] if len(starts) >= 16 else "",
             "who":       whose,
+            "calendar":  cal_names.get(str(r.get("calendar_id") or ""), ""),
         })
     return events
+
+
+def _calendar_names(calendar_ids: list[Any]) -> dict[str, str]:
+    """calendar id → name, so a subscribed calendar ("Stundenplan Ben")
+    says what its events are even when their titles do not."""
+    ids = sorted({str(i) for i in calendar_ids if i is not None})
+    if not ids:
+        return {}
+    from backend.database import get_conn
+    ph = ",".join("?" * len(ids))
+    with get_conn() as conn:
+        return {str(r["id"]): (r["name"] or "") for r in conn.execute(
+            f"SELECT id, name FROM calendars WHERE id IN ({ph})", [int(i) for i in ids]).fetchall()}
 
 
 _WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]

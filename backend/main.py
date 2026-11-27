@@ -1565,31 +1565,7 @@ def ambient_board_order(body: BoardOrderIn,
     return {"user_id": target, "task_ids": ids}
 
 
-_TIMETABLE_DEFAULT_PERIODS = [("08:00", "08:45"), ("08:50", "09:35"), ("09:55", "10:40"),
-                              ("10:45", "11:30"), ("11:45", "12:30"), ("12:35", "13:20")]
-
-
-def _clean_timetable(raw: Any) -> Dict[str, Any]:
-    """Whatever comes in, what is stored is a small, well-formed plan:
-    up to 12 periods with HH:MM times, cells for Mon–Fri only."""
-    import re as _re
-    raw = raw if isinstance(raw, dict) else {}
-    hhmm = _re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
-    periods = []
-    for p in (raw.get("periods") or [])[:12]:
-        p = p if isinstance(p, dict) else {}
-        start, end = str(p.get("start") or ""), str(p.get("end") or "")
-        periods.append({"start": start if hhmm.match(start) else "", "end": end if hhmm.match(end) else ""})
-    cells: Dict[str, Dict[str, str]] = {}
-    for key, c in (raw.get("cells") or {}).items() if isinstance(raw.get("cells"), dict) else []:
-        m = _re.fullmatch(r"([0-4])-(\d{1,2})", str(key))
-        if not m or int(m.group(2)) >= len(periods) or not isinstance(c, dict):
-            continue
-        subject = str(c.get("subject") or "").strip()[:40]
-        room = str(c.get("room") or "").strip()[:20]
-        if subject or room:
-            cells[f"{m.group(1)}-{int(m.group(2))}"] = {"subject": subject, "room": room}
-    return {"periods": periods, "cells": cells}
+from .timetables import DEFAULT_PERIODS as _TIMETABLE_DEFAULT_PERIODS, clean as _clean_timetable  # noqa: E402
 
 
 @app.get("/api/ambient/timetable", tags=["kiosk"])

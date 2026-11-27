@@ -8,6 +8,7 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- The chat and agents (Hermes over MCP) can answer which lesson a child has. The school timetable on the family board is not a calendar, so `check_calendar` never saw it; it now returns the child's lessons for the asked window as `school_timetable` rows (subject, room, period, times) to the child itself and, with `everyone=true`, to the parents, and points a parent asking in the default scope to them. Calendar events also carry their calendar's name.
 - Yorik no longer hangs for good after the database drops. 2026-10-19 a 15 s Postgres restart left the server answering nothing for eight hours. Pooled connections now use TCP keepalives and connect timeouts, every checkout runs a bounded SELECT 1 and replaces a dead connection, a request waits at most 20 s for a connection and then fails instead of blocking, and an in-process watchdog exits the server when `/api/health/live` stops answering for about two minutes so systemd or Docker restart it (off with `YORIK_WATCHDOG=0`).
 - Autotagger folders are visible to the family. Tags the autotagger created in Paperless belonged to Yorik's service account and were shared with nobody, so every person's own Paperless user saw none of them: Settings reported the documents as tagged while the folder view in Documents stayed empty. New tags are created unowned, and the next run makes earlier ones visible as well.
 
