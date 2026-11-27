@@ -6,6 +6,7 @@ when_not_to_use: |
 when_to_use: |
   - User asks "what's on Thursday?" / "am I free at 3pm?" → default scope (their own appointments)
   - "What does Beate have on Friday?" / "what's on for the family?" → everyone=true; say whose each one is from `who`
+  - "Which lesson does Ben have at 10 on Tuesday?" → everyone=true; the child's timetable comes as `school_timetable` rows
   - Another skill (whatsapp_draft) needs availability before proposing meeting times
   - Briefing skill wants today's schedule for the morning summary
 inputs:
@@ -47,8 +48,17 @@ outputs:
   events:
     type: array
     description: |
-      [{date, time, title, who, starts_at, ends_at, all_day}] — events
-      in the window, oldest first.
+      [{date, time, title, who, calendar, starts_at, ends_at, all_day}] —
+      events in the window, oldest first; `calendar` is the calendar's name.
+  school_timetable:
+    type: object
+    description: |
+      Only when a child's weekly timetable is readable in this scope.
+      {note, lessons: [{who, date, weekday, period, start, end, subject,
+      room}]} — the regular lessons in the window, without holidays.
+  also_reachable:
+    type: string
+    description: Present when a child's timetable exists but needs everyone=true to read.
   free_slots:
     type: array
     description: |
